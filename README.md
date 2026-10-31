@@ -285,6 +285,90 @@ DDL + functions: `tools/sql/cast-page.sql` (migrations `cast_page`, `cast_page_d
 
 ---
 
+## The registration page
+
+`register.html` creates the account and writes **only** to `members` — no separate
+registration table, no separate recovery-code table. The form is English, monochrome and
+follows the same field/panel language as the rest of the site.
+
+| Field | Rule |
+| --- | --- |
+| Full name | Required, at least 3 characters and at least one letter |
+| Username | Required, unique **case-insensitively**, 3–24 characters (`a–z`, `0–9`, `.`, `_`, `-`), stored as `@handle`, **locked after creation** |
+| Email | Required, unique after lowercasing and trimming, one account per address |
+| Phone number | Required, international format (`+212 612 345 678`), stored as typed |
+| Password + confirmation | Required, 8–72 characters, the two must match; sent once to the server and stored as a **bcrypt hash** |
+| Date of birth | Required, at least 13 years old, no future dates |
+| Country | Required, with a country datalist |
+| Terms | Required; the acceptance timestamp is stored automatically |
+
+**What happens on submit.** `member_register()` (SECURITY DEFINER) validates everything
+again, checks both uniqueness rules, generates the member code, hashes the password
+(`crypt`), creates the recovery code, stores only its sha256 fingerprint and inserts the
+row with `status = 'inactive'`. It returns the plain recovery code **once** with the public
+account data. A duplicate username or email never reaches the insert — and a race is still
+caught by the unique indexes (`unique_violation` is mapped back to the right field).
+
+**Success card.** “Registration complete”, the account details (full name, username,
+email, phone, date of birth, country, member code, status, registration date), the recovery
+code in a copyable card marked *shown once*, a **Download details (.txt)** button that
+builds `ONEWORLD-<username>.txt` in the browser (there is no server copy of that file), and
+a **Log in** button. The password never appears on the success card, in the file or in
+storage; the form's password inputs are cleared as soon as the account exists.
+
+**Log in after registration.** The button asks `member_status()` for the account:
+- inactive → an inline notice says the account is waiting for activation (no navigation);
+- active → `login.html?username=…` (plus `?plan=` when the visitor came from a pricing card).
+
+**Recovery code.** `OW-XXXX-XXXX-XXXX`, generated from 12 random bytes with an alphabet
+that avoids `I`, `O`, `0` and `1`. Only `recovery_code_hash` (sha256 hex) is stored, and
+the code is never written to `localStorage`/`sessionStorage`. Leaving the success card
+while it is unsaved triggers the browser's “leave page?” warning.
+
+### Columns added to `members`
+
+| Column | Type | Note |
+| --- | --- | --- |
+| `full_name` | text | shown on the success card and in the .txt |
+| `phone_number` | text | as typed, with the country code |
+| `birth_date` | date | 13+ check enforced server-side |
+| `country` | text | free text with a datalist |
+| `terms_accepted` | boolean | default false |
+| `terms_accepted_at` | timestamptz | stamped by the trigger |
+| `account_status` | text | generated mirror of `status` for readers that expect this name |
+| `account_activated_at` | timestamptz | stamped the moment `status` becomes `active` |
+| `recovery_code_hash` | text | sha256 of the code, never the code |
+| `last_login_at` | timestamptz | reserved for the Auth-backed sign-in |
+
+`password_hash` already existed and now receives the bcrypt hash. `username` is protected by
+a `members_guard` trigger that rejects any change (`42501`), so the “username cannot be
+changed” rule holds even for a direct SQL update. Unique indexes
+`members_username_lower_key` and `members_email_lower_key` back the two uniqueness rules.
+
+### Functions
+
+| Function | What it does |
+| --- | --- |
+| `member_register(full_name, username, email, phone, password, birth_date, country, terms)` | Validates, checks uniqueness, creates the inactive row, returns `{ok, recovery_code, member}` |
+| `member_check(username, email)` | Live availability for the form (case-insensitive) |
+| `member_status(login)` | Username **or** email → `{found, status, username}` only |
+| `member_recovery_code()` | `OW-XXXX-XXXX-XXXX` generator (service role) |
+
+DDL + functions: `tools/sql/register-page.sql` (migration `registration_page`). The table
+itself stays closed to `anon` — RLS still only allows a signed-in member to read/update
+their own row, so registration cannot be bypassed with a direct REST insert.
+
+**Password storage.** The publishable key cannot create Supabase Auth users, so the password
+is hashed server-side into `members.password_hash` (bcrypt, cost 10) and `auth_user_id`
+stays free for the Auth-backed sign-in. No plaintext password is stored anywhere, and the
+RPC never returns it.
+
+`tools/register-smoke.mjs` covers the page end to end in jsdom: empty submit, password
+mismatch, terms, live availability, a rejected duplicate, a successful registration, the
+success card, the .txt export (content, filename, mime type) and both login branches.
+
+---
+
 ## Sounds
 
 Played from the public `source` bucket of the Supabase project:
@@ -444,10 +528,13 @@ assets/js/icons.js          line icon set + brand glyphs (brands.js)
 assets/js/blocks.js         blocked people/media cache used by every list
 assets/css/cast.css         cast page (profile, dials, reels, mentions)
 assets/js/cast.js           cast page controller (TMDB + person_* RPCs)
+assets/css/register.css     registration form + success card
+assets/js/register.js       registration controller (member_register RPC, .txt export)
 tools/build-pages.mjs       regenerates the placeholder pages
 tools/smoke.mjs             jsdom smoke test (renders the homepage offline)
 tools/watch-smoke.mjs       jsdom watch page test (player, gates, watch-time)
 tools/cast-smoke.mjs        jsdom cast page test (guest + member dials)
+tools/register-smoke.mjs    registration test (form, duplicates, success, .txt)
 tools/visit-smoke.mjs       visit tracker test (5 modes)
 ```
 

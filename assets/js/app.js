@@ -8,7 +8,7 @@ import { getMember, refreshMember, setMember, signOut, noteSeen } from "./sessio
 import { awardPoints, renderWallet, startWalletPolling, syncFromMember } from "./wallet.js";
 import { toast } from "./ui.js";
 import { avatarPlaceholder, enableDragScrollAll } from "./utils.js";
-import { startVisitTracking, finishVisit, lastVisitError } from "./visits.js?v=20261031m";
+import { startVisitTracking, finishVisit, lastVisitError } from "./visits.js?v=20261031n";
 import { initTheme, setTheme, toggleTheme, resetTheme, currentTheme, systemTheme } from "./theme.js";
 import { lookupVisitor, cachedVisitor } from "./geo.js";
 
@@ -32,6 +32,11 @@ async function boot() {
   if (document.body.dataset.page === "cast") {
     const { initCast } = await import("./cast.js");
     initCast().catch((error) => console.warn("[1World] cast page:", error));
+  }
+
+  if (document.body.dataset.page === "register") {
+    const { initRegister } = await import("./register.js");
+    initRegister().catch((error) => console.warn("[1World] register page:", error));
   }
 
   const member = getMember();

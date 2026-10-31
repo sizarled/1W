@@ -4,16 +4,17 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Create account — 1World Web</title>
-    <meta name="description" content="Register free — membership is granted at sign-up." />
+    <meta name="description" content="Create your 1World account: full name, username, email, phone, password, birth date and country. Every new account is inactive until it is activated." />
     <meta name="theme-color" content="#060607" />
     <meta name="robots" content="noindex" />
     <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="assets/css/base.css?v=20261031m" />
-    <link rel="stylesheet" href="assets/css/layout.css?v=20261031m" />
-    <link rel="stylesheet" href="assets/css/components.css?v=20261031m" />
+    <link rel="stylesheet" href="assets/css/base.css?v=20261031n" />
+    <link rel="stylesheet" href="assets/css/layout.css?v=20261031n" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261031n" />
+    <link rel="stylesheet" href="assets/css/register.css?v=20261031n" />
     <script>
       /* apply the saved theme (or the OS preference) before first paint */
       (function () {
@@ -31,42 +32,209 @@
         } catch (e) {}
       })();
     </script>
-    <script type="module" src="assets/js/app.js?v=20261031m"></script>
+
+    <script type="module" src="assets/js/app.js?v=20261031n"></script>
   </head>
   <body data-page="register" data-title="Create account">
     <a class="skip-link" href="#main">Skip to content</a>
+
     <div data-site-header></div>
     <div data-site-sidebar></div>
+    <div data-scrim hidden></div>
 
-    <main class="site-main" id="main">
-      <section class="soon">
-        <div class="soon__inner">
-          <span class="soon__icon"><i data-icon="user"></i></span>
-          <p class="eyebrow"><span class="eyebrow__dot"></span>Page in build</p>
-          <h1 class="soon__title">Create account</h1>
-          <p class="soon__text">Register free — membership is granted at sign-up. Accepts ?plan= and ?duration= from the pricing cards.</p>
+    <main class="site-main reg" id="main">
+      <nav class="reg__crumbs" aria-label="Breadcrumb">
+        <a href="index.html">Home</a><span aria-hidden="true">/</span>
+        <span>Create account</span>
+      </nav>
 
-          <div class="soon__meta">
-            <span class="badge badge--solid">register.html</span>
-            <span class="badge">Next release</span>
-            <span class="badge">1World Web</span>
+      <div class="reg__grid">
+        <!-- intro -------------------------------------------------- -->
+        <aside class="reg__aside">
+          <p class="eyebrow"><span class="eyebrow__dot"></span>Join 1World</p>
+          <h1 class="reg__title">Create your account</h1>
+          <p class="reg__lead">
+            One account for the whole catalogue: films, series, channels, reviews and points.
+            Registration takes a minute and costs nothing.
+          </p>
+
+          <ul class="reg__benefits">
+            <li>
+              <span class="reg__benefit-icon"><i data-icon="film"></i></span>
+              <div><b>Everything in one place</b><span>Films, series, live channels and member publishing.</span></div>
+            </li>
+            <li>
+              <span class="reg__benefit-icon"><i data-icon="shield"></i></span>
+              <div><b>Your username is yours</b><span>Unique, case-insensitive, and locked after registration.</span></div>
+            </li>
+            <li>
+              <span class="reg__benefit-icon"><i data-icon="key"></i></span>
+              <div><b>A recovery code</b><span>Shown once, stored only as a fingerprint. Keep it safe.</span></div>
+            </li>
+            <li>
+              <span class="reg__benefit-icon"><i data-icon="lock"></i></span>
+              <div><b>Activation first</b><span>New accounts start inactive and cannot sign in until they are reviewed.</span></div>
+            </li>
+          </ul>
+
+          <div class="reg__plan" data-reg-plan hidden>
+            <span class="reg__plan-label">Selected plan</span>
+            <b data-reg-plan-name>Free</b>
+            <span data-reg-plan-meta></span>
           </div>
 
-          <div class="soon__actions">
-            <a class="btn btn--primary" href="index.html"><i data-icon="arrowLeft"></i> Back to homepage</a>
-            <a class="btn btn--ghost" href="index.html#membership"><i data-icon="crown"></i> Membership</a>
+          <p class="reg__aside-note">
+            Already registered? <a href="login.html">Go to sign in</a>.
+          </p>
+        </aside>
+
+        <!-- form --------------------------------------------------- -->
+        <section class="reg-card" data-reg-form aria-labelledby="reg-form-title">
+          <header class="reg-card__head">
+            <h2 class="reg-card__title" id="reg-form-title">Account details</h2>
+            <span class="badge">Step 1 of 1</span>
+          </header>
+
+          <div class="reg-alert" data-reg-error hidden>
+            <i data-icon="info"></i>
+            <p data-reg-error-text></p>
           </div>
 
-          <div class="soon__links">
-            <a class="soon__link" href="index.html"><i data-icon="home"></i>Home</a>
-            <a class="soon__link" href="search.html"><i data-icon="search"></i>Search</a>
-            <a class="soon__link" href="movies.html"><i data-icon="film"></i>Movies</a>
-            <a class="soon__link" href="series.html"><i data-icon="tv"></i>Series</a>
-            <a class="soon__link" href="iptv.html"><i data-icon="broadcast"></i>IPTV</a>
-            <a class="soon__link" href="help.html"><i data-icon="lifebuoy"></i>Help</a>
+          <form class="reg-form" data-regform novalidate autocomplete="on">
+            <div class="reg-field" data-field="full_name">
+              <label for="reg-full-name">Full name</label>
+              <input id="reg-full-name" name="full_name" type="text" autocomplete="name" placeholder="Youssef El Amrani" aria-required="true" />
+              <p class="reg-field__hint" data-hint="full_name">As it should appear on your account.</p>
+              <p class="reg-field__error" data-err="full_name" role="alert" hidden></p>
+            </div>
+
+            <div class="reg-field" data-field="username">
+              <label for="reg-username">Username</label>
+              <div class="reg-input reg-input--prefix">
+                <span class="reg-input__prefix" aria-hidden="true">@</span>
+                <input id="reg-username" name="username" type="text" autocomplete="username" placeholder="youssef.amrani" aria-required="true" spellcheck="false" autocapitalize="none" />
+                <span class="reg-input__state" data-username-state hidden></span>
+              </div>
+              <p class="reg-field__hint" data-hint="username">3–24 characters: letters, numbers, dot, dash, underscore. It cannot be changed later.</p>
+              <p class="reg-field__error" data-err="username" role="alert" hidden></p>
+            </div>
+
+            <div class="reg-field" data-field="email">
+              <label for="reg-email">Email address</label>
+              <div class="reg-input">
+                <input id="reg-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" aria-required="true" spellcheck="false" />
+                <span class="reg-input__state" data-email-state hidden></span>
+              </div>
+              <p class="reg-field__hint" data-hint="email">One account per email address.</p>
+              <p class="reg-field__error" data-err="email" role="alert" hidden></p>
+            </div>
+
+            <div class="reg-field" data-field="phone">
+              <label for="reg-phone">Phone number</label>
+              <input id="reg-phone" name="phone" type="tel" autocomplete="tel" placeholder="+212 612 345 678" aria-required="true" />
+              <p class="reg-field__hint" data-hint="phone">Include the country code.</p>
+              <p class="reg-field__error" data-err="phone" role="alert" hidden></p>
+            </div>
+
+            <div class="reg-field" data-field="password">
+              <label for="reg-password">Password</label>
+              <div class="reg-input">
+                <input id="reg-password" name="password" type="password" autocomplete="new-password" placeholder="At least 8 characters" aria-required="true" />
+                <button class="reg-input__toggle" type="button" data-reveal="password" aria-label="Show password" aria-pressed="false">
+                  <i data-icon="eye"></i>
+                </button>
+              </div>
+              <div class="reg-strength" data-strength hidden>
+                <span class="reg-strength__bar"><i data-strength-bar></i></span>
+                <span class="reg-strength__label" data-strength-label>Weak</span>
+              </div>
+              <p class="reg-field__error" data-err="password" role="alert" hidden></p>
+            </div>
+
+            <div class="reg-field" data-field="password_confirm">
+              <label for="reg-password-2">Confirm password</label>
+              <div class="reg-input">
+                <input id="reg-password-2" name="password_confirm" type="password" autocomplete="new-password" placeholder="Repeat the password" aria-required="true" />
+                <button class="reg-input__toggle" type="button" data-reveal="password_confirm" aria-label="Show password" aria-pressed="false">
+                  <i data-icon="eye"></i>
+                </button>
+              </div>
+              <p class="reg-field__error" data-err="password_confirm" role="alert" hidden></p>
+            </div>
+
+            <div class="reg-field" data-field="birth_date">
+              <label for="reg-birth">Date of birth</label>
+              <input id="reg-birth" name="birth_date" type="date" autocomplete="bday" aria-required="true" />
+              <p class="reg-field__error" data-err="birth_date" role="alert" hidden></p>
+            </div>
+
+            <div class="reg-field" data-field="country">
+              <label for="reg-country">Country</label>
+              <input id="reg-country" name="country" type="text" list="reg-countries" autocomplete="country-name" placeholder="Morocco" aria-required="true" />
+              <datalist id="reg-countries"></datalist>
+              <p class="reg-field__error" data-err="country" role="alert" hidden></p>
+            </div>
+
+            <div class="reg-terms reg-field" data-field="terms">
+              <label class="reg-check">
+                <input type="checkbox" name="terms" data-terms />
+                <span class="reg-check__box" aria-hidden="true"><i data-icon="check"></i></span>
+                <span class="reg-check__text">
+                  I accept the <a href="terms.html" target="_blank" rel="noopener">terms of use</a> and the
+                  <a href="privacy.html" target="_blank" rel="noopener">privacy policy</a>.
+                </span>
+              </label>
+              <p class="reg-field__error" data-err="terms" role="alert" hidden></p>
+            </div>
+
+            <button class="btn btn--primary reg-submit" type="submit" data-reg-submit>
+              <i data-icon="user"></i><span data-submit-label>Create account</span>
+            </button>
+            <p class="reg-form__note">
+              Your account is created <b>inactive</b>. You can sign in once it has been activated.
+            </p>
+          </form>
+        </section>
+
+        <!-- success ------------------------------------------------ -->
+        <section class="reg-card reg-card--success" data-reg-success hidden aria-live="polite">
+          <span class="reg-success__icon"><i data-icon="check"></i></span>
+          <h2 class="reg-success__title">Registration complete</h2>
+          <p class="reg-success__lead">
+            Your account has been created. Save the recovery code below — it is shown
+            <b>once</b> and never again.
+          </p>
+          <p class="reg-success__status"><i data-icon="clock"></i> Account status: <b>Inactive</b> — waiting for activation</p>
+
+          <dl class="reg-details" data-reg-details></dl>
+
+          <div class="reg-recovery">
+            <p class="reg-recovery__label">Recovery code</p>
+            <p class="reg-recovery__code" data-reg-code>OW-XXXX-XXXX-XXXX</p>
+            <p class="reg-recovery__note">
+              Keep it somewhere safe. It can restore your account or reset your password later.
+              It is stored only as a fingerprint on our side.
+            </p>
+            <button class="reg-copy" type="button" data-reg-copy>
+              <i data-icon="file"></i><span>Copy code</span>
+            </button>
           </div>
-        </div>
-      </section>
+
+          <div class="reg-success__actions">
+            <button class="btn btn--primary" type="button" data-reg-download>
+              <i data-icon="download"></i> Download details (.txt)
+            </button>
+            <button class="btn btn--ghost" type="button" data-reg-login>
+              <i data-icon="login"></i> Log in
+            </button>
+          </div>
+
+          <p class="reg-alert reg-alert--inline reg-success__note" data-reg-login-note hidden></p>
+          <p class="reg-success__foot">
+            Need a hand? <a href="help.html">Read the help pages</a> or <a href="contact.html">contact us</a>.
+          </p>
+        </section>
+      </div>
     </main>
 
     <div data-site-footer></div>
