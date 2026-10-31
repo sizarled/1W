@@ -108,7 +108,25 @@ click(document.querySelector("[data-notif-trigger]"));
 await wait(60);
 const notifOpen = !document.querySelector("[data-notif-panel]").hidden;
 
-Object.assign(report, { heroTitles, premiumChannels, lockedCount, lockedToast, goldPrice6: plan.querySelector("[data-price]").textContent, signedIn, notifOpen });
+// ---- appearance ---------------------------------------------------
+const themeState = () => ({
+  theme: document.documentElement.getAttribute("data-theme"),
+  stored: localStorage.getItem("1w.theme"),
+  meta: document.querySelector('meta[name="theme-color"]')?.getAttribute("content"),
+  headerIcon: document.querySelector(".header__actions [data-theme-toggle] svg path") ? "svg" : "none",
+  headerLabel: document.querySelector(".header__actions [data-theme-toggle]")?.getAttribute("aria-label"),
+  sidebarLabel: document.querySelector('.tool-btn[data-theme-toggle]')?.textContent.trim(),
+});
+
+const appearance = { initial: themeState() };
+click(document.querySelector('.header__actions [data-theme-toggle]'));
+await wait(80);
+appearance.afterHeaderClick = themeState();
+click(document.querySelector('.tool-btn[data-theme-toggle]'));
+await wait(80);
+appearance.afterSidebarClick = themeState();
+
+Object.assign(report, { heroTitles, premiumChannels, lockedCount, lockedToast, goldPrice6: plan.querySelector("[data-price]").textContent, signedIn, notifOpen, appearance });
 
 console.log(report);
 console.log("errors:", errors.length ? errors : "none");

@@ -19,6 +19,7 @@ import { renderWallet } from "./wallet.js";
 import { initNotifications } from "./notifications.js";
 import { toast } from "./ui.js";
 import { hydrateIcons } from "./icons.js";
+import { initTheme, toggleTheme, currentTheme, flashTransition } from "./theme.js";
 
 const SIDEBAR_KEY = "1w.sidebar";
 
@@ -61,6 +62,10 @@ function headerTemplate() {
       </nav>
 
       <div class="header__actions">
+        <button class="icon-btn theme-btn" data-theme-toggle data-variant="icon" type="button" title="Light theme">
+          ${icon("sun")}
+        </button>
+
         <div class="notif" data-notif>
           <button class="icon-btn notif__btn" data-notif-trigger aria-label="Notifications" aria-haspopup="true" aria-expanded="false">
             ${icon("bell")}
@@ -138,8 +143,8 @@ function sidebarTemplate() {
 
       <div class="sidebar__foot">
         <div class="sidebar__tools">
-          <button class="tool-btn" data-action="theme" aria-label="Toggle colour theme">
-            ${icon("moon")}<span data-theme-label>Theme</span>
+          <button class="tool-btn" type="button" data-theme-toggle data-variant="label" title="Light theme">
+            ${icon("sun")}<span>Light</span>
           </button>
           <button class="tool-btn" data-action="sound" aria-label="Toggle interface sounds">
             ${icon("volume")}<span data-sound-label>Sound</span>
@@ -201,28 +206,6 @@ function footerTemplate() {
 }
 
 /* ------------------------------------------------------------------ */
-/* theme                                                              */
-/* ------------------------------------------------------------------ */
-export function applyTheme(theme) {
-  const next = theme || store.get("1w.theme", "dark");
-  document.documentElement.setAttribute("data-theme", next);
-  store.set("1w.theme", next);
-  return next;
-}
-
-function toggleTheme() {
-  const current = document.documentElement.getAttribute("data-theme") || "dark";
-  const next = current === "dark" ? "light" : "dark";
-  applyTheme(next);
-  toast({
-    tone: "info",
-    iconName: next === "dark" ? "moon" : "sun",
-    title: `${next === "dark" ? "Dark" : "Light"} theme on`,
-    duration: 2400,
-  });
-}
-
-/* ------------------------------------------------------------------ */
 /* render                                                             */
 /* ------------------------------------------------------------------ */
 function renderAccount() {
@@ -272,11 +255,24 @@ function renderSoundLabel() {
   });
 }
 
-function renderThemeLabel() {
-  const dark = (document.documentElement.getAttribute("data-theme") || "dark") === "dark";
-  document.querySelectorAll("[data-theme-label]").forEach((el) => (el.textContent = dark ? "Dark" : "Light"));
-  document.querySelectorAll('[data-action="theme"]').forEach((btn) => {
-    btn.innerHTML = `${icon(dark ? "moon" : "sun")}<span data-theme-label>${dark ? "Dark" : "Light"}</span>`;
+/**
+ * Both switches (header icon + sidebar label) always describe the mode you
+ * would switch TO, and expose it to assistive tech.
+ */
+function syncThemeToggles() {
+  const dark = currentTheme() === "dark";
+  const target = dark ? "light" : "dark";
+  const label = dark ? "Switch to light mode" : "Switch to dark mode";
+
+  document.querySelectorAll("[data-theme-toggle]").forEach((btn) => {
+    const variant = btn.getAttribute("data-variant") || "icon";
+    btn.innerHTML =
+      variant === "label"
+        ? `${icon(dark ? "sun" : "moon")}<span>${target === "light" ? "Light" : "Dark"}</span>`
+        : icon(dark ? "sun" : "moon");
+    btn.setAttribute("aria-label", label);
+    btn.setAttribute("title", `Switch to ${target} mode`);
+    btn.setAttribute("aria-pressed", String(!dark));
   });
 }
 
@@ -373,6 +369,20 @@ function handleLogout() {
 
 function bindActions() {
   document.addEventListener("click", (event) => {
+    if (event.target.closest("[data-theme-toggle]")) {
+      flashTransition();
+      const next = toggleTheme();
+      syncThemeToggles();
+      toast({
+        tone: "info",
+        iconName: next === "dark" ? "moon" : "sun",
+        title: `${next === "dark" ? "Dark" : "Light"} mode on`,
+        message: next === "dark" ? "Black, white and grey — the cinema default." : "White, black and grey — daylight reading.",
+        duration: 2600,
+      });
+      return;
+    }
+
     const actionEl = event.target.closest("[data-action]");
     if (!actionEl) return;
     const action = actionEl.getAttribute("data-action");
@@ -382,10 +392,6 @@ function bindActions() {
     }
     if (action === "logout") {
       handleLogout();
-    }
-    if (action === "theme") {
-      toggleTheme();
-      renderThemeLabel();
     }
     if (action === "sound") {
       const on = toggleSound();
@@ -411,7 +417,7 @@ function bindActions() {
 /* public                                                             */
 /* ------------------------------------------------------------------ */
 export function mountShell() {
-  applyTheme();
+  initTheme();
 
   const headerMount = document.querySelector("[data-site-header]");
   const sidebarMount = document.querySelector("[data-site-sidebar]");
@@ -423,7 +429,7 @@ export function mountShell() {
   renderAccount();
   renderAuth();
   renderWallet();
-  renderThemeLabel();
+  syncThemeToggles();
   renderSoundLabel();
   initSidebar();
   initScrollEffects();

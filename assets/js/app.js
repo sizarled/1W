@@ -8,6 +8,7 @@ import { getMember, refreshMember, setMember, signOut, noteSeen } from "./sessio
 import { awardPoints, renderWallet, startWalletPolling, syncFromMember } from "./wallet.js";
 import { toast } from "./ui.js";
 import { avatarPlaceholder } from "./utils.js";
+import { initTheme, setTheme, toggleTheme, resetTheme, currentTheme, systemTheme } from "./theme.js";
 
 async function boot() {
   mountShell();
@@ -41,6 +42,14 @@ window.OneW = {
   signOut,
   refreshMember,
   setMember,
+  theme: {
+    current: currentTheme,
+    system: systemTheme,
+    set: setTheme,
+    toggle: toggleTheme,
+    reset: resetTheme,
+    init: initTheme,
+  },
   /** Preview helper — signs in a local demo member (no server call). */
   demoSignIn({
     id = "100001",

@@ -73,10 +73,21 @@ const page = ([file, title, iconName, description, note]) => `<!doctype html>
     <link rel="stylesheet" href="assets/css/layout.css" />
     <link rel="stylesheet" href="assets/css/components.css" />
     <script>
-      try {
-        var savedTheme = JSON.parse(localStorage.getItem("1w.theme") || '"dark"');
-        document.documentElement.dataset.theme = savedTheme === "light" ? "light" : "dark";
-      } catch (e) {}
+      /* apply the saved theme (or the OS preference) before first paint */
+      (function () {
+        try {
+          var saved = JSON.parse(localStorage.getItem("1w.theme") || "null");
+          var theme =
+            saved === "light" || saved === "dark"
+              ? saved
+              : window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
+                ? "light"
+                : "dark";
+          document.documentElement.dataset.theme = theme;
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute("content", theme === "light" ? "#f4f4f5" : "#060607");
+        } catch (e) {}
+      })();
     </script>
     <script type="module" src="assets/js/app.js"></script>
   </head>

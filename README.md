@@ -147,8 +147,22 @@ node tools/build-pages.mjs
 
 ---
 
-## Theme
+## Light & dark mode
 
-Black is the default; the sidebar has a light (white) switch that is remembered in
-`localStorage` and applied before first paint. Both themes share the same monochrome
-palette — grey text, white accents, no brand colours except inside platform logos.
+Both modes are complete — every surface, card, form, toast, hero overlay and media
+treatment is themed, not just the background.
+
+- **First visit** follows the operating system (`prefers-color-scheme`), and keeps
+  following it live until the visitor chooses a side.
+- **Switching** is available in two places: the sun/moon button in the header and the
+  Dark/Light control at the bottom of the sidebar (always reachable from the menu on
+  phones). The choice is stored in `localStorage` under `1w.theme`.
+- The decision is applied by an inline script **before first paint** (no flash), and the
+  browser chrome follows via `theme-color` and `color-scheme`.
+- Artwork stays monochrome in both modes: posters are desaturated and only resolve to
+  colour on hover, with the filter tuned per theme (`--art-filter`, `--hero-art-filter`).
+- The switch triggers a short 300 ms colour transition so the change reads as deliberate.
+
+Logic lives in `assets/js/theme.js` (`initTheme`, `setTheme`, `toggleTheme`,
+`resetTheme`, `systemTheme`). Call `OneW.theme.reset()` from the console to fall back to
+the operating system preference.

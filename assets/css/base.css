@@ -65,6 +65,16 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-serif: "Instrument Serif", "Iowan Old Style", Georgia, "Times New Roman", serif;
 
+  /* media treatment (kept monochrome in both themes) */
+  --art-filter: grayscale(1) contrast(1.05) brightness(0.92);
+  --art-filter-hover: grayscale(0) contrast(1) brightness(0.98);
+  --hero-art-filter: grayscale(1) contrast(1.08) brightness(0.92);
+  --wordmark-stroke: rgba(255, 255, 255, 0.14);
+
+  /* fields */
+  --input-bg: color-mix(in srgb, var(--surface) 80%, transparent);
+  --input-bg-focus: var(--surface-2);
+
   /* hero base (visible before artwork arrives) */
   --hero-base: radial-gradient(120% 100% at 78% 18%, #1b1b21 0%, #0b0b0e 45%, #060607 100%);
 
@@ -78,8 +88,8 @@ html[data-theme="light"] {
   --bg: #f4f4f5;
   --bg-soft: #ffffff;
   --surface: #ffffff;
-  --surface-2: #fbfbfc;
-  --surface-3: #efeff1;
+  --surface-2: #f7f7f9;
+  --surface-3: #ededf0;
   --surface-inv: #0f0f12;
 
   --line: rgba(10, 10, 12, 0.09);
@@ -88,8 +98,8 @@ html[data-theme="light"] {
 
   --text: #0b0b0d;
   --text-2: #2c2c33;
-  --muted: #5c5c66;
-  --faint: #8b8b95;
+  --muted: #56565f;
+  --faint: #77777f;
   --ink: #ffffff;
 
   --accent: #0b0b0d;
@@ -101,6 +111,12 @@ html[data-theme="light"] {
   --glow: radial-gradient(60% 60% at 50% 0%, rgba(10, 10, 14, 0.06), transparent 70%);
 
   --hero-base: radial-gradient(120% 100% at 78% 18%, #ffffff 0%, #eeeeef 45%, #e7e7e9 100%);
+  --art-filter: grayscale(1) contrast(1.02) brightness(0.98);
+  --art-filter-hover: grayscale(0) contrast(1) brightness(1);
+  --hero-art-filter: grayscale(1) contrast(0.96) brightness(1.08);
+  --wordmark-stroke: rgba(10, 10, 12, 0.18);
+  --input-bg: #fbfbfc;
+  --input-bg-focus: #ffffff;
 
   --scrim: linear-gradient(90deg, rgba(244, 244, 245, 0.97) 0%, rgba(244, 244, 245, 0.86) 40%, rgba(244, 244, 245, 0.25) 72%, rgba(244, 244, 245, 0.6) 100%),
     linear-gradient(0deg, var(--bg) 2%, rgba(244, 244, 245, 0.15) 55%, rgba(244, 244, 245, 0.55) 100%);
@@ -552,7 +568,7 @@ html[data-theme="light"] .btn--primary {
   padding: 0.85rem 1rem;
   border-radius: var(--radius-sm);
   border: 1px solid var(--line-2);
-  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  background: var(--input-bg);
   color: var(--text);
   font-size: 0.92rem;
   transition: border-color 0.2s var(--ease), background 0.2s var(--ease), box-shadow 0.2s var(--ease);
@@ -568,7 +584,7 @@ html[data-theme="light"] .btn--primary {
 .select:focus {
   outline: none;
   border-color: var(--line-3);
-  background: var(--surface-2);
+  background: var(--input-bg-focus);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--text) 7%, transparent);
 }
 
@@ -586,6 +602,39 @@ html[data-theme="light"] .btn--primary {
   font-size: 0.76rem;
   color: var(--text-2);
   opacity: 0.9;
+}
+
+/* ------------------------------------------------------------------ */
+/* appearance switch                                                  */
+/* ------------------------------------------------------------------ */
+html.is-theme-changing body,
+html.is-theme-changing .site-header,
+html.is-theme-changing .site-header::before,
+html.is-theme-changing .sidebar,
+html.is-theme-changing .site-footer,
+html.is-theme-changing .hero__kicker,
+html.is-theme-changing .segmented,
+html.is-theme-changing .wallet,
+html.is-theme-changing .account,
+html.is-theme-changing .plan,
+html.is-theme-changing .feature,
+html.is-theme-changing .app-card,
+html.is-theme-changing .platform-card,
+html.is-theme-changing .support-card,
+html.is-theme-changing .support-links,
+html.is-theme-changing .search-panel,
+html.is-theme-changing .notif__panel,
+html.is-theme-changing .toast,
+html.is-theme-changing .pcard__media,
+html.is-theme-changing .chcard__media,
+html.is-theme-changing .snav__link,
+html.is-theme-changing .chip,
+html.is-theme-changing .btn,
+html.is-theme-changing .icon-btn,
+html.is-theme-changing .input,
+html.is-theme-changing .textarea,
+html.is-theme-changing .select {
+  transition: background-color 0.3s ease, background 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }
 
 /* ------------------------------------------------------------------ */
