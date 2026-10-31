@@ -292,8 +292,12 @@ export async function loadSeries() {
 
 const mapChannel = (row, index, premium) => {
   const name = pick(row, ["channel_name", "name", "title", "Channel Name"], `Channel ${index + 1}`);
+  const fallbackId = `playlist${String(index + 1).padStart(6, "0")}`;
+  // The public deep-link is the M3U / playlist identity, not the row uuid.
+  const m3u = pick(row, ["m3u", "m3u_id", "playlist_id", "channel_id", "id"], fallbackId);
   return {
-    id: pick(row, ["id", "m3u", "m3u_id", "playlist_id", "channel_id"], `playlist${String(index + 1).padStart(6, "0")}`),
+    id: pick(row, ["id"], m3u),
+    m3u,
     name,
     category: pick(row, ["channel_category", "category", "genre"], "General"),
     group: pick(row, ["channel_group", "group", "country"], "Global"),
@@ -301,12 +305,16 @@ const mapChannel = (row, index, premium) => {
     link: pick(row, ["channel_link", "url", "stream_url", "link"], ""),
     views: Number(pick(row, ["channel_views_per_minute", "views_per_minute", "views", "viewers"], 0)) || 0,
     premium: Boolean(premium),
-    href: `iptv.html?M3U=${encodeURIComponent(pick(row, ["id", "m3u", "playlist_id", "channel_id"], `playlist${index + 1}`))}`,
+    href: `iptv.html?M3U=${encodeURIComponent(m3u)}`,
   };
 };
 
 async function loadChannelTable(table, premium) {
-  const rows = await rest(table, { limit: 40 }).catch(() => null);
+  const rows = await rest(table, {
+    limit: 40,
+    order: "channel_views_per_minute.desc",
+  }).catch(() => null);
+  if (Array.isArray(rows)) rows.sort((a, b) => Number(b.channel_views_per_minute || 0) - Number(a.channel_views_per_minute || 0));
   if (!Array.isArray(rows) || !rows.length) return null;
   return rows.map((row, i) => mapChannel(row, i, premium));
 }
@@ -331,7 +339,7 @@ export async function loadChannels() {
 }
 
 export async function loadFeatures() {
-  const rows = await rest("features", { limit: 12 }).catch(() => null);
+  const rows = await rest("features", { limit: 12, order: "display_order.asc" }).catch(() => null);
   if (!Array.isArray(rows) || !rows.length) return FALLBACK_FEATURES.map((f) => ({ ...f, clicks: 0, releaseDate: "" }));
   return rows.slice(0, 12).map((row, i) => ({
     id: pick(row, ["id", "feature_id"], `f${i}`),

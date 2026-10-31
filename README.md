@@ -72,14 +72,50 @@ through the REST endpoint only (no SDK, no build step). Tables used on this page
 
 | Table | Purpose on the homepage |
 | --- | --- |
-| `members` | points (`points` / `balance`), `level`, `membership`, `avatar`, `username` |
-| `notifications` | bell panel (`title`, `subject`, `read_or_unread`, `creation_date`) |
-| `features` | feature grid |
+| `members` | points, `level`, `membership`, `avatar_url`, `username` (never public — see RLS) |
+| `members_public` (view) | safe, non-sensitive member columns for public profiles |
+| `notifications` | bell panel (`title`, `subject`, `read_or_unread`, `created_at`) |
+| `features` | feature grid, ordered by `display_order` |
 | `apps` (or `app_versions`, `versions`) | download links per system |
-| `iptvfree` / `iptvpremium` | channel reels |
+| `iptvfree` / `iptvpremium` | channel reels, most-watched first (`channel_views_per_minute`) |
+| `messages` | the support / contact form writes here as an anonymous visitor |
 
 Column names are read defensively (`feature_title` **or** `title`, `id_member` **or**
 `member_id`, …), so small schema differences will not break the page.
+
+### The live schema
+
+The project already contains the full schema (migrations `core_schema`,
+`rls_policies_and_public_api`, `seed_catalogue`, `alias_iptvpremuim_view`):
+
+| Table | What it holds |
+| --- | --- |
+| `members` | account row: `member_code` (6 digits), `username` (`@handle`), `email`, `status`, `level` 1‑10, `membership` free/silver/gold/diamond, `points`, `viewing_codes_limit`, avatar/cover |
+| `profiles` | public profile (same `id` as the member, created by a trigger) |
+| `profile_follows` | follower graph, counts kept in sync by trigger |
+| `notifications` | per-member inbox (`id_member`, `source`, `title`, `subject`, `read_or_unread`) |
+| `points_ledger` | every credit/debit with `delta` and `balance_after` |
+| `viewing_codes` | 6‑digit codes, capped per member by `members.viewing_codes_limit` |
+| `sessions` | token hashes, 30‑day expiry, revocation |
+| `visitor_visits` / `member_visits` | traffic and dwell time |
+| `messages` | support/contact messages (anonymous insert allowed) |
+| `features` | homepage feature cards |
+| `apps` | one row per OS version, with download counters |
+| `channels` | master channel registry |
+| `iptvfree` / `iptvpremium` | the two channel reels shown on the homepage |
+
+`iptvpremium` is the real table name; a read-only view called **`iptvpremuim`** keeps the
+original spelling working.
+
+**Row Level Security is on for every table.** Anonymous visitors (the publishable key) can
+read published `features`, `apps`, `channels`, `iptvfree`, `iptvpremium`, public
+`profiles` and `members_public`, and can *insert* a `messages` row. Everything member
+specific (`members`, `notifications`, `points_ledger`, `sessions`, `viewing_codes`,
+`member_visits`) is readable only by that member's authenticated session. The helper RPC
+`member_notifications(member_id, limit)` returns an inbox without exposing the table.
+
+Points are never written by hand: inserting into `points_ledger` updates
+`members.points` and stamps `balance_after` in the same transaction.
 
 **TMDB** — trending films/series with the provided API key. If TMDB is unreachable, the
 page falls back to a curated local catalogue and generates monochrome typographic
