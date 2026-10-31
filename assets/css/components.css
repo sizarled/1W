@@ -425,14 +425,45 @@ html[data-theme="light"] .hero__title {
   overflow-x: auto;
   overflow-y: hidden;
   scroll-snap-type: x proximity;
-  scroll-behavior: smooth;
   scrollbar-width: none;
   padding-block: 0.7rem 0.9rem;
   scroll-padding-left: 0;
+  overscroll-behavior-x: contain;
 }
 
 .rail__track::-webkit-scrollbar {
   display: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* drag-to-scroll (mouse)                                             */
+/* ------------------------------------------------------------------ */
+.is-draggable {
+  cursor: grab;
+}
+
+.is-draggable.is-dragging,
+.is-draggable.is-wheel-scrolling {
+  /* kills smooth-scroll lag and snap fighting while the pointer moves */
+  scroll-behavior: auto;
+  scroll-snap-type: none;
+}
+
+.is-draggable.is-dragging {
+  cursor: grabbing;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+html.is-grabbing,
+html.is-grabbing * {
+  cursor: grabbing !important;
+}
+
+.is-draggable.is-dragging img,
+.is-draggable.is-dragging a {
+  -webkit-user-drag: none;
+  user-drag: none;
 }
 
 .rail__track > * {

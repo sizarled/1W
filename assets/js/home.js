@@ -18,6 +18,7 @@ import {
   backdropPlaceholder,
   tilePlaceholder,
   store,
+  enableDragScrollAll,
 } from "./utils.js";
 import { isPremium } from "./session.js";
 import { toast } from "./ui.js";
@@ -686,6 +687,7 @@ export async function initHome() {
   if (seriesTrack) seriesTrack.innerHTML = skeletons(8);
 
   qsa("section").forEach((section) => { if (qs(".rail", section)) initRail(section); });
+  enableDragScrollAll();
   initHero();
   initSearch();
   initIptv();

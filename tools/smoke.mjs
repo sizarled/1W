@@ -126,7 +126,26 @@ click(document.querySelector('.tool-btn[data-theme-toggle]'));
 await wait(80);
 appearance.afterSidebarClick = themeState();
 
-Object.assign(report, { heroTitles, premiumChannels, lockedCount, lockedToast, goldPrice6: plan.querySelector("[data-price]").textContent, signedIn, notifOpen, appearance });
+// ---- drag to scroll -----------------------------------------------
+const fire = (el, type, props) => {
+  const ev = new window.Event(type, { bubbles: true, cancelable: true });
+  Object.assign(ev, props);
+  el.dispatchEvent(ev);
+};
+const dragTrack = document.querySelector("#movies [data-rail-track]");
+const drag = {
+  wired: document.querySelectorAll('[data-drag-ready="1"]').length,
+  tracks: document.querySelectorAll(".rail__track, .plans").length,
+};
+fire(dragTrack, "pointerdown", { pointerType: "mouse", button: 0, pointerId: 1, clientX: 240, clientY: 320 });
+drag.downClass = dragTrack.classList.contains("is-dragging");
+fire(dragTrack, "pointermove", { pointerType: "mouse", button: 0, pointerId: 1, clientX: 320, clientY: 322 });
+drag.grabCursor = document.documentElement.classList.contains("is-grabbing");
+fire(dragTrack, "pointerup", { pointerType: "mouse", button: 0, pointerId: 1, clientX: 320, clientY: 322 });
+drag.upClass = dragTrack.classList.contains("is-dragging");
+drag.grabReleased = document.documentElement.classList.contains("is-grabbing");
+
+Object.assign(report, { heroTitles, premiumChannels, lockedCount, lockedToast, goldPrice6: plan.querySelector("[data-price]").textContent, signedIn, notifOpen, appearance, drag });
 
 console.log(report);
 console.log("errors:", errors.length ? errors : "none");

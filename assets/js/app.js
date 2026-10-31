@@ -7,11 +7,12 @@ import { mountShell } from "./shell.js";
 import { getMember, refreshMember, setMember, signOut, noteSeen } from "./session.js";
 import { awardPoints, renderWallet, startWalletPolling, syncFromMember } from "./wallet.js";
 import { toast } from "./ui.js";
-import { avatarPlaceholder } from "./utils.js";
+import { avatarPlaceholder, enableDragScrollAll } from "./utils.js";
 import { initTheme, setTheme, toggleTheme, resetTheme, currentTheme, systemTheme } from "./theme.js";
 
 async function boot() {
   mountShell();
+  enableDragScrollAll();
 
   if (document.body.dataset.page === "home") {
     const { initHome } = await import("./home.js");
@@ -42,6 +43,7 @@ window.OneW = {
   signOut,
   refreshMember,
   setMember,
+  enableDragScrollAll,
   theme: {
     current: currentTheme,
     system: systemTheme,

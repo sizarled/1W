@@ -240,3 +240,129 @@ export function scrollRail(rail, direction = 1) {
   const amount = Math.max(rail.clientWidth * 0.8, 320);
   rail.scrollBy({ left: amount * direction, behavior: "smooth" });
 }
+
+/* ------------------------------------------------------------------ */
+/* Horizontal scrollers: click-and-drag with the mouse                */
+/* ------------------------------------------------------------------ */
+const DRAG_SELECTOR =
+  ".rail__track, .plans, .notif__filters, [data-rail-track], [data-channel-track], [data-drag-scroll]";
+
+/**
+ * Lets a horizontal scroller be dragged with the mouse (click, hold, pull left
+ * or right) while native touch swiping and the arrow buttons keep working.
+ * Idempotent: a container is only wired once.
+ */
+export function enableDragScroll(el) {
+  if (!el || el.dataset.dragReady === "1") return el;
+  el.dataset.dragReady = "1";
+  el.classList.add("is-draggable");
+
+  const THRESHOLD = 4;
+  let active = false; // pointer is down on the track
+  let moved = false; // the pointer passed the drag threshold
+  let swallowClick = false; // a drag just ended → ignore the click
+  let pointerId = null;
+  let startX = 0;
+  let startY = 0;
+  let startLeft = 0;
+
+  const stop = () => {
+    if (!active) return;
+    active = false;
+    swallowClick = moved;
+    if (pointerId !== null && el.hasPointerCapture && el.hasPointerCapture(pointerId)) {
+      el.releasePointerCapture(pointerId);
+    }
+    pointerId = null;
+    el.classList.remove("is-dragging");
+    document.documentElement.classList.remove("is-grabbing");
+  };
+
+  el.addEventListener("pointerdown", (event) => {
+    // Touch and pen keep their native momentum scrolling.
+    if (event.pointerType === "touch" || event.button !== 0) return;
+    active = true;
+    moved = false;
+    swallowClick = false;
+    pointerId = event.pointerId;
+    startX = event.clientX;
+    startY = event.clientY;
+    startLeft = el.scrollLeft;
+    el.classList.add("is-dragging");
+  });
+
+  el.addEventListener("pointermove", (event) => {
+    if (!active || event.pointerId !== pointerId) return;
+    const dx = event.clientX - startX;
+    const dy = event.clientY - startY;
+
+    if (!moved) {
+      if (Math.abs(dx) < THRESHOLD) return;
+      // Mostly vertical movement: the visitor is scrolling the page, not the rail.
+      if (Math.abs(dx) <= Math.abs(dy)) {
+        stop();
+        return;
+      }
+      moved = true;
+      el.setPointerCapture?.(pointerId);
+      document.documentElement.classList.add("is-grabbing");
+    }
+
+    event.preventDefault();
+    el.scrollLeft = startLeft - dx;
+  });
+
+  el.addEventListener("pointerup", stop);
+  el.addEventListener("pointercancel", stop);
+  el.addEventListener("lostpointercapture", stop);
+
+  // Never start a native image/link drag while pulling the rail.
+  el.addEventListener("dragstart", (event) => event.preventDefault());
+
+  // A drag must not open the card the pointer happened to finish on.
+  el.addEventListener(
+    "click",
+    (event) => {
+      if (!swallowClick) return;
+      swallowClick = false;
+      event.preventDefault();
+      event.stopPropagation();
+    },
+    true
+  );
+
+  // Vertical wheel over a rail scrolls it sideways until it reaches an edge,
+  // then the page takes over again.
+  el.addEventListener(
+    "wheel",
+    (event) => {
+      if (event.ctrlKey) return;
+      const max = el.scrollWidth - el.clientWidth;
+      if (max <= 0) return;
+      const horizontal = Math.abs(event.deltaX) > Math.abs(event.deltaY);
+      const delta = horizontal ? event.deltaX : event.deltaY;
+      if (!horizontal && !event.shiftKey) {
+        const atStart = el.scrollLeft <= 0;
+        const atEnd = el.scrollLeft >= max - 1;
+        if ((delta > 0 && atEnd) || (delta < 0 && atStart)) return; // let the page scroll
+      }
+      event.preventDefault();
+      el.classList.add("is-wheel-scrolling");
+      el.scrollLeft += delta;
+      clearTimeout(el.__wheelTimer);
+      el.__wheelTimer = setTimeout(() => el.classList.remove("is-wheel-scrolling"), 140);
+    },
+    { passive: false }
+  );
+
+  return el;
+}
+
+/** Wires every horizontal scroller inside `root` (defaults to the document). */
+export function enableDragScrollAll(root = document) {
+  const scope = root?.querySelectorAll ? root : document;
+  const nodes = new Set(scope.querySelectorAll(DRAG_SELECTOR));
+  if (scope.matches?.(DRAG_SELECTOR)) nodes.add(scope);
+  nodes.forEach((node) => enableDragScroll(node));
+  return nodes.size;
+}

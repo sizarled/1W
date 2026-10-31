@@ -41,6 +41,20 @@ folder structure intact because the JS uses native ES modules.
 | **Platform** | The 14 social platforms, horizontally scrollable, each with its brand glyph. |
 | **Footer** | Description, social dots, four link columns, legal bar and an outlined wordmark. |
 
+### Scrolling the reels
+
+Every horizontal reel (films, series, IPTV, apps, platforms, membership plans, the
+notification filters) works three ways:
+
+- **Mouse drag** — press and hold anywhere on the reel, then pull left or right. The
+  cursor turns into a grabbing hand, the card under the pointer is not opened when a drag
+  ends on it, and a mostly-vertical pull scrolls the page instead of the reel.
+- **Wheel / trackpad** — a vertical wheel over a reel moves it sideways until it hits an
+  edge, then the page scrolls again. `Shift` + wheel and a two-finger horizontal swipe
+  work everywhere.
+- **Arrow buttons** — the `‹ ›` pair at the top right of each section, plus native
+  touch swiping on phones and tablets.
+
 ---
 
 ## Sounds
