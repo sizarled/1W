@@ -493,7 +493,8 @@ function imgTag(src, fallback, alt, cls = "") {
   const source = src || fallback || "";
   const fb = fallback && fallback !== source ? `data-fb="${esc(fallback)}"` : "";
   return `<img class="${cls}" src="${esc(source)}" alt="${esc(alt)}" loading="lazy" decoding="async" ${fb}
-    onerror="this.onerror=null;this.src=this.dataset.fb||''" />`;
+    onload="this.classList.add('is-loaded')"
+    onerror="this.onerror=null;this.src=this.dataset.fb||'';this.classList.add('is-loaded')" />`;
 }
 
 /* ================================================================== */

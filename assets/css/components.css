@@ -345,9 +345,8 @@ html[data-theme="light"] .hero__title {
   gap: 5px;
   width: clamp(44px, 5vw, 60px);
   padding: 0;
-  opacity: 0.42;
-  filter: grayscale(1);
-  transition: opacity 0.3s var(--ease), filter 0.3s var(--ease), transform 0.3s var(--ease);
+  opacity: 0.46;
+  transition: opacity 0.3s var(--ease), transform 0.3s var(--ease);
 }
 
 .hero__thumb img,
@@ -367,7 +366,6 @@ html[data-theme="light"] .hero__title {
 
 .hero__thumb.is-active {
   opacity: 1;
-  filter: none;
 }
 
 .hero__thumb.is-active img {
@@ -923,12 +921,11 @@ html.is-grabbing * {
   border-radius: 13px;
   object-fit: cover;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  filter: grayscale(1);
-  transition: filter 0.4s var(--ease);
+  transition: transform 0.4s var(--ease);
 }
 
 .chcard:hover .chcard__logo {
-  filter: grayscale(0);
+  transform: scale(1.04);
 }
 
 .chcard__live {

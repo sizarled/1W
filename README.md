@@ -289,8 +289,11 @@ treatment is themed, not just the background.
   phones). The choice is stored in `localStorage` under `1w.theme`.
 - The decision is applied by an inline script **before first paint** (no flash), and the
   browser chrome follows via `theme-color` and `color-scheme`.
-- Artwork stays monochrome in both modes: posters are desaturated and only resolve to
-  colour on hover, with the filter tuned per theme (`--art-filter`, `--hero-art-filter`).
+- Artwork keeps its **real colours** in both modes — posters, backdrops, cast photos and
+  channel logos are only lightly graded (`--art-filter`, `--hero-art-filter`), so a light
+  theme never washes them out and a dark theme never drains them.
+- Poster cards fade in once the bitmap is ready (`.pcard__img` → `.is-loaded`), which is
+  why every generated image carries an `onload` hook.
 - The switch triggers a short 300 ms colour transition so the change reads as deliberate.
 
 Logic lives in `assets/js/theme.js` (`initTheme`, `setTheme`, `toggleTheme`,

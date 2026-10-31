@@ -135,6 +135,10 @@ __debug.tracker.pending = 42;
 __debug.tracker.seconds = 42;
 await __debug.flushTracker();
 report.watchtimeLogged = calls.some((c) => c.includes("/rpc/log_watchtime"));
+report.relatedImgClassHook = [...document.querySelectorAll('[data-w-rail="related"] img.pcard__img')].every(
+  (img) => img.getAttribute("onload")?.includes("is-loaded")
+);
+report.relatedImgSrc = document.querySelector('[data-w-rail="related"] img.pcard__img')?.getAttribute("src") || null;
 report.visitLogged = calls.some((c) => c.includes("/rpc/log_visit"));
 report.visitId = window.sessionStorage.getItem("1w.visit") ? JSON.parse(window.sessionStorage.getItem("1w.visit")).visitId : null;
 

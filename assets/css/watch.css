@@ -231,7 +231,7 @@
   inset: 0;
   background-size: cover;
   background-position: center;
-  filter: var(--hero-art-filter) brightness(0.55) saturate(0.85);
+  filter: var(--hero-art-filter) brightness(0.62) saturate(1.05);
   transform: scale(1.02);
 }
 
