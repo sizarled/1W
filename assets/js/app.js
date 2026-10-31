@@ -19,6 +19,11 @@ async function boot() {
     initHome().catch((error) => console.warn("[1World] homepage data:", error));
   }
 
+  if (document.body.dataset.page === "watch") {
+    const { initWatch } = await import("./watch.js");
+    initWatch().catch((error) => console.warn("[1World] watch page:", error));
+  }
+
   const member = getMember();
   if (member) {
     const fresh = await refreshMember().catch(() => null);

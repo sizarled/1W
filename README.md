@@ -57,6 +57,47 @@ notification filters) works three ways:
 
 ---
 
+## The watch page
+
+`watch.html` is a real page, not a placeholder. It reads the title from the URL and builds
+everything around it:
+
+```
+watch.html?tv=1399                        series, season 1 episode 1
+watch.html?movie=550&publisher=<uuid>     film + referral publisher
+watch.html?tv=1399&season=2&episode=3     a specific episode
+watch.html?movie=550&link=link000004      start on a specific member source
+```
+
+| Block | Behaviour |
+| --- | --- |
+| Title header | Poster, display + original title, tagline, synopsis, certification, status, genres and every TMDB fact (runtime, seasons, rating, director, writers, studios, countries, language). |
+| Actions | Like / dislike (one vote per member, changeable), comments toggle, total minutes, watch later, download, share, report. |
+| Player | Poster + play button + duration. Play opens the **30-second sponsor gate**: the countdown only starts once the sponsor link is opened, and it stops when the page is closed. Then `vidsrc.sh/embed/…` loads. |
+| Viewing code | Five minutes after playback starts — for titles rated **≥ 50 % on TMDB or age-restricted** — the film stops, fullscreen exits and the lock panel asks for a six-digit code. Codes are checked through `verify_watch_code()` against `viewing_codes`; "remember this device" binds the code to a random device id. |
+| Seasons | Season + episode pickers for series; changing either restarts the player and the ledger. |
+| Watch links | The platform source is always first (logo only, URL hidden). Member links show favicon, site name, quality (SD → 8K), audio, subtitles and ads. Picking one loads it in the same player and prints its details underneath. |
+| Cast & crew | Director, writers, producers and cast — every card opens `cast.html?id=<personId>`. |
+| Official providers | TMDB watch providers for the visitor's region, logo + name + type. |
+| Comments | Public read, member write, nested replies, agree / disagree counters (kept by a trigger), reply and report. |
+| Related | Saga parts, recommendations and similar titles. |
+| Playlists | Member playlists that contain this title → `playlist.html?id=<idplaylist>&creator=…`. |
+| Member content | Videos, articles, answers, documents, reviews and recommendations that mention the title, most-watched first. |
+| Prizes / Tasks | Published prizes (`prizeavilable`) and offers from the tasks network — impressions, clicks and completions are logged in `taskimpretion`, `taskclick`, `taskcomplet`, and a verified payout credits `points_ledger` at $1 = 100 points. |
+| Exit intent | Leaving the page (or opening another title) while playing asks: finished / continue later / not interested. The choice lands in the member's system playlist + `hestory`. |
+
+**Watch-time ledger.** While the player runs, the page counts real seconds only when the
+tab is visible, the browser is online and playback is active; it flushes to `watchtime`
+every 20 seconds and on hide/unload (`keepalive`). Ad blockers get a probe at load: their
+minutes are stored with `is_eligible = false`, so nothing is credited — previously earned
+minutes are never removed. Reaching **1000 eligible minutes** fires the ad-network hook
+`_Wi()` exactly once per member (`claim_milestone`).
+
+**Ads.** The site tag and the Adsterra popunder live in the `<head>` of `watch.html`; the
+1000-minute hook is fired from JavaScript only when the milestone is claimed.
+
+---
+
 ## Sounds
 
 Played from the public `source` bucket of the Supabase project:
@@ -117,6 +158,28 @@ The project already contains the full schema (migrations `core_schema`,
 | `apps` | one row per OS version, with download counters |
 | `channels` | master channel registry |
 | `iptvfree` / `iptvpremium` | the two channel reels shown on the homepage |
+
+### Watch-page tables
+
+| Table | What it holds |
+| --- | --- |
+| `watchlink` | Player sources: `idtmdb`, `media_type`, season/episode, site name + logo, URL, quality (SD…8K), audio, subtitles, ads flag, `is_hidden` (hide the URL), `publisher_id` (null = platform), clicks |
+| `watchtime` | Seconds watched, per member, publisher, title and source; `is_eligible` is false when an ad blocker was detected |
+| `hestory` | Resume / history points per member and episode |
+| `comment` + `comment_reaction` | Threads keyed by `location` (`movie:1399`, `tv:1399:season:1:episode:1`), agree / disagree counters kept by trigger |
+| `content_reaction` / `watch_later` | Like-dislike per title and the watch-later list |
+| `playlists` + `playlistmovie` / `playlisttv` | Playlist identity (name, visibility, owner, `system_kind` for completed/later/not-interested) and its items |
+| `reportlink` | Reports: broken, misleading, harmful, other |
+| `prizeavilable` | Published prizes with points cost and expiry |
+| `channelsvideo`, `blogarticle`, `spaceanswer`, `libraryducment`, `reviewwatch`, `postrecommendation` | Member content matched by title / keywords, sorted by watched minutes |
+| `taskimpretion`, `taskclick`, `taskcomplet` | Offers-network events; a completion stores payout + points once |
+| `watch_code_devices`, `watch_sessions`, `member_milestones` | Device binding for viewing codes, playback sessions, and the 1000-minute milestone |
+
+SQL for all of it lives in `tools/sql/watch-page.sql`.
+
+Functions: `content_stats(location)`, `content_minutes(idtmdb, type)`,
+`member_watch_minutes(member)`, `verify_watch_code(code, device, member)`,
+`claim_milestone(member, milestone)`.
 
 `iptvpremium` is the real table name; a read-only view called **`iptvpremuim`** keeps the
 original spelling working.

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Watch — 1World Web</title>
-    <meta name="description" content="Player page: stream, synopsis, cast, ratings and member comments." />
+    <meta name="description" content="Watch films and series: synopsis, cast, official providers, member links, comments and everything related." />
     <meta name="theme-color" content="#060607" />
     <meta name="robots" content="noindex" />
     <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml" />
@@ -14,6 +14,7 @@
     <link rel="stylesheet" href="assets/css/base.css" />
     <link rel="stylesheet" href="assets/css/layout.css" />
     <link rel="stylesheet" href="assets/css/components.css" />
+    <link rel="stylesheet" href="assets/css/watch.css" />
     <script>
       /* apply the saved theme (or the OS preference) before first paint */
       (function () {
@@ -31,43 +32,332 @@
         } catch (e) {}
       })();
     </script>
+
+    <!-- ad network: site tag -->
+    <script type="text/javascript">
+      var YzVtb_QwE_HznKfc = { it: 4638953, key: "0cad4" };
+    </script>
+    <script src="https://d1chbu4sfo2xhu.cloudfront.net/a91fd0a.js" async></script>
+    <!-- adsterra popunder -->
+    <script data-cfasync="false" src="https://aarems.org/1/040ec503f7ba207e96e2acce3de1a24d" async></script>
+
     <script type="module" src="assets/js/app.js"></script>
   </head>
   <body data-page="watch" data-title="Watch">
     <a class="skip-link" href="#main">Skip to content</a>
+
     <div data-site-header></div>
     <div data-site-sidebar></div>
+    <div data-scrim hidden></div>
 
-    <main class="site-main" id="main">
-      <section class="soon">
-        <div class="soon__inner">
-          <span class="soon__icon"><i data-icon="play"></i></span>
-          <p class="eyebrow"><span class="eyebrow__dot"></span>Page in build</p>
-          <h1 class="soon__title">Watch</h1>
-          <p class="soon__text">Player page: stream, synopsis, cast, ratings and member comments. Opens a film with ?movie=ID or a series with ?tv=ID.</p>
+    <main class="site-main watch" id="main">
+      <nav class="watch__crumbs" aria-label="Breadcrumb">
+        <a href="index.html">Home</a><span aria-hidden="true">/</span>
+        <a href="movies.html" data-w-crumb-kind>Movies</a><span aria-hidden="true">/</span>
+        <span data-w-crumb-title>Loading…</span>
+      </nav>
 
-          <div class="soon__meta">
-            <span class="badge badge--solid">watch.html</span>
-            <span class="badge">Next release</span>
-            <span class="badge">1World Web</span>
+      <!-- title ------------------------------------------------------ -->
+      <section class="w-hero" data-w-hero aria-busy="true">
+        <div class="w-hero__art">
+          <img data-w-poster alt="" width="232" height="348" />
+        </div>
+        <div class="w-hero__body">
+          <div class="w-hero__kicker">
+            <span class="badge badge--solid" data-w-kind>Film</span>
+            <span class="badge" data-w-cert hidden></span>
+            <span class="badge" data-w-status hidden></span>
           </div>
+          <h1 class="w-hero__title" data-w-title>Loading…</h1>
+          <p class="w-hero__orig" data-w-original hidden></p>
+          <p class="w-hero__tagline" data-w-tagline hidden></p>
+          <p class="w-hero__overview" data-w-overview></p>
 
-          <div class="soon__actions">
-            <a class="btn btn--primary" href="index.html"><i data-icon="arrowLeft"></i> Back to homepage</a>
-            <a class="btn btn--ghost" href="index.html#membership"><i data-icon="crown"></i> Membership</a>
-          </div>
+          <div class="w-genres" data-w-genres></div>
+          <div class="w-meta" data-w-meta></div>
 
-          <div class="soon__links">
-            <a class="soon__link" href="index.html"><i data-icon="home"></i>Home</a>
-            <a class="soon__link" href="search.html"><i data-icon="search"></i>Search</a>
-            <a class="soon__link" href="movies.html"><i data-icon="film"></i>Movies</a>
-            <a class="soon__link" href="series.html"><i data-icon="tv"></i>Series</a>
-            <a class="soon__link" href="iptv.html"><i data-icon="broadcast"></i>IPTV</a>
-            <a class="soon__link" href="help.html"><i data-icon="lifebuoy"></i>Help</a>
+          <div class="w-actions" data-w-actions>
+            <button class="w-act" type="button" data-w-like aria-pressed="false">
+              <i data-icon="thumbUp"></i><span class="w-act__label">Like</span><span class="w-act__count" data-w-like-count>0</span>
+            </button>
+            <button class="w-act" type="button" data-w-dislike aria-pressed="false">
+              <i data-icon="thumbDown"></i><span class="w-act__label">Dislike</span><span class="w-act__count" data-w-dislike-count>0</span>
+            </button>
+            <button class="w-act" type="button" data-w-comments-toggle aria-expanded="false" aria-controls="comments">
+              <i data-icon="comment"></i><span class="w-act__label">Comments</span><span class="w-act__count" data-w-comment-count>0</span>
+            </button>
+            <span class="w-act" title="Minutes watched by members">
+              <i data-icon="eye"></i><span class="w-act__label">Views</span><span class="w-act__count" data-w-views-count>0</span>
+            </span>
+            <button class="w-act" type="button" data-w-later aria-pressed="false">
+              <i data-icon="bookmark"></i><span class="w-act__label">Watch later</span>
+            </button>
+            <a class="w-act" data-w-download href="download.html">
+              <i data-icon="download"></i><span class="w-act__label">Download</span>
+            </a>
+            <button class="w-act" type="button" data-w-share>
+              <i data-icon="share"></i><span class="w-act__label">Share</span>
+            </button>
+            <button class="w-act" type="button" data-w-report>
+              <i data-icon="flag"></i><span class="w-act__label">Report</span>
+            </button>
           </div>
         </div>
       </section>
+
+      <!-- player ---------------------------------------------------- -->
+      <section class="w-player" data-w-player>
+        <div class="w-player__stage" data-w-stage>
+          <div class="w-player__poster" data-w-backdrop></div>
+
+          <div class="w-player__idle" data-w-idle>
+            <span class="w-player__duration" data-w-duration></span>
+            <button class="w-player__play" type="button" data-w-play>
+              <span class="w-player__play-disc"><i data-icon="play"></i></span>
+              <span class="w-player__play-label">Play</span>
+            </button>
+            <span class="w-player__duration" data-w-duration-sub></span>
+          </div>
+
+          <div class="w-player__frame" data-w-frame hidden></div>
+
+          <!-- ad gate -->
+          <div class="w-player__gate" data-w-ad hidden>
+            <div class="w-gate">
+              <span class="w-gate__icon"><i data-icon="shield"></i></span>
+              <h2 class="w-gate__title">One quick step</h2>
+              <p class="w-gate__text">
+                Open the sponsor link below and keep it open for <b>30 seconds</b>. The countdown starts the
+                moment the link opens and pauses if you leave this page.
+              </p>
+              <a class="w-gate__link" data-w-ad-link href="#" target="_blank" rel="noopener sponsored">
+                <i data-icon="external"></i> Open the link
+              </a>
+              <div class="w-gate__ring" data-w-ad-ring>
+                <svg viewBox="0 0 80 80" aria-hidden="true">
+                  <circle class="track" cx="40" cy="40" r="36"></circle>
+                  <circle class="fill" cx="40" cy="40" r="36" data-w-ad-progress></circle>
+                </svg>
+                <span class="w-gate__count" data-w-ad-count>30</span>
+              </div>
+              <p class="w-gate__text" data-w-ad-note>Waiting for you to open the link…</p>
+            </div>
+          </div>
+
+          <!-- viewing-code gate -->
+          <div class="w-player__gate" data-w-lock hidden>
+            <div class="w-gate">
+              <span class="w-gate__icon"><i data-icon="lock"></i></span>
+              <h2 class="w-gate__title">Enter your viewing code</h2>
+              <p class="w-gate__text">
+                This title needs a six-digit viewing code. Create or manage your codes in
+                <a href="dashboard.html#codes" style="text-decoration: underline">your dashboard</a>.
+              </p>
+              <button class="w-gate__link" type="button" data-w-unlock>Open the lock</button>
+
+              <div class="w-gate__form" data-w-code-form hidden style="width: 100%; display: grid; gap: 0.6rem; justify-items: center">
+                <div class="w-gate__row">
+                  <input class="w-gate__input" data-w-code-input inputmode="numeric" maxlength="6" pattern="[0-9]*" placeholder="000000" aria-label="Six digit viewing code" />
+                  <button class="w-gate__link" type="button" data-w-code-submit>Unlock</button>
+                </div>
+                <label class="w-gate__check">
+                  <input type="checkbox" data-w-code-remember checked /> Remember this device
+                </label>
+                <p class="w-gate__err" data-w-code-error role="status"></p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="w-player__bar">
+          <div class="w-season" data-w-season hidden>
+            <label class="w-source" for="w-season" style="margin: 0">Season</label>
+            <select class="w-select" id="w-season" data-w-season-select></select>
+            <label class="w-source" for="w-episode" style="margin: 0">Episode</label>
+            <select class="w-select" id="w-episode" data-w-episode-select></select>
+          </div>
+          <p class="w-source" data-w-source>Source · <b>vidsrc</b></p>
+        </div>
+
+        <div class="w-sourcebox" data-w-sourcebox hidden></div>
+        <p class="w-player__note" data-w-caption-note></p>
+      </section>
+
+      <!-- watch links ----------------------------------------------- -->
+      <section class="w-sec" data-w-section="links">
+        <div class="w-sec__head">
+          <div>
+            <h2 class="w-sec__title">Watch links</h2>
+            <p class="w-sec__sub">Member sources, checked by the community. Pick one to play it here.</p>
+          </div>
+          <div class="w-sec__nav">
+            <button class="icon-btn" type="button" data-rail-prev aria-label="Scroll back"><i data-icon="chevronLeft"></i></button>
+            <button class="icon-btn" type="button" data-rail-next aria-label="Scroll forward"><i data-icon="chevronRight"></i></button>
+          </div>
+        </div>
+        <div class="rail"><div class="rail__track" data-rail-track data-w-rail="links"></div></div>
+      </section>
+
+      <!-- cast ------------------------------------------------------ -->
+      <section class="w-sec" data-w-section="cast">
+        <div class="w-sec__head">
+          <div>
+            <h2 class="w-sec__title">Director &amp; cast</h2>
+            <p class="w-sec__sub">Open anyone to see everything they worked on.</p>
+          </div>
+          <div class="w-sec__nav">
+            <button class="icon-btn" type="button" data-rail-prev aria-label="Scroll back"><i data-icon="chevronLeft"></i></button>
+            <button class="icon-btn" type="button" data-rail-next aria-label="Scroll forward"><i data-icon="chevronRight"></i></button>
+          </div>
+        </div>
+        <div class="rail"><div class="rail__track" data-rail-track data-w-rail="cast"></div></div>
+      </section>
+
+      <!-- providers ------------------------------------------------- -->
+      <section class="w-sec" data-w-section="providers">
+        <div class="w-sec__head">
+          <div>
+            <h2 class="w-sec__title">Official streaming</h2>
+            <p class="w-sec__sub">Where this title streams legally in your region.</p>
+          </div>
+          <div class="w-sec__nav">
+            <button class="icon-btn" type="button" data-rail-prev aria-label="Scroll back"><i data-icon="chevronLeft"></i></button>
+            <button class="icon-btn" type="button" data-rail-next aria-label="Scroll forward"><i data-icon="chevronRight"></i></button>
+          </div>
+        </div>
+        <div class="rail"><div class="rail__track" data-rail-track data-w-rail="providers"></div></div>
+      </section>
+
+      <!-- comments -------------------------------------------------- -->
+      <section class="w-sec" id="comments" data-w-section="comments">
+        <div class="w-sec__head">
+          <div>
+            <h2 class="w-sec__title">Comments <span class="w-sec__sub" data-w-comment-total></span></h2>
+            <p class="w-sec__sub">Everyone can read. Members can join the conversation.</p>
+          </div>
+        </div>
+        <div class="w-comments">
+          <form class="w-comment-form" data-w-comment-form>
+            <textarea data-w-comment-input maxlength="4000" placeholder="Share what you thought — spoilers welcome if you flag them." aria-label="Write a comment"></textarea>
+            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap">
+              <button class="btn btn--primary btn--sm" type="submit"><i data-icon="send"></i> Post comment</button>
+              <span class="w-sec__sub" data-w-comment-hint>Sign in to comment.</span>
+            </div>
+          </form>
+          <div class="w-comment-list" data-w-comment-list></div>
+        </div>
+      </section>
+
+      <!-- related --------------------------------------------------- -->
+      <section class="w-sec" data-w-section="related">
+        <div class="w-sec__head">
+          <div>
+            <h2 class="w-sec__title">Related &amp; similar</h2>
+            <p class="w-sec__sub">Same saga, same director, same cast — and close matches.</p>
+          </div>
+          <div class="w-sec__nav">
+            <button class="icon-btn" type="button" data-rail-prev aria-label="Scroll back"><i data-icon="chevronLeft"></i></button>
+            <button class="icon-btn" type="button" data-rail-next aria-label="Scroll forward"><i data-icon="chevronRight"></i></button>
+          </div>
+        </div>
+        <div class="rail"><div class="rail__track" data-rail-track data-w-rail="related"></div></div>
+      </section>
+
+      <!-- playlists ------------------------------------------------- -->
+      <section class="w-sec" data-w-section="playlists">
+        <div class="w-sec__head">
+          <div>
+            <h2 class="w-sec__title">Member playlists with this title</h2>
+            <p class="w-sec__sub">Lists other members built around it.</p>
+          </div>
+          <div class="w-sec__nav">
+            <button class="icon-btn" type="button" data-rail-prev aria-label="Scroll back"><i data-icon="chevronLeft"></i></button>
+            <button class="icon-btn" type="button" data-rail-next aria-label="Scroll forward"><i data-icon="chevronRight"></i></button>
+          </div>
+        </div>
+        <div class="rail"><div class="rail__track" data-rail-track data-w-rail="playlists"></div></div>
+      </section>
+
+      <!-- community ------------------------------------------------- -->
+      <section class="w-sec" data-w-section="community">
+        <div class="w-sec__head">
+          <div>
+            <h2 class="w-sec__title">Member content about this title</h2>
+            <p class="w-sec__sub">Videos, articles, answers, documents, reviews and recommendations — most watched first.</p>
+          </div>
+          <div class="w-sec__nav">
+            <button class="icon-btn" type="button" data-rail-prev aria-label="Scroll back"><i data-icon="chevronLeft"></i></button>
+            <button class="icon-btn" type="button" data-rail-next aria-label="Scroll forward"><i data-icon="chevronRight"></i></button>
+          </div>
+        </div>
+        <div class="rail"><div class="rail__track" data-rail-track data-w-rail="community"></div></div>
+      </section>
+
+      <!-- prizes ---------------------------------------------------- -->
+      <section class="w-sec" data-w-section="prizes">
+        <div class="w-sec__head">
+          <div>
+            <h2 class="w-sec__title">Available prizes</h2>
+            <p class="w-sec__sub">Spend the points you earn while watching.</p>
+          </div>
+          <div class="w-sec__nav">
+            <button class="icon-btn" type="button" data-rail-prev aria-label="Scroll back"><i data-icon="chevronLeft"></i></button>
+            <button class="icon-btn" type="button" data-rail-next aria-label="Scroll forward"><i data-icon="chevronRight"></i></button>
+          </div>
+        </div>
+        <div class="rail"><div class="rail__track" data-rail-track data-w-rail="prizes"></div></div>
+      </section>
+
+      <!-- tasks ----------------------------------------------------- -->
+      <section class="w-sec" data-w-section="tasks">
+        <div class="w-sec__head">
+          <div>
+            <h2 class="w-sec__title">Tasks for points</h2>
+            <p class="w-sec__sub">Finish a task and the payout lands in your wallet — $1 = 100 points.</p>
+          </div>
+          <div class="w-sec__nav">
+            <button class="icon-btn" type="button" data-rail-prev aria-label="Scroll back"><i data-icon="chevronLeft"></i></button>
+            <button class="icon-btn" type="button" data-rail-next aria-label="Scroll forward"><i data-icon="chevronRight"></i></button>
+          </div>
+        </div>
+        <div class="rail"><div class="rail__track" data-rail-track data-w-rail="tasks"></div></div>
+      </section>
+
+      <!-- suggested ------------------------------------------------- -->
+      <section class="w-sec" data-w-section="suggested">
+        <div class="w-sec__head">
+          <div>
+            <h2 class="w-sec__title">Suggested for you</h2>
+            <p class="w-sec__sub">Popular right now on 1World.</p>
+          </div>
+          <div class="w-sec__nav">
+            <button class="icon-btn" type="button" data-rail-prev aria-label="Scroll back"><i data-icon="chevronLeft"></i></button>
+            <button class="icon-btn" type="button" data-rail-next aria-label="Scroll forward"><i data-icon="chevronRight"></i></button>
+          </div>
+        </div>
+        <div class="rail"><div class="rail__track" data-rail-track data-w-rail="suggested"></div></div>
+      </section>
     </main>
+
+    <!-- exit dialog -------------------------------------------------- -->
+    <div class="w-exit" data-w-exit hidden role="dialog" aria-modal="true" aria-labelledby="w-exit-title">
+      <div class="w-exit__card">
+        <h2 class="w-exit__title" id="w-exit-title">Before you go</h2>
+        <p class="w-exit__text" data-w-exit-text>You were watching this title. What should happen to it?</p>
+        <div class="w-exit__options">
+          <button class="w-exit__option" type="button" data-w-exit-option="completed">
+            <i data-icon="check"></i> I finished it — add to my completed list
+          </button>
+          <button class="w-exit__option" type="button" data-w-exit-option="later">
+            <i data-icon="clock"></i> Continue later — save my place
+          </button>
+          <button class="w-exit__option" type="button" data-w-exit-option="not_interested">
+            <i data-icon="close"></i> I don't want to watch this
+          </button>
+        </div>
+        <button class="w-exit__skip" type="button" data-w-exit-skip>Stay on the page</button>
+      </div>
+    </div>
 
     <div data-site-footer></div>
   </body>

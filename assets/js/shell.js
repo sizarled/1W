@@ -57,14 +57,23 @@ function headerTemplate() {
         <span class="brand__word">${SITE.name}<span class="brand__suffix">Web</span></span>
       </a>
 
-      <nav class="primary-nav" aria-label="Homepage sections">
-        ${PRIMARY_NAV.map((item) => `<a href="${item.href}" data-nav-link="${item.href.replace("#", "")}">${esc(item.label)}</a>`).join("")}
+      <nav class="primary-nav" aria-label="Sections" data-primary-nav>
+        ${PRIMARY_NAV.map(
+          (item) => `<a class="primary-nav__item" href="${item.href}" data-nav-link="${item.href.replace(".html", "").replace("#", "")}" title="${esc(item.label)}">
+            <span class="primary-nav__icon" aria-hidden="true">${icon(item.icon || "sparkle")}</span>
+            <span class="primary-nav__label">${esc(item.label)}</span>
+          </a>`
+        ).join("")}
       </nav>
 
       <div class="header__actions">
         <button class="icon-btn theme-btn" data-theme-toggle data-variant="icon" type="button" title="Light theme">
           ${icon("sun")}
         </button>
+
+        <a class="icon-btn header-avatar" href="profile.html" data-header-avatar aria-label="Open your profile">
+          <span class="header-avatar__img" data-header-avatar-img>${icon("user")}</span>
+        </a>
 
         <div class="notif" data-notif>
           <button class="icon-btn notif__btn" data-notif-trigger aria-label="Notifications" aria-haspopup="true" aria-expanded="false">
@@ -223,6 +232,15 @@ function renderAccount() {
       ? `<img src="${esc(avatarFor(member))}" alt="" />`
       : icon("user");
     el.classList.toggle("account__avatar--ghost", !member);
+  });
+
+  document.querySelectorAll("[data-header-avatar]").forEach((a) => {
+    a.setAttribute("href", member ? "profile.html" : "login.html");
+    a.setAttribute("aria-label", member ? `Open ${name}'s profile` : "Log in to your account");
+  });
+  document.querySelectorAll("[data-header-avatar-img]").forEach((el) => {
+    el.innerHTML = member ? `<img src="${esc(avatarFor(member))}" alt="" />` : icon("user");
+    el.classList.toggle("is-ghost", !member);
   });
 
   document.querySelectorAll("[data-account-name]").forEach((el) => {

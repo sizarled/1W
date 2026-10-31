@@ -164,14 +164,18 @@ export const PLANS = [
 /* Navigation                                                         */
 /* ------------------------------------------------------------------ */
 export const PRIMARY_NAV = [
-  { label: "Features", href: "#features" },
-  { label: "Search", href: "#search" },
-  { label: "Movies", href: "#movies" },
-  { label: "Series", href: "#series" },
-  { label: "IPTV", href: "#iptv" },
-  { label: "Membership", href: "#membership" },
-  { label: "Apps", href: "#apps" },
-  { label: "Support", href: "#support" },
+  { label: "Movies", href: "movies.html", icon: "film" },
+  { label: "TV Series", href: "series.html", icon: "tv" },
+  { label: "Channels", href: "iptv.html", icon: "broadcast" },
+  { label: "Videos", href: "videos.html", icon: "video" },
+  { label: "Podcasts", href: "podcast.html", icon: "mic" },
+  { label: "Photos", href: "pictures.html", icon: "image" },
+  { label: "Articles", href: "articles.html", icon: "article" },
+  { label: "Reviews", href: "reviews.html", icon: "star" },
+  { label: "Answers", href: "answers.html", icon: "help" },
+  { label: "Documents", href: "documents.html", icon: "file" },
+  { label: "Store", href: "market.html", icon: "cart" },
+  { label: "Auction", href: "auction.html", icon: "gavel" },
 ];
 
 export const SIDEBAR_NAV = [
