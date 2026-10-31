@@ -8,13 +8,15 @@ import { getMember, refreshMember, setMember, signOut, noteSeen } from "./sessio
 import { awardPoints, renderWallet, startWalletPolling, syncFromMember } from "./wallet.js";
 import { toast } from "./ui.js";
 import { avatarPlaceholder, enableDragScrollAll } from "./utils.js";
-import { startVisitTracking, finishVisit, lastVisitError } from "./visits.js?v=20261031k";
+import { startVisitTracking, finishVisit, lastVisitError } from "./visits.js?v=20261031l";
 import { initTheme, setTheme, toggleTheme, resetTheme, currentTheme, systemTheme } from "./theme.js";
 import { lookupVisitor, cachedVisitor } from "./geo.js";
 
 async function boot() {
   mountShell();
   enableDragScrollAll();
+  // the header list can be re-rendered when the session changes → wire it again
+  window.addEventListener("1w:session", () => enableDragScrollAll());
   startVisitTracking().catch((error) => console.warn("[1World] visits:", error.message));
 
   if (document.body.dataset.page === "home") {

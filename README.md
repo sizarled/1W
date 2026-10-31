@@ -44,7 +44,8 @@ folder structure intact because the JS uses native ES modules.
 ### Scrolling the reels
 
 Every horizontal reel (films, series, IPTV, apps, platforms, membership plans, the
-notification filters) works three ways:
+notification filters) **and the twelve-section header list on every page** — `watch.html`
+included — work three ways:
 
 - **Mouse drag** — press and hold anywhere on the reel, then pull left or right. The
   cursor turns into a grabbing hand, the card under the pointer is not opened when a drag

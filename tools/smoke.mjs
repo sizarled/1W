@@ -137,6 +137,18 @@ const drag = {
   wired: document.querySelectorAll('[data-drag-ready="1"]').length,
   tracks: document.querySelectorAll(".rail__track, .plans").length,
 };
+
+// the twelve header sections must be draggable too (watch.html included)
+const nav = document.querySelector("[data-primary-nav]");
+drag.navReady = nav?.dataset.dragReady === "1";
+drag.navLinks = nav ? nav.querySelectorAll(".primary-nav__item").length : 0;
+if (nav) {
+  fire(nav, "pointerdown", { pointerType: "mouse", button: 0, pointerId: 7, clientX: 300, clientY: 24 });
+  fire(nav, "pointermove", { pointerType: "mouse", button: 0, pointerId: 7, clientX: 200, clientY: 26 });
+  drag.navDragging = nav.classList.contains("is-dragging");
+  fire(nav, "pointerup", { pointerType: "mouse", button: 0, pointerId: 7, clientX: 200, clientY: 26 });
+  drag.navReleased = !nav.classList.contains("is-dragging");
+}
 fire(dragTrack, "pointerdown", { pointerType: "mouse", button: 0, pointerId: 1, clientX: 240, clientY: 320 });
 drag.downClass = dragTrack.classList.contains("is-dragging");
 fire(dragTrack, "pointermove", { pointerType: "mouse", button: 0, pointerId: 1, clientX: 320, clientY: 322 });
@@ -147,6 +159,13 @@ drag.grabReleased = document.documentElement.classList.contains("is-grabbing");
 
 Object.assign(report, { heroTitles, premiumChannels, lockedCount, lockedToast, goldPrice6: plan.querySelector("[data-price]").textContent, signedIn, notifOpen, appearance, drag });
 
+const checks = {
+  headerNavDraggable: Boolean(drag.navReady && drag.navDragging && drag.navReleased),
+  headerNavHasSections: drag.navLinks >= 12,
+  railsDraggable: drag.wired >= 3 && drag.downClass === true && drag.grabCursor === true,
+};
+const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name);
 console.log(report);
+console.log("checks:", failed.length ? `FAILED ${failed.join(", ")}` : "all pass");
 console.log("errors:", errors.length ? errors : "none");
-process.exit(0);
+process.exit(errors.length || failed.length ? 1 : 0);

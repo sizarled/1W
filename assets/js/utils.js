@@ -244,8 +244,16 @@ export function scrollRail(rail, direction = 1) {
 /* ------------------------------------------------------------------ */
 /* Horizontal scrollers: click-and-drag with the mouse                */
 /* ------------------------------------------------------------------ */
-const DRAG_SELECTOR =
-  ".rail__track, .plans, .notif__filters, [data-rail-track], [data-channel-track], [data-drag-scroll]";
+const DRAG_SELECTOR = [
+  ".rail__track",
+  ".plans",
+  ".notif__filters",
+  ".primary-nav", // the twelve sections in the header
+  "[data-primary-nav]",
+  "[data-rail-track]",
+  "[data-channel-track]",
+  "[data-drag-scroll]",
+].join(", ");
 
 /**
  * Lets a horizontal scroller be dragged with the mouse (click, hold, pull left
