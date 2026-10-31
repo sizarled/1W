@@ -40,6 +40,7 @@ import { refreshBlockMap } from "./blocks.js";
 /* ================================================================== */
 const PAGE = 24; // works per reel batch
 const CACHE_FRESH_MS = 24 * 3600 * 1000; // re-sync a person at most once a day
+const DELIVERY_KEY = "1w.cast.delivered"; // per person throttle for the delivery drip
 const MEMBER_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /* TMDB external ids → the only links we will ever show (nothing invented) */
@@ -786,7 +787,7 @@ async function setAction(name, on) {
     toast({ title: label, message: personLabel(), tone: on ? "success" : "info", iconName: name === "block" ? "lock" : name === "follow" ? "bell" : "refresh" });
     playSound(on ? "success" : "notefcation", 0.3);
 
-    if (on && (name === "follow" || name === "repost")) deliverNewWork();
+    if (on && (name === "follow" || name === "repost")) deliverNewWork({ throttle: false });
   } catch (error) {
     console.warn("[1World] cast: action failed", error.message);
     toast({ title: "Could not save the action", message: "Try again in a moment.", tone: "error" });
@@ -803,9 +804,25 @@ async function updateBlockCache() {
   await refreshBlockMap(state.member);
 }
 
-async function deliverNewWork() {
+function deliveryDue() {
+  try {
+    const seen = JSON.parse(localStorage.getItem(DELIVERY_KEY) || "{}");
+    const last = Number(seen[state.id] || 0);
+    if (Date.now() - last < 6 * 3600 * 1000) return false;
+    seen[state.id] = Date.now();
+    localStorage.setItem(DELIVERY_KEY, JSON.stringify(seen));
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+async function deliverNewWork({ throttle = true } = {}) {
   if (!memberId()) return;
   if (!state.actions.follow && !state.actions.repost) return;
+  // the automatic drip runs at most every six hours; a dial the member just
+  // switched on delivers straight away
+  if (throttle && !deliveryDue()) return;
   try {
     const res = await rpc("person_sync_deliveries", {
       p_member: memberId(),
@@ -944,7 +961,7 @@ function mentionCard(row) {
   const date = row.published ? formatDate(row.published) : "";
   const thumb = row.thumbnail_url || "";
   return `<a class="c-card" href="${hrefFor(row)}">
-    <span class="c-card__thumb">${imgTag(thumb, tilePlaceholder(label, row.content_id || title), `${title} thumbnail`, "c-card__img")}</span>
+    <span class="c-card__thumb">${imgTag(thumb, tilePlaceholder(label, title.length), `${title} thumbnail`, "c-card__img")}</span>
     <span class="c-card__body">
       <span class="c-card__type">${icon(type === "review" ? "star" : type === "article" ? "article" : "video")}${label}</span>
       <span class="c-card__title">${esc(title)}</span>
