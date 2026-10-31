@@ -549,13 +549,13 @@ async function loadStats() {
   }
   const member = state.member;
   if (member?.id) {
-    const mine = await safe(rest("content_reaction", { filters: { location: `eq.${state.location}`, idmember: `eq.${member.id}` }, limit: 1 }), null);
+    const mine = await safe(rest("content_reaction", { filters: { location: `eq.${state.location}`, idmember: `eq.${memberUuid()}` }, limit: 1 }), null);
     if (Array.isArray(mine) && mine[0]) {
       const btn = mine[0].value === 1 ? qs("[data-w-like]") : qs("[data-w-dislike]");
       btn?.classList.add("is-on");
       btn?.setAttribute("aria-pressed", "true");
     }
-    const saved = await safe(rest("watch_later", { filters: { idmember: `eq.${member.id}`, idtmdb: `eq.${state.id}`, media_type: `eq.${state.kind}` }, limit: 1 }), null);
+    const saved = await safe(rest("watch_later", { filters: { idmember: `eq.${memberUuid()}`, idtmdb: `eq.${state.id}`, media_type: `eq.${state.kind}` }, limit: 1 }), null);
     if (Array.isArray(saved) && saved.length) {
       const btn = qs("[data-w-later]");
       btn?.classList.add("is-on");
@@ -569,8 +569,13 @@ function setText(sel, value) {
   if (el) el.textContent = value;
 }
 
+function memberUuid() {
+  const id = state.member?.id;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id || "") ? id : null;
+}
+
 function requireMember(action = "do that") {
-  if (state.member?.id) return true;
+  if (memberUuid()) return true;
   toast({
     tone: "error",
     iconName: "lock",
@@ -588,7 +593,7 @@ async function react(value) {
   const current = likeBtn?.classList.contains("is-on") ? 1 : dislikeBtn?.classList.contains("is-on") ? -1 : 0;
   try {
     if (current === value) {
-      await fetch(`${SUPABASE.restUrl}/content_reaction?location=eq.${encodeURIComponent(state.location)}&idmember=eq.${state.member.id}`, {
+      await fetch(`${SUPABASE.restUrl}/content_reaction?location=eq.${encodeURIComponent(state.location)}&idmember=eq.${memberUuid()}`, {
         method: "DELETE",
         headers: sb,
       });
@@ -598,7 +603,7 @@ async function react(value) {
       await fetch(`${SUPABASE.restUrl}/content_reaction`, {
         method: "POST",
         headers: { ...sb, Prefer: "resolution=merge-duplicates,return=minimal" },
-        body: JSON.stringify({ location: state.location, idmember: state.member.id, value }),
+        body: JSON.stringify({ location: state.location, idmember: memberUuid(), value }),
       });
       likeBtn?.classList.toggle("is-on", value === 1);
       dislikeBtn?.classList.toggle("is-on", value === -1);
@@ -618,7 +623,7 @@ async function toggleWatchLater() {
   try {
     if (on) {
       await fetch(
-        `${SUPABASE.restUrl}/watch_later?idmember=eq.${state.member.id}&idtmdb=eq.${state.id}&media_type=eq.${state.kind}`,
+        `${SUPABASE.restUrl}/watch_later?idmember=eq.${memberUuid()}&idtmdb=eq.${state.id}&media_type=eq.${state.kind}`,
         { method: "DELETE", headers: sb }
       );
       btn.classList.remove("is-on");
@@ -629,7 +634,7 @@ async function toggleWatchLater() {
         method: "POST",
         minimal: true,
         body: {
-          idmember: state.member.id,
+          idmember: memberUuid(),
           idtmdb: state.id,
           media_type: state.kind,
           season: state.kind === "tv" ? state.season : null,
@@ -823,7 +828,7 @@ async function submitCode() {
   const result = await safe(rpc("verify_watch_code", {
     p_code: code,
     p_device: remember ? deviceId() : null,
-    p_member: state.member?.id || null,
+    p_member: memberUuid(),
   }), null);
 
   if (result?.ok) {
@@ -927,7 +932,7 @@ async function flushTracker(useBeacon = false) {
     const rowId = await rpc(
       "log_watchtime",
       {
-        p_member: state.member?.id || null,
+        p_member: memberUuid(),
         p_publisher: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(state.publisher || "")
           ? state.publisher
           : null,
@@ -943,7 +948,7 @@ async function flushTracker(useBeacon = false) {
       { keepalive: useBeacon }
     );
     if (rowId === null || rowId === undefined) throw new Error("watchtime rejected");
-    if (!state.adBlocked && state.member?.id) checkMilestone();
+    if (!state.adBlocked && memberUuid()) checkMilestone();
   } catch (error) {
     tracker.pending += seconds; // retry on the next tick
     console.warn("[1World] watchtime:", error.message);
@@ -951,9 +956,9 @@ async function flushTracker(useBeacon = false) {
 }
 
 async function checkMilestone() {
-  const total = await safe(rpc("member_watch_minutes", { p_member: state.member.id }), null);
+  const total = await safe(rpc("member_watch_minutes", { p_member: memberUuid() }), null);
   if (typeof total === "number" && total >= 1000) {
-    const first = await safe(rpc("claim_milestone", { p_idmember: state.member.id, p_milestone: "watch-1000" }), false);
+    const first = await safe(rpc("claim_milestone", { p_idmember: memberUuid(), p_milestone: "watch-1000" }), false);
     if (first) {
       try {
         // the ad network reward hook, fired exactly once per member
@@ -1201,7 +1206,7 @@ async function postComment(content, parentId) {
       minimal: true,
       body: {
         location: state.location,
-        idmember: state.member.id,
+        idmember: memberUuid(),
         parent_id: parentId || null,
         content,
         status: "visible",
@@ -1225,7 +1230,7 @@ async function reactComment(btn) {
     await fetch(`${SUPABASE.restUrl}/comment_reaction`, {
       method: "POST",
       headers: { ...sb, Prefer: "resolution=merge-duplicates,return=minimal" },
-      body: JSON.stringify({ comment_id: Number(commentId), idmember: state.member.id, reaction }),
+      body: JSON.stringify({ comment_id: Number(commentId), idmember: memberUuid(), reaction }),
     });
     btn.classList.add("is-on");
     loadComments();
@@ -1410,7 +1415,7 @@ async function loadTasks() {
 
 async function logTask(table, offerId) {
   if (!offerId) return;
-  rest(table, { method: "POST", minimal: true, body: { offer_id: String(offerId), idmember: state.member?.id || null } }).catch(() => {});
+  rest(table, { method: "POST", minimal: true, body: { offer_id: String(offerId), idmember: memberUuid() } }).catch(() => {});
 }
 
 let leadsTimer = null;
@@ -1423,12 +1428,12 @@ function pollLeads() {
     for (const lead of leads) {
       const offerId = String(lead.offer_id);
       const payout = Number(lead.points || 0) / 100;
-      if (!state.member?.id) continue;
+      if (!memberUuid()) continue;
       const done = await safe(
         rest("taskcomplet", {
           method: "POST",
           minimal: true,
-          body: { offer_id: offerId, idmember: state.member.id, payout, points: Math.round(payout * 100) },
+          body: { offer_id: offerId, idmember: memberUuid(), payout, points: Math.round(payout * 100) },
         }),
         null
       );
@@ -1498,7 +1503,7 @@ async function reportLink() {
       minimal: true,
       body: {
         link_id: link.id,
-        idmember: state.member?.id || null,
+        idmember: memberUuid(),
         idtmdb: state.id,
         reason: "broken",
         details: "Reported from the watch page.",
@@ -1517,9 +1522,9 @@ async function reportLink() {
 let historyAt = 0;
 
 async function saveHistory(status) {
-  if (!state.member?.id) return;
+  if (!memberUuid()) return;
   const body = {
-    idmember: state.member.id,
+    idmember: memberUuid(),
     idtmdb: state.id,
     media_type: state.kind,
     season: state.kind === "tv" ? state.season : null,
@@ -1601,7 +1606,7 @@ async function saveListChoice(kind) {
   const systemKind = map[kind];
   if (!systemKind) return;
 
-  if (!state.member?.id) {
+  if (!memberUuid()) {
     const local = JSON.parse(localStorage.getItem("1w.lists") || "{}");
     local[systemKind] = local[systemKind] || [];
     local[systemKind].push({ id: state.id, kind: state.kind, at: Date.now() });
@@ -1613,7 +1618,7 @@ async function saveListChoice(kind) {
   try {
     // find or create the member's system playlist
     let list = await rest("playlists", {
-      filters: { idmember: `eq.${state.member.id}`, system_kind: `eq.${systemKind}` },
+      filters: { idmember: `eq.${memberUuid()}`, system_kind: `eq.${systemKind}` },
       limit: 1,
     });
     list = Array.isArray(list) ? list[0] : null;
@@ -1624,8 +1629,8 @@ async function saveListChoice(kind) {
         minimal: true,
         body: {
           id,
-          idmember: state.member.id,
-          idcreator: state.member.id,
+          idmember: memberUuid(),
+          idcreator: memberUuid(),
           list_name: systemKind === "completed" ? "Completed" : systemKind === "later" ? "Continue later" : "Not interested",
           system_kind: systemKind,
           media_type: state.kind,
@@ -1640,13 +1645,13 @@ async function saveListChoice(kind) {
       await rest("playlistmovie", {
         method: "POST",
         minimal: true,
-        body: { idplaylist: list.id, idcreator: state.member.id, idmember: state.member.id, idmovie: state.id },
+        body: { idplaylist: list.id, idcreator: memberUuid(), idmember: memberUuid(), idmovie: state.id },
       });
     } else {
       await rest("playlisttv", {
         method: "POST",
         minimal: true,
-        body: { idplaylist: list.id, idcreator: state.member.id, idmember: state.member.id, idtv: state.id, season: state.season, episode: state.episode },
+        body: { idplaylist: list.id, idcreator: memberUuid(), idmember: memberUuid(), idtv: state.id, season: state.season, episode: state.episode },
       });
     }
     await saveHistory(systemKind);

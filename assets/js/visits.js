@@ -14,6 +14,7 @@ import { getMember, visitorId } from "./session.js";
 import { rpc } from "./data.js";
 
 const KEY = "1w.visit";
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MIN_GAP = 12000; // ignore a second log for the same page within 12 s
 
 const state = {
@@ -94,6 +95,8 @@ export async function startVisitTracking() {
   }
 
   const member = getMember();
+  // only a real member uuid can be written (the local demo session uses numbers)
+  const memberId = UUID.test(member?.id || "") ? member.id : null;
   try {
     const result = await rpc("log_visit", {
       p_visitor: visitorId(),
@@ -101,7 +104,7 @@ export async function startVisitTracking() {
       p_location: path,
       p_purpose: purposeFor(page),
       p_source: "web",
-      p_member: member?.id || null,
+      p_member: memberId,
     });
     if (result && typeof result === "object") {
       state.visitId = result.visit_id || null;
