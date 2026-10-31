@@ -1,6 +1,7 @@
 /* ==================================================================
    register.html — account registration + success card
-   Only loaded by the register page. Monochrome, hairline, no colour.
+   Only loaded by the register page. Monochrome, hairline, high
+   contrast in both themes (no color-mix, no washed-out greys).
    ================================================================== */
 
 .reg [hidden] {
@@ -22,16 +23,21 @@
   font-size: 0.74rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--faint);
+  color: var(--muted);
   margin-bottom: 1.1rem;
 }
 
 .reg__crumbs a {
-  color: var(--muted);
+  color: var(--text-2);
+  text-decoration: none;
+}
+
+.reg__crumbs a:hover {
+  color: var(--text);
 }
 
 .reg__crumbs span[aria-hidden] {
-  opacity: 0.45;
+  opacity: 0.5;
 }
 
 .reg__grid {
@@ -48,36 +54,43 @@
   position: sticky;
   top: calc(var(--header-h) + 1.4rem);
   display: grid;
-  gap: 0.9rem;
+  gap: 0.85rem;
   padding-top: 0.4rem;
 }
 
 .reg__title {
   margin: 0;
-  font-size: clamp(1.9rem, 3.6vw, 2.9rem);
-  line-height: 1.03;
-  letter-spacing: -0.022em;
+  font-size: clamp(2rem, 3.7vw, 3rem);
+  font-weight: 600;
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+
+.reg__title .serif {
+  font-size: 1.06em;
+  line-height: 0.9;
 }
 
 .reg__lead {
   margin: 0;
   font-size: 0.92rem;
   line-height: 1.65;
-  color: var(--muted);
+  color: var(--text-2);
   max-width: 42ch;
 }
 
 .reg__benefits {
   display: grid;
-  gap: 0.8rem;
-  margin: 0.4rem 0 0;
+  gap: 0.85rem;
+  margin: 0.45rem 0 0;
   padding: 0;
   list-style: none;
 }
 
 .reg__benefits li {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
+  grid-template-columns: 36px minmax(0, 1fr);
   gap: 0.7rem;
   align-items: start;
 }
@@ -85,11 +98,12 @@
 .reg__benefit-icon {
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   border-radius: 10px;
   border: 1px solid var(--line-2);
-  color: var(--text-2);
+  background: var(--surface-2);
+  color: var(--text);
 }
 
 .reg__benefit-icon .ico {
@@ -99,13 +113,14 @@
 
 .reg__benefits b {
   display: block;
-  font-size: 0.85rem;
+  font-size: 0.86rem;
   font-weight: 600;
-  margin-bottom: 0.1rem;
+  color: var(--text);
+  margin-bottom: 0.08rem;
 }
 
 .reg__benefits span {
-  font-size: 0.78rem;
+  font-size: 0.79rem;
   line-height: 1.5;
   color: var(--muted);
 }
@@ -115,39 +130,41 @@
   flex-wrap: wrap;
   align-items: baseline;
   gap: 0.3rem 0.55rem;
-  margin-top: 0.4rem;
-  padding: 0.7rem 0.85rem;
+  margin-top: 0.5rem;
+  padding: 0.75rem 0.9rem;
   border: 1px solid var(--line-2);
   border-radius: 14px;
-  background: var(--surface);
+  background: var(--surface-2);
 }
 
 .reg__plan-label {
   flex: 0 0 100%;
-  font-size: 0.6rem;
+  font-size: 0.62rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--faint);
+  color: var(--muted);
 }
 
 .reg__plan b {
   font-size: 0.9rem;
+  color: var(--text);
 }
 
 .reg__plan span:last-child {
-  font-size: 0.76rem;
-  color: var(--muted);
+  font-size: 0.77rem;
+  color: var(--text-2);
 }
 
 .reg__aside-note {
-  margin: 0.3rem 0 0;
-  font-size: 0.78rem;
-  color: var(--muted);
+  margin: 0.35rem 0 0;
+  font-size: 0.79rem;
+  color: var(--text-2);
 }
 
 .reg__aside-note a {
   color: var(--text);
-  border-bottom: 1px solid var(--line-2);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 /* ------------------------------------------------------------------ */
@@ -156,18 +173,10 @@
 .reg-card {
   position: relative;
   padding: clamp(1.1rem, 2.4vw, 2rem);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-2);
   border-radius: 26px;
-  background:
-    radial-gradient(120% 120% at 100% 0%, rgba(255, 255, 255, 0.05), transparent 55%),
-    linear-gradient(180deg, var(--surface-2), var(--surface));
+  background: var(--surface);
   box-shadow: var(--shadow);
-}
-
-html[data-theme="light"] .reg-card {
-  background:
-    radial-gradient(120% 120% at 100% 0%, rgba(10, 10, 12, 0.035), transparent 55%),
-    linear-gradient(180deg, #ffffff, var(--surface-2));
 }
 
 .reg-card__head {
@@ -176,14 +185,21 @@ html[data-theme="light"] .reg-card {
   justify-content: space-between;
   gap: 1rem;
   padding-bottom: 0.9rem;
-  margin-bottom: 1.1rem;
-  border-bottom: 1px solid var(--line);
+  margin-bottom: 1.15rem;
+  border-bottom: 1px solid var(--line-2);
 }
 
 .reg-card__title {
   margin: 0;
-  font-size: 1.18rem;
+  font-size: 1.2rem;
+  font-weight: 600;
   letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.reg-card .badge {
+  border-color: var(--line-3);
+  color: var(--text-2);
 }
 
 /* alert ----------------------------------------------------------- */
@@ -191,22 +207,22 @@ html[data-theme="light"] .reg-card {
   display: flex;
   align-items: flex-start;
   gap: 0.55rem;
-  padding: 0.7rem 0.85rem;
-  margin-bottom: 0.9rem;
-  border: 1px solid var(--line-2);
+  padding: 0.75rem 0.9rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--line-3);
   border-left: 3px solid var(--text);
   border-radius: 12px;
   background: var(--surface-3);
-  font-size: 0.8rem;
+  font-size: 0.81rem;
   line-height: 1.5;
-  color: var(--text-2);
+  color: var(--text);
 }
 
 .reg-alert .ico {
   width: 16px;
   height: 16px;
   flex: none;
-  margin-top: 0.1rem;
+  margin-top: 0.12rem;
   color: var(--text);
 }
 
@@ -220,12 +236,12 @@ html[data-theme="light"] .reg-card {
 .reg-form {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.95rem 1.05rem;
+  gap: 1rem 1.05rem;
 }
 
 .reg-field {
   display: grid;
-  gap: 0.32rem;
+  gap: 0.35rem;
   min-width: 0;
   align-content: start;
 }
@@ -237,74 +253,131 @@ html[data-theme="light"] .reg-card {
 }
 
 .reg-field > label {
-  font-size: 0.72rem;
+  font-size: 0.73rem;
   font-weight: 600;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--text-2);
 }
 
-.reg-field input[type="text"],
-.reg-field input[type="email"],
-.reg-field input[type="tel"],
-.reg-field input[type="password"],
-.reg-field input[type="date"] {
+/* one rule for every text-ish input — padding overrides live below */
+.reg-field input:not([type="checkbox"]) {
   width: 100%;
-  height: 46px;
+  height: 48px;
   padding: 0 0.85rem;
-  border: 1px solid var(--line-2);
+  border: 1px solid var(--line-3);
   border-radius: 12px;
   background: var(--input-bg);
   color: var(--text);
   font: inherit;
-  font-size: 0.9rem;
+  font-size: 0.92rem;
+  line-height: 48px;
   transition: border-color 0.2s var(--ease), background 0.2s var(--ease), box-shadow 0.2s var(--ease);
 }
 
-.reg-field input::placeholder {
-  color: var(--faint);
+.reg-field input:not([type="checkbox"])::placeholder {
+  color: var(--muted);
+  opacity: 0.85;
 }
 
-.reg-field input:hover {
-  border-color: var(--line-3);
+.reg-field input:not([type="checkbox"]):hover {
+  border-color: var(--text-2);
 }
 
-.reg-field input:focus {
+.reg-field input:not([type="checkbox"]):focus {
   outline: none;
   border-color: var(--text);
   background: var(--input-bg-focus);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--text) 12%, transparent);
+  box-shadow: 0 0 0 3px rgba(128, 128, 140, 0.35);
 }
 
-.reg-field.is-invalid input {
-  border-color: var(--line-3);
-  background: var(--surface-3);
+.reg-field.is-invalid input:not([type="checkbox"]) {
+  border-color: var(--text);
+  border-style: dashed;
+}
+
+.reg-field input[type="date"] {
+  line-height: normal;
 }
 
 .reg-field input[type="date"]::-webkit-calendar-picker-indicator {
-  opacity: 0.55;
+  opacity: 0.7;
   cursor: pointer;
 }
 
-html[data-theme="dark"] .reg-field input[type="date"]::-webkit-calendar-picker-indicator {
+html[data-theme="dark"] .reg-field input[type="date"] {
+  line-height: normal;
+}
+
+.reg-field input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(1);
+}
+
+/* hint + availability chip share one line under the field */
+.reg-field__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem 0.6rem;
+  min-height: 1.1rem;
 }
 
 .reg-field__hint {
   margin: 0;
-  font-size: 0.72rem;
+  font-size: 0.73rem;
   line-height: 1.45;
-  color: var(--faint);
+  color: var(--muted);
+}
+
+.reg-field__hint b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.reg-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--line-3);
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 0.68rem;
+  letter-spacing: 0.03em;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.reg-chip::before {
+  font-size: 0.6rem;
+}
+
+.reg-chip[data-state="ok"] {
+  border-color: var(--text);
+}
+
+.reg-chip[data-state="ok"]::before {
+  content: "✓";
+}
+
+.reg-chip[data-state="taken"] {
+  border-style: dashed;
+  color: var(--text-2);
+}
+
+.reg-chip[data-state="taken"]::before {
+  content: "✕";
 }
 
 .reg-field__error {
-  margin: 0;
-  font-size: 0.74rem;
-  line-height: 1.45;
-  color: var(--text);
   display: flex;
   align-items: flex-start;
   gap: 0.35rem;
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--text);
 }
 
 .reg-field__error::before {
@@ -323,65 +396,29 @@ html[data-theme="dark"] .reg-field input[type="date"]::-webkit-calendar-picker-i
   line-height: 1;
 }
 
-/* input with prefix / suffix -------------------------------------- */
+/* password field with its reveal button --------------------------- */
 .reg-input {
   position: relative;
   display: flex;
   align-items: center;
 }
 
-.reg-input input {
-  padding-right: 2.8rem;
-}
-
-.reg-input--prefix input {
-  padding-left: 2.1rem;
-  padding-right: 5.4rem;
-}
-
-.reg-input__prefix {
-  position: absolute;
-  left: 0.85rem;
-  font-size: 0.9rem;
-  color: var(--faint);
-  pointer-events: none;
-}
-
-.reg-input__state {
-  position: absolute;
-  right: 0.7rem;
-  font-size: 0.68rem;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-  padding: 0.1rem 0.4rem;
-  border: 1px solid var(--line-2);
-  border-radius: 999px;
-  background: var(--surface-2);
-  pointer-events: none;
-}
-
-.reg-input__state.is-ok {
-  color: var(--text);
-  border-color: var(--line-3);
-}
-
-.reg-input__state.is-taken {
-  color: var(--text);
-  border-color: var(--line-3);
-  text-decoration: line-through;
+.reg-field .reg-input input {
+  padding-right: 3rem;
 }
 
 .reg-input__toggle {
   position: absolute;
-  right: 0.45rem;
+  right: 0.4rem;
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   border-radius: 9px;
   border: 0;
   background: transparent;
-  color: var(--muted);
+  color: var(--text-2);
+  cursor: pointer;
   transition: color 0.2s var(--ease), background 0.2s var(--ease);
 }
 
@@ -407,9 +444,10 @@ html[data-theme="dark"] .reg-field input[type="date"]::-webkit-calendar-picker-i
 .reg-strength__bar {
   position: relative;
   flex: 1;
-  height: 4px;
+  height: 5px;
   border-radius: 999px;
   background: var(--surface-3);
+  box-shadow: inset 0 0 0 1px var(--line-2);
   overflow: hidden;
 }
 
@@ -419,20 +457,15 @@ html[data-theme="dark"] .reg-field input[type="date"]::-webkit-calendar-picker-i
   width: 0;
   border-radius: 999px;
   background: var(--text);
-  opacity: 0.85;
-  transition: width 0.25s var(--ease), opacity 0.25s var(--ease);
-}
-
-.reg-strength__bar i[data-score="1"] {
-  opacity: 0.45;
+  transition: width 0.25s var(--ease);
 }
 
 .reg-strength__label {
-  font-size: 0.68rem;
+  font-size: 0.69rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--muted);
-  min-width: 4.4rem;
+  color: var(--text-2);
+  min-width: 4.6rem;
   text-align: right;
 }
 
@@ -444,20 +477,20 @@ html[data-theme="dark"] .reg-field input[type="date"]::-webkit-calendar-picker-i
 .reg-check {
   position: relative;
   display: grid;
-  grid-template-columns: 20px minmax(0, 1fr);
+  grid-template-columns: 22px minmax(0, 1fr);
   gap: 0.6rem;
   align-items: start;
   cursor: pointer;
-  font-size: 0.82rem;
-  line-height: 1.5;
+  font-size: 0.83rem;
+  line-height: 1.55;
   color: var(--text-2);
 }
 
 .reg-check input {
   position: absolute;
   opacity: 0;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   margin: 0;
   cursor: pointer;
 }
@@ -465,8 +498,8 @@ html[data-theme="dark"] .reg-field input[type="date"]::-webkit-calendar-picker-i
 .reg-check__box {
   display: grid;
   place-items: center;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border-radius: 6px;
   border: 1px solid var(--line-3);
   background: var(--input-bg);
@@ -474,15 +507,15 @@ html[data-theme="dark"] .reg-field input[type="date"]::-webkit-calendar-picker-i
 }
 
 .reg-check__box .ico {
-  width: 13px;
-  height: 13px;
+  width: 14px;
+  height: 14px;
   opacity: 0;
   color: var(--bg);
 }
 
 .reg-check input:checked + .reg-check__box {
   background: var(--text);
-  border-color: transparent;
+  border-color: var(--text);
 }
 
 .reg-check input:checked + .reg-check__box .ico {
@@ -490,42 +523,81 @@ html[data-theme="dark"] .reg-field input[type="date"]::-webkit-calendar-picker-i
 }
 
 .reg-check input:focus-visible + .reg-check__box {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--text) 18%, transparent);
+  box-shadow: 0 0 0 3px rgba(128, 128, 140, 0.35);
 }
 
 .reg-check__text a {
   color: var(--text);
-  border-bottom: 1px solid var(--line-2);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .reg-field.is-invalid .reg-check__box {
   border-color: var(--text);
+  border-style: dashed;
 }
 
 /* submit ---------------------------------------------------------- */
 .reg-submit {
   width: 100%;
-  height: 50px;
+  height: 52px;
   justify-content: center;
-  margin-top: 0.35rem;
-  font-size: 0.92rem;
+  margin-top: 0.4rem;
+  font-size: 0.94rem;
 }
 
 .reg-submit:disabled {
-  opacity: 0.6;
+  opacity: 0.65;
   cursor: progress;
 }
 
 .reg-form__note {
   margin: 0;
-  font-size: 0.74rem;
+  font-size: 0.75rem;
   line-height: 1.55;
-  color: var(--faint);
+  color: var(--muted);
   text-align: center;
 }
 
 .reg-form__note b {
-  color: var(--text-2);
+  color: var(--text);
+}
+
+/* ------------------------------------------------------------------ */
+/* buttons — pinned to text/bg so they always contrast                */
+/* ------------------------------------------------------------------ */
+.reg .btn {
+  color: var(--text);
+  border-color: var(--line-3);
+  background: var(--surface-2);
+}
+
+.reg .btn--primary {
+  color: var(--bg);
+  background: var(--text);
+  border-color: var(--text);
+  box-shadow: 0 14px 34px -18px rgba(0, 0, 0, 0.55);
+}
+
+.reg .btn--primary:hover {
+  background: var(--text);
+  border-color: var(--text);
+  opacity: 0.88;
+}
+
+.reg .btn--ghost {
+  color: var(--text);
+  background: var(--surface-2);
+  border-color: var(--line-3);
+}
+
+.reg .btn--ghost:hover {
+  background: var(--surface-3);
+  border-color: var(--text-2);
+}
+
+.reg .btn .ico {
+  color: currentColor;
 }
 
 /* ------------------------------------------------------------------ */
@@ -540,37 +612,35 @@ html[data-theme="dark"] .reg-field input[type="date"]::-webkit-calendar-picker-i
 .reg-success__icon {
   display: grid;
   place-items: center;
-  width: 46px;
-  height: 46px;
+  width: 48px;
+  height: 48px;
   border-radius: 14px;
   background: var(--text);
   color: var(--bg);
 }
 
 .reg-success__icon .ico {
-  width: 22px;
-  height: 22px;
+  width: 23px;
+  height: 23px;
 }
 
 .reg-success__title {
   margin: 0;
-  font-size: clamp(1.4rem, 2.4vw, 1.8rem);
-  letter-spacing: -0.015em;
+  font-size: clamp(1.45rem, 2.4vw, 1.9rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text);
 }
 
 .reg-success__lead {
   margin: 0;
-  font-size: 0.88rem;
+  font-size: 0.89rem;
   line-height: 1.6;
-  color: var(--muted);
-  max-width: 56ch;
+  color: var(--text-2);
+  max-width: 58ch;
 }
 
 .reg-success__lead b {
-  color: var(--text);
-}
-
-html[data-theme="dark"] .reg-success__lead b {
   color: var(--text);
 }
 
@@ -579,41 +649,73 @@ html[data-theme="dark"] .reg-success__lead b {
   align-items: center;
   gap: 0.42rem;
   margin: 0;
-  padding: 0.36rem 0.7rem;
-  border: 1px dashed var(--line-3);
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--line-3);
   border-radius: 999px;
-  font-size: 0.76rem;
-  color: var(--muted);
+  font-size: 0.77rem;
+  color: var(--text-2);
 }
 
 .reg-success__status .ico {
   width: 14px;
   height: 14px;
+  color: var(--text);
 }
 
 .reg-success__status b {
   color: var(--text);
 }
 
+/* member ID ------------------------------------------------------- */
+.reg-identity {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--line-2);
+  border-radius: 16px;
+  background: var(--surface-2);
+}
+
+.reg-identity__label {
+  margin: 0 0 0.1rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.reg-identity__value {
+  margin: 0;
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  font-size: clamp(1.15rem, 2.4vw, 1.45rem);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--text);
+  user-select: all;
+}
+
 /* details --------------------------------------------------------- */
 .reg-details {
   width: 100%;
   display: grid;
-  gap: 0.1rem;
-  margin: 0.2rem 0 0;
-  padding: 0.4rem 0.9rem;
-  border: 1px solid var(--line);
+  gap: 0;
+  margin: 0.1rem 0 0;
+  padding: 0.35rem 0.95rem;
+  border: 1px solid var(--line-2);
   border-radius: 16px;
-  background: color-mix(in srgb, var(--surface) 65%, transparent);
+  background: var(--surface-2);
 }
 
 .reg-details div {
   display: grid;
-  grid-template-columns: minmax(0, 0.6fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 0.62fr) minmax(0, 1fr);
   gap: 0.6rem;
-  padding: 0.42rem 0;
-  border-bottom: 1px solid var(--line);
-  font-size: 0.82rem;
+  padding: 0.46rem 0;
+  border-bottom: 1px solid var(--line-2);
+  font-size: 0.83rem;
 }
 
 .reg-details div:last-child {
@@ -621,8 +723,8 @@ html[data-theme="dark"] .reg-success__lead b {
 }
 
 .reg-details dt {
-  color: var(--faint);
-  font-size: 0.72rem;
+  color: var(--muted);
+  font-size: 0.73rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   align-self: center;
@@ -639,7 +741,7 @@ html[data-theme="dark"] .reg-success__lead b {
   width: 100%;
   display: grid;
   gap: 0.35rem;
-  padding: 0.9rem 1rem;
+  padding: 0.95rem 1rem;
   border: 1px dashed var(--line-3);
   border-radius: 18px;
   background: var(--surface-2);
@@ -647,18 +749,18 @@ html[data-theme="dark"] .reg-success__lead b {
 
 .reg-recovery__label {
   margin: 0;
-  font-size: 0.62rem;
+  font-size: 0.63rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--faint);
+  color: var(--muted);
 }
 
 .reg-recovery__code {
   margin: 0;
   font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
-  font-size: clamp(1.25rem, 3vw, 1.6rem);
+  font-size: clamp(1.3rem, 3vw, 1.65rem);
   font-weight: 600;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
   color: var(--text);
   overflow-wrap: anywhere;
   user-select: all;
@@ -666,9 +768,9 @@ html[data-theme="dark"] .reg-success__lead b {
 
 .reg-recovery__note {
   margin: 0;
-  font-size: 0.74rem;
+  font-size: 0.75rem;
   line-height: 1.55;
-  color: var(--muted);
+  color: var(--text-2);
   max-width: 52ch;
 }
 
@@ -677,14 +779,15 @@ html[data-theme="dark"] .reg-success__lead b {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  margin-top: 0.25rem;
-  padding: 0.34rem 0.7rem;
-  border: 1px solid var(--line-2);
+  margin-top: 0.3rem;
+  padding: 0.36rem 0.75rem;
+  border: 1px solid var(--line-3);
   border-radius: 999px;
-  background: transparent;
-  color: var(--text-2);
-  font-size: 0.74rem;
-  transition: all 0.2s var(--ease);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background 0.2s var(--ease), color 0.2s var(--ease), border-color 0.2s var(--ease);
 }
 
 .reg-copy .ico {
@@ -695,7 +798,12 @@ html[data-theme="dark"] .reg-success__lead b {
 .reg-copy:hover {
   background: var(--text);
   color: var(--bg);
-  border-color: transparent;
+  border-color: var(--text);
+}
+
+.reg-copy--sm {
+  margin-top: 0;
+  flex: none;
 }
 
 /* actions --------------------------------------------------------- */
@@ -704,7 +812,7 @@ html[data-theme="dark"] .reg-success__lead b {
   flex-wrap: wrap;
   gap: 0.55rem;
   width: 100%;
-  margin-top: 0.1rem;
+  margin-top: 0.15rem;
 }
 
 .reg-alert--inline {
@@ -714,18 +822,22 @@ html[data-theme="dark"] .reg-success__lead b {
 
 .reg-success__note {
   display: flex;
-  gap: 0.5rem;
 }
 
 .reg-success__foot {
   margin: 0;
-  font-size: 0.74rem;
-  color: var(--faint);
+  font-size: 0.75rem;
+  color: var(--muted);
 }
 
 .reg-success__foot a {
   color: var(--text-2);
-  border-bottom: 1px solid var(--line-2);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.reg-success__foot a:hover {
+  color: var(--text);
 }
 
 /* ------------------------------------------------------------------ */
@@ -754,6 +866,10 @@ html[data-theme="dark"] .reg-success__lead b {
   .reg-details div {
     grid-template-columns: minmax(0, 1fr);
     gap: 0.1rem;
+  }
+
+  .reg-identity {
+    align-items: flex-start;
   }
 
   .reg-success__actions .btn {

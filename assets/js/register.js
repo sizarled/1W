@@ -253,6 +253,19 @@ function wireLiveValidation() {
   });
 
   qs("[data-terms]")?.addEventListener("change", () => setError("terms", ""));
+
+  // the "@" is decoration only: the field accepts anything and the handle is
+  // echoed in the hint, so nothing ever sits on top of what you type
+  const handle = qs('[name="username"]');
+  const preview = qs("[data-handle-preview]");
+  const paintHandle = () => {
+    if (!preview) return;
+    const value = cleanUsername(handle?.value || "");
+    preview.textContent = value ? `@${value}` : "@yourname";
+  };
+  handle?.addEventListener("input", paintHandle);
+  paintHandle();
+
   ["username", "email"].forEach((name) => {
     qs(`[name="${name}"]`)?.addEventListener("input", () => {
       // the previous availability answer belongs to the previous value
@@ -339,8 +352,7 @@ async function checkAvailability() {
     if (userNode) {
       userNode.hidden = false;
       userNode.textContent = result.username_taken ? "Taken" : "Available";
-      userNode.classList.toggle("is-taken", Boolean(result.username_taken));
-      userNode.classList.toggle("is-ok", !result.username_taken);
+      userNode.dataset.state = result.username_taken ? "taken" : "ok";
     }
     if (result.username_taken) setError("username", MESSAGES.username_taken);
   }
@@ -350,8 +362,7 @@ async function checkAvailability() {
     if (mailNode) {
       mailNode.hidden = false;
       mailNode.textContent = result.email_taken ? "Already registered" : "Available";
-      mailNode.classList.toggle("is-taken", Boolean(result.email_taken));
-      mailNode.classList.toggle("is-ok", !result.email_taken);
+      mailNode.dataset.state = result.email_taken ? "taken" : "ok";
     }
     if (result.email_taken) setError("email", MESSAGES.email_taken);
   }
@@ -462,16 +473,19 @@ function showSuccess(result) {
   const code = qs("[data-reg-code]");
   if (code) code.textContent = state.code;
 
+  const idNode = qs("[data-reg-member-id]");
+  if (idNode) idNode.textContent = member.member_id || "—";
+
   const details = qs("[data-reg-details]");
   if (details) {
     const rows = [
+      ["Member ID", member.member_id],
       ["Full name", member.full_name],
       ["Username", member.username],
       ["Email", member.email],
       ["Phone number", member.phone_number],
       ["Date of birth", member.birth_date ? formatDate(`${member.birth_date}T00:00:00`) : "—"],
       ["Country", member.country],
-      ["Member code", member.member_code],
       ["Status", "Inactive"],
       ["Registered", member.created_at ? formatDate(member.created_at) : formatDate(new Date())],
     ];
@@ -509,27 +523,34 @@ function warnUnsaved(event) {
   return "";
 }
 
-function wireSuccessActions() {
-  qs("[data-reg-copy]")?.addEventListener("click", async () => {
-    const button = qs("[data-reg-copy]");
-    const label = button?.querySelector("span");
-    try {
-      await navigator.clipboard.writeText(state.code);
-      if (label) label.textContent = "Copied";
-    } catch {
-      const code = qs("[data-reg-code]");
-      if (code && window.getSelection) {
-        const range = document.createRange();
-        range.selectNodeContents(code);
-        const selection = window.getSelection();
-        selection.removeAllRanges();
-        selection.addRange(range);
-        if (label) label.textContent = "Select and copy";
-      }
+async function copyValue(text, button, idle, target) {
+  const label = button?.querySelector("span");
+  try {
+    await navigator.clipboard.writeText(text);
+    if (label) label.textContent = "Copied";
+  } catch {
+    const node = qs(target);
+    if (node && window.getSelection) {
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      if (label) label.textContent = "Select and copy";
     }
-    setTimeout(() => {
-      if (label) label.textContent = "Copy code";
-    }, 2200);
+  }
+  setTimeout(() => {
+    if (label) label.textContent = idle;
+  }, 2200);
+}
+
+function wireSuccessActions() {
+  qs("[data-reg-copy]")?.addEventListener("click", () => {
+    copyValue(state.code, qs("[data-reg-copy]"), "Copy code", "[data-reg-code]");
+  });
+
+  qs("[data-reg-copy-id]")?.addEventListener("click", () => {
+    copyValue(state.member?.member_id || "", qs("[data-reg-copy-id]"), "Copy ID", "[data-reg-member-id]");
   });
 
   qs("[data-reg-download]")?.addEventListener("click", () => {
@@ -552,6 +573,7 @@ function txtBody() {
     "      ACCOUNT REGISTRATION",
     "================================",
     "",
+    `Member ID: ${m.member_id || ""}`,
     `Full Name: ${m.full_name || ""}`,
     `Username: ${m.username || ""}`,
     `Email: ${m.email || ""}`,

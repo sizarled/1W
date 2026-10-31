@@ -11,10 +11,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="assets/css/base.css?v=20261031n" />
-    <link rel="stylesheet" href="assets/css/layout.css?v=20261031n" />
-    <link rel="stylesheet" href="assets/css/components.css?v=20261031n" />
-    <link rel="stylesheet" href="assets/css/register.css?v=20261031n" />
+    <link rel="stylesheet" href="assets/css/base.css?v=20261031o" />
+    <link rel="stylesheet" href="assets/css/layout.css?v=20261031o" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261031o" />
+    <link rel="stylesheet" href="assets/css/register.css?v=20261031o" />
     <script>
       /* apply the saved theme (or the OS preference) before first paint */
       (function () {
@@ -33,7 +33,7 @@
       })();
     </script>
 
-    <script type="module" src="assets/js/app.js?v=20261031n"></script>
+    <script type="module" src="assets/js/app.js?v=20261031o"></script>
   </head>
   <body data-page="register" data-title="Create account">
     <a class="skip-link" href="#main">Skip to content</a>
@@ -52,7 +52,7 @@
         <!-- intro -------------------------------------------------- -->
         <aside class="reg__aside">
           <p class="eyebrow"><span class="eyebrow__dot"></span>Join 1World</p>
-          <h1 class="reg__title">Create your account</h1>
+          <h1 class="reg__title">Create your <span class="serif">account</span></h1>
           <p class="reg__lead">
             One account for the whole catalogue: films, series, channels, reviews and points.
             Registration takes a minute and costs nothing.
@@ -110,22 +110,23 @@
 
             <div class="reg-field" data-field="username">
               <label for="reg-username">Username</label>
-              <div class="reg-input reg-input--prefix">
-                <span class="reg-input__prefix" aria-hidden="true">@</span>
-                <input id="reg-username" name="username" type="text" autocomplete="username" placeholder="youssef.amrani" aria-required="true" spellcheck="false" autocapitalize="none" />
-                <span class="reg-input__state" data-username-state hidden></span>
+              <input id="reg-username" name="username" type="text" autocomplete="username" placeholder="youssef.amrani" aria-required="true" spellcheck="false" autocapitalize="none" maxlength="26" />
+              <div class="reg-field__meta">
+                <p class="reg-field__hint" data-hint="username">
+                  Your handle: <b data-handle-preview>@yourname</b> — letters, numbers, dot, dash, underscore.
+                </p>
+                <span class="reg-chip" data-username-state hidden></span>
               </div>
-              <p class="reg-field__hint" data-hint="username">3–24 characters: letters, numbers, dot, dash, underscore. It cannot be changed later.</p>
               <p class="reg-field__error" data-err="username" role="alert" hidden></p>
             </div>
 
             <div class="reg-field" data-field="email">
               <label for="reg-email">Email address</label>
-              <div class="reg-input">
-                <input id="reg-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" aria-required="true" spellcheck="false" />
-                <span class="reg-input__state" data-email-state hidden></span>
+              <input id="reg-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" aria-required="true" spellcheck="false" />
+              <div class="reg-field__meta">
+                <p class="reg-field__hint" data-hint="email">One account per email address.</p>
+                <span class="reg-chip" data-email-state hidden></span>
               </div>
-              <p class="reg-field__hint" data-hint="email">One account per email address.</p>
               <p class="reg-field__error" data-err="email" role="alert" hidden></p>
             </div>
 
@@ -205,6 +206,16 @@
             <b>once</b> and never again.
           </p>
           <p class="reg-success__status"><i data-icon="clock"></i> Account status: <b>Inactive</b> — waiting for activation</p>
+
+          <div class="reg-identity">
+            <div>
+              <p class="reg-identity__label">Member ID</p>
+              <p class="reg-identity__value" data-reg-member-id>ID000000</p>
+            </div>
+            <button class="reg-copy reg-copy--sm" type="button" data-reg-copy-id>
+              <i data-icon="file"></i><span>Copy ID</span>
+            </button>
+          </div>
 
           <dl class="reg-details" data-reg-details></dl>
 

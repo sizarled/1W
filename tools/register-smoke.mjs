@@ -69,6 +69,7 @@ let registerBody = null;
 
 const MEMBER = {
   id: "3f0c2f5e-8a41-4d1c-9b0e-88a1f2c4d5e6",
+  member_id: "ID100042",
   member_code: "000031",
   full_name: "Youssef El Amrani",
   username: "@youssef.amrani",
@@ -150,6 +151,8 @@ await wait(60);
 const report = { calls: [] };
 report.fields = document.querySelectorAll(".reg-form .reg-field").length;
 report.countries = document.querySelectorAll("#reg-countries option").length;
+report.prefixInDom = document.querySelectorAll(".reg-input__prefix, .reg-input__state").length;
+report.handleIdle = text("[data-handle-preview]");
 report.maxBirth = qs("#reg-birth")?.max || "";
 report.planChip = text("[data-reg-plan-name]");
 report.planMeta = text("[data-reg-plan-meta]");
@@ -172,6 +175,9 @@ setInput("username", "Youssef.Amrani");
 blur("username");
 await wait(160);
 report.availableChip = text("[data-username-state]");
+report.availableState = qs("[data-username-state]")?.dataset.state;
+report.handlePreview = text("[data-handle-preview]");
+report.usernameValue = qs('[name="username"]').value;
 
 /* 3. password mismatch ------------------------------------------- */
 setInput("full_name", "Youssef El Amrani");
@@ -211,6 +217,7 @@ report.successVisible = qs("[data-reg-success]").hidden === false;
 report.formHidden = qs("[data-reg-form]").hidden === true;
 report.successTitle = text(".reg-success__title");
 report.code = text("[data-reg-code]");
+report.memberId = text("[data-reg-member-id]");
 report.detailPairs = [...document.querySelectorAll("[data-reg-details] div")].map((row) => row.textContent.trim());
 report.passwordInputsEmpty = [...document.querySelectorAll('[name="password"], [name="password_confirm"]')].every((i) => i.value === "");
 report.passwordNotOnPage = !document.body.textContent.includes("Str0ngPass!23");
@@ -229,6 +236,12 @@ await wait(60);
 report.download = downloads.at(-1) || null;
 report.downloadText = lastBlob ? await lastBlob.text() : "";
 report.downloadType = lastBlob ? lastBlob.type : "";
+report.txtHasId = txt.includes("Member ID: ID100042");
+
+/* 6b. copy the member ID ----------------------------------------- */
+click(qs("[data-reg-copy-id]"));
+await wait(80);
+report.idCopyLabel = qs("[data-reg-copy-id] span").textContent;
 
 /* 7. login button ------------------------------------------------ */
 click(qs("[data-reg-login]"));
@@ -247,12 +260,14 @@ report.activeLoginHref = location.href;
 /* ------------------------------------------------------------------ */
 const checks = {
   fields: report.fields === 9,
+  noOverlayOnInputs: report.prefixInDom === 0 && report.handleIdle === "@yourname",
   countries: report.countries > 90,
   birthLimit: report.maxBirth.length === 10,
   planFromUrl: report.planChip.includes("Gold") && report.planMeta.includes("3 months"),
   emptyValidation: report.emptyFullNameError.length > 0 && report.emptyTermsError.length > 0 && report.emptySubmitNoCall,
   takenHiddenWhileTyping: report.takenChip === "Taken" && report.takenError.includes("already taken"),
-  available: report.availableChip === "Available",
+  available: report.availableChip === "Available" && report.availableState === "ok",
+  handle: report.handlePreview === "@youssef.amrani" && report.usernameValue === "Youssef.Amrani",
   passwordMismatch: report.mismatchError.includes("do not match") && report.mismatchNoCall,
   duplicateRejected: report.rejectedAlert.includes("already taken") && report.rejectedError.includes("already taken") &&
     report.rejectedStillOnForm && report.rejectedNoSuccess,
@@ -266,13 +281,17 @@ const checks = {
     report.registerPayload?.p_terms === true &&
     report.passwordSent === "Str0ngPass!23",
   successCard: report.successVisible && report.formHidden && report.successTitle === "Registration complete" && report.code === CODE,
+  memberId: report.memberId === "ID100042" && report.idCopyLabel === "Select and copy",
   details: report.detailPairs.length === 9 &&
+    report.detailPairs[0].includes("Member ID") && report.detailPairs[0].includes("ID100042") &&
     report.detailPairs.some((row) => row.includes("Youssef El Amrani")) &&
     report.detailPairs.some((row) => row.includes("@youssef.amrani")) &&
     report.detailPairs.some((row) => row.includes("Inactive")),
   passwordWiped: report.passwordInputsEmpty && report.passwordNotOnPage,
   codeNotPersisted: report.codeNotStored,
-  txt: report.txtHasName && report.txtHasUser && report.txtHasCode && report.txtInactive && report.txtNoPassword,
+  txt:
+    report.txtHasName && report.txtHasUser && report.txtHasCode && report.txtHasId &&
+    report.txtInactive && report.txtNoPassword,
   download:
     report.download?.download === "ONEWORLD-youssef.amrani.txt" &&
     report.download?.href === "blob:mock" &&
