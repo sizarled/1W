@@ -1,13 +1,24 @@
 /**
  * Visit tracking.
  * ------------------------------------------------------------------
- * Every page load writes one row to `visitor_visits` (and to `member_visits`
- * when a member session exists) through the `log_visit()` function, then closes
- * it with `finish_visit()` when the page is hidden or closed.
+ * A **visit** is one stay on the site, not one page. The first page a visitor
+ * opens writes a row through `log_visit()`; every other page they open — in the
+ * same tab or in a new one — adopts that same row, so `visit_id` only changes
+ * when the visitor leaves the site completely and closes every page.
  *
- * The row carries: visitor id (six digits), referrer, page path, how many times
- * this visitor has been seen, the purpose (watching / joining), the source and
- * the seconds spent on the page.
+ * How a stay is recognised (`localStorage["1w.visit.session"]`, shared by all
+ * tabs of this browser):
+ *   · every open tab registers itself and beats every 10 s
+ *   · a page that loads while another tab is still open continues that visit
+ *   · a page that loads less than 15 s after the last page closed is a normal
+ *     navigation (same visit)
+ *   · a page that loads after every tab closed and the grace window passed
+ *     starts a new visit id
+ *
+ * The row carries: visitor id (six digits), referrer, landing page, IP, country,
+ * how many times this visitor has been seen, the purpose, the source and the
+ * seconds spent on the site — `finish_visit()` moves the end date forward and
+ * never shortens the duration.
  */
 
 import { getMember, visitorId } from "./session.js";
@@ -15,18 +26,27 @@ import { rpc } from "./data.js";
 import { SUPABASE } from "./config.js";
 import { lookupVisitor, lookupVisitorFast } from "./geo.js";
 
-const KEY = "1w.visit";
+const KEY = "1w.visit"; // this tab's copy, for the console
+const SESSION_KEY = "1w.visit.session"; // shared by every tab
+const TAB_KEY = "1w.visit.tab"; // one id per tab, survives a reload
 const ERROR_KEY = "1w.visit.error";
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const MIN_GAP = 12000; // ignore a second log for the same page within 12 s
+const HEARTBEAT = 10000; // how often a tab says "still here"
+const TAB_STALE = 150000; // a tab that missed beats for 2.5 min is gone (background throttling)
+const REJOIN_GRACE = 15000; // page-to-page gap that still counts as the same visit
 
 const state = {
   visitId: null,
   memberVisitId: null,
-  seconds: 0,
+  seconds: 0, // seconds counted by this page
+  pending: 0, // counted but not yet written to the shared session
   startedAt: 0,
   sent: false,
   timer: null,
+  beat: null,
+  tab: null,
+  page: "",
 };
 
 function purposeFor(page) {
@@ -37,16 +57,88 @@ function pageLocation() {
   return `${location.pathname}${location.search}`.slice(0, 2000);
 }
 
-function recentLog(path) {
+/* ------------------------------------------------------------------ */
+/* the shared visit session                                            */
+/* ------------------------------------------------------------------ */
+function tabId() {
   try {
-    const saved = JSON.parse(sessionStorage.getItem(KEY) || "null");
-    if (saved && saved.path === path && Date.now() - saved.at < MIN_GAP) return saved;
+    let id = sessionStorage.getItem(TAB_KEY);
+    if (!id) {
+      id = `t${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+      sessionStorage.setItem(TAB_KEY, id);
+    }
+    return id;
   } catch {
-    /* ignore */
+    return `m${Math.random().toString(36).slice(2, 10)}`;
   }
-  return null;
 }
 
+function readSession() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+    if (!saved || typeof saved !== "object") return null;
+    if (!saved.tabs || typeof saved.tabs !== "object") saved.tabs = {};
+    return saved;
+  } catch {
+    return null;
+  }
+}
+
+function writeSession(session) {
+  try {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  } catch {
+    /* private mode — the visit simply restarts on the next page */
+  }
+}
+
+function freshTabs(tabs = {}, now = Date.now()) {
+  return Object.entries(tabs).filter(([, at]) => now - Number(at || 0) < TAB_STALE);
+}
+
+/** True when the stay is still running: another tab is open, or the last page just left. */
+function sessionIsOpen(session, tab, now = Date.now()) {
+  if (!session?.id) return false;
+  const others = freshTabs(session.tabs, now).filter(([id]) => id !== tab);
+  if (others.length) return true;
+  const last = Math.max(Number(session.closedAt || 0), Number(session.lastSeen || 0));
+  return Boolean(last) && now - last < REJOIN_GRACE;
+}
+
+function markTab(session, tab, now = Date.now()) {
+  session.tabs = Object.fromEntries(freshTabs(session.tabs, now));
+  session.tabs[tab] = now;
+  session.lastSeen = now;
+  delete session.closedAt;
+  return session;
+}
+
+/** Registers this tab and optionally adds counted seconds to the shared total. */
+function touchSession(deltaSeconds = 0) {
+  const session = readSession();
+  if (!session?.id) return;
+  markTab(session, state.tab);
+  if (deltaSeconds > 0) session.seconds = Number(session.seconds || 0) + deltaSeconds;
+  writeSession(session);
+}
+
+/** Counted seconds of the whole stay, including the ones not written yet. */
+function sessionSeconds() {
+  const session = readSession();
+  const shared = session?.id === state.visitId ? Number(session?.seconds || 0) : 0;
+  return Math.max(shared + state.pending, state.seconds);
+}
+
+function flushPending() {
+  if (!state.pending) return;
+  const delta = state.pending;
+  state.pending = 0;
+  touchSession(delta);
+}
+
+/* ------------------------------------------------------------------ */
+/* errors + per-tab copy                                               */
+/* ------------------------------------------------------------------ */
 function remember(path, payload) {
   try {
     sessionStorage.setItem(KEY, JSON.stringify({ path, at: Date.now(), ...payload }));
@@ -91,6 +183,9 @@ function clearFailure() {
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* counting                                                            */
+/* ------------------------------------------------------------------ */
 // dwell time counts only while the visitor is really on the page: a hidden tab
 // or another window in front of this one does not add seconds
 let pageFocused = !document.hidden;
@@ -98,52 +193,93 @@ let pageFocused = !document.hidden;
 function tick() {
   if (document.hidden || !pageFocused) return;
   state.seconds += 1;
+  state.pending += 1;
+  if (state.pending >= 5) flushPending();
 }
 
-/** Sends the closing frame: duration + end date. Safe to call more than once. */
+/**
+ * Records the duration + end date of the visit so far. Safe to call as often as
+ * needed: the server keeps the greatest duration and simply moves the end date,
+ * so a tab that was hidden for a while can keep counting when it comes back.
+ */
 export function finishVisit({ keepalive = false } = {}) {
   if (!state.visitId && !state.memberVisitId) return;
-  if (state.sent) return;
-  state.sent = true;
-  clearInterval(state.timer);
-  const seconds = Math.max(0, state.seconds);
+  flushPending();
+  const seconds = Math.max(0, sessionSeconds());
   rpc(
     "finish_visit",
     { p_visit: state.visitId, p_member_visit: state.memberVisitId, p_seconds: seconds },
     { keepalive }
   ).catch(() => {
-    state.sent = false;
+    /* the next flush will carry the same total */
   });
 }
 
+/** This page is going away: drop the tab from the shared session. */
+function leaveTab() {
+  clearInterval(state.timer);
+  clearInterval(state.beat);
+  state.timer = null;
+  state.beat = null;
+  flushPending();
+  const session = readSession();
+  if (session?.id === state.visitId) {
+    delete session.tabs?.[state.tab];
+    session.closedAt = Date.now();
+    session.lastSeen = Date.now();
+    session.seconds = Math.max(Number(session.seconds || 0), state.seconds);
+    writeSession(session);
+  }
+  finishVisit({ keepalive: true });
+}
+
+/* ------------------------------------------------------------------ */
+/* boot                                                                */
+/* ------------------------------------------------------------------ */
 /** Boots the tracker for the current page. */
 export async function startVisitTracking() {
   const page = document.body?.dataset.page || "home";
   const path = pageLocation();
-  const previous = recentLog(path);
-
+  state.page = page;
+  state.tab = tabId();
   state.startedAt = Date.now();
-  state.timer = setInterval(tick, 1000);
 
-  window.addEventListener("pagehide", () => finishVisit({ keepalive: true }));
+  state.timer = setInterval(tick, 1000);
+  state.beat = setInterval(() => touchSession(0), HEARTBEAT);
+
+  window.addEventListener("pagehide", leaveTab);
+  window.addEventListener("pageshow", (event) => {
+    if (event.persisted) touchSession(0);
+  });
   window.addEventListener("focus", () => {
     pageFocused = true;
   });
   window.addEventListener("blur", () => {
     pageFocused = false;
+    flushPending();
   });
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden) finishVisit({ keepalive: true });
+    if (document.hidden) {
+      flushPending();
+      finishVisit({ keepalive: true });
+    }
   });
 
-  if (previous?.visitId) {
-    // same page reopened moments ago — continue that row instead of adding one
-    state.visitId = previous.visitId;
-    state.memberVisitId = previous.memberVisitId || null;
-    state.seconds = Number(previous.seconds || 0);
+  // ---- 1. this browser is already in the middle of a stay ----------
+  const session = readSession();
+  if (sessionIsOpen(session, state.tab)) {
+    state.visitId = session.id || null;
+    state.memberVisitId = session.memberId || null;
+    state.seconds = Number(session.seconds || 0);
+    markTab(session, state.tab);
+    writeSession(session);
+    remember(path, { visitId: state.visitId, memberVisitId: state.memberVisitId, seconds: state.seconds, continued: true });
+    document.documentElement.dataset.visit = state.visitId || "direct-row";
+    console.info("[1World] visit continued:", state.visitId, path);
     return;
   }
 
+  // ---- 2. a new stay: one row for the whole session ------------------
   const member = getMember();
   // only a real member uuid can be written (the local demo session uses numbers)
   const memberId = UUID.test(member?.id || "") ? member.id : null;
@@ -181,11 +317,26 @@ export async function startVisitTracking() {
       state.memberVisitId = result.member_visit_id || null;
       remember(path, { visitId: state.visitId, memberVisitId: state.memberVisitId, seconds: 0 });
       clearFailure();
+
+      // one shared session per stay, so every following page reuses this visit id
+      if (state.visitId) {
+        const now = Date.now();
+        writeSession({
+          id: state.visitId,
+          memberId: state.memberVisitId,
+          startedAt: now,
+          lastSeen: now,
+          seconds: 0,
+          path,
+          tabs: { [state.tab]: now },
+        });
+      }
+
       // visible proof for the console: <html data-visit="visit000123">
       document.documentElement.dataset.visit = state.visitId || "direct-row";
       if (geo?.code || geo?.country) document.documentElement.dataset.country = geo.code || geo.country;
       console.info(
-        "[1World] visit logged:",
+        "[1World] visit started:",
         state.visitId || "(direct row)",
         path,
         geo?.ip ? `${geo.ip} · ${geo.country || geo.code || "?"}` : "(address pending)"
@@ -251,4 +402,9 @@ async function insertVisitRow(payload) {
     throw error;
   }
   return { visit_id: null, member_visit_id: null, fallback: true };
+}
+
+/** Debug/console surface: the shared session as stored. */
+export function currentVisitSession() {
+  return readSession();
 }

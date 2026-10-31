@@ -123,6 +123,26 @@ per member (`claim_milestone`).
 frequency, the purpose (`watching` / `joining`) and the source, then closes the row with
 `finish_visit()` — duration + end date — on hide or unload.
 
+**One visit per stay, not per page.** `visit_id` is created the first time a visitor
+opens the site and is then reused by every page until they leave completely:
+
+| Situation | `visit_id` |
+| --- | --- |
+| first page of the stay | new row through `log_visit()` |
+| another page in the same tab (normal navigation) | unchanged |
+| the same page reloaded | unchanged |
+| a second tab, while one is still open | unchanged |
+| every page closed, visitor comes back later | **new** visit id |
+| browser crashed, tab stopped beating for 2.5 min | **new** visit id |
+
+The bookkeeping lives in `localStorage["1w.visit.session"]` (shared by all tabs): every
+open tab registers itself and beats every 10 s, a beaten tab counts as open for 2.5
+minutes (background tabs are throttled by browsers), and a page that loads within 15 s of
+the last one closing counts as a normal navigation. The row's `visitor_page` / `visitor_link`
+keep the landing page of the stay, `visitor_duration` accumulates the seconds of every tab
+(`finish_visit` keeps the greatest duration and only moves the end date), and
+`visitor_frequency` therefore counts **stays**, not page views.
+
 **Visitor identity.** The six-digit `visitor_id` belongs to the browser and never
 changes: `localStorage["1w.visitor"]` is read first, then the first-party cookie `1w_vid`
 (two years, `SameSite=Lax`, `Secure` on https), and only then is a new number minted —

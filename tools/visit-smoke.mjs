@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const MODES = ["rpc", "fallback", "slow", "identity"];
+const MODES = ["rpc", "fallback", "slow", "identity", "session"];
 const MODE = MODES.includes(process.env.VISIT_MODE) ? process.env.VISIT_MODE : "rpc";
 
 const GEO = { success: true, ip: "41.140.12.34", country: "Morocco", country_code: "MA", city: "Casablanca" };
@@ -104,6 +104,101 @@ if (MODE === "identity") {
   report.privateModeId = privateMode.visitorId();
   checks.oneIdWhenStorageBlocked =
     /^[0-9]{6}$/.test(report.privateModeId) && privateMode.visitorId() === report.privateModeId;
+
+  const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name);
+  console.log(JSON.stringify({ mode: MODE, report, checks }, null, 2));
+  console.log("checks:", failed.length ? `FAILED ${failed.join(", ")}` : "all pass");
+  process.exit(failed.length ? 1 : 0);
+}
+
+/* ------------------------------------------------------------------ */
+/* session scenario: one visit_id for the whole stay on the site      */
+/* ------------------------------------------------------------------ */
+if (MODE === "session") {
+  const visitsUrl = `file://${join(root, "assets/js/visits.js")}`;
+  const GEOS = { success: true, ip: "41.140.12.34", country: "Morocco", country_code: "MA", city: "Casablanca" };
+  const reply = (data) =>
+    Promise.resolve({ ok: true, status: 200, json: async () => data, text: async () => JSON.stringify(data) });
+
+  let created = 0;
+  const sessions = [];
+  globalThis.fetch = (url) => {
+    const href = String(url);
+    if (href.includes("/rpc/log_visit")) {
+      created += 1;
+      return reply({ visit_id: `visit00000${created}`, member_visit_id: null, frequency: created });
+    }
+    if (href.includes("/rpc/finish_visit") || href.includes("/rpc/annotate_visit")) return reply(true);
+    if (href.includes("ipwho.is")) return reply(GEOS);
+    return reply([]);
+  };
+
+  localStorage.clear();
+  sessionStorage.clear();
+  const readSession = () => JSON.parse(localStorage.getItem("1w.visit.session") || "null");
+  const boot = async (tag) => {
+    const mod = await import(`${visitsUrl}?${tag}`);
+    await mod.startVisitTracking();
+    await new Promise((r) => setTimeout(r, 60));
+    return mod;
+  };
+  const snapshot = () => {
+    const session = readSession();
+    sessions.push(session);
+    return session;
+  };
+  const report = {};
+  const checks = {};
+
+  // 1 · first page of the stay
+  await boot("p1");
+  const first = snapshot();
+  report.firstVisitId = first?.id || null;
+  checks.firstVisitCreated = created === 1 && first?.id === "visit000001";
+  checks.sessionHasTab = Boolean(first?.tabs && Object.keys(first.tabs).length === 1);
+
+  // 2 · same tab navigates to another page (pagehide, then the next page loads)
+  window.dispatchEvent(new window.Event("pagehide"));
+  const afterNav = readSession();
+  report.closedAfterLeave = Boolean(afterNav?.closedAt);
+  await boot("p2");
+  const second = snapshot();
+  report.afterNavigation = second?.id || null;
+  checks.navigationKeepsVisit = created === 1 && second?.id === "visit000001";
+
+  // 3 · the visitor opens a second tab while the first one is still open
+  sessionStorage.setItem("1w.visit.tab", "tab-two");
+  await boot("p3");
+  const third = snapshot();
+  report.afterSecondTab = third?.id || null;
+  checks.secondTabKeepsVisit = created === 1 && third?.id === "visit000001";
+  checks.twoTabsRegistered = Object.keys(third?.tabs || {}).length === 2;
+
+  // 4 · every page was closed and the visitor comes back later
+  window.dispatchEvent(new window.Event("pagehide"));
+  const stale = readSession();
+  stale.tabs = {};
+  stale.closedAt = Date.now() - 60000;
+  stale.lastSeen = stale.closedAt;
+  localStorage.setItem("1w.visit.session", JSON.stringify(stale));
+  sessionStorage.setItem("1w.visit.tab", "tab-three");
+  await boot("p4");
+  const fourth = snapshot();
+  report.afterFullExit = fourth?.id || null;
+  checks.newVisitAfterExit = created === 2 && fourth?.id === "visit000002";
+
+  // 5 · a tab that stopped beating (crashed browser) no longer holds the stay
+  window.dispatchEvent(new window.Event("pagehide"));
+  const crashed = readSession();
+  crashed.tabs = { ghost: Date.now() - 200000 };
+  crashed.closedAt = Date.now() - 60000;
+  crashed.lastSeen = crashed.closedAt;
+  localStorage.setItem("1w.visit.session", JSON.stringify(crashed));
+  sessionStorage.setItem("1w.visit.tab", "tab-four");
+  await boot("p5");
+  const fifth = snapshot();
+  report.afterStaleTab = fifth?.id || null;
+  checks.staleTabIgnored = created === 3 && fifth?.id === "visit000003";
 
   const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name);
   console.log(JSON.stringify({ mode: MODE, report, checks }, null, 2));
@@ -225,7 +320,7 @@ if (MODE !== "rpc") {
 
 // main process: run the other scenarios in their own module registries
 let exitCode = failed.length ? 1 : 0;
-for (const mode of ["fallback", "slow", "identity"]) {
+for (const mode of ["fallback", "slow", "identity", "session"]) {
   const child = spawnSync(process.execPath, [fileURLToPath(import.meta.url)], {
     env: { ...process.env, VISIT_MODE: mode },
     encoding: "utf8",

@@ -8,7 +8,7 @@ import { getMember, refreshMember, setMember, signOut, noteSeen } from "./sessio
 import { awardPoints, renderWallet, startWalletPolling, syncFromMember } from "./wallet.js";
 import { toast } from "./ui.js";
 import { avatarPlaceholder, enableDragScrollAll } from "./utils.js";
-import { startVisitTracking, finishVisit, lastVisitError } from "./visits.js?v=20261031g";
+import { startVisitTracking, finishVisit, lastVisitError } from "./visits.js?v=20261031h";
 import { initTheme, setTheme, toggleTheme, resetTheme, currentTheme, systemTheme } from "./theme.js";
 import { lookupVisitor, cachedVisitor } from "./geo.js";
 
