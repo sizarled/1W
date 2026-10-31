@@ -378,6 +378,109 @@ success card, the .txt export (content, filename, mime type) and both login bran
 
 ---
 
+## The login page
+
+`login.html` signs a member in with **one field for the account** — member ID (`ID100042`),
+username (`@youssef.amrani` or `youssef.amrani`), member code (`000042`) or email — plus the
+password, a **stay signed in** checkbox, the *Forgot password?* / *Create account* links and
+the **Log in** button. The whole check happens in the database; the page only renders the
+answer.
+
+### What happens on submit
+
+1. `member_login(login, password, remember, ip, agent)` resolves the account with one
+   case-insensitive lookup over `member_id`, `member_code`, `username` (`@` optional) and
+   `email`.
+2. It builds a session with the bcrypt hash: `crypt(password, password_hash) = password_hash`.
+   A wrong password is checked **before** the account state, so a wrong secret never learns
+   whether the account exists, is inactive or is banned.
+3. It reads `status` / `account_status` from `members` and refuses anything that is not
+   `active`.
+4. On success it writes one row in `sessions` (token hash, method, IP, user agent, remember
+   flag, expiry), stamps `members.last_login_at`, and appends `login_success` +
+   `session_created` to `log`.
+5. The browser receives the **plain token once** and stores it in `localStorage` when *stay
+   signed in* was ticked (30 days) or in `sessionStorage` otherwise (12 hours). The table
+   only ever holds `sha256(token)`.
+
+| Situation | What the member sees |
+| --- | --- |
+| Correct details, active account | Signed-in card: avatar, username, member ID, session details |
+| Wrong password | “That password is not correct.” under the field and in the alert |
+| No such account | “No account matches those details.” |
+| Inactive account | “Your account is waiting for activation…” plus the auto-ban deadline |
+| Banned account | “This account has been banned and cannot sign in.” |
+| Expired account | “This account has expired.” |
+| Stored session token rejected | The token is dropped and the form is shown again |
+
+**Signed-in card.** Avatar (the member's `avatar_url` or the generated placeholder),
+`@username`, the member ID chip, the account status, a detail list (member ID, username,
+email, level, membership, sign-in time, when the session ends, stay-signed-in state) and the
+three actions the page is for: **Profile** → `profile.html`, **Dashboard** →
+`dashboard.html`, **Log out**. When the visitor arrived from another page
+(`login.html?next=cast.html?id=287`) a **Continue** button points back there; only same-site
+`*.html` targets are accepted. The header, sidebar and wallet update immediately through
+`setMember()`.
+
+**Log out.** `member_logout(token)` marks the session `ended` (with `logged_out_at`),
+appends `logout` to `log`, the token is deleted from storage and `signOut()` clears
+`1w.member`. Signing out is therefore server-side, not cosmetic.
+
+### The three tables
+
+| Table | Role in sign-in |
+| --- | --- |
+| `members` | identity + `password_hash` (bcrypt) + `status`/`account_status` + `last_login_at` |
+| `sessions` | one row per sign-in: `session_id`, `member_id`, `session_token_hash` (sha256, generated from `token_hash`), `login_method`, `ip_address`, `user_agent`, `remember_me`, `session_status` (`active`/`ended`/`revoked`/`expired`), `created_at`, `last_activity_at`, `expires_at`, `logged_out_at` |
+| `log` | append-only audit trail: `log_id`, `member_id`, `session_id`, `action`, `action_details` (jsonb), `ip_address`, `user_agent`, `created_at` |
+
+`sessions` keeps its original columns (`user_id`, `token_hash`, `last_seen_at`,
+`revoked_at`) for compatibility and adds the spec ones on top; `user_id` and `member_id`
+both point at the member row.
+
+**What is written to `log`:** `login_success`, `login_failed` (reason `password` or
+`not_found`), `login_blocked` (reason `inactive`, `banned`, `expired`), `session_created`,
+`session_expired`, `session_revoked`, `logout`, `account_banned`, `account_updated` (field
+names only — a trigger on `members`) and anything a page reports through
+`member_log(token, action, details)`. Passwords, hashes and tokens are never written.
+
+**Nobody can edit the trail.** `log` and `sessions` have RLS enabled and **no policies**, so
+`anon`/`authenticated` cannot read, insert, update or delete a single row; everything goes
+through the security-definer functions. That is also why logins can only be created
+server-side.
+
+### Functions
+
+| Function | What it does |
+| --- | --- |
+| `member_login(login, password, remember, ip, agent)` | Resolves the account, checks the hash, checks the status, creates the session, writes the log rows |
+| `member_session(token)` | Restores a session from its token, touches `last_activity_at`, revokes it if the account is no longer active |
+| `member_logout(token)` | Ends the session and logs it |
+| `member_log(token, action, details)` | Appends an action for the signed-in session |
+| `member_sweep_inactive()` | Bans accounts that stayed inactive for 30 days (called on every login attempt; service role) |
+| `member_payload(m)` | The public shape of a member — never the hashes |
+
+**30-day rule.** `member_sweep_inactive()` is invoked at the start of every `member_login()`,
+so any account still `inactive` 31+ days after `created_at` becomes `banned` (with an
+`account_banned` log row) the next time anyone signs in. No cron job required.
+
+**Activating an account** (there is no admin UI yet — this is the SQL the operator runs):
+
+```sql
+update public.members set status = 'active' where member_id = 'ID100042';
+```
+
+DDL + functions: `tools/sql/login-page.sql` (migrations `login_page`,
+`login_handle_lookup`, `login_password_before_status`, `login_digest_search_path`,
+`member_ip_lenient`, `members_log_fields_fix`).
+
+`tools/login-smoke.mjs` runs the page three times in jsdom: a fresh visitor (prefill, empty
+submit, wrong password, unknown account, inactive, banned, successful sign-in with the
+remember flag, the signed-in card, log out), a returning visitor whose stored token is
+restored through `member_session()`, and a visitor whose token is no longer accepted.
+
+---
+
 ## Sounds
 
 Played from the public `source` bucket of the Supabase project:
@@ -539,11 +642,14 @@ assets/css/cast.css         cast page (profile, dials, reels, mentions)
 assets/js/cast.js           cast page controller (TMDB + person_* RPCs)
 assets/css/register.css     registration form + success card (high-contrast, both themes)
 assets/js/register.js       registration controller (member_register RPC, .txt export)
+assets/css/login.css        sign-in form + signed-in card
+assets/js/login.js          sign-in controller (member_login / member_session / member_logout)
 tools/build-pages.mjs       regenerates the placeholder pages
 tools/smoke.mjs             jsdom smoke test (renders the homepage offline)
 tools/watch-smoke.mjs       jsdom watch page test (player, gates, watch-time)
 tools/cast-smoke.mjs        jsdom cast page test (guest + member dials)
 tools/register-smoke.mjs    registration test (form, duplicates, member ID, success, .txt)
+tools/login-smoke.mjs       sign-in test (states, success card, restore, log out)
 tools/visit-smoke.mjs       visit tracker test (5 modes)
 ```
 

@@ -81,10 +81,57 @@ export function setMember(member) {
 }
 
 export function signOut() {
+  clearSessionToken();
   store.remove(MEMBER_KEY);
   store.remove(SEEN_POINTS);
   store.remove(SEEN_LEVEL);
   window.dispatchEvent(new CustomEvent("1w:session", { detail: null }));
+}
+
+/* ------------------------------------------------------------------ */
+/* server session token                                                */
+/* ------------------------------------------------------------------ */
+const SESSION_KEY = "1w.session";
+let sessionTokenMemory = "";
+
+/**
+ * The login page trades the password for a session token. The token is kept
+ * in localStorage when "stay signed in" was chosen (30 days) and in
+ * sessionStorage otherwise (the server expires it after 12 hours).
+ */
+export function setSessionToken(token, remember = false) {
+  if (!token) return;
+  sessionTokenMemory = token;
+  try {
+    if (remember) {
+      localStorage.setItem(SESSION_KEY, token);
+      sessionStorage.removeItem(SESSION_KEY);
+    } else {
+      sessionStorage.setItem(SESSION_KEY, token);
+      localStorage.removeItem(SESSION_KEY);
+    }
+  } catch {
+    /* storage blocked — the token still lives in memory for this page */
+  }
+}
+
+export function sessionToken() {
+  if (sessionTokenMemory) return sessionTokenMemory;
+  try {
+    return sessionStorage.getItem(SESSION_KEY) || localStorage.getItem(SESSION_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+export function clearSessionToken() {
+  sessionTokenMemory = "";
+  try {
+    sessionStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(SESSION_KEY);
+  } catch {
+    /* nothing to clear */
+  }
 }
 
 /** Pull the authoritative row from Supabase and merge it in. */

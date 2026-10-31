@@ -14,7 +14,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const BUILD = "20261031o"; // cache-bust for css/js
+const BUILD = "20261031p"; // cache-bust for css/js
 
 const PAGES = [
   ["search.html", "Search", "search", "Search across films, series, channels, articles, documents, answers and reviews.", "Reads ?q= from the URL."],
@@ -48,7 +48,6 @@ const PAGES = [
   ["profile.html", "Profile", "user", "Public member profile: avatar, cover, followers and reach.", ""],
   ["dashboard.html", "Dashboard", "dashboard", "Your account: membership, points, sessions and notification settings.", ""],
   ["notifications.html", "Notifications", "bell", "Every notification, filtered by month, year, exact date or all time.", ""],
-  ["login.html", "Log in", "login", "Sign in with your email and password.", ""],
   ["actevite.html", "Activate membership", "crown", "Upgrade to Silver, Gold or Diamond and activate viewing codes.", ""],
   ["panel.html", "Control panel", "settings", "Admin and moderator console for features, apps, channels and members.", ""],
 ];
