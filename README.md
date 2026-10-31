@@ -123,30 +123,32 @@ per member (`claim_milestone`).
 frequency, the purpose (`watching` / `joining`) and the source, then closes the row with
 `finish_visit()` — duration + end date — on hide or unload.
 
-**One visit per page — a reload is not a visit.** A visit row is created for the page
-the visitor opens, and only a real page change adds another one:
+**`visit_id` = one browser session, one row per page.** The visit id is minted the first
+time the site is opened and then **never changes** while the browser stays open, however
+many pages are opened. Each page adds its own row carrying that same `visit_id`:
 
-| Situation | `visitor_visits` |
-| --- | --- |
-| first page of a stay | new row through `log_visit()` |
-| reloading that same page (F5, or back to the same URL) | **no row** — same `visit_id` |
-| moving to another page of the site | **new row** + new `visit_id` |
-| the same page with another `?movie=` / `?tv=` / `?season=` | **new row** — the query string is part of the page |
-| a second tab on another page | new row (it is a different page) |
-| every page closed, visitor comes back later | new row |
-| browser crashed, tab silent for 2.5 min | new row |
+| Situation | `visit_id` | row |
+| --- | --- | --- |
+| opening the site | new | one row (start date, duration) |
+| moving to another page | unchanged | new row |
+| another page after `?movie=` / `?tv=` / `?season=` | unchanged | new row — the query string is part of the page |
+| reloading the page that is already recorded | unchanged | **no new row** |
+| a second tab on another page | unchanged | new row |
+| every page closed (browser closed) | **new** | new row |
 
-The bookkeeping lives in `localStorage["1w.visit.session"]` (shared by all tabs): every
-open tab registers itself and beats every 10 s, a beaten tab counts as open for 2.5
-minutes (browsers throttle background tabs), a page that loads within 15 s of the last one
-closing is a reload or a navigation rather than a new stay, and the recorded `path`
-decides between the two — same path reuses the row, another path starts a new visit.
-Each row is independent: its own `visitor_start_date`, its own `visitor_end_date`, its own
-`visitor_duration` (`finish_visit` keeps the greatest duration and only moves the end
-date) and its own `visitor_frequency`. The frequency is the **repeat rate of that exact
-page**: `1` the first time this `visitor_id` opens `/watch.html?movie=1765072`, `2` the
-second time, while `/watch.html?movie=550` starts again at `1`. Member rows count the same
+Because the id is shared, the rows are addressed by their own `id` (returned by
+`log_visit()` as `row_id` and used by `finish_visit(p_row := …)`), so each page keeps its
+own `visitor_start_date`, `visitor_end_date` and `visitor_duration`. `visitor_frequency`
+is the repeat rate of that exact page for that visitor (`1` the first time
+`/watch.html?movie=1765072` is opened, `2` the second time), and member rows count the same
 way per `member_page`.
+
+The browser session is tracked in `localStorage["1w.visit.session"]`, shared by all tabs:
+every tab registers itself and beats every 10 s, a beaten tab counts as open for 2.5
+minutes (browsers throttle background tabs), and a page that loads within 15 s of the last
+one closing is a reload or a navigation rather than a closed browser. Only when no tab is
+left does the next page start a new `visit_id` — and since a tab that went silent (crash)
+is not trusted, a dropped browser never keeps an old session alive.
 
 **Visitor identity.** The six-digit `visitor_id` belongs to the browser and never
 changes: `localStorage["1w.visitor"]` is read first, then the first-party cookie `1w_vid`

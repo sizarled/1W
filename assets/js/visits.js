@@ -1,10 +1,13 @@
 /**
  * Visit tracking.
  * ------------------------------------------------------------------
- * A **visit** is counted per page, and a reload is not a visit:
- *   · opening a page that is not the one already recorded → new row + new `visit_id`
- *   · reloading that same page (same path) → the same row, nothing is added
- *   · leaving the site completely and coming back → new row
+ * Two things are tracked separately:
+ *   · `visit_id` — the browser session. It is minted when the site is opened and
+ *     never changes afterwards, no matter how many pages are opened; a new one
+ *     appears only when every page was closed (the browser was closed).
+ *   · the row — one per page. Moving to another page adds a row carrying the
+ *     same `visit_id`, with its own frequency, start date, end date and duration.
+ *     Reloading the page that is already recorded adds nothing.
  *
  * How it is recognised (`localStorage["1w.visit.session"]`, shared by all tabs of
  * this browser):
@@ -37,7 +40,9 @@ const TAB_STALE = 150000; // a tab that missed beats for 2.5 min is gone (backgr
 const REJOIN_GRACE = 15000; // page-to-page gap that still counts as the same visit
 
 const state = {
-  visitId: null,
+  visitId: null, // the browser session id, shared by every row
+  rowId: null, // this page's row
+  memberRowId: null,
   memberVisitId: null,
   seconds: 0, // seconds counted by this page
   pending: 0, // counted but not yet written to the shared session
@@ -208,7 +213,13 @@ export function finishVisit({ keepalive = false } = {}) {
   const seconds = Math.max(0, sessionSeconds());
   rpc(
     "finish_visit",
-    { p_visit: state.visitId, p_member_visit: state.memberVisitId, p_seconds: seconds },
+    {
+      p_visit: state.visitId,
+      p_member_visit: state.memberVisitId,
+      p_seconds: seconds,
+      p_row: state.rowId, // one row = one page, so every page closes on its own
+      p_member_row: state.memberRowId,
+    },
     { keepalive }
   ).catch(() => {
     /* the next flush will carry the same total */
@@ -271,7 +282,9 @@ export async function startVisitTracking() {
   const session = readSession();
   if (sessionIsOpen(session, state.tab) && session.path === path) {
     state.visitId = session.id || null;
+    state.rowId = session.rowId || null;
     state.memberVisitId = session.memberId || null;
+    state.memberRowId = session.memberRowId || null;
     state.seconds = Number(session.seconds || 0);
     markTab(session, state.tab);
     writeSession(session);
@@ -299,6 +312,9 @@ export async function startVisitTracking() {
     p_address: geo?.ip || null,
     p_country: geo?.country || null,
     p_code: geo?.code || null,
+    // keep the browser session: the server only mints a new visit id when this
+    // is empty, i.e. when the visitor opened the site after closing every page
+    p_visit: sessionIsOpen(session, state.tab) ? session.id || null : null,
   };
 
   try {
@@ -316,7 +332,9 @@ export async function startVisitTracking() {
     }
     if (result && typeof result === "object") {
       state.visitId = result.visit_id || null;
+      state.rowId = result.row_id || null;
       state.memberVisitId = result.member_visit_id || null;
+      state.memberRowId = result.member_row_id || null;
       remember(path, { visitId: state.visitId, memberVisitId: state.memberVisitId, seconds: 0 });
       clearFailure();
 
@@ -329,7 +347,9 @@ export async function startVisitTracking() {
         tabs[state.tab] = now;
         writeSession({
           id: state.visitId,
+          rowId: state.rowId,
           memberId: state.memberVisitId,
+          memberRowId: state.memberRowId,
           startedAt: now,
           lastSeen: now,
           seconds: 0,
@@ -342,7 +362,7 @@ export async function startVisitTracking() {
       document.documentElement.dataset.visit = state.visitId || "direct-row";
       if (geo?.code || geo?.country) document.documentElement.dataset.country = geo.code || geo.country;
       console.info(
-        "[1World] visit started:",
+        payload.p_visit ? "[1World] page opened in visit:" : "[1World] visit started:",
         state.visitId || "(direct row)",
         path,
         geo?.ip ? `${geo.ip} · ${geo.country || geo.code || "?"}` : "(address pending)"
@@ -369,6 +389,8 @@ function annotateLater() {
         p_address: geo.ip,
         p_country: geo.country,
         p_code: geo.code,
+        p_row: state.rowId,
+        p_member_row: state.memberRowId,
       });
     })
     .catch(() => {
@@ -376,8 +398,14 @@ function annotateLater() {
     });
 }
 
+/** A session id the browser can keep using while the RPC is unavailable. */
+function localSessionId() {
+  return `visit${String(Date.now()).slice(-9)}`;
+}
+
 /** Direct REST insert, used only when the RPC is unavailable. */
 async function insertVisitRow(payload) {
+  const sessionId = payload.p_visit || localSessionId();
   const res = await fetch(`${SUPABASE.restUrl}/visitor_visits`, {
     method: "POST",
     headers: {
@@ -388,6 +416,7 @@ async function insertVisitRow(payload) {
     },
     body: JSON.stringify([
       {
+        visit_id: sessionId,
         visitor_id: payload.p_visitor,
         visitor_link: payload.p_link,
         visitor_page: payload.p_page,
@@ -407,7 +436,7 @@ async function insertVisitRow(payload) {
     error.body = text.slice(0, 400);
     throw error;
   }
-  return { visit_id: null, member_visit_id: null, fallback: true };
+  return { visit_id: sessionId, row_id: null, member_visit_id: null, member_row_id: null, fallback: true };
 }
 
 /** Debug/console surface: the shared session as stored. */
