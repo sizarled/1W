@@ -34,6 +34,21 @@ const MESSAGES = {
   server: "We could not sign you in right now. Please try again in a moment.",
 };
 
+const STATUS_NOTICE = {
+  inactive: {
+    title: "Your account is not activated yet",
+    text: "You can sign in and open your profile, but publishing, purchases and points stay locked until your account is activated.",
+  },
+  banned: {
+    title: "This account is banned",
+    text: "You can sign in, but restricted areas stay locked. Contact support to appeal the ban.",
+  },
+  expired: {
+    title: "This account has expired",
+    text: "You can sign in, but membership features stay locked until the account is renewed.",
+  },
+};
+
 const state = {
   busy: false,
   member: null,
@@ -97,7 +112,7 @@ async function restoreSession() {
   }
 
   state.restored = true;
-  showSignedIn(result.member, result.session, "Your session is still active. Welcome back.");
+  showSignedIn(result.member, result.session, "Your session is still active. Welcome back.", isRestricted(result));
 }
 
 /* ================================================================== */
@@ -203,14 +218,17 @@ function wireSubmit() {
       }
 
       setSessionToken(result.session?.token || "", remember);
-      showSignedIn(result.member, result.session, "You are signed in. Welcome back.");
+      showSignedIn(result.member, result.session, "You are signed in.", isRestricted(result));
       qs('[name="password"]').value = "";
       playSound("success", 0.4);
+      const restricted = isRestricted(result);
       toast({
-        title: "Signed in",
-        message: `Welcome back, ${displayName(result.member)}.`,
-        tone: "success",
-        iconName: "check",
+        title: restricted ? "Signed in — account restricted" : "Signed in",
+        message: restricted
+          ? `${statusLabel(result.member?.status)} account. Some areas stay locked.`
+          : `Welcome back, ${displayName(result.member)}.`,
+        tone: restricted ? "info" : "success",
+        iconName: restricted ? "info" : "check",
       });
     } catch (error) {
       console.warn("[1World] login:", error.message);
@@ -255,7 +273,16 @@ function displayName(member) {
   return String(member?.username || member?.full_name || "member").replace(/^@/, "") || "member";
 }
 
-function showSignedIn(member, session, message) {
+function isRestricted(result) {
+  const status = String(result?.member?.status || result?.status || "active").toLowerCase();
+  return Boolean(result?.restricted) || status !== "active";
+}
+
+function statusLabel(status) {
+  return String(status || "active").replace(/^./, (c) => c.toUpperCase());
+}
+
+function showSignedIn(member, session, message, restricted = false) {
   state.member = member || null;
   state.session = session || null;
 
@@ -278,9 +305,12 @@ function showSignedIn(member, session, message) {
 
   const status = qs("[data-lg-status]");
   if (status) {
-    const state_ = String(member?.status || "active");
-    status.textContent = state_.replace(/^./, (c) => c.toUpperCase());
+    const label = statusLabel(member?.status);
+    status.textContent = label;
+    status.dataset.state = restricted ? "restricted" : "active";
   }
+
+  paintNotice(member, restricted, session);
 
   const lead = qs("[data-lg-message]");
   if (lead) lead.textContent = message || "You are signed in. Welcome back.";
@@ -333,6 +363,35 @@ function showSignedIn(member, session, message) {
   doneCard?.scrollIntoView?.({ block: "start", behavior: "smooth" });
 }
 
+function paintNotice(member, restricted, session) {
+  const box = qs("[data-lg-notice]");
+  if (!box) return;
+  const status = String(member?.status || "active").toLowerCase();
+  const copy = STATUS_NOTICE[status];
+  if (!restricted || !copy) {
+    box.hidden = true;
+    return;
+  }
+
+  const title = qs("[data-lg-notice-title]");
+  const text = qs("[data-lg-notice-text]");
+  if (title) title.textContent = copy.title;
+  if (text) {
+    let extra = "";
+    if (status === "inactive" && member?.created_at) {
+      const deadline = new Date(new Date(member.created_at).getTime() + 30 * 864e5);
+      if (!Number.isNaN(deadline.getTime())) {
+        extra = ` Accounts that stay inactive until ${formatDate(deadline)} are banned automatically.`;
+      }
+    }
+    if (session?.remember_me === false && status === "inactive") {
+      extra += " This session ends after 12 hours.";
+    }
+    text.textContent = copy.text + extra;
+  }
+  box.hidden = false;
+}
+
 function titleCase(value) {
   return String(value).replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -366,6 +425,8 @@ function wireLogout() {
     if (doneCard) doneCard.hidden = true;
     if (formCard) formCard.hidden = false;
     clearErrors();
+    const notice = qs("[data-lg-notice]");
+    if (notice) notice.hidden = true;
     const password = qs('[name="password"]');
     if (password) password.value = "";
     qs('[name="login"]')?.focus();

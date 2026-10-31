@@ -4,17 +4,17 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Log in — 1World Web</title>
-    <meta name="description" content="Sign in to 1World with your member ID, username or email. Sessions, account status and activity are checked server-side." />
+    <meta name="description" content="Sign in to 1World with your member ID, username or email. Sessions, account status and activity are kept server-side." />
     <meta name="theme-color" content="#060607" />
     <meta name="robots" content="noindex" />
     <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="assets/css/base.css?v=20261031p" />
-    <link rel="stylesheet" href="assets/css/layout.css?v=20261031p" />
-    <link rel="stylesheet" href="assets/css/components.css?v=20261031p" />
-    <link rel="stylesheet" href="assets/css/login.css?v=20261031p" />
+    <link rel="stylesheet" href="assets/css/base.css?v=20261031q" />
+    <link rel="stylesheet" href="assets/css/layout.css?v=20261031q" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261031q" />
+    <link rel="stylesheet" href="assets/css/login.css?v=20261031q" />
     <script>
       /* apply the saved theme (or the OS preference) before first paint */
       (function () {
@@ -33,7 +33,7 @@
       })();
     </script>
 
-    <script type="module" src="assets/js/app.js?v=20261031p"></script>
+    <script type="module" src="assets/js/app.js?v=20261031q"></script>
   </head>
   <body data-page="login" data-title="Log in">
     <a class="skip-link" href="#main">Skip to content</a>
@@ -65,7 +65,7 @@
             </li>
             <li>
               <span class="lg__point-icon"><i data-icon="shield"></i></span>
-              <div><b>Status checked first</b><span>Inactive, expired and banned accounts are stopped at the door.</span></div>
+              <div><b>Your status is visible</b><span>Inactive, expired and banned accounts can sign in — the page says which state the account is in.</span></div>
             </li>
             <li>
               <span class="lg__point-icon"><i data-icon="unlock"></i></span>
@@ -149,6 +149,14 @@
           </div>
 
           <p class="lg-profile__lead" data-lg-message>You are signed in. Welcome back.</p>
+
+          <div class="lg-notice" data-lg-notice hidden>
+            <i data-icon="info"></i>
+            <div>
+              <p class="lg-notice__title" data-lg-notice-title></p>
+              <p class="lg-notice__text" data-lg-notice-text></p>
+            </div>
+          </div>
 
           <dl class="lg-details" data-lg-details></dl>
 

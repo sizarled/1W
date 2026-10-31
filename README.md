@@ -394,11 +394,12 @@ answer.
 2. It builds a session with the bcrypt hash: `crypt(password, password_hash) = password_hash`.
    A wrong password is checked **before** the account state, so a wrong secret never learns
    whether the account exists, is inactive or is banned.
-3. It reads `status` / `account_status` from `members` and refuses anything that is not
-   `active`.
-4. On success it writes one row in `sessions` (token hash, method, IP, user agent, remember
-   flag, expiry), stamps `members.last_login_at`, and appends `login_success` +
-   `session_created` to `log`.
+3. It reads `status` / `account_status` from `members`. An `inactive`, `banned` or `expired`
+   account **still signs in** — the state comes back as `restricted: true` and the page shows
+   it as a notice instead of a password screen.
+4. It writes one row in `sessions` (token hash, method, IP, user agent, remember flag,
+   expiry), stamps `members.last_login_at`, and appends `login_success` + `session_created`
+   (plus `login_restricted` when the account is not active) to `log`.
 5. The browser receives the **plain token once** and stores it in `localStorage` when *stay
    signed in* was ticked (30 days) or in `sessionStorage` otherwise (12 hours). The table
    only ever holds `sha256(token)`.
@@ -408,16 +409,18 @@ answer.
 | Correct details, active account | Signed-in card: avatar, username, member ID, session details |
 | Wrong password | “That password is not correct.” under the field and in the alert |
 | No such account | “No account matches those details.” |
-| Inactive account | “Your account is waiting for activation…” plus the auto-ban deadline |
-| Banned account | “This account has been banned and cannot sign in.” |
-| Expired account | “This account has expired.” |
+| **Inactive account** | Signed in, status chip `Inactive`, notice “Your account is not activated yet…” with the auto-ban deadline |
+| **Banned account** | Signed in, status chip `Banned`, notice “This account is banned… appeal” |
+| **Expired account** | Signed in, status chip `Expired`, notice “This account has expired…” |
 | Stored session token rejected | The token is dropped and the form is shown again |
 
 **Signed-in card.** Avatar (the member's `avatar_url` or the generated placeholder),
 `@username`, the member ID chip, the account status, a detail list (member ID, username,
 email, level, membership, sign-in time, when the session ends, stay-signed-in state) and the
 three actions the page is for: **Profile** → `profile.html`, **Dashboard** →
-`dashboard.html`, **Log out**. When the visitor arrived from another page
+`dashboard.html`, **Log out**. When the account is not `active`, a dashed **restriction
+notice** sits above the details (with the 30-day ban deadline for inactive accounts); the
+card and the three buttons stay exactly the same. When the visitor arrived from another page
 (`login.html?next=cast.html?id=287`) a **Continue** button points back there; only same-site
 `*.html` targets are accepted. The header, sidebar and wallet update immediately through
 `setMember()`.
@@ -438,11 +441,12 @@ appends `logout` to `log`, the token is deleted from storage and `signOut()` cle
 `revoked_at`) for compatibility and adds the spec ones on top; `user_id` and `member_id`
 both point at the member row.
 
-**What is written to `log`:** `login_success`, `login_failed` (reason `password` or
-`not_found`), `login_blocked` (reason `inactive`, `banned`, `expired`), `session_created`,
-`session_expired`, `session_revoked`, `logout`, `account_banned`, `account_updated` (field
-names only — a trigger on `members`) and anything a page reports through
-`member_log(token, action, details)`. Passwords, hashes and tokens are never written.
+**What is written to `log`:** `login_success` (with the account status), `login_failed`
+(reason `password` or `not_found`), `login_restricted` (an inactive/banned/expired account
+signed in), `session_created`, `session_expired`, `session_revoked`, `logout`,
+`account_banned`, `account_updated` (field names only — a trigger on `members`) and anything a
+page reports through `member_log(token, action, details)`. Passwords, hashes and tokens are
+never written.
 
 **Nobody can edit the trail.** `log` and `sessions` have RLS enabled and **no policies**, so
 `anon`/`authenticated` cannot read, insert, update or delete a single row; everything goes
@@ -453,12 +457,18 @@ server-side.
 
 | Function | What it does |
 | --- | --- |
-| `member_login(login, password, remember, ip, agent)` | Resolves the account, checks the hash, checks the status, creates the session, writes the log rows |
-| `member_session(token)` | Restores a session from its token, touches `last_activity_at`, revokes it if the account is no longer active |
+| `member_login(login, password, remember, ip, agent)` | Resolves the account, checks the hash, reads the status, creates the session (+ `login_restricted` when the account is not active), writes the log rows |
+| `member_session(token)` | Restores a session from its token and touches `last_activity_at`; non-active accounts keep their session and come back with `restricted: true` |
 | `member_logout(token)` | Ends the session and logs it |
 | `member_log(token, action, details)` | Appends an action for the signed-in session |
 | `member_sweep_inactive()` | Bans accounts that stayed inactive for 30 days (called on every login attempt; service role) |
 | `member_payload(m)` | The public shape of a member — never the hashes |
+
+**Restriction policy.** Login is *open*: any account that knows its password gets in, and the
+state (`inactive` / `banned` / `expired`) is shown rather than used to block the door. The gate
+lives in one place — the `if v_row.status is distinct from 'active' then v_restricted := true`
+block of `member_login()` — so switching back to a hard block is a single, readable edit (return
+`jsonb_build_object('ok', false, 'error', 'inactive')` from that branch).
 
 **30-day rule.** `member_sweep_inactive()` is invoked at the start of every `member_login()`,
 so any account still `inactive` 31+ days after `created_at` becomes `banned` (with an
@@ -474,10 +484,11 @@ DDL + functions: `tools/sql/login-page.sql` (migrations `login_page`,
 `login_handle_lookup`, `login_password_before_status`, `login_digest_search_path`,
 `member_ip_lenient`, `members_log_fields_fix`).
 
-`tools/login-smoke.mjs` runs the page three times in jsdom: a fresh visitor (prefill, empty
-submit, wrong password, unknown account, inactive, banned, successful sign-in with the
-remember flag, the signed-in card, log out), a returning visitor whose stored token is
-restored through `member_session()`, and a visitor whose token is no longer accepted.
+`tools/login-smoke.mjs` runs the page four times in jsdom: a fresh visitor (prefill, empty
+submit, wrong password, unknown account, then sign-in for an inactive account, a banned
+account and an active one — each reaching the signed-in card — plus log out), a returning
+visitor whose stored token is restored through `member_session()`, a visitor whose token is
+no longer accepted, and a restored session for an inactive account (notice shown).
 
 ---
 

@@ -199,6 +199,7 @@ declare
   v_session uuid;
   v_expires timestamptz;
   v_remember boolean := coalesce(p_remember, false);
+  v_restricted boolean := false;
 begin
   perform public.member_sweep_inactive();
 
@@ -240,28 +241,10 @@ begin
     return jsonb_build_object('ok', false, 'error', 'password');
   end if;
 
-  if v_row.status = 'banned' then
-    perform public.member_log_write(v_row.id, null, 'login_blocked',
-      jsonb_build_object('reason', 'banned'), p_ip, p_agent);
-    return jsonb_build_object('ok', false, 'error', 'banned');
-  end if;
-
-  if v_row.status = 'expired' then
-    perform public.member_log_write(v_row.id, null, 'login_blocked',
-      jsonb_build_object('reason', 'expired'), p_ip, p_agent);
-    return jsonb_build_object('ok', false, 'error', 'expired');
-  end if;
-
-  if v_row.status <> 'active' then
-    perform public.member_log_write(v_row.id, null, 'login_blocked',
-      jsonb_build_object('reason', 'inactive'), p_ip, p_agent);
-    return jsonb_build_object(
-      'ok', false,
-      'error', 'inactive',
-      'status', v_row.status,
-      'activate_deadline', v_row.created_at + interval '30 days',
-      'member', jsonb_build_object('member_id', v_row.member_id, 'username', v_row.username)
-    );
+  -- inactive / banned / expired members may sign in: the status is carried
+  -- with the session and the page shows it as a restriction notice
+  if v_row.status is distinct from 'active' then
+    v_restricted := true;
   end if;
 
   v_token   := encode(gen_random_bytes(32), 'hex');
@@ -280,14 +263,20 @@ begin
   update public.members set last_login_at = now() where id = v_row.id;
 
   perform public.member_log_write(v_row.id, v_session, 'login_success',
-    jsonb_build_object('method', v_method), p_ip, p_agent);
+    jsonb_build_object('method', v_method, 'status', v_row.status, 'restricted', v_restricted), p_ip, p_agent);
   perform public.member_log_write(v_row.id, v_session, 'session_created',
     jsonb_build_object('remember_me', v_remember, 'expires_at', v_expires), p_ip, p_agent);
+  if v_restricted then
+    perform public.member_log_write(v_row.id, v_session, 'login_restricted',
+      jsonb_build_object('status', v_row.status), p_ip, p_agent);
+  end if;
 
   select * into v_row from public.members m where m.id = v_row.id; -- last_login_at
 
   return jsonb_build_object(
     'ok', true,
+    'restricted', v_restricted,
+    'status', v_row.status,
     'login_method', v_method,
     'session', jsonb_build_object(
       'id', v_session,
@@ -341,15 +330,7 @@ begin
     return jsonb_build_object('ok', false, 'error', 'unknown');
   end if;
 
-  if v_member.status <> 'active' then
-    update public.sessions
-       set session_status = 'revoked', revoked_at = coalesce(revoked_at, now())
-     where id = v_session.id;
-    perform public.member_log_write(v_member.id, v_session.id, 'session_revoked',
-      jsonb_build_object('reason', v_member.status), v_session.ip_address::text, v_session.user_agent);
-    return jsonb_build_object('ok', false, 'error', v_member.status);
-  end if;
-
+  -- inactive / banned accounts keep their session; the page shows the status
   update public.sessions
      set last_activity_at = now(), last_seen_at = now()
    where id = v_session.id;
@@ -357,6 +338,8 @@ begin
 
   return jsonb_build_object(
     'ok', true,
+    'restricted', v_member.status is distinct from 'active',
+    'status', v_member.status,
     'member', public.member_payload(v_member),
     'session', jsonb_build_object(
       'id', v_session.id,

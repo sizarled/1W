@@ -3,11 +3,13 @@
  *
  *   node tools/login-smoke.mjs
  *
- * Pass 1 — a fresh visitor: prefill, empty submit, wrong password, unknown
- *          account, inactive account, banned account, successful sign-in
- *          (remember me), the signed-in card and log out.
- * Pass 2 — a returning visitor: a stored token is restored through
- *          `member_session()` and the signed-in card opens immediately.
+ * Pass 1 — fresh visitor: prefill, empty submit, wrong password, unknown
+ *          account, then sign-in for an inactive account, a banned account and
+ *          an active one (all three reach the signed-in card), plus log out.
+ * Pass 2 — returning visitor: a stored token is restored through
+ *          `member_session()`.
+ * Pass 3 — a stored token the server no longer accepts.
+ * Pass 4 — a restored session for an account that is not active.
  */
 import { JSDOM } from "jsdom";
 import { readFileSync } from "node:fs";
@@ -35,7 +37,7 @@ const MEMBER = {
 };
 const EXPIRES = new Date(Date.now() + 30 * 864e5).toISOString();
 
-let mode = "ok"; // ok | password | not_found | inactive | banned
+let mode = "active"; // active | inactive | banned | password | not_found | restore-dead | restore-restricted
 const calls = [];
 
 function reply(data) {
@@ -47,42 +49,46 @@ function reply(data) {
   });
 }
 
+function sessionPayload(status, remember) {
+  return {
+    id: "s1",
+    token: CODE_TOKEN,
+    expires_at: EXPIRES,
+    remember_me: Boolean(remember),
+  };
+}
+
 function stubFetch(url, opts = {}) {
   const href = String(url);
   calls.push(href);
   const body = opts.body ? JSON.parse(opts.body) : {};
 
   if (href.includes("/rpc/member_login")) {
-    if (mode === "ok") {
-      return reply({
-        ok: true,
-        login_method: "member_id",
-        session: { id: "s1", token: CODE_TOKEN, expires_at: EXPIRES, remember_me: Boolean(body.p_remember) },
-        member: MEMBER,
-      });
-    }
-    if (mode === "inactive") {
-      return reply({
-        ok: false,
-        error: "inactive",
-        status: "inactive",
-        activate_deadline: new Date(Date.now() + 27 * 864e5).toISOString(),
-        member: { member_id: "ID100042", username: "@youssef.amrani" },
-      });
-    }
-    return reply({ ok: false, error: mode });
-  }
-  if (href.includes("/rpc/member_session")) {
-    if (mode === "restore-dead") return reply({ ok: false, error: "expired" });
+    if (mode === "password" || mode === "not_found") return reply({ ok: false, error: mode });
+    const status = mode === "inactive" || mode === "banned" ? mode : "active";
     return reply({
       ok: true,
-      member: MEMBER,
-      session: { id: "s2", expires_at: EXPIRES, remember_me: true, created_at: "2026-10-31T20:00:00Z", last_activity_at: new Date().toISOString() },
+      restricted: status !== "active",
+      status,
+      login_method: "member_id",
+      session: sessionPayload(status, body.p_remember),
+      member: { ...MEMBER, status, account_status: status },
     });
   }
-  if (href.includes("/rpc/member_logout")) {
-    return reply({ ok: true, ended_at: new Date().toISOString() });
+
+  if (href.includes("/rpc/member_session")) {
+    if (mode === "restore-dead") return reply({ ok: false, error: "expired" });
+    const status = mode === "restore-restricted" ? "inactive" : "active";
+    return reply({
+      ok: true,
+      restricted: status !== "active",
+      status,
+      member: { ...MEMBER, status, account_status: status },
+      session: { ...sessionPayload(status, true), created_at: "2026-10-31T20:00:00Z", last_activity_at: new Date().toISOString() },
+    });
   }
+
+  if (href.includes("/rpc/member_logout")) return reply({ ok: true, ended_at: new Date().toISOString() });
   if (href.includes("/rpc/member_log")) return reply({ ok: true });
   return reply([]);
 }
@@ -136,13 +142,12 @@ async function boot(pass, { token } = {}) {
 
   const mod = await import(`file://${join(root, "assets/js/login.js")}?pass=${pass}`);
   await mod.initLogin();
-  await new Promise((r) => setTimeout(r, 120));
-  await new Promise((r) => setTimeout(r, 60));
+  await new Promise((r) => setTimeout(r, 140));
 
   const qs = (sel) => window.document.querySelector(sel);
   const text = (sel) => qs(sel)?.textContent.replace(/\s+/g, " ").trim() || "";
   const click = (el) => el.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
-  const wait = (ms = 90) => new Promise((r) => setTimeout(r, ms));
+  const wait = (ms = 100) => new Promise((r) => setTimeout(r, ms));
   const setInput = (name, value) => {
     const input = qs(`[name="${name}"]`);
     input.value = value;
@@ -163,7 +168,7 @@ async function boot(pass, { token } = {}) {
 /* ------------------------------------------------------------------ */
 const report = {};
 {
-  mode = "ok";
+  mode = "active";
   calls.length = 0;
   const p = await boot(1);
 
@@ -175,14 +180,14 @@ const report = {};
   report.forgotHref = p.qs(".lg-links a")?.getAttribute("href") || "";
   report.signupHref = [...p.document.querySelectorAll(".lg-links a")].map((a) => a.getAttribute("href"));
 
-  // 1. empty submit (clear the prefilled identifier first)
+  // 1. empty submit
   p.setInput("login", "");
   p.submit();
   await p.wait(60);
   report.emptyError = p.errorFor("login");
   report.emptyNoCall = !calls.some((c) => c.includes("member_login"));
 
-  // 2. identifiers pass through, remember flag honoured
+  // 2. empty password
   p.setInput("login", "ID100042");
   p.setInput("password", "");
   p.submit();
@@ -201,29 +206,50 @@ const report = {};
   // 4. unknown account
   mode = "not_found";
   p.setInput("login", "ID999999");
-  p.setInput("password", "nope-nope");
   p.submit();
   await p.wait(140);
   report.notFoundAlert = p.text("[data-lg-error-text]");
   report.notFoundField = p.errorFor("login");
 
-  // 5. inactive account
+  // 5. inactive account — allowed in, flagged
   mode = "inactive";
   p.setInput("login", "@youssef.amrani");
+  p.setInput("password", "Str0ngPass!23");
   p.submit();
-  await p.wait(140);
-  report.inactiveAlert = p.text("[data-lg-error-text]");
-  report.inactiveExtra = p.text("[data-lg-error-extra]");
-  report.inactiveNoSuccess = p.qs("[data-lg-success]").hidden === true;
+  await p.wait(200);
+  report.inactiveSuccess = p.qs("[data-lg-success]").hidden === false;
+  report.inactiveFormHidden = p.qs("[data-lg-form]").hidden === true;
+  report.inactiveStatusChip = p.text("[data-lg-status]");
+  report.inactiveChipState = p.qs("[data-lg-status]")?.dataset.state;
+  report.inactiveNoticeShown = p.qs("[data-lg-notice]").hidden === false;
+  report.inactiveNoticeTitle = p.text("[data-lg-notice-title]");
+  report.inactiveNoticeText = p.text("[data-lg-notice-text]");
+  report.inactiveHasActions =
+    p.qs("[data-lg-profile]").getAttribute("href") === "profile.html" &&
+    p.qs("[data-lg-dashboard]").getAttribute("href") === "dashboard.html" &&
+    Boolean(p.qs("[data-lg-logout]"));
 
-  // 6. banned account
+  // back to the form
+  p.click(p.qs("[data-lg-logout]"));
+  await p.wait(160);
+  report.afterInactiveLogout = p.qs("[data-lg-form]").hidden === false;
+
+  // 6. banned account — also allowed in
   mode = "banned";
+  p.setInput("login", "ID100042");
+  p.setInput("password", "Str0ngPass!23");
   p.submit();
-  await p.wait(140);
-  report.bannedAlert = p.text("[data-lg-error-text]");
+  await p.wait(200);
+  report.bannedSuccess = p.qs("[data-lg-success]").hidden === false;
+  report.bannedStatusChip = p.text("[data-lg-status]");
+  report.bannedNoticeTitle = p.text("[data-lg-notice-title]");
+  report.bannedNoticeText = p.text("[data-lg-notice-text]");
 
-  // 7. success with "stay signed in"
-  mode = "ok";
+  p.click(p.qs("[data-lg-logout]"));
+  await p.wait(160);
+
+  // 7. active account with "stay signed in"
+  mode = "active";
   p.qs("[data-remember]").checked = true;
   p.setInput("login", "ID100042");
   p.setInput("password", "Str0ngPass!23");
@@ -238,6 +264,7 @@ const report = {};
   report.avatarSrc = (p.qs("[data-lg-avatar]")?.getAttribute("src") || "").slice(0, 30);
   report.detailRows = [...p.document.querySelectorAll("[data-lg-details] div")].map((row) => row.textContent.replace(/\s+/g, " ").trim());
   report.message = p.text("[data-lg-message]");
+  report.noticeHidden = p.qs("[data-lg-notice]").hidden === true;
   report.profileHref = p.qs("[data-lg-profile]").getAttribute("href");
   report.dashboardHref = p.qs("[data-lg-dashboard]").getAttribute("href");
   report.nextHref = p.qs("[data-lg-next]").getAttribute("href");
@@ -245,7 +272,6 @@ const report = {};
   report.tokenStored = p.window.localStorage.getItem("1w.session");
   report.tokenNotInSessionStore = p.window.sessionStorage.getItem("1w.session");
   report.memberStored = JSON.parse(p.window.localStorage.getItem("1w.member") || "null");
-  report.lastLoginPayload = calls.some((c) => c.includes("member_login"));
 
   // 8. log out
   p.click(p.qs("[data-lg-logout]"));
@@ -262,7 +288,7 @@ const report = {};
 /* pass 2 — returning visitor with a live token                       */
 /* ------------------------------------------------------------------ */
 {
-  mode = "ok";
+  mode = "active";
   calls.length = 0;
   const p = await boot(2, { token: CODE_TOKEN });
 
@@ -270,6 +296,7 @@ const report = {};
   report.restoredFormHidden = p.qs("[data-lg-form]").hidden === true;
   report.restoredName = p.text("[data-lg-name]");
   report.restoredMessage = p.text("[data-lg-message]");
+  report.restoredNotice = p.qs("[data-lg-notice]").hidden === true;
   report.restoredSessionCall = calls.some((c) => c.includes("member_session"));
   report.restoredErrors = p.errors;
 }
@@ -288,6 +315,20 @@ const report = {};
 }
 
 /* ------------------------------------------------------------------ */
+/* pass 4 — restored session for an inactive account                  */
+/* ------------------------------------------------------------------ */
+{
+  mode = "restore-restricted";
+  calls.length = 0;
+  const p = await boot(4, { token: CODE_TOKEN });
+
+  report.restoredRestrictedVisible = p.qs("[data-lg-success]").hidden === false;
+  report.restoredRestrictedNotice = p.qs("[data-lg-notice]").hidden === false;
+  report.restoredRestrictedTitle = p.text("[data-lg-notice-title]");
+  report.restoredRestrictedErrors = p.errors;
+}
+
+/* ------------------------------------------------------------------ */
 /* checks                                                             */
 /* ------------------------------------------------------------------ */
 const details = report.detailRows || [];
@@ -302,14 +343,18 @@ const checks = {
     report.wrongPasswordField.includes("not correct") &&
     report.wrongStillOnForm,
   notFound: report.notFoundAlert.includes("No account matches") && report.notFoundField.includes("No account matches"),
-  inactive:
-    report.inactiveAlert.includes("waiting for activation") &&
-    report.inactiveExtra.toLowerCase().includes("banned automatically") &&
-    report.inactiveNoSuccess,
-  banned: report.bannedAlert.includes("has been banned"),
+  inactiveAllowed:
+    report.inactiveSuccess && report.inactiveFormHidden &&
+    report.inactiveStatusChip === "Inactive" && report.inactiveChipState === "restricted" &&
+    report.inactiveNoticeShown && report.inactiveNoticeTitle.includes("not activated") &&
+    report.inactiveNoticeText.includes("banned automatically") &&
+    report.inactiveHasActions && report.afterInactiveLogout,
+  bannedAllowed:
+    report.bannedSuccess && report.bannedStatusChip === "Banned" &&
+    report.bannedNoticeTitle.includes("banned") && report.bannedNoticeText.includes("appeal"),
   signedIn:
     report.successVisible && report.formHidden && report.name === "@youssef.amrani" &&
-    report.memberId === "ID100042" && report.status === "Active",
+    report.memberId === "ID100042" && report.status === "Active" && report.noticeHidden,
   avatar: report.avatarSrc.startsWith("data:image/svg+xml"),
   details:
     details.length === 8 &&
@@ -327,10 +372,13 @@ const checks = {
     report.afterLogoutMember === null && report.passwordCleared,
   restore:
     report.restoredVisible && report.restoredFormHidden && report.restoredName === "@youssef.amrani" &&
-    report.restoredSessionCall && report.restoredMessage.includes("still active"),
+    report.restoredSessionCall && report.restoredMessage.includes("still active") && report.restoredNotice,
   deadToken: report.deadTokenStaysOnForm && report.deadTokenCleared === null,
+  restoredRestricted:
+    report.restoredRestrictedVisible && report.restoredRestrictedNotice &&
+    report.restoredRestrictedTitle.includes("not activated"),
   noErrors:
-    report.errors1.length === 0 && report.restoredErrors.length === 0 && report.deadTokenErrors.length === 0,
+    [report.errors1, report.restoredErrors, report.deadTokenErrors, report.restoredRestrictedErrors].every((list) => list.length === 0),
 };
 
 const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name);
