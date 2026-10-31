@@ -3,17 +3,18 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Cast &amp; crew — 1World Web</title>
-    <meta name="description" content="Everything a director or actor worked on, pulled from TMDB." />
+    <title>Cast — 1World Web</title>
+    <meta name="description" content="An actor or director on 1World: biography, every film and series they worked on, official links and the reviews, articles and videos that mention them." />
     <meta name="theme-color" content="#060607" />
     <meta name="robots" content="noindex" />
     <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="assets/css/base.css?v=20261031l" />
-    <link rel="stylesheet" href="assets/css/layout.css?v=20261031l" />
-    <link rel="stylesheet" href="assets/css/components.css?v=20261031l" />
+    <link rel="stylesheet" href="assets/css/base.css?v=20261031m" />
+    <link rel="stylesheet" href="assets/css/layout.css?v=20261031m" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261031m" />
+    <link rel="stylesheet" href="assets/css/cast.css?v=20261031m" />
     <script>
       /* apply the saved theme (or the OS preference) before first paint */
       (function () {
@@ -31,40 +32,202 @@
         } catch (e) {}
       })();
     </script>
-    <script type="module" src="assets/js/app.js?v=20261031l"></script>
+
+    <script type="module" src="assets/js/app.js?v=20261031m"></script>
   </head>
-  <body data-page="cast" data-title="Cast &amp; crew">
+  <body data-page="cast" data-title="Cast">
     <a class="skip-link" href="#main">Skip to content</a>
+
     <div data-site-header></div>
     <div data-site-sidebar></div>
+    <div data-scrim hidden></div>
 
-    <main class="site-main" id="main">
-      <section class="soon">
-        <div class="soon__inner">
-          <span class="soon__icon"><i data-icon="users"></i></span>
-          <p class="eyebrow"><span class="eyebrow__dot"></span>Page in build</p>
-          <h1 class="soon__title">Cast &amp; crew</h1>
-          <p class="soon__text">Everything a director or actor worked on, pulled from TMDB. Reads ?id=personId.</p>
+    <main class="site-main cast" id="main">
+      <nav class="cast__crumbs" aria-label="Breadcrumb">
+        <a href="index.html">Home</a><span aria-hidden="true">/</span>
+        <a href="movies.html">Catalogue</a><span aria-hidden="true">/</span>
+        <span data-c-crumb>Cast &amp; crew</span>
+      </nav>
 
-          <div class="soon__meta">
-            <span class="badge badge--solid">cast.html</span>
-            <span class="badge">Next release</span>
-            <span class="badge">1World Web</span>
+      <!-- profile -------------------------------------------------- -->
+      <section class="c-hero" data-c-hero aria-busy="true">
+        <div class="c-hero__portrait">
+          <img data-c-photo alt="" width="300" height="450" />
+          <span class="c-hero__badge" data-c-dept hidden></span>
+        </div>
+
+        <div class="c-hero__body">
+          <p class="eyebrow"><span class="eyebrow__dot"></span><span data-c-kicker>TMDB person</span></p>
+          <h1 class="c-hero__name" data-c-name>Loading…</h1>
+          <p class="c-hero__aka" data-c-aka hidden></p>
+
+          <div class="c-tally" data-c-tally aria-label="Member reactions">
+            <span class="c-tally__item">
+              <b data-c-fans>0</b><span class="c-tally__label">Fans</span>
+            </span>
+            <span class="c-tally__item">
+              <b data-c-haters>0</b><span class="c-tally__label">Haters</span>
+            </span>
+            <span class="c-tally__item">
+              <b data-c-critics>0</b><span class="c-tally__label">Critics</span>
+            </span>
           </div>
 
-          <div class="soon__actions">
-            <a class="btn btn--primary" href="index.html"><i data-icon="arrowLeft"></i> Back to homepage</a>
-            <a class="btn btn--ghost" href="index.html#membership"><i data-icon="crown"></i> Membership</a>
+          <div class="c-reactions" data-c-reactions role="group" aria-label="React to this person">
+            <button class="c-react" type="button" data-reaction="fan" aria-pressed="false">
+              <i data-icon="thumbUp"></i><span>Fan</span>
+            </button>
+            <button class="c-react" type="button" data-reaction="hater" aria-pressed="false">
+              <i data-icon="thumbDown"></i><span>Hater</span>
+            </button>
+            <button class="c-react" type="button" data-reaction="critic" aria-pressed="false">
+              <i data-icon="scale"></i><span>Critic</span>
+            </button>
           </div>
 
-          <div class="soon__links">
-            <a class="soon__link" href="index.html"><i data-icon="home"></i>Home</a>
-            <a class="soon__link" href="search.html"><i data-icon="search"></i>Search</a>
-            <a class="soon__link" href="movies.html"><i data-icon="film"></i>Movies</a>
-            <a class="soon__link" href="series.html"><i data-icon="tv"></i>Series</a>
-            <a class="soon__link" href="iptv.html"><i data-icon="broadcast"></i>IPTV</a>
-            <a class="soon__link" href="help.html"><i data-icon="lifebuoy"></i>Help</a>
+          <dl class="c-facts" data-c-facts></dl>
+
+          <div class="c-actionbar">
+            <button class="btn btn--primary c-actionbar__btn" type="button" data-c-dials-toggle aria-expanded="false" aria-controls="c-dials">
+              <i data-icon="settings"></i> Take action
+            </button>
+            <p class="c-actionbar__state" data-c-action-state>Follow, repost or block this person.</p>
           </div>
+
+          <!-- the three dials -->
+          <div class="c-dials" id="c-dials" data-c-dials hidden>
+            <div class="c-dial" data-dial="follow">
+              <span class="c-dial__icon"><i data-icon="bell"></i></span>
+              <div class="c-dial__body">
+                <p class="c-dial__title">Follow</p>
+                <p class="c-dial__note">Get a notification and see it in Updates whenever this person acts in or directs something new.</p>
+              </div>
+              <button class="c-switch" type="button" role="switch" aria-checked="false" data-dial-btn="follow" aria-label="Follow this person">
+                <span class="c-switch__dot"></span>
+              </button>
+            </div>
+
+            <div class="c-dial" data-dial="repost">
+              <span class="c-dial__icon"><i data-icon="refresh"></i></span>
+              <div class="c-dial__body">
+                <p class="c-dial__title">Repost</p>
+                <p class="c-dial__note">Publish their new work on your profile and in Updates, in your name.</p>
+              </div>
+              <button class="c-switch" type="button" role="switch" aria-checked="false" data-dial-btn="repost" aria-label="Repost this person's new work">
+                <span class="c-switch__dot"></span>
+              </button>
+            </div>
+
+            <div class="c-dial c-dial--block" data-dial="block">
+              <span class="c-dial__icon"><i data-icon="lock"></i></span>
+              <div class="c-dial__body">
+                <p class="c-dial__title">Block</p>
+                <p class="c-dial__note">Hide every film and series of this person from your lists, search, recommendations, Updates and sharing. Following and reposting stop.</p>
+              </div>
+              <button class="c-switch" type="button" role="switch" aria-checked="false" data-dial-btn="block" aria-label="Block this person">
+                <span class="c-switch__dot"></span>
+              </button>
+            </div>
+
+            <p class="c-dials__note" data-c-dials-note>Actions apply to your member account only. Blocking turns following and reposting off and they stay off after you unblock.</p>
+          </div>
+
+          <div class="c-links" data-c-links></div>
+        </div>
+      </section>
+
+      <!-- blocked state -------------------------------------------- -->
+      <section class="c-blocked" data-c-blocked hidden>
+        <span class="c-blocked__icon"><i data-icon="lock"></i></span>
+        <div>
+          <h2 class="c-blocked__title">You blocked this person</h2>
+          <p class="c-blocked__text">
+            Their films and series are hidden from your lists, search, recommendations, Updates and sharing.
+            Unblocking never turns following or reposting back on — you have to switch them on again.
+          </p>
+        </div>
+        <button class="btn btn--ghost btn--sm" type="button" data-c-unblock><i data-icon="unlock"></i> Unblock</button>
+      </section>
+
+      <!-- about ---------------------------------------------------- -->
+      <section class="c-about" data-c-about>
+        <div class="c-about__bio">
+          <header class="c-section__head">
+            <h2 class="c-section__title">Biography</h2>
+            <span class="c-section__note" data-c-bio-note></span>
+          </header>
+          <div class="c-about__text" data-c-bio>
+            <p class="c-empty">Loading biography…</p>
+          </div>
+          <button class="c-more" type="button" data-c-bio-more hidden>Read more</button>
+
+          <header class="c-section__head c-section__head--sub">
+            <h2 class="c-section__title">Personal data</h2>
+          </header>
+          <dl class="c-facts c-facts--wide" data-c-facts-extra></dl>
+          <p class="c-source" data-c-source></p>
+        </div>
+
+        <aside class="c-about__side" data-c-side aria-label="At a glance"></aside>
+      </section>
+
+      <!-- movies --------------------------------------------------- -->
+      <section class="c-reel" data-c-reel="movie">
+        <header class="c-section__head">
+          <div>
+            <p class="eyebrow"><span class="eyebrow__dot"></span>Filmography</p>
+            <h2 class="c-section__title">Movies <span class="c-section__count" data-c-count="movie">0</span></h2>
+          </div>
+          <div class="rail__nav">
+            <button class="rail__btn" type="button" data-c-prev="movie" aria-label="Scroll movies back"><i data-icon="chevronLeft"></i></button>
+            <button class="rail__btn" type="button" data-c-next="movie" aria-label="Scroll movies forward"><i data-icon="chevronRight"></i></button>
+          </div>
+        </header>
+        <div class="rail">
+          <div class="rail__track" data-c-track="movie" aria-busy="true"><p class="c-empty">Loading movies…</p></div>
+        </div>
+      </section>
+
+      <!-- series --------------------------------------------------- -->
+      <section class="c-reel" data-c-reel="tv">
+        <header class="c-section__head">
+          <div>
+            <p class="eyebrow"><span class="eyebrow__dot"></span>Filmography</p>
+            <h2 class="c-section__title">TV series <span class="c-section__count" data-c-count="tv">0</span></h2>
+          </div>
+          <div class="rail__nav">
+            <button class="rail__btn" type="button" data-c-prev="tv" aria-label="Scroll series back"><i data-icon="chevronLeft"></i></button>
+            <button class="rail__btn" type="button" data-c-next="tv" aria-label="Scroll series forward"><i data-icon="chevronRight"></i></button>
+          </div>
+        </header>
+        <div class="rail">
+          <div class="rail__track" data-c-track="tv" aria-busy="true"><p class="c-empty">Loading series…</p></div>
+        </div>
+      </section>
+
+      <!-- mentions ------------------------------------------------- -->
+      <section class="c-mentions" data-c-mentions>
+        <header class="c-section__head">
+          <div>
+            <p class="eyebrow"><span class="eyebrow__dot"></span>On 1World</p>
+            <h2 class="c-section__title">Reviews, articles &amp; videos</h2>
+          </div>
+        </header>
+
+        <div class="c-tabs" role="tablist" aria-label="Content that mentions this person">
+          <button class="c-tab" type="button" role="tab" aria-selected="true" data-c-tab="review">
+            <i data-icon="star"></i> Reviews <span class="c-tab__count" data-c-tabcount="review">0</span>
+          </button>
+          <button class="c-tab" type="button" role="tab" aria-selected="false" data-c-tab="article">
+            <i data-icon="article"></i> Articles <span class="c-tab__count" data-c-tabcount="article">0</span>
+          </button>
+          <button class="c-tab" type="button" role="tab" aria-selected="false" data-c-tab="video">
+            <i data-icon="video"></i> Videos <span class="c-tab__count" data-c-tabcount="video">0</span>
+          </button>
+        </div>
+
+        <div class="c-cards" data-c-mention-list aria-live="polite">
+          <p class="c-empty">Loading…</p>
         </div>
       </section>
     </main>

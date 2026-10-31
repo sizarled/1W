@@ -20,7 +20,8 @@ import {
   store,
   enableDragScrollAll,
 } from "./utils.js";
-import { isPremium } from "./session.js";
+import { isPremium, getMember } from "./session.js";
+import { refreshBlockMap, filterBlocked } from "./blocks.js";
 import { toast } from "./ui.js";
 import { playSound } from "./sound.js";
 
@@ -698,6 +699,8 @@ export async function initHome() {
 
   const appsPromise = loadApps();
 
+  if (getMember()) await refreshBlockMap().catch(() => null);
+
   const data = await loadHomeData();
   state.movies = data.movies;
   state.series = data.series;
@@ -707,8 +710,8 @@ export async function initHome() {
   paintHero();
   restartProgress();
 
-  renderRail(qs("#movies"), state.movies, { limit: 50 });
-  renderRail(qs("#series"), state.series, { limit: 50, showKind: true });
+  renderRail(qs("#movies"), filterBlocked(state.movies, "movie"), { limit: 50 });
+  renderRail(qs("#series"), filterBlocked(state.series, "tv"), { limit: 50, showKind: true });
   renderFeatures(data.features);
   renderChannels();
 

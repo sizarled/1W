@@ -219,6 +219,72 @@ and in SQL: `select count(*), max(visitor_start_date) from public.visitor_visits
 
 ---
 
+## The cast page
+
+`cast.html?id=<TMDB_PERSON_ID>` — one actor, director, writer or producer. The watch page
+already links every cast member here (`watch.html` → `.w-person` → `cast.html?id=…`).
+
+| Part | Behaviour |
+| --- | --- |
+| **Profile** | Portrait, name, also-known-as, biography (clamped with *Read more*), and personal data: birthday **with age**, place of birth, death day, known-for department, IMDb id, the TMDB person id (linked) and when 1World last synced the record. |
+| **Fans / Haters / Critics** | Three counts beside the name, computed by `person_reactions` — the numbers themselves are never editable. The three buttons underneath let a member pick a side; pressing the same one again removes it. |
+| **Take action** | One button that opens the three dials. |
+| **Follow** | A notification (and an Updates row) for every new film or series the person acts in or directs. |
+| **Repost** | The same work is published on the member's profile, in their name (`postrecommendation`), and in Updates. |
+| **Block** | Hidden from lists, search, recommendations, Updates and sharing. Turning it on switches Follow and Repost off; turning it off never switches them back on. |
+| **Movies / TV series** | Two separate reels from TMDB `combined_credits` (job + character merged per title): poster, title, release / first-air date, role, TMDB id, click → `watch.html?movie=ID` or `watch.html?tv=ID`. Loaded 24 at a time (*Show 24 more*), mouse-draggable, touch-swipeable, with arrow buttons. |
+| **Reviews / Articles / Videos** | Three tabs fed by `content_person_mentions`, joined to `reviewwatch`, `blogarticle` and `channelsvideo`. A name search over those tables records any new match through `person_mention_add`, so the second visitor gets it from the join. |
+| **Official links** | Facebook, Instagram, X, TikTok, YouTube, IMDb, Wikidata and the official site — **only** when TMDB's external ids (or `homepage`) actually contain them. Nothing is guessed; with no ids the panel says so. |
+
+**No TMDB call on every visit.** The first view fetches
+`/person/{id}?append_to_response=external_ids,combined_credits` once, renders it and stores
+it with `person_save` (`tmdb_people`, `tmdb_person_external_links`, `tmdb_person_credits`,
+`last_synced_at`). A later view paints the stored copy first and refreshes it in the
+background; if TMDB is unavailable the stored copy stays on screen with a *Showing the
+saved copy* toast.
+
+Guests can read everything. Follow / repost / block / reactions need a member — the dials
+send them to `login.html?next=cast.html?id=…`.
+
+**Block is not a page switch.** `assets/js/blocks.js` caches `person_block_map(member)` in
+`localStorage["1w.blocks"]` and every surface filters through it: the homepage movie and
+series reels, the watch page (a blocked title shows a *This title is hidden* panel instead
+of the player, and Related & similar drops the person's other works), and the cast page
+itself (reels and mentions collapse into the blocked banner). Following or reposting
+delivers work in batches of three per visit (`p_limit`) so the first follow of a prolific
+actor does not flood the notification feed; `person_work_deliveries` guarantees the same
+work is delivered once as a notification and once as a repost.
+
+### Cast tables
+
+| Table | What it holds |
+| --- | --- |
+| `tmdb_people` | The cached person: `tmdb_person_id` (unique), name, `also_known_as[]`, biography, `profile_path`, department, birthday / deathday, place of birth, gender, popularity, `imdb_id`, `homepage`, `last_synced_at` |
+| `tmdb_person_external_links` | Official links only (`network`, `url`, `handle`), one row per network, replaced on every sync |
+| `tmdb_person_credits` | One row per person + title + job/character, `media_type` = `movie` / `tv` (no split tables), release date, poster, rating, episode count. Viewing links stay in `movie_links` / `tv_episode_links` |
+| `member_person_actions` | The dials: `follow`, `repost`, `block` — one row per member + person |
+| `person_reactions` | `fan` / `hater` / `critic`, one row per member + person |
+| `content_person_mentions` | Which review / article / video mentions the person (`content_type`, `content_id`), unique per person + item |
+| `person_work_deliveries` | Delivery ledger: unique per member + person + work + `delivery_type`, so a notification and a repost for the same work are two rows and can never repeat |
+
+### Cast functions
+
+| Function | What it does |
+| --- | --- |
+| `person_stats(p_tmdb, p_member)` | Fans / haters / critics plus followers, reposters, blocks and the member's own dials |
+| `person_get(p_tmdb)` | The stored person + links + credits (the offline copy) |
+| `person_save(p_person, p_links, p_credits)` | Upserts the person, replaces the links, merges the credits, returns how many titles were new |
+| `person_action_set(p_member, p_tmdb, p_follow, p_repost, p_block)` | One upsert for the three dials; block forces follow and repost off |
+| `person_reaction_set(p_member, p_tmdb, p_reaction)` | Sets, changes or clears a reaction and returns the new counts |
+| `person_sync_deliveries(p_member, p_tmdb, p_limit)` | Writes the notifications and the profile reposts, guarded by `person_work_deliveries` |
+| `person_mentions(p_tmdb)` | The mentions already joined to the content tables |
+| `person_mention_add(p_tmdb, p_type, p_content, p_title)` | Records a match found by the name search |
+| `person_block_map(p_member)` | `{people, media}` — the one call every list, search and recommendation uses to filter |
+
+DDL + functions: `tools/sql/cast-page.sql` (migrations `cast_page`, `cast_page_delivery_limit`).
+
+---
+
 ## Sounds
 
 Played from the public `source` bucket of the Supabase project:
@@ -375,8 +441,14 @@ assets/js/geo.js            visitor address / country lookup (cached 6 h)
 assets/js/ui.js             toasts (+points banner, level-up)
 assets/js/sound.js          audio pool and mute state
 assets/js/icons.js          line icon set + brand glyphs (brands.js)
+assets/js/blocks.js         blocked people/media cache used by every list
+assets/css/cast.css         cast page (profile, dials, reels, mentions)
+assets/js/cast.js           cast page controller (TMDB + person_* RPCs)
 tools/build-pages.mjs       regenerates the placeholder pages
 tools/smoke.mjs             jsdom smoke test (renders the homepage offline)
+tools/watch-smoke.mjs       jsdom watch page test (player, gates, watch-time)
+tools/cast-smoke.mjs        jsdom cast page test (guest + member dials)
+tools/visit-smoke.mjs       visit tracker test (5 modes)
 ```
 
 Regenerate the placeholder pages after editing the list in `tools/build-pages.mjs`:

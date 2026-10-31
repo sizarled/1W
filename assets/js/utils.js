@@ -238,7 +238,11 @@ export function chunk(list, size) {
 export function scrollRail(rail, direction = 1) {
   if (!rail) return;
   const amount = Math.max(rail.clientWidth * 0.8, 320);
-  rail.scrollBy({ left: amount * direction, behavior: "smooth" });
+  if (typeof rail.scrollBy === "function") {
+    rail.scrollBy({ left: amount * direction, behavior: "smooth" });
+    return;
+  }
+  rail.scrollLeft += amount * direction;
 }
 
 /* ------------------------------------------------------------------ */

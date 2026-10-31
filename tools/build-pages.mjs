@@ -14,7 +14,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const BUILD = "20261031l"; // cache-bust for css/js
+const BUILD = "20261031m"; // cache-bust for css/js
 
 const PAGES = [
   ["search.html", "Search", "search", "Search across films, series, channels, articles, documents, answers and reviews.", "Reads ?q= from the URL."],
@@ -25,7 +25,6 @@ const PAGES = [
   ["article.html", "Article", "article", "One member article with reading time, publisher and reactions.", "Reads ?id= from the URL."],
   ["answer.html", "Answer", "help", "One question and its answers from the community.", "Reads ?id= from the URL."],
   ["document.html", "Document", "file", "One shared document with preview, download and publisher.", "Reads ?id= from the URL."],
-  ["cast.html", "Cast &amp; crew", "users", "Everything a director or actor worked on, pulled from TMDB.", "Reads ?id=personId."],
   ["playlist.html", "Playlist", "bookmark", "A member playlist: titles, visibility, creator and publisher chain.", "Reads ?id=playlistId&amp;creator=memberId."],
   ["download.html", "Download", "download", "Download options for a film or an episode.", "Reads ?movie=ID or ?tv=ID."],
   ["prize.html", "Prize", "gift", "One prize: rules, points required, stock and expiration.", "Reads ?id=prizeId."],

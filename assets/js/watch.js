@@ -18,6 +18,7 @@ import { playSound } from "./sound.js";
 import { getMember, visitorId } from "./session.js";
 import { awardPoints } from "./wallet.js";
 import { rest, rpc } from "./data.js";
+import { refreshBlockMap, isMediaBlocked, noBlocks, filterBlocked } from "./blocks.js";
 
 /* ================================================================== */
 /* constants                                                          */
@@ -148,6 +149,15 @@ export async function initWatch() {
   state.location = state.kind === "movie" ? `movie:${state.id}` : `tv:${state.id}`;
 
   wireRails();
+
+  // a blocked person's works stay out of reach — even by direct URL
+  if (getMember()) {
+    await refreshBlockMap().catch(() => null);
+    if (isMediaBlocked(state.kind, state.id)) {
+      renderBlockedTitle();
+      return;
+    }
+  }
 
   if (!state.id || Number.isNaN(state.id)) {
     renderMissing();
@@ -492,9 +502,11 @@ async function renderRelated(detail) {
   push((detail.recommendations?.results || []).map((m) => ({ ...m, __why: "Recommended" })));
   push((detail.similar?.results || []).map((m) => ({ ...m, __why: "Similar" })));
 
+  const visible = noBlocks() ? items : filterBlocked(items, state.kind);
+
   fillRail(
     "related",
-    items
+    visible
       .slice(0, 30)
       .map((m) => mediaCard({ ...m, kind: m.first_air_date || m.media_type === "tv" ? "tv" : state.kind }, m.__why))
       .join("")
@@ -505,6 +517,25 @@ async function loadSuggested() {
   const data = await safe(tmdb(`/trending/${state.kind}/week`), null);
   const list = (data?.results || []).filter((m) => m.id !== state.id).slice(0, 20);
   fillRail("suggested", list.map((m) => mediaCard(m, "Trending")).join(""));
+}
+
+function renderBlockedTitle() {
+  const main = qs("#main");
+  if (!main) return;
+  main.innerHTML = `
+    <section class="soon" style="min-height: 60vh">
+      <div class="soon__inner">
+        <span class="soon__icon">${icon("lock")}</span>
+        <p class="eyebrow"><span class="eyebrow__dot"></span>Blocked person</p>
+        <h1 class="soon__title">This title is hidden</h1>
+        <p class="soon__text">You blocked someone who appears in this title, so it is hidden from your lists,
+        search, recommendations, Updates and sharing.</p>
+        <div class="soon__actions">
+          <a class="btn btn--primary" href="index.html">${icon("home")} Back home</a>
+          <a class="btn btn--ghost" href="movies.html">${icon("film")} Browse films</a>
+        </div>
+      </div>
+    </section>`;
 }
 
 function mediaCard(item, why) {
