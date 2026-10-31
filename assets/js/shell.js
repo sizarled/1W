@@ -74,8 +74,8 @@ function headerTemplate() {
           <span class="wallet__main">
             <span class="wallet__label">Your points</span>
             <span class="wallet__value"><b data-wallet-value>—</b><em>pts</em></span>
+            <span class="wallet__level">Level · <b data-wallet-level>Guest</b></span>
           </span>
-          <span class="wallet__level" data-wallet-level>Guest</span>
         </a>
 
         <div class="auth-actions" data-auth-actions></div>

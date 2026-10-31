@@ -161,11 +161,11 @@ html[data-theme="light"] .site-header::before {
   display: inline-flex;
   cursor: pointer;
   align-items: center;
-  gap: 0.5rem;
-  height: 42px;
-  padding: 0 0.8rem 0 0.72rem;
+  gap: 0.55rem;
+  height: 48px;
+  padding: 0 0.9rem 0 0.72rem;
   border: 1px solid var(--line-2);
-  border-radius: 999px;
+  border-radius: 16px;
   background: color-mix(in srgb, var(--surface) 62%, transparent);
   backdrop-filter: blur(10px);
   transition: border-color 0.2s var(--ease), background 0.2s var(--ease);
@@ -192,8 +192,8 @@ html[data-theme="light"] .site-header::before {
 
 .wallet__main {
   display: grid;
-  line-height: 1.05;
-  gap: 2px;
+  line-height: 1.12;
+  gap: 0;
 }
 
 .wallet__label {
@@ -207,8 +207,8 @@ html[data-theme="light"] .site-header::before {
 .wallet__value {
   display: flex;
   align-items: baseline;
-  gap: 0.2rem;
-  font-size: 0.86rem;
+  gap: 0.22rem;
+  font-size: 0.84rem;
   font-weight: 650;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
@@ -225,15 +225,19 @@ html[data-theme="light"] .site-header::before {
 .wallet__level {
   display: inline-flex;
   align-items: center;
-  gap: 0.24rem;
-  padding: 0.16rem 0.42rem;
-  border-radius: 6px;
-  background: var(--surface-3);
-  border: 1px solid var(--line);
-  font-size: 0.6rem;
+  gap: 0.22rem;
+  font-size: 0.565rem;
+  font-weight: 600;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.wallet__level b {
+  color: var(--text-2);
   font-weight: 700;
   letter-spacing: 0.08em;
-  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
 }
 
 .wallet.is-bump .wallet__value {
@@ -917,6 +921,7 @@ html[data-theme="light"] .site-header::before {
     height: 38px;
     padding: 0 0.6rem 0 0.5rem;
     gap: 0.35rem;
+    border-radius: 999px;
   }
   .auth-actions .btn--ghost {
     display: none;
