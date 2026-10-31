@@ -123,25 +123,26 @@ per member (`claim_milestone`).
 frequency, the purpose (`watching` / `joining`) and the source, then closes the row with
 `finish_visit()` — duration + end date — on hide or unload.
 
-**One visit per stay, not per page.** `visit_id` is created the first time a visitor
-opens the site and is then reused by every page until they leave completely:
+**One visit per page — a reload is not a visit.** A visit row is created for the page
+the visitor opens, and only a real page change adds another one:
 
-| Situation | `visit_id` |
+| Situation | `visitor_visits` |
 | --- | --- |
-| first page of the stay | new row through `log_visit()` |
-| another page in the same tab (normal navigation) | unchanged |
-| the same page reloaded | unchanged |
-| a second tab, while one is still open | unchanged |
-| every page closed, visitor comes back later | **new** visit id |
-| browser crashed, tab stopped beating for 2.5 min | **new** visit id |
+| first page of a stay | new row through `log_visit()` |
+| reloading that same page (F5, or back to the same URL) | **no row** — same `visit_id` |
+| moving to another page of the site | **new row** + new `visit_id` |
+| a second tab on another page | new row (it is a different page) |
+| every page closed, visitor comes back later | new row |
+| browser crashed, tab silent for 2.5 min | new row |
 
 The bookkeeping lives in `localStorage["1w.visit.session"]` (shared by all tabs): every
 open tab registers itself and beats every 10 s, a beaten tab counts as open for 2.5
-minutes (background tabs are throttled by browsers), and a page that loads within 15 s of
-the last one closing counts as a normal navigation. The row's `visitor_page` / `visitor_link`
-keep the landing page of the stay, `visitor_duration` accumulates the seconds of every tab
-(`finish_visit` keeps the greatest duration and only moves the end date), and
-`visitor_frequency` therefore counts **stays**, not page views.
+minutes (browsers throttle background tabs), a page that loads within 15 s of the last one
+closing is a reload or a navigation rather than a new stay, and the recorded `path`
+decides between the two — same path reuses the row, another path starts a new visit.
+`visitor_duration` accumulates per row (`finish_visit` keeps the greatest duration and
+only moves the end date), so `visitor_frequency` counts the pages the visitor really
+opened.
 
 **Visitor identity.** The six-digit `visitor_id` belongs to the browser and never
 changes: `localStorage["1w.visitor"]` is read first, then the first-party cookie `1w_vid`

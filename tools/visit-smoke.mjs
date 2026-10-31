@@ -150,6 +150,103 @@ if (MODE === "session") {
   const report = {};
   const checks = {};
 
+  // 1 · first page
+  await boot("p1");
+  const first = snapshot();
+  report.firstVisitId = first?.id || null;
+  checks.firstPageCreatesVisit = created === 1 && first?.id === "visit000001";
+  checks.sessionHasTab = Object.keys(first?.tabs || {}).length === 1;
+
+  // 2 · reload of the same page is NOT a visit
+  window.dispatchEvent(new window.Event("pagehide"));
+  await boot("p2");
+  const reload = snapshot();
+  report.afterReload = reload?.id || null;
+  checks.reloadKeepsVisit = created === 1 && reload?.id === "visit000001";
+
+  // 3 · moving to another page IS a visit
+  window.history.pushState({}, "", "/watch.html?tv=1399");
+  window.dispatchEvent(new window.Event("pagehide"));
+  await boot("p3");
+  const moved = snapshot();
+  report.afterPageChange = moved?.id || null;
+  checks.pageChangeCreatesVisit = created === 2 && moved?.id === "visit000002";
+  checks.sessionFollowsPage = moved?.path === "/watch.html?tv=1399";
+
+  // 4 · reloading that new page keeps it
+  window.dispatchEvent(new window.Event("pagehide"));
+  await boot("p4");
+  const reload2 = snapshot();
+  report.afterReloadWatch = reload2?.id || null;
+  checks.reloadOfSecondPageKeepsVisit = created === 2 && reload2?.id === "visit000002";
+
+  // 5 · a second tab on another page counts as a page change
+  window.history.pushState({}, "", "/index.html");
+  sessionStorage.setItem("1w.visit.tab", "tab-two");
+  await boot("p5");
+  const otherTab = snapshot();
+  report.afterSecondTab = otherTab?.id || null;
+  checks.secondTabOtherPageCreatesVisit = created === 3 && otherTab?.id === "visit000003";
+
+  // 6 · every page closed, visitor comes back later → new visit
+  window.dispatchEvent(new window.Event("pagehide"));
+  const stale = readSession();
+  stale.tabs = {};
+  stale.closedAt = Date.now() - 60000;
+  stale.lastSeen = stale.closedAt;
+  localStorage.setItem("1w.visit.session", JSON.stringify(stale));
+  sessionStorage.setItem("1w.visit.tab", "tab-three");
+  window.history.pushState({}, "", "/watch.html?tv=1399");
+  await boot("p6");
+  const returned = snapshot();
+  report.afterFullExit = returned?.id || null;
+  checks.newVisitAfterFullExit = created === 4 && returned?.id === "visit000004";
+
+  const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name);
+  console.log(JSON.stringify({ mode: MODE, report, checks }, null, 2));
+  console.log("checks:", failed.length ? `FAILED ${failed.join(", ")}` : "all pass");
+  process.exit(failed.length ? 1 : 0);
+}
+
+/* ------------------------------------------------------------------ */
+/* session scenario: one visit_id for the whole stay on the site      */
+/* ------------------------------------------------------------------ */
+if (MODE === "session") {
+  const visitsUrl = `file://${join(root, "assets/js/visits.js")}`;
+  const GEOS = { success: true, ip: "41.140.12.34", country: "Morocco", country_code: "MA", city: "Casablanca" };
+  const reply = (data) =>
+    Promise.resolve({ ok: true, status: 200, json: async () => data, text: async () => JSON.stringify(data) });
+
+  let created = 0;
+  const sessions = [];
+  globalThis.fetch = (url) => {
+    const href = String(url);
+    if (href.includes("/rpc/log_visit")) {
+      created += 1;
+      return reply({ visit_id: `visit00000${created}`, member_visit_id: null, frequency: created });
+    }
+    if (href.includes("/rpc/finish_visit") || href.includes("/rpc/annotate_visit")) return reply(true);
+    if (href.includes("ipwho.is")) return reply(GEOS);
+    return reply([]);
+  };
+
+  localStorage.clear();
+  sessionStorage.clear();
+  const readSession = () => JSON.parse(localStorage.getItem("1w.visit.session") || "null");
+  const boot = async (tag) => {
+    const mod = await import(`${visitsUrl}?${tag}`);
+    await mod.startVisitTracking();
+    await new Promise((r) => setTimeout(r, 60));
+    return mod;
+  };
+  const snapshot = () => {
+    const session = readSession();
+    sessions.push(session);
+    return session;
+  };
+  const report = {};
+  const checks = {};
+
   // 1 · first page of the stay
   await boot("p1");
   const first = snapshot();

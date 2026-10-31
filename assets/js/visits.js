@@ -1,19 +1,19 @@
 /**
  * Visit tracking.
  * ------------------------------------------------------------------
- * A **visit** is one stay on the site, not one page. The first page a visitor
- * opens writes a row through `log_visit()`; every other page they open — in the
- * same tab or in a new one — adopts that same row, so `visit_id` only changes
- * when the visitor leaves the site completely and closes every page.
+ * A **visit** is counted per page, and a reload is not a visit:
+ *   · opening a page that is not the one already recorded → new row + new `visit_id`
+ *   · reloading that same page (same path) → the same row, nothing is added
+ *   · leaving the site completely and coming back → new row
  *
- * How a stay is recognised (`localStorage["1w.visit.session"]`, shared by all
- * tabs of this browser):
+ * How it is recognised (`localStorage["1w.visit.session"]`, shared by all tabs of
+ * this browser):
  *   · every open tab registers itself and beats every 10 s
- *   · a page that loads while another tab is still open continues that visit
- *   · a page that loads less than 15 s after the last page closed is a normal
- *     navigation (same visit)
- *   · a page that loads after every tab closed and the grace window passed
- *     starts a new visit id
+ *   · a page that loads while another tab is still open is part of the same stay
+ *   · a page that loads less than 15 s after the last page closed is a reload or
+ *     a navigation, not a new stay
+ *   · the recorded `path` decides: same path = reload (row reused), other path =
+ *     page change (new row)
  *
  * The row carries: visitor id (six digits), referrer, landing page, IP, country,
  * how many times this visitor has been seen, the purpose, the source and the
@@ -265,9 +265,11 @@ export async function startVisitTracking() {
     }
   });
 
-  // ---- 1. this browser is already in the middle of a stay ----------
+  // ---- 1. same page again (reload, or the page reopened) ------------
+  // A visit is counted per page: reloading the page that is already recorded
+  // keeps its visit_id, moving to another page starts a new visit row.
   const session = readSession();
-  if (sessionIsOpen(session, state.tab)) {
+  if (sessionIsOpen(session, state.tab) && session.path === path) {
     state.visitId = session.id || null;
     state.memberVisitId = session.memberId || null;
     state.seconds = Number(session.seconds || 0);
@@ -318,9 +320,13 @@ export async function startVisitTracking() {
       remember(path, { visitId: state.visitId, memberVisitId: state.memberVisitId, seconds: 0 });
       clearFailure();
 
-      // one shared session per stay, so every following page reuses this visit id
+      // remember which page this visit covers: a reload of it will not add a row,
+      // while any other page of the site starts its own visit
       if (state.visitId) {
         const now = Date.now();
+        // keep the tabs that are still open, so the stay survives the page change
+        const tabs = sessionIsOpen(session, state.tab, now) ? { ...markTab(session, state.tab, now).tabs } : {};
+        tabs[state.tab] = now;
         writeSession({
           id: state.visitId,
           memberId: state.memberVisitId,
@@ -328,7 +334,7 @@ export async function startVisitTracking() {
           lastSeen: now,
           seconds: 0,
           path,
-          tabs: { [state.tab]: now },
+          tabs,
         });
       }
 
