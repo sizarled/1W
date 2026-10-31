@@ -98,6 +98,8 @@ html[data-theme="light"] .site-header::before {
   align-items: center;
   gap: 0.08rem;
   margin-inline: auto;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .primary-nav a {
