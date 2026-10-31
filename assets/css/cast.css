@@ -4,6 +4,11 @@
    Monochrome: black, white, grey. Artwork keeps its real colours.
    ================================================================== */
 
+/* the `hidden` attribute must win over the layout displays below */
+.cast [hidden] {
+  display: none !important;
+}
+
 .cast {
   width: 100%;
   max-width: var(--maxw);
