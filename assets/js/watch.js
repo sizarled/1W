@@ -17,7 +17,7 @@ import { toast } from "./ui.js";
 import { playSound } from "./sound.js";
 import { getMember, visitorId } from "./session.js";
 import { awardPoints } from "./wallet.js";
-import { rest } from "./data.js";
+import { rest, rpc } from "./data.js";
 
 /* ================================================================== */
 /* constants                                                          */
@@ -539,16 +539,6 @@ function wireRails() {
 /* ================================================================== */
 /* stats / likes / watch later                                        */
 /* ================================================================== */
-async function rpc(fn, body) {
-  const res = await fetch(`${SUPABASE.restUrl}/rpc/${fn}`, {
-    method: "POST",
-    headers: { ...sb, Prefer: "return=representation" },
-    body: JSON.stringify(body || {}),
-  });
-  if (!res.ok) throw new Error(`rpc ${fn} ${res.status}`);
-  return res.json();
-}
-
 async function loadStats() {
   const stats = await safe(rpc("content_stats", { p_location: state.location }), null);
   if (stats) {
@@ -637,6 +627,7 @@ async function toggleWatchLater() {
     } else {
       await rest("watch_later", {
         method: "POST",
+        minimal: true,
         body: {
           idmember: state.member.id,
           idtmdb: state.id,
@@ -932,32 +923,30 @@ async function flushTracker(useBeacon = false) {
   const seconds = tracker.pending;
   if (seconds <= 0) return;
   tracker.pending = 0;
-  const payload = {
-    idmember: state.member?.id || null,
-    idpublisher: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(state.publisher || "") ? state.publisher : null,
-    idtmdb: state.id,
-    media_type: state.kind,
-    season: state.kind === "tv" ? state.season : null,
-    episode: state.kind === "tv" ? state.episode : null,
-    seconds,
-    is_eligible: !state.adBlocked,
-    link_id: state.activeLink && state.activeLink.id !== "platform" ? state.activeLink.id : null,
-    device_id: deviceId(),
-  };
   try {
-    if (useBeacon) {
-      fetch(`${SUPABASE.restUrl}/watchtime`, {
-        method: "POST",
-        headers: sb,
-        body: JSON.stringify([payload]),
-        keepalive: true,
-      });
-    } else {
-      await rest("watchtime", { method: "POST", body: payload });
-    }
+    const rowId = await rpc(
+      "log_watchtime",
+      {
+        p_member: state.member?.id || null,
+        p_publisher: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(state.publisher || "")
+          ? state.publisher
+          : null,
+        p_tmdb: state.id,
+        p_type: state.kind,
+        p_season: state.kind === "tv" ? state.season : null,
+        p_episode: state.kind === "tv" ? state.episode : null,
+        p_seconds: seconds,
+        p_eligible: !state.adBlocked,
+        p_link: state.activeLink && state.activeLink.id !== "platform" ? state.activeLink.id : null,
+        p_device: deviceId(),
+      },
+      { keepalive: useBeacon }
+    );
+    if (rowId === null || rowId === undefined) throw new Error("watchtime rejected");
     if (!state.adBlocked && state.member?.id) checkMilestone();
-  } catch {
+  } catch (error) {
     tracker.pending += seconds; // retry on the next tick
+    console.warn("[1World] watchtime:", error.message);
   }
 }
 
@@ -1074,7 +1063,7 @@ function selectLink(id) {
   updateSourceLabel();
   // click counter, best effort
   if (link.id !== "platform") {
-    rest("watchlink", { method: "PATCH", filters: { id: `eq.${link.id}` }, body: { clicks: (Number(link.clicks) || 0) + 1 } }).catch(() => {});
+    rest("watchlink", { method: "PATCH", minimal: true, filters: { id: `eq.${link.id}` }, body: { clicks: (Number(link.clicks) || 0) + 1 } }).catch(() => {});
   }
 }
 
@@ -1209,6 +1198,7 @@ async function postComment(content, parentId) {
   try {
     await rest("comment", {
       method: "POST",
+      minimal: true,
       body: {
         location: state.location,
         idmember: state.member.id,
@@ -1420,7 +1410,7 @@ async function loadTasks() {
 
 async function logTask(table, offerId) {
   if (!offerId) return;
-  rest(table, { method: "POST", body: { offer_id: String(offerId), idmember: state.member?.id || null } }).catch(() => {});
+  rest(table, { method: "POST", minimal: true, body: { offer_id: String(offerId), idmember: state.member?.id || null } }).catch(() => {});
 }
 
 let leadsTimer = null;
@@ -1435,7 +1425,11 @@ function pollLeads() {
       const payout = Number(lead.points || 0) / 100;
       if (!state.member?.id) continue;
       const done = await safe(
-        rest("taskcomplet", { method: "POST", body: { offer_id: offerId, idmember: state.member.id, payout, points: Math.round(payout * 100) } }),
+        rest("taskcomplet", {
+          method: "POST",
+          minimal: true,
+          body: { offer_id: offerId, idmember: state.member.id, payout, points: Math.round(payout * 100) },
+        }),
         null
       );
       if (done) {
@@ -1501,6 +1495,7 @@ async function reportLink() {
   try {
     await rest("reportlink", {
       method: "POST",
+      minimal: true,
       body: {
         link_id: link.id,
         idmember: state.member?.id || null,
@@ -1623,9 +1618,12 @@ async function saveListChoice(kind) {
     });
     list = Array.isArray(list) ? list[0] : null;
     if (!list) {
-      const created = await rest("playlists", {
+      const id = crypto.randomUUID();
+      await rest("playlists", {
         method: "POST",
+        minimal: true,
         body: {
+          id,
           idmember: state.member.id,
           idcreator: state.member.id,
           list_name: systemKind === "completed" ? "Completed" : systemKind === "later" ? "Continue later" : "Not interested",
@@ -1634,15 +1632,20 @@ async function saveListChoice(kind) {
           visibility: "private",
         },
       });
-      list = Array.isArray(created) ? created[0] : created;
+      list = { id };
     }
     if (!list?.id) return;
 
     if (state.kind === "movie") {
-      await rest("playlistmovie", { method: "POST", body: { idplaylist: list.id, idcreator: state.member.id, idmember: state.member.id, idmovie: state.id } });
+      await rest("playlistmovie", {
+        method: "POST",
+        minimal: true,
+        body: { idplaylist: list.id, idcreator: state.member.id, idmember: state.member.id, idmovie: state.id },
+      });
     } else {
       await rest("playlisttv", {
         method: "POST",
+        minimal: true,
         body: { idplaylist: list.id, idcreator: state.member.id, idmember: state.member.id, idtv: state.id, season: state.season, episode: state.episode },
       });
     }
@@ -1668,3 +1671,6 @@ if (typeof document !== "undefined") {
 }
 
 export default initWatch;
+
+/** Test hook used by tools/watch-smoke.mjs (not part of the public API). */
+export const __debug = { state, tracker, flushTracker };

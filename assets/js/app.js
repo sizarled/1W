@@ -8,11 +8,13 @@ import { getMember, refreshMember, setMember, signOut, noteSeen } from "./sessio
 import { awardPoints, renderWallet, startWalletPolling, syncFromMember } from "./wallet.js";
 import { toast } from "./ui.js";
 import { avatarPlaceholder, enableDragScrollAll } from "./utils.js";
+import { startVisitTracking, finishVisit } from "./visits.js";
 import { initTheme, setTheme, toggleTheme, resetTheme, currentTheme, systemTheme } from "./theme.js";
 
 async function boot() {
   mountShell();
   enableDragScrollAll();
+  startVisitTracking().catch((error) => console.warn("[1World] visits:", error.message));
 
   if (document.body.dataset.page === "home") {
     const { initHome } = await import("./home.js");
@@ -49,6 +51,7 @@ window.OneW = {
   refreshMember,
   setMember,
   enableDragScrollAll,
+  finishVisit,
   theme: {
     current: currentTheme,
     system: systemTheme,

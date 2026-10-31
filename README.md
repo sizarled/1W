@@ -93,6 +93,19 @@ minutes are stored with `is_eligible = false`, so nothing is credited — previo
 minutes are never removed. Reaching **1000 eligible minutes** fires the ad-network hook
 `_Wi()` exactly once per member (`claim_milestone`).
 
+**Visits.** `assets/js/visits.js` runs on every page from `app.js`: it writes one
+`visitor_visits` row (and one `member_visits` row when a member session exists) through
+`log_visit()`, carrying the six-digit visitor id, the referrer, the page, the visit
+frequency, the purpose (`watching` / `joining`) and the source, then closes the row with
+`finish_visit()` — duration + end date — on hide or unload.
+
+> **Why the counters used to stay empty.** Both `visitor_visits` and `watchtime` are
+> protected by RLS with insert-only policies. PostgREST adds `RETURNING` when a request
+> asks for `Prefer: return=representation` (which our `rest()` helper did by default), and
+> a table without a SELECT policy rejects that — so the whole insert was rolled back.
+> Writes now go through the security-definer functions `log_visit`, `finish_visit` and
+> `log_watchtime`, and every other insert passes `minimal: true`.
+
 **Ads.** The site tag and the Adsterra popunder live in the `<head>` of `watch.html`; the
 1000-minute hook is fired from JavaScript only when the milestone is claimed.
 
@@ -179,7 +192,11 @@ SQL for all of it lives in `tools/sql/watch-page.sql`.
 
 Functions: `content_stats(location)`, `content_minutes(idtmdb, type)`,
 `member_watch_minutes(member)`, `verify_watch_code(code, device, member)`,
-`claim_milestone(member, milestone)`.
+`claim_milestone(member, milestone)`, plus the write path `log_visit(...)`,
+`finish_visit(...)` and `log_watchtime(...)`.
+
+Traffic lands in `visitor_visits` / `member_visits` (`visit_id`, visitor id, referrer,
+page, frequency, purpose, source, duration, start/end).
 
 `iptvpremium` is the real table name; a read-only view called **`iptvpremuim`** keeps the
 original spelling working.

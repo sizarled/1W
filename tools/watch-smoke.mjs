@@ -22,6 +22,10 @@ globalThis.CustomEvent = window.CustomEvent;
 globalThis.Event = window.Event;
 globalThis.AbortController = window.AbortController || AbortController;
 globalThis.localStorage = window.localStorage;
+globalThis.sessionStorage = window.sessionStorage;
+if (typeof globalThis.crypto?.randomUUID !== "function") {
+  Object.defineProperty(globalThis, "crypto", { value: window.crypto, configurable: true });
+}
 globalThis.getComputedStyle = window.getComputedStyle.bind(window);
 globalThis.requestAnimationFrame = window.requestAnimationFrame.bind(window);
 globalThis.cancelAnimationFrame = window.cancelAnimationFrame.bind(window);
@@ -70,6 +74,9 @@ globalThis.fetch = (url, opts = {}) => {
   if (href.includes("api.themoviedb.org/3/tv/1399")) return reply(TMDB_TV);
   if (href.includes("api.themoviedb.org/3/trending/")) return reply({ results: [{ id: 999, name: "Trend Show", first_air_date: "2024-01-01", vote_average: 7.1 }] });
   if (href.includes("/rpc/content_stats")) return reply(stats);
+  if (href.includes("/rpc/log_visit")) return reply({ visit_id: "visit000001", member_visit_id: null, frequency: 1 });
+  if (href.includes("/rpc/finish_visit")) return reply(true);
+  if (href.includes("/rpc/log_watchtime")) return reply(4242);
   if (href.includes("/rpc/member_watch_minutes")) return reply(1234);
   if (href.includes("/rest/v1/comment")) return reply(comments);
   if (href.includes("/rest/v1/members_public")) return reply(members);
@@ -79,7 +86,9 @@ globalThis.fetch = (url, opts = {}) => {
   return reply([]);
 };
 
-const { initWatch } = await import(`file://${join(root, "assets/js/watch.js")}`);
+const { initWatch, __debug } = await import(`file://${join(root, "assets/js/watch.js")}`);
+const { startVisitTracking } = await import(`file://${join(root, "assets/js/visits.js")}`);
+await startVisitTracking();
 await initWatch();
 await new Promise((r) => setTimeout(r, 250));
 
@@ -120,6 +129,14 @@ adLink.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable:
 await new Promise((r) => setTimeout(r, 1200));
 report.adCountAfterTick = text("[data-w-ad-count]");
 report.ringOffset = document.querySelector("[data-w-ad-progress]").style.strokeDashoffset;
+
+// watch-time ledger: a flush must reach log_watchtime()
+__debug.tracker.pending = 42;
+__debug.tracker.seconds = 42;
+await __debug.flushTracker();
+report.watchtimeLogged = calls.some((c) => c.includes("/rpc/log_watchtime"));
+report.visitLogged = calls.some((c) => c.includes("/rpc/log_visit"));
+report.visitId = window.sessionStorage.getItem("1w.visit") ? JSON.parse(window.sessionStorage.getItem("1w.visit")).visitId : null;
 
 // the code gate itself
 document.querySelector("[data-w-lock]").hidden = false;

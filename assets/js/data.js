@@ -50,7 +50,7 @@ const sbHeaders = {
   "Content-Type": "application/json",
 };
 
-export async function rest(table, { select = "*", filters = {}, order, limit, offset, method = "GET", body, single } = {}) {
+export async function rest(table, { select = "*", filters = {}, order, limit, offset, method = "GET", body, single, minimal = false } = {}) {
   const url = new URL(`${SUPABASE.restUrl}/${table}`);
   url.searchParams.set("select", select);
   Object.entries(filters).forEach(([key, value]) => {
@@ -60,7 +60,9 @@ export async function rest(table, { select = "*", filters = {}, order, limit, of
   if (limit) url.searchParams.set("limit", String(limit));
   if (offset) url.searchParams.set("offset", String(offset));
 
-  const headers = { ...sbHeaders, Prefer: "return=representation" };
+  // RLS tables without a SELECT policy reject INSERT … RETURNING, so writes that do
+  // not need the row back must ask for `return=minimal`.
+  const headers = { ...sbHeaders, Prefer: minimal ? "return=minimal" : "return=representation" };
   const res = await http(url.toString(), {
     method,
     headers,
@@ -68,6 +70,27 @@ export async function rest(table, { select = "*", filters = {}, order, limit, of
   });
   if (Array.isArray(res) && single) return res[0] || null;
   return res;
+}
+
+/** Calls a Postgres function through PostgREST (security definer on the server). */
+export async function rpc(fn, body = {}, { keepalive = false } = {}) {
+  const res = await fetch(`${SUPABASE.restUrl}/rpc/${fn}`, {
+    method: "POST",
+    headers: { ...sbHeaders, Prefer: "return=representation" },
+    body: JSON.stringify(body || {}),
+    keepalive,
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`rpc ${fn} ${res.status} ${text.slice(0, 180)}`);
+  }
+  const text = await res.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
 }
 
 /* ================================================================== */
