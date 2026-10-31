@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#17171b"/><stop offset=".55" stop-color="#0a0a0c"/><stop offset="1" stop-color="#030304"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="80%" cy="20%" r="60%">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".16"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+  <g stroke="#ffffff" stroke-opacity=".08" fill="none">
+    <circle cx="1010" cy="200" r="150"/><circle cx="1010" cy="200" r="210"/>
+  </g>
+  <rect x="72" y="72" width="72" height="72" rx="20" fill="#ffffff"/>
+  <text x="108" y="124" text-anchor="middle" font-family="Helvetica Neue,Helvetica,Arial,sans-serif" font-size="28" font-weight="800" letter-spacing="-1.6" fill="#0a0a0b">1W</text>
+  <text x="166" y="122" font-family="Helvetica Neue,Helvetica,Arial,sans-serif" font-size="30" font-weight="600" letter-spacing="-.5" fill="#f5f5f6">1World</text>
+  <text x="72" y="330" font-family="Helvetica Neue,Helvetica,Arial,sans-serif" font-size="76" font-weight="600" letter-spacing="-3" fill="#ffffff">Films, series &amp; live IPTV.</text>
+  <text x="72" y="392" font-family="Helvetica Neue,Helvetica,Arial,sans-serif" font-size="30" fill="#a3a3ad">Curated in monochrome — by members, for members.</text>
+  <rect x="72" y="470" width="240" height="1" fill="#ffffff" fill-opacity=".25"/>
+  <text x="72" y="520" font-family="Helvetica Neue,Helvetica,Arial,sans-serif" font-size="22" letter-spacing="4" fill="#7a7a85">WATCH · PUBLISH · EARN</text>
+</svg>
