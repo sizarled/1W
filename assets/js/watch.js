@@ -951,8 +951,28 @@ async function flushTracker(useBeacon = false) {
     if (rowId === null || rowId === undefined) throw new Error("watchtime rejected");
     if (!state.adBlocked && memberUuid()) checkMilestone();
   } catch (error) {
-    tracker.pending += seconds; // retry on the next tick
-    console.warn("[1World] watchtime:", error.message);
+    // the function may be missing from the API schema cache — insert the row directly
+    try {
+      await rest("watchtime", {
+        method: "POST",
+        minimal: true,
+        body: {
+          idmember: memberUuid(),
+          idtmdb: state.id,
+          media_type: state.kind,
+          season: state.kind === "tv" ? state.season : null,
+          episode: state.kind === "tv" ? state.episode : null,
+          seconds,
+          is_eligible: !state.adBlocked,
+          link_id: state.activeLink && state.activeLink.id !== "platform" ? state.activeLink.id : null,
+          device_id: deviceId(),
+        },
+      });
+      if (!state.adBlocked && memberUuid()) checkMilestone();
+    } catch (fallbackError) {
+      tracker.pending += seconds; // retry on the next tick
+      console.warn("[1World] watchtime:", fallbackError.message || error.message);
+    }
   }
 }
 

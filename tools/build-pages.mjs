@@ -14,6 +14,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const BUILD = "20261031b"; // cache-bust for css/js
 
 const PAGES = [
   ["search.html", "Search", "search", "Search across films, series, channels, articles, documents, answers and reviews.", "Reads ?q= from the URL."],
@@ -76,9 +77,9 @@ const page = ([file, title, iconName, description, note]) => `<!doctype html>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="assets/css/base.css" />
-    <link rel="stylesheet" href="assets/css/layout.css" />
-    <link rel="stylesheet" href="assets/css/components.css" />
+    <link rel="stylesheet" href="assets/css/base.css?v=${BUILD}" />
+    <link rel="stylesheet" href="assets/css/layout.css?v=${BUILD}" />
+    <link rel="stylesheet" href="assets/css/components.css?v=${BUILD}" />
     <script>
       /* apply the saved theme (or the OS preference) before first paint */
       (function () {
@@ -96,7 +97,7 @@ const page = ([file, title, iconName, description, note]) => `<!doctype html>
         } catch (e) {}
       })();
     </script>
-    <script type="module" src="assets/js/app.js"></script>
+    <script type="module" src="assets/js/app.js?v=${BUILD}"></script>
   </head>
   <body data-page="${file.replace(".html", "")}" data-title="${title}">
     <a class="skip-link" href="#main">Skip to content</a>

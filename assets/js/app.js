@@ -51,7 +51,7 @@ window.OneW = {
   refreshMember,
   setMember,
   enableDragScrollAll,
-  finishVisit,
+  visits: { start: startVisitTracking, finish: finishVisit },
   theme: {
     current: currentTheme,
     system: systemTheme,

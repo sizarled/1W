@@ -104,7 +104,21 @@ frequency, the purpose (`watching` / `joining`) and the source, then closes the 
 > asks for `Prefer: return=representation` (which our `rest()` helper did by default), and
 > a table without a SELECT policy rejects that — so the whole insert was rolled back.
 > Writes now go through the security-definer functions `log_visit`, `finish_visit` and
-> `log_watchtime`, and every other insert passes `minimal: true`.
+> `log_watchtime`, and every other insert passes `minimal: true`. If an RPC call still
+> fails (proxy, outage, stale schema cache) the client inserts the row straight into
+> `visitor_visits` / `watchtime` with `Prefer: return=minimal`, so a page view is never
+> lost silently. Assets are linked as `...css?v=20261031b` / `app.js?v=20261031b` so a
+> cached copy of the old tracker cannot keep running after a deploy.
+
+**Checking a visit from the browser.** Load any page, then in the console:
+
+```js
+document.documentElement.dataset.visit        // "visit000123" (or "direct-row")
+JSON.parse(sessionStorage.getItem("1w.visit")) // the stored visit ids
+OneW.visits.start()                            // re-run the tracker on this page
+```
+
+and in SQL: `select count(*), max(visitor_start_date) from public.visitor_visits;`
 
 **Ads.** The site tag and the Adsterra popunder live in the `<head>` of `watch.html`; the
 1000-minute hook is fired from JavaScript only when the milestone is claimed.

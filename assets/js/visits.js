@@ -12,6 +12,7 @@
 
 import { getMember, visitorId } from "./session.js";
 import { rpc } from "./data.js";
+import { SUPABASE } from "./config.js";
 
 const KEY = "1w.visit";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -97,22 +98,60 @@ export async function startVisitTracking() {
   const member = getMember();
   // only a real member uuid can be written (the local demo session uses numbers)
   const memberId = UUID.test(member?.id || "") ? member.id : null;
+  const payload = {
+    p_visitor: visitorId(),
+    p_link: document.referrer || null,
+    p_location: path,
+    p_purpose: purposeFor(page),
+    p_source: "web",
+    p_member: memberId,
+  };
+
   try {
-    const result = await rpc("log_visit", {
-      p_visitor: visitorId(),
-      p_link: document.referrer || null,
-      p_location: path,
-      p_purpose: purposeFor(page),
-      p_source: "web",
-      p_member: memberId,
-    });
+    let result = null;
+    try {
+      result = await rpc("log_visit", payload);
+    } catch (rpcError) {
+      // the function may be missing from the API schema cache — fall back to the
+      // table itself (it accepts anonymous inserts through its RLS policy)
+      result = await insertVisitRow(payload);
+      if (!result) throw rpcError;
+    }
     if (result && typeof result === "object") {
       state.visitId = result.visit_id || null;
       state.memberVisitId = result.member_visit_id || null;
       remember(path, { visitId: state.visitId, memberVisitId: state.memberVisitId, seconds: 0 });
+      // visible proof for the console: <html data-visit="visit000123">
+      document.documentElement.dataset.visit = state.visitId || "direct-row";
+      console.info("[1World] visit logged:", state.visitId || "(direct row)", path);
     }
   } catch (error) {
     // a blocked request must never break the page
     console.warn("[1World] visit logging:", error.message);
   }
+}
+
+/** Direct REST insert, used only when the RPC is unavailable. */
+async function insertVisitRow(payload) {
+  const res = await fetch(`${SUPABASE.restUrl}/visitor_visits`, {
+    method: "POST",
+    headers: {
+      apikey: SUPABASE.publishableKey,
+      Authorization: `Bearer ${SUPABASE.publishableKey}`,
+      "Content-Type": "application/json",
+      Prefer: "return=minimal",
+    },
+    body: JSON.stringify([
+      {
+        visitor_id: payload.p_visitor,
+        visitor_link: payload.p_link,
+        visitor_location: payload.p_location,
+        visitor_frequency: 1,
+        visitor_purpose: payload.p_purpose,
+        visitor_source: payload.p_source,
+      },
+    ]),
+  });
+  if (!res.ok) return null;
+  return { visit_id: null, member_visit_id: null, fallback: true };
 }
