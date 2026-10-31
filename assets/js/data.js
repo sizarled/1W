@@ -388,10 +388,7 @@ const normaliseMember = (row) => {
 
 export async function loadMember(id) {
   if (!id) return null;
-  const attempts = [
-    { id: `eq.${id}` },
-    { member_id: `eq.${id}` },
-  ];
+  const attempts = [{ id: `eq.${id}` }, { member_id: `eq.${id}` }, { id_member: `eq.${id}` }];
   for (const filters of attempts) {
     const rows = await rest("members", { filters, limit: 1 }).catch(() => null);
     if (Array.isArray(rows) && rows.length) return normaliseMember(rows[0]);

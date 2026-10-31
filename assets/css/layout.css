@@ -40,10 +40,14 @@ html[data-theme="light"] .site-header::before {
 .site-header__bar {
   position: relative;
   height: 100%;
+  width: 100%;
+  max-width: var(--maxw);
+  margin-inline: auto;
   display: flex;
   align-items: center;
   gap: 0.9rem;
   padding-inline: var(--gutter);
+  transition: padding-left 0.42s var(--ease-out);
 }
 
 /* brand ------------------------------------------------------------- */
@@ -745,6 +749,9 @@ html[data-theme="light"] .site-header::before {
 @media (min-width: 1024px) {
   body.sb-open .site-main {
     padding-left: var(--sidebar-w);
+  }
+  body.sb-open .site-header__bar {
+    padding-left: calc(var(--sidebar-w) + var(--gutter));
   }
   body.sb-open .site-footer {
     padding-left: var(--sidebar-w);

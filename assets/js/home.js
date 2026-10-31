@@ -316,7 +316,11 @@ function renderFeatures(features) {
       .map(
         (f, i) => `
       <article class="feature" data-reveal style="--delay:${i * 45}ms">
-        <span class="feature__icon">${icon(f.icon) || icon("sparkle")}</span>
+        <span class="feature__icon">${
+          /^https?:\/\//i.test(f.icon)
+            ? `<img src="${esc(f.icon)}" alt="" width="19" height="19" loading="lazy" />`
+            : icon(f.icon) || icon("sparkle")
+        }</span>
         <h3 class="feature__title">${esc(f.title)}</h3>
         <p class="feature__desc">${esc(f.description)}</p>
         <a class="feature__link" href="${esc(f.link || "#")}">Learn more ${icon("arrowUpRight")}</a>

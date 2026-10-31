@@ -314,6 +314,14 @@ function initSidebar() {
     if (event.key === "Escape" && document.body.classList.contains("sb-open")) setSidebar(false);
   });
 
+  window.addEventListener("resize", () => {
+    if (window.matchMedia("(min-width: 1024px)").matches) {
+      document.querySelector("[data-scrim]")?.classList.remove("is-on");
+    } else if (document.body.classList.contains("sb-open")) {
+      document.querySelector("[data-scrim]")?.classList.add("is-on");
+    }
+  });
+
   // mark the current page
   const path = window.location.pathname.split("/").pop() || "index.html";
   document.querySelectorAll("[data-sidebar-link]").forEach((link) => {
