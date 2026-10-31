@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Court — 1World Web</title>
+    <meta name="description" content="Your trial: case number, date, parties, verdict." />
+    <meta name="theme-color" content="#060607" />
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="assets/css/base.css?v=20261031r" />
+    <link rel="stylesheet" href="assets/css/layout.css?v=20261031r" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261031r" />
+    <link rel="stylesheet" href="assets/css/dashboard.css?v=20261031r" />
+    <script>
+      (function () {
+        try {
+          var saved = JSON.parse(localStorage.getItem("1w.theme") || "null");
+          var theme =
+            saved === "light" || saved === "dark"
+              ? saved
+              : window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
+                ? "light"
+                : "dark";
+          document.documentElement.dataset.theme = theme;
+        } catch (e) {}
+      })();
+    </script>
+    <script type="module" src="assets/js/app.js?v=20261031r"></script>
+    <script type="module" src="assets/js/court.js?v=20261031r"></script>
+  </head>
+
+  <body data-page="court" data-title="Court">
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <div class="dsh-page">
+      <header class="dsh-simple-top">
+        <a class="dsh-brand" href="index.html">
+          <span class="dsh-brand__mark" aria-hidden="true">1W</span>
+          <span class="dsh-brand__name">Court</span>
+        </a>
+        <div class="dsh-top__tools">
+          <a class="dsh-btn dsh-btn--sm" href="dashboard.html#court"><i data-icon="arrowLeft"></i>Dashboard</a>
+          <button class="dsh-icon-btn" type="button" data-logout aria-label="Log out"><i data-icon="logout"></i></button>
+        </div>
+      </header>
+
+      <main id="main" class="dsh-page__main">
+        <p class="dsh-crumbs">
+          <a href="dashboard.html">Dashboard</a> <span aria-hidden="true">/</span>
+          <a href="dashboard.html#court">Court</a> <span aria-hidden="true">/</span>
+          <span data-court-code>Case</span>
+        </p>
+
+        <div data-court-room>
+          <div class="dsh-loading"><span class="dsh-spinner" aria-hidden="true"></span><p>Opening the case file…</p></div>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

@@ -492,6 +492,153 @@ no longer accepted, and a restored session for an inactive account (notice shown
 
 ---
 
+## The dashboard
+
+`dashboard.html` is the member's control room. It is drawn from **one** server call —
+`member_dashboard(token)` — and it gates itself **before** it draws a single tool, so an
+inactive or banned account never receives a menu, a code form or a hidden button it could
+unhide.
+
+### The five states
+
+| Account state | What the page shows | Buttons |
+| --- | --- | --- |
+| `active` | Header rail, sidebar and every section | Everything |
+| `inactive` | “Your account is not activated yet”, plus the day the account would be banned automatically | **Activate account** → `activated.html?member=ID_MEMBER`, **Log out** |
+| `expired` | “Your membership has expired” | **Renew membership**, **Log out** |
+| `banned`, no trial | The ban reason, who wrote it and when, plus “you may ask for a trial” | **Request trial**, **Log out** |
+| `banned`, trial requested | “Your request is with the court”, case number | **Check notifications**, **Log out** |
+| `banned`, trial scheduled | The date and time of the hearing, the case and the reason, and the warning that missing it makes the ban permanent | **Go to trial** → `court.html?id=ID_COURT`, **Log out** |
+| `banned`, ban upheld (`ban_permanent` or `decision = uphold`) | “This account is permanently closed” with the case number and the court note | **Log out** only |
+| Ban lifted (`decision = unban`) | Normal dashboard with a “Reopened by court decision” note and the case number | Everything |
+
+The gate is chosen from the payload, and the payload comes from the token: a member cannot
+pick a state by editing the URL or a class. `member_court_request()` refuses anything that is
+not a non-permanent ban, creates at most one open case and writes a notification plus a
+`court_requested` log row. `member_activation_request()` accepts `inactive` accounts only, at
+most once an hour.
+
+### Header
+
+A horizontally scrollable rail of the twelve sections — **Movies, Series, Channels, Videos,
+Podcasts, Images, Articles, Reviews, Q&A, Documents, Store, Auction** — each with its own SVG
+icon. It scrolls with the mouse (click-and-drag through `enableDragScroll`), with a finger,
+with the two arrow buttons and with the keyboard, because it is a real overflow container and
+not a clipped list. Then the bell, the avatar (→ `profile.html`) and **Log out**.
+
+The **bell** opens a popover with the last notifications in four windows (hour, today,
+yesterday, week), a **Settings** button that jumps to the notification settings tab, and
+**View all** → `notifications.html`. Unread items carry a dot on the bell and a counter in the
+sidebar.
+
+### Sidebar
+
+Avatar, `@username`, `IDXXXXXX` and the account status chip, then the groups:
+
+| Group | Items |
+| --- | --- |
+| Account | Overview, Notifications, Codes, IPTV, Favorites, Watch later, Completed, Reports, Court, Points, Level, Payments, Prizes |
+| History & analytics | Viewing history, Analytics |
+| Creator | Creator management (eStudio, eServer, eBlog, eGallery, eSpace, eLibrary, eCinema) |
+| Publisher | Publisher management (eStore, auctions, eBank, community) |
+| Advertiser | Advertising campaigns |
+| Settings | Website, Profile, Account, Platforms |
+| Administration | Panel → `panel.html`, **only** for admins and moderators |
+
+`Administration` is hidden for everybody else, and the panel enforces the same rule
+server-side — hiding the link is a courtesy, not the permission.
+
+### Sections in this build
+
+**Live, reading and writing real rows**
+
+- **Overview** — membership and its expiry, days as a member, points available / spent /
+  total, total watch minutes, the six-digit codes and the devices linked to them, and the
+  account details.
+- **Notifications** — the whole list with date filters (hour, today, yesterday, week, month,
+  year, custom range, all time) on one tab, and per-section switches on the other. **Messages
+  and Court cannot be switched off**: the inputs are disabled and `member_notify_set()` also
+  rejects those two sources.
+- **Codes** — generate or type six digits, pick 1 / 3 / 6 / 12 months, an age rating
+  (none / 13+ / 16+ / 18+), a device MAC or a free code. Each row shows the code, duration,
+  age rating, bound device, expiry and status, with **Copy**, **Download**, **Share**,
+  **Unlink** and **Delete**. The **Linked devices** tab lists device, MAC, code, linked date
+  and status with a remove action. Codes are refused while the account is not active.
+- **IPTV** — M3U and Xtream tabs with their package shape (name, playlist URL, EPG URL, free
+  or premium, status, download, channels). Members cannot add a package here; packages are
+  published by admins and members create theirs from `e-server`.
+- **Favorites / Watch later / Completed** — eight tabs (movies, series, channels, podcasts,
+  articles, answers, documents, images) with posters, logos or thumbnails according to the
+  type, and **Open** / **Share** / **Remove**.
+- **Reports** — reports the member filed *and* reports against their own content, with
+  reason, decision and dates.
+- **Court** — the current case (reason, parties, hearing, decision, absence warning) with
+  **Enter court** → `court.html?id=…`, and the verdict archive.
+- **Points** — available / spent / total with the 100 points = $1 value, the earn breakdown,
+  the serial box and the full ledger.
+- **Level** — current and next level, a progress bar with the points still needed, the level
+  table with what each level unlocks, and a criteria checklist.
+- **Prizes** — the open draws with thumbnail, title, end date and points.
+- **Viewing history** — one row per title with type, date and time, minutes watched and
+  **Open**, filtered by type and by date; movie and series titles are resolved from TMDB.
+- **Website settings** — language, country and theme, written to the same local keys the rest
+  of the site reads, plus the skin gallery.
+
+**Staged — the layout and copy are in place, the aggregation comes next**
+
+Payments (the wallet, the 100:1 calculator, the payout form and the status chain are drawn,
+no transfer row is written yet), Analytics, Creator, Publisher, Advertiser, Profile settings,
+Account settings and Platforms. Each one states what it will do instead of pretending to have
+data.
+
+### Server surface
+
+| Function | Purpose |
+| --- | --- |
+| `member_dashboard(token)` | the whole page: member, ban, court, overview, codes, devices, notifications, prefs, lists, reports, prizes, ledger, history |
+| `member_code_create(token, code, months, age, mac, name)` | six digits, 1/3/6/12 months, an age rating, an optional device; active accounts only |
+| `member_code_action(token, code_id, action)` | `unlink`, `delete`, `disable`, `enable` on a code the caller owns |
+| `member_device_delete(token, device_id)` | removes a device and frees its code |
+| `member_notify_set(token, source, enabled)` | per-section switch; `messages` and `court` return `locked` |
+| `member_notify_read(token, id)` | marks one notification read |
+| `member_list_remove(token, list_id)` | drops a favorites / later / completed row |
+| `member_court_request(token)` | banned, non-permanent accounts ask for a trial |
+| `member_court_history(token)` | every case of the caller, for `court.html` |
+| `member_activation_request(token, note)` | activation request from `activated.html`, once an hour |
+| `admin_ban_member(member, reason, by, permanent)` | service role only |
+
+No table is readable from the browser: `viewing_codes`, `watch_code_devices`,
+`notifications`, `notification_prefs`, `member_lists` and `court_cases` all have RLS on with
+no policies, and the token is only ever compared inside `member_from_token()`.
+
+### The two pages beside it
+
+`activated.html?member=ID_MEMBER` shows the member ID, username, current status, the 30-day
+auto-ban date and a note box. Sending the request writes a notification and a log row, and
+the page confirms it. A member who is already active or banned is told that activation is not
+the way back.
+
+`court.html?id=ID_COURT` is the case file: case number, date and time, judge / defendant /
+plaintiff, reason, status, the absence warning and the verdict with the court note. A case id
+that belongs to somebody else shows “Case not found”, because `member_court_history()` only
+returns the caller's cases.
+
+### Tests
+
+```bash
+node tools/dashboard-smoke.mjs   # 76 checks: the five gates, rail, popover, codes, sections
+node tools/court-smoke.mjs       # 22 checks: activation requests + the court room
+```
+
+`dashboard-smoke.mjs` boots the page in jsdom with a stubbed `member_dashboard` and walks the
+five states: inactive (activation link with the member id, no rail, no menu), banned (reason,
+request → requested), scheduled (date, `court.html?id=…`, absence warning), upheld (closed,
+log out only) and active (12 rail items, drag-enabled rail, sidebar, overview numbers, the
+popover's filters and both paths, the two locked switches, the code generator, the devices
+tab and every section rendering). `court-smoke.mjs` covers the activation page as a guest,
+as an inactive member and as an active one, plus the court room for a guest, the owner and a
+foreign id.
+
 ## Sounds
 
 Played from the public `source` bucket of the Supabase project:
@@ -655,12 +802,18 @@ assets/css/register.css     registration form + success card (high-contrast, bot
 assets/js/register.js       registration controller (member_register RPC, .txt export)
 assets/css/login.css        sign-in form + signed-in card
 assets/js/login.js          sign-in controller (member_login / member_session / member_logout)
+assets/css/dashboard.css    app shell: header rail, sidebar, gates, section views
+assets/js/dashboard.js      dashboard controller (member_dashboard + code/notify/court actions)
+assets/js/activated.js      activation request page (member_activation_request)
+assets/js/court.js          court room page (member_court_history)
 tools/build-pages.mjs       regenerates the placeholder pages
 tools/smoke.mjs             jsdom smoke test (renders the homepage offline)
 tools/watch-smoke.mjs       jsdom watch page test (player, gates, watch-time)
 tools/cast-smoke.mjs        jsdom cast page test (guest + member dials)
 tools/register-smoke.mjs    registration test (form, duplicates, member ID, success, .txt)
 tools/login-smoke.mjs       sign-in test (states, success card, restore, log out)
+tools/dashboard-smoke.mjs   dashboard test (five gates, rail, popover, codes, sections)
+tools/court-smoke.mjs       activation page + court room test
 tools/visit-smoke.mjs       visit tracker test (5 modes)
 ```
 

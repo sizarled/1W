@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Activate your account — 1World Web</title>
+    <meta name="description" content="Request activation for your 1World member account." />
+    <meta name="theme-color" content="#060607" />
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="assets/css/base.css?v=20261031r" />
+    <link rel="stylesheet" href="assets/css/layout.css?v=20261031r" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261031r" />
+    <link rel="stylesheet" href="assets/css/dashboard.css?v=20261031r" />
+    <script>
+      (function () {
+        try {
+          var saved = JSON.parse(localStorage.getItem("1w.theme") || "null");
+          var theme =
+            saved === "light" || saved === "dark"
+              ? saved
+              : window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
+                ? "light"
+                : "dark";
+          document.documentElement.dataset.theme = theme;
+        } catch (e) {}
+      })();
+    </script>
+    <script type="module" src="assets/js/app.js?v=20261031r"></script>
+    <script type="module" src="assets/js/activated.js?v=20261031r"></script>
+  </head>
+
+  <body data-page="activated" data-title="Activate account">
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <div class="dsh-page">
+      <header class="dsh-simple-top">
+        <a class="dsh-brand" href="index.html">
+          <span class="dsh-brand__mark" aria-hidden="true">1W</span>
+          <span class="dsh-brand__name">Account activation</span>
+        </a>
+        <div class="dsh-top__tools">
+          <a class="dsh-btn dsh-btn--sm" href="dashboard.html"><i data-icon="dashboard"></i>Dashboard</a>
+          <button class="dsh-icon-btn" type="button" data-logout aria-label="Log out"><i data-icon="logout"></i></button>
+        </div>
+      </header>
+
+      <main id="main" class="dsh-page__main">
+        <section class="dsh-gate" data-act data-state="loading">
+          <span class="dsh-gate__icon"><i data-icon="lock"></i></span>
+          <p class="dsh-eyebrow">Step 1 of 1</p>
+          <h1 class="dsh-gate__title">Activate your account</h1>
+          <p class="dsh-gate__text">
+            New accounts start as <b>inactive</b>. A moderator reviews every request — normally within
+            24 hours. Until then you can sign in, keep your profile and see your member ID, but the
+            dashboard, viewing codes and points stay closed.
+          </p>
+
+          <dl class="dsh-kv dsh-kv--gate">
+            <div><dt>Member ID</dt><dd data-act-member>—</dd></div>
+            <div><dt>Username</dt><dd data-act-username>—</dd></div>
+            <div><dt>Status</dt><dd data-act-status>—</dd></div>
+          </dl>
+
+          <p class="dsh-gate__note" data-act-deadline hidden></p>
+
+          <form class="dsh-form" data-act-form>
+            <div class="dsh-field dsh-field--wide">
+              <label for="act-note">Anything we should know? (optional)</label>
+              <input class="dsh-input" id="act-note" name="note" maxlength="280" placeholder="How you found 1World, what you plan to watch…" />
+            </div>
+            <div class="dsh-field dsh-field--wide">
+              <button class="dsh-btn dsh-btn--primary" type="submit"><i data-icon="send"></i>Send activation request</button>
+              <a class="dsh-btn" href="dashboard.html"><i data-icon="arrowLeft"></i>Back to dashboard</a>
+            </div>
+          </form>
+
+          <p class="dsh-gate__warn" data-act-notice hidden>
+            <i data-icon="info"></i><span data-act-notice-text></span>
+          </p>
+
+          <p class="dsh-help" style="margin-top:.8rem">
+            Need help? <a href="contact.html">Contact support</a> and mention your member ID.
+          </p>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>
