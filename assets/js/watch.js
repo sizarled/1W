@@ -26,6 +26,9 @@ const AD_URL = "https://asiafilm.org/4/e476b83b0c777b7828ac79fef485bd1a";
 const AD_SECONDS = 30;
 const CODE_DELAY = 5 * 60; // seconds of playback before the viewing code is required
 const HEARTBEAT = 20; // flush the watch-time ledger every 20 s
+const WATCH_KEY = "1w.watched"; // per-title counted seconds (best effort, survives a reload)
+// used only when TMDB has no runtime for the title (never the normal case)
+const FALLBACK_RUNTIME = { movie: 150, tv: 45 };
 const ADULT_CERTS = ["R", "NC-17", "18", "18+", "TV-MA", "MA 15+", "X"];
 const DEVICE_KEY = "1w.device";
 const REMEMBER_KEY = "1w.code";
@@ -55,6 +58,9 @@ const state = {
   codeVerified: false,
   playbackStarted: false,
   adBlocked: false,
+  runtimeMinutes: 0, // TMDB runtime of the film / of this episode
+  capSeconds: 0, // how many seconds this title may ever count
+  capReached: false,
   seasonMeta: [],
   offers: [],
 };
@@ -151,9 +157,12 @@ export async function initWatch() {
   hydrateChrome();
   detectAdBlocker();
   await Promise.all([loadTitle(), loadCommunity()]);
+  await loadEpisodeRuntime();
   wireActions();
   wirePlayer();
+  wireWatchTimeGuards();
   wireExitIntent();
+  renderLimitNote();
 }
 
 function renderMissing() {
@@ -285,11 +294,42 @@ function certification(detail) {
   return ratings.find((r) => r.iso_3166_1 === "US")?.rating || ratings[0]?.rating || "";
 }
 
+/** The runtime TMDB gives the film, or this exact episode of a series. */
+function rememberRuntime(minutes) {
+  const value = Number(minutes) || 0;
+  if (value <= 0) return;
+  state.runtimeMinutes = value;
+  state.capSeconds = Math.round(value * 60);
+  renderLimitNote();
+}
+
+async function loadEpisodeRuntime() {
+  if (state.kind !== "tv") return;
+  const episode = await safe(tmdb(`/tv/${state.id}/season/${state.season}/episode/${state.episode}`), null);
+  const detail = state.detail || {};
+  const minutes =
+    Number(episode?.runtime || 0) ||
+    Number(detail.episode_run_time?.[0] || 0) ||
+    Number(detail.last_episode_to_air?.runtime || 0);
+  if (minutes > 0) rememberRuntime(minutes);
+}
+
+/** Season / episode changed: the allowance follows the new episode's runtime. */
+async function refreshEpisodeRuntime() {
+  state.capReached = false;
+  await loadEpisodeRuntime();
+  counterKey = null; // force a fresh allowance for this episode
+  resetCounter();
+  renderLimitNote();
+}
+
 function renderHero(detail, credits) {
   const title = tmdbName(detail);
   const year = yearOf(detail);
   const runtime =
     state.kind === "movie" ? detail.runtime : detail.episode_run_time?.[0] || detail.last_episode_to_air?.runtime || 0;
+  if (state.kind === "movie") rememberRuntime(detail.runtime);
+  else rememberRuntime(runtime);
   const rating = detail.vote_average ? Number(detail.vote_average).toFixed(1) : "";
   const votes = detail.vote_count ? compact(detail.vote_count) : "";
   const cert = certification(detail);
@@ -696,10 +736,12 @@ function wirePlayer() {
     state.episode = 1;
     buildEpisodeOptions();
     changeSource();
+    refreshEpisodeRuntime();
   });
   qs("[data-w-episode-select]")?.addEventListener("change", (e) => {
     state.episode = Number(e.target.value);
     changeSource();
+    refreshEpisodeRuntime();
   });
 }
 
@@ -887,47 +929,183 @@ function changeSource() {
   if (!qs("[data-w-frame]") || qs("[data-w-frame]").hidden) return;
   mountIframe(embedUrl(state.activeLink));
   resetPlaybackTimers();
+  refreshEpisodeRuntime();
   toast({ tone: "default", iconName: "tv", title: `Season ${state.season} · Episode ${state.episode}`, message: "Playback restarted for this episode." });
 }
 
 function resetPlaybackTimers() {
   clearTimeout(codeTimer);
   pauseTracker();
-  startTracker();
+  if (state.playbackStarted) startTracker();
   if (state.needsCode && !state.codeVerified) scheduleCodeGate();
 }
 
 /* ================================================================== */
 /* watch-time ledger                                                  */
 /* ================================================================== */
-const tracker = { seconds: 0, pending: 0, timer: null, running: false };
+/**
+ * The ledger only advances when ALL of these are true:
+ *   · the visitor pressed Play and the frame is mounted
+ *   · the tab is visible and the window has focus (another window/dialog = paused)
+ *   · the browser is online and the viewing-code lock is not covering the film
+ *   · the title has not used up its TMDB runtime yet (anti-abuse ceiling)
+ */
+const tracker = { seconds: 0, pending: 0, timer: null, running: false, stored: 0 };
+let counterKey = null; // which title/episode/day the counted seconds belong to
+// optimistically focused: a page opened in a background tab reports hidden anyway,
+// and the blur/focus listeners correct the flag from then on
+let windowFocused = !document.hidden;
+
+function capSeconds() {
+  if (!state.capSeconds) {
+    const fallback = FALLBACK_RUNTIME[state.kind] || FALLBACK_RUNTIME.movie;
+    state.capSeconds = Math.round((state.runtimeMinutes || fallback) * 60);
+  }
+  return state.capSeconds;
+}
+
+function dayStamp() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function countKey() {
+  const day = dayStamp(); // the allowance is per day, like the server backstop
+  return state.kind === "movie"
+    ? `${WATCH_KEY}:movie:${state.id}:${day}`
+    : `${WATCH_KEY}:tv:${state.id}:s${state.season}:e${state.episode}:${day}`;
+}
+
+function clockLabel(total) {
+  const value = Math.max(0, Math.floor(total));
+  const hours = Math.floor(value / 3600);
+  const minutes = Math.floor((value % 3600) / 60);
+  const seconds = value % 60;
+  const pad = (n) => String(n).padStart(2, "0");
+  return hours ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${minutes}:${pad(seconds)}`;
+}
+
+function storedSeconds() {
+  try {
+    return Math.max(0, Number(localStorage.getItem(countKey()) || 0));
+  } catch {
+    return 0;
+  }
+}
+
+function saveCounted(seconds) {
+  // always write to the bucket the counter belongs to, so switching episodes
+  // cannot credit the previous episode's seconds to the new one
+  const key = counterKey || countKey();
+  tracker.stored = seconds;
+  try {
+    localStorage.setItem(key, String(Math.round(seconds)));
+  } catch {
+    /* private mode — the count simply restarts next time */
+  }
+}
+
+function codeLockOpen() {
+  return qs("[data-w-lock]")?.hidden === false;
+}
+
+function isCounting() {
+  if (!state.playbackStarted) return false;
+  if (state.capReached) return false;
+  if (document.hidden) return false;
+  if (!windowFocused) return false;
+  if (!navigator.onLine) return false;
+  if (codeLockOpen()) return false;
+  return true;
+}
+
+/** Re-loads the counted seconds for the current title (called when the title changes). */
+function resetCounter() {
+  counterKey = countKey();
+  tracker.pending = 0;
+  tracker.seconds = Math.min(storedSeconds(), capSeconds());
+  state.capReached = tracker.seconds >= capSeconds();
+  renderLimitNote();
+}
 
 function startTracker() {
+  resetCounterIfIdle();
   if (tracker.running) return;
   tracker.running = true;
-  tracker.timer = setInterval(() => {
-    if (document.hidden || !navigator.onLine) return;
-    if (!state.playbackStarted || qs("[data-w-lock]")?.hidden === false) return;
-    tracker.seconds += 1;
-    tracker.pending += 1;
-    if (tracker.pending >= HEARTBEAT) flushTracker();
-  }, 1000);
+  tracker.timer = setInterval(stepTracker, 1000);
+}
+
+function resetCounterIfIdle() {
+  if (countKey() !== counterKey) resetCounter();
+}
+
+function stepTracker() {
+  if (!isCounting()) return;
+  const cap = capSeconds();
+  if (tracker.seconds >= cap) return reachCap();
+  tracker.seconds += 1;
+  tracker.pending += 1;
+  if (tracker.seconds % 5 === 0) saveCounted(tracker.seconds);
+  if (tracker.pending >= HEARTBEAT) flushTracker();
+  renderLimitNote();
+}
+
+/** The title used up its TMDB minutes: stop counting, keep playing. */
+function reachCap() {
+  if (state.capReached) return;
+  state.capReached = true;
+  tracker.seconds = capSeconds();
+  saveCounted(tracker.seconds);
+  flushTracker();
+  renderLimitNote();
+  toast({
+    tone: "default",
+    iconName: "clock",
+    title: "Watch-time limit reached",
+    message: `This ${state.kind === "movie" ? "film" : "episode"} counts up to ${Math.round(capSeconds() / 60)} minutes.`,
+  });
 }
 
 function pauseTracker() {
   tracker.running = false;
   clearInterval(tracker.timer);
   tracker.timer = null;
+  saveCounted(tracker.seconds);
+  renderLimitNote();
 }
 
 function resumeTracker() {
   state.playbackStarted = true;
   startTracker();
+  renderLimitNote();
+}
+
+/** "Counting 3 / 132 min" line under the player — also proves when counting is paused. */
+function renderLimitNote() {
+  const node = qs("[data-w-limit]");
+  if (!node) return;
+  const cap = Math.round(capSeconds() / 60);
+  const used = clockLabel(Math.min(tracker.seconds, capSeconds()));
+  const tally = `${used} of ${cap} min`;
+  let text;
+  if (state.capReached) text = `Limit reached — all ${cap} min of this title are counted.`;
+  else if (!state.playbackStarted) text = `Watch time starts when you press Play · this title counts up to ${cap} min.`;
+  else if (codeLockOpen()) text = `Paused — enter your viewing code · ${tally}.`;
+  else if (document.hidden) text = `Paused — this tab is in the background · ${tally}.`;
+  else if (!windowFocused) text = `Paused — this window is not focused · ${tally}.`;
+  else if (!navigator.onLine) text = `Paused — you are offline · ${tally}.`;
+  else text = `Counting · ${tally}.`;
+  node.textContent = text;
+  node.dataset.state = state.capReached ? "capped" : isCounting() ? "counting" : "paused";
 }
 
 async function flushTracker(useBeacon = false) {
-  const seconds = tracker.pending;
-  if (seconds <= 0) return;
+  const cap = capSeconds();
+  const seconds = Math.min(tracker.pending, Math.max(0, cap - tracker.stored));
+  if (seconds <= 0) {
+    tracker.pending = 0;
+    return;
+  }
   tracker.pending = 0;
   try {
     const rowId = await rpc(
@@ -945,14 +1123,24 @@ async function flushTracker(useBeacon = false) {
         p_eligible: !state.adBlocked,
         p_link: state.activeLink && state.activeLink.id !== "platform" ? state.activeLink.id : null,
         p_device: deviceId(),
+        p_cap: cap, // the server clamps the daily total for this title to this ceiling
       },
       { keepalive: useBeacon }
     );
-    if (rowId === null || rowId === undefined) throw new Error("watchtime rejected");
+    if (rowId === null || rowId === undefined) {
+      // the server refused the minutes: this title has already counted its full runtime
+      state.capReached = true;
+      tracker.seconds = cap;
+      saveCounted(cap);
+      renderLimitNote();
+      return;
+    }
+    saveCounted(Math.min(tracker.stored + seconds, cap));
     if (!state.adBlocked && memberUuid()) checkMilestone();
   } catch (error) {
     // the function may be missing from the API schema cache — insert the row directly
     try {
+      saveCounted(Math.min(tracker.stored + seconds, cap));
       await rest("watchtime", {
         method: "POST",
         minimal: true,
@@ -1568,6 +1756,36 @@ async function saveHistory(status) {
   );
 }
 
+/**
+ * Counting is tied to the visitor actually watching: another window, a hidden
+ * tab, a lost connection or the code lock all pause the ledger.
+ */
+function wireWatchTimeGuards() {
+  window.addEventListener("focus", () => {
+    windowFocused = true;
+    renderLimitNote();
+  });
+  window.addEventListener("blur", () => {
+    windowFocused = false;
+    flushTracker(true);
+    renderLimitNote();
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) flushTracker(true);
+    renderLimitNote();
+  });
+  window.addEventListener("online", renderLimitNote);
+  window.addEventListener("offline", () => {
+    flushTracker(true);
+    renderLimitNote();
+  });
+  // a covered lock (viewing code) stops the clock too
+  const lock = qs("[data-w-lock]");
+  if (lock && typeof MutationObserver === "function") {
+    new MutationObserver(renderLimitNote).observe(lock, { attributes: true, attributeFilter: ["hidden"] });
+  }
+}
+
 function wireExitIntent() {
   // internal navigation away from the player
   document.addEventListener("click", (event) => {
@@ -1699,4 +1917,14 @@ if (typeof document !== "undefined") {
 export default initWatch;
 
 /** Test hook used by tools/watch-smoke.mjs (not part of the public API). */
-export const __debug = { state, tracker, flushTracker };
+export const __debug = {
+  state,
+  tracker,
+  flushTracker,
+  startTracker,
+  stepTracker,
+  isCounting,
+  capSeconds,
+  resetCounter,
+  renderLimitNote,
+};

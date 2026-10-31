@@ -90,8 +90,13 @@ function clearFailure() {
   }
 }
 
+// dwell time counts only while the visitor is really on the page: a hidden tab
+// or another window in front of this one does not add seconds
+let pageFocused = !document.hidden;
+
 function tick() {
-  if (!document.hidden) state.seconds += 1;
+  if (document.hidden || !pageFocused) return;
+  state.seconds += 1;
 }
 
 /** Sends the closing frame: duration + end date. Safe to call more than once. */
@@ -120,6 +125,12 @@ export async function startVisitTracking() {
   state.timer = setInterval(tick, 1000);
 
   window.addEventListener("pagehide", () => finishVisit({ keepalive: true }));
+  window.addEventListener("focus", () => {
+    pageFocused = true;
+  });
+  window.addEventListener("blur", () => {
+    pageFocused = false;
+  });
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) finishVisit({ keepalive: true });
   });

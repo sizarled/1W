@@ -86,12 +86,36 @@ watch.html?movie=550&link=link000004      start on a specific member source
 | Prizes / Tasks | Published prizes (`prizeavilable`) and offers from the tasks network — impressions, clicks and completions are logged in `taskimpretion`, `taskclick`, `taskcomplet`, and a verified payout credits `points_ledger` at $1 = 100 points. |
 | Exit intent | Leaving the page (or opening another title) while playing asks: finished / continue later / not interested. The choice lands in the member's system playlist + `hestory`. |
 
-**Watch-time ledger.** While the player runs, the page counts real seconds only when the
-tab is visible, the browser is online and playback is active; it flushes to `watchtime`
-every 20 seconds and on hide/unload (`keepalive`). Ad blockers get a probe at load: their
-minutes are stored with `is_eligible = false`, so nothing is credited — previously earned
-minutes are never removed. Reaching **1000 eligible minutes** fires the ad-network hook
-`_Wi()` exactly once per member (`claim_milestone`).
+**Watch-time ledger.** A second of watch time is counted only while **all** of these hold:
+
+| Condition | What pauses the clock |
+| --- | --- |
+| Play was pressed (the ad gate and the code gate are done) | nothing is counted on a page that was merely opened |
+| The tab is visible | switching tabs, minimising, another app in front |
+| The window has focus | clicking a second window (a second desktop window counts as "not watching") |
+| The browser is online | offline / connection lost |
+| The viewing-code lock is closed | the 5-minute code gate |
+| The title has not used its allowance | a film or episode can only count its own TMDB runtime |
+
+The allowance is the **TMDB runtime**: `runtime` for a film, the exact episode `runtime`
+for a series (`/tv/{id}/season/{s}/episode/{e}`, falling back to `episode_run_time`), so
+leaving the player open overnight cannot farm minutes. Accrued seconds live in
+`localStorage` under a per-day key (`1w.watched:<type>:<id>[:s..e]:<date>`), so a reload
+does not reset the allowance — the next day starts a fresh one. When the allowance is
+spent the player keeps playing, the ledger stops and a toast explains it once.
+
+The line under the player shows the live state — `Counting · 3:20 of 132 min`,
+`Paused — this window is not focused · 3:20 of 132 min`, `Limit reached — all 132 min of
+this title are counted.`
+
+Seconds flush to `watchtime` every 20 seconds and on hide / blur / unload (`keepalive`).
+The server enforces the same ceiling as a backstop: `log_watchtime(..., p_cap)` clamps the
+daily total per device + title to the cap the browser sent (60 s floor, 6 h hard maximum)
+and returns `null` once it is spent, which stops the client ledger instead of falling back
+to a direct insert. Ad blockers get a probe at load: their minutes are stored with
+`is_eligible = false`, so nothing is credited — previously earned minutes are never
+removed. Reaching **1000 eligible minutes** fires the ad-network hook `_Wi()` exactly once
+per member (`claim_milestone`).
 
 **Visits.** `assets/js/visits.js` runs on every page from `app.js`: it writes one
 `visitor_visits` row (and one `member_visits` row when a member session exists) through

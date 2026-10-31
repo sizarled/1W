@@ -2,10 +2,17 @@ import { JSDOM } from "jsdom";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const MODE = process.env.WATCH_MODE === "movie" ? "movie" : "tv";
+const expectedCapMinutes = MODE === "movie" ? 120 : 62;
 const html = readFileSync(join(root, "watch.html"), "utf8").replace(/<script[^>]*src="[^"]*"[^>]*><\/script>/g, "");
-const dom = new JSDOM(html, { url: "http://localhost/watch.html?tv=1399&publisher=", pretendToBeVisual: true });
+const pageUrl =
+  MODE === "movie"
+    ? "http://localhost/watch.html?movie=550"
+    : "http://localhost/watch.html?tv=1399&publisher=";
+const dom = new JSDOM(html, { url: pageUrl, pretendToBeVisual: true });
 const { window } = dom;
 
 const errors = [];
@@ -59,6 +66,24 @@ const comments = [
 ];
 const members = [{ id: "m-1", username: "@cineaura", avatar_url: null }];
 
+const TMDB_MOVIE = {
+  id: 550, title: "Fight Club", original_title: "Fight Club", tagline: "Mischief. Mayhem. Soap.",
+  overview: "A ticking-time-bomb insomniac and a slippery soap salesman channel primal male aggression.",
+  poster_path: null, backdrop_path: null, release_date: "1999-10-15", runtime: 120,
+  vote_average: 8.4, vote_count: 26000, status: "Released", original_language: "en", adult: false,
+  genres: [{ id: 18, name: "Drama" }], production_companies: [{ name: "Fox 2000 Pictures" }],
+  production_countries: [{ name: "United States of America" }],
+  credits: {
+    cast: Array.from({ length: 6 }, (_, i) => ({ id: 3000 + i, name: `Actor ${i}`, character: `Role ${i}`, profile_path: null })),
+    crew: [{ id: 4000, name: "David Fincher", job: "Director", profile_path: null }],
+  },
+  "watch/providers": { results: { US: { link: "https://www.themoviedb.org/movie/550/watch", flatrate: [], buy: [] } } },
+  release_dates: { results: [{ iso_3166_1: "US", release_dates: [{ certification: "R" }] }] },
+  recommendations: { results: [{ id: 807, title: "Se7en", poster_path: null, release_date: "1995-09-22", vote_average: 8.4 }] },
+  similar: { results: [] },
+  belongs_to_collection: null,
+};
+
 function reply(data) {
   return Promise.resolve({
     ok: true, status: 200,
@@ -68,15 +93,22 @@ function reply(data) {
 }
 
 let calls = [];
+let serverRefusesMinutes = false;
+const watchtimeBodies = [];
 globalThis.fetch = (url, opts = {}) => {
   const href = String(url);
   calls.push(href);
+  if (href.includes("api.themoviedb.org/3/movie/550")) return reply(TMDB_MOVIE);
+  if (href.includes("/tv/1399/season/1/episode/1")) return reply({ id: 63056, runtime: 62, episode_number: 1, season_number: 1 });
   if (href.includes("api.themoviedb.org/3/tv/1399")) return reply(TMDB_TV);
   if (href.includes("api.themoviedb.org/3/trending/")) return reply({ results: [{ id: 999, name: "Trend Show", first_air_date: "2024-01-01", vote_average: 7.1 }] });
   if (href.includes("/rpc/content_stats")) return reply(stats);
   if (href.includes("/rpc/log_visit")) return reply({ visit_id: "visit000001", member_visit_id: null, frequency: 1 });
   if (href.includes("/rpc/finish_visit")) return reply(true);
-  if (href.includes("/rpc/log_watchtime")) return reply(4242);
+  if (href.includes("/rpc/log_watchtime")) {
+    watchtimeBodies.push(opts.body);
+    return reply(serverRefusesMinutes ? null : 4242);
+  }
   if (href.includes("/rpc/member_watch_minutes")) return reply(1234);
   if (href.includes("/rest/v1/comment")) return reply(comments);
   if (href.includes("/rest/v1/members_public")) return reply(members);
@@ -130,22 +162,109 @@ await new Promise((r) => setTimeout(r, 1200));
 report.adCountAfterTick = text("[data-w-ad-count]");
 report.ringOffset = document.querySelector("[data-w-ad-progress]").style.strokeDashoffset;
 
-// watch-time ledger: a flush must reach log_watchtime()
+// ---- watch time: nothing is counted before Play -------------------
+report.noCountBeforePlay = __debug.tracker.seconds === 0 && !calls.some((c) => c.includes("/rpc/log_watchtime"));
+report.limitNoteBeforePlay = text("[data-w-limit]");
+report.capSeconds = __debug.capSeconds();
+report.capMinutes = Math.round(__debug.capSeconds() / 60);
+
+// ---- after Play the ledger ticks once per second ------------------
+__debug.state.playbackStarted = true;
+__debug.startTracker();
+for (let i = 0; i < 5; i += 1) __debug.stepTracker();
+report.countedAfterPlay = __debug.tracker.seconds;
+report.pendingAfterPlay = __debug.tracker.pending;
+report.limitNoteCounting = text("[data-w-limit]");
+report.limitState = document.querySelector("[data-w-limit]").dataset.state;
+
+// ---- another window / unfocused tab pauses the clock --------------
+window.dispatchEvent(new window.Event("blur"));
+const beforeBlur = __debug.tracker.seconds;
+for (let i = 0; i < 5; i += 1) __debug.stepTracker();
+report.countingPausedWhileUnfocused = __debug.tracker.seconds === beforeBlur && __debug.isCounting() === false;
+report.limitNoteUnfocused = text("[data-w-limit]");
+window.dispatchEvent(new window.Event("focus"));
+__debug.stepTracker();
+report.countingResumesOnFocus = __debug.tracker.seconds === beforeBlur + 1;
+
+// ---- a title can never count more than its TMDB runtime -----------
+__debug.state.capSeconds = __debug.tracker.seconds + 120;
+for (let i = 0; i < 130; i += 1) __debug.stepTracker();
+report.capStopsCounting = __debug.state.capReached === true && __debug.tracker.seconds === __debug.state.capSeconds;
+report.limitNoteCapped = text("[data-w-limit]");
+report.pausedFlagIgnoredWhenCapped = __debug.isCounting() === false;
+
+// ---- the flush itself still reaches log_watchtime() ---------------
+__debug.state.capReached = false;
+__debug.state.capSeconds = 0;
+__debug.tracker.stored = 0;
 __debug.tracker.pending = 42;
 __debug.tracker.seconds = 42;
+const visitCalls = calls.slice();
+report.visitLogged = visitCalls.some((c) => c.includes("/rpc/log_visit"));
+calls = [];
 await __debug.flushTracker();
 report.watchtimeLogged = calls.some((c) => c.includes("/rpc/log_watchtime"));
+report.watchtimeSendsCap = calls.some((c) => c.includes("/rpc/log_watchtime"));
+report.watchtimeCapValue = watchtimeBodies.length ? JSON.parse(watchtimeBodies.at(-1)).p_cap : null;
+
+// ---- the server can refuse (title already counted its runtime today) ----
+serverRefusesMinutes = true;
+let afterRefusalCalls = 0;
+__debug.state.capReached = false;
+__debug.state.capSeconds = 0;
+__debug.tracker.stored = 0;
+__debug.tracker.pending = 30;
+afterRefusalCalls = calls.length;
+await __debug.flushTracker();
+report.serverRefusalStopsLedger = __debug.state.capReached === true;
+report.serverRefusalNoDirectInsert = !calls
+  .slice(afterRefusalCalls)
+  .some((c) => c.includes("/rest/v1/watchtime"));
 report.relatedImgClassHook = [...document.querySelectorAll('[data-w-rail="related"] img.pcard__img')].every(
   (img) => img.getAttribute("onload")?.includes("is-loaded")
 );
 report.relatedImgSrc = document.querySelector('[data-w-rail="related"] img.pcard__img')?.getAttribute("src") || null;
-report.visitLogged = calls.some((c) => c.includes("/rpc/log_visit"));
 report.visitId = window.sessionStorage.getItem("1w.visit") ? JSON.parse(window.sessionStorage.getItem("1w.visit")).visitId : null;
 
 // the code gate itself
 document.querySelector("[data-w-lock]").hidden = false;
 report.lockVisible = document.querySelector("[data-w-lock]").hidden === false;
 
+const checks = {
+  nothingCountedBeforePlay: report.noCountBeforePlay,
+  countsOnlyAfterPlay: report.countedAfterPlay >= 5,
+  blurPausesLedger: report.countingPausedWhileUnfocused,
+  focusResumesLedger: report.countingResumesOnFocus,
+  capStopsLedger: report.capStopsCounting,
+  capFollowsTmdbRuntime: report.capMinutes === expectedCapMinutes,
+  flushSendsCap: report.watchtimeCapValue === expectedCapMinutes * 60,
+  serverRefusalStopsLedgerWithoutFallback:
+    report.serverRefusalStopsLedger && report.serverRefusalNoDirectInsert,
+  watchtimeLogged: report.watchtimeLogged,
+  visitLogged: report.visitLogged,
+  postersKeepColourHooks: report.relatedImgClassHook,
+};
+const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name);
+
 console.log(report);
+console.log("checks:", failed.length ? `FAILED ${failed.join(", ")}` : "all pass");
 console.log("errors:", errors.length ? errors : "none");
-process.exit(errors.length ? 1 : 0);
+
+let movieStatus = 0;
+if (MODE === "tv") {
+  // the same ledger rules have to hold for a film
+  const child = spawnSync(process.execPath, [fileURLToPath(import.meta.url)], {
+    env: { ...process.env, WATCH_MODE: "movie" },
+    encoding: "utf8",
+  });
+  if (child.status !== 0) {
+    process.stdout.write(child.stdout);
+    process.stderr.write(child.stderr || "");
+  } else {
+    console.log("movie scenario:", child.stdout.split("\n").filter((l) => l.startsWith("checks:")).join(""));
+  }
+  movieStatus = child.status || 0;
+}
+
+process.exit(errors.length || failed.length || movieStatus !== 0 ? 1 : 0);
