@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const MODES = ["rpc", "fallback", "slow"];
+const MODES = ["rpc", "fallback", "slow", "identity"];
 const MODE = MODES.includes(process.env.VISIT_MODE) ? process.env.VISIT_MODE : "rpc";
 
 const GEO = { success: true, ip: "41.140.12.34", country: "Morocco", country_code: "MA", city: "Casablanca" };
@@ -53,6 +53,63 @@ const mediaStub = (q) => ({
 window.matchMedia = mediaStub;
 globalThis.matchMedia = mediaStub;
 Object.defineProperty(globalThis, "navigator", { value: window.navigator, configurable: true });
+
+/* ------------------------------------------------------------------ */
+/* identity scenario: the visitor id must never change for a browser  */
+/* ------------------------------------------------------------------ */
+if (MODE === "identity") {
+  const sessionUrl = `file://${join(root, "assets/js/session.js")}`;
+  const checks = {};
+  const report = {};
+
+  localStorage.clear();
+  document.cookie = "1w_vid=; Max-Age=0; Path=/";
+
+  const first = await import(`${sessionUrl}?case=fresh`);
+  const id = first.visitorId();
+  const idAgain = first.visitorId();
+  report.generated = id;
+  checks.sixDigits = /^[0-9]{6}$/.test(id) && id !== "000000";
+  checks.stableWithinPage = id === idAgain;
+  checks.savedToLocalStorage = JSON.parse(localStorage.getItem("1w.visitor") || "null") === id;
+  checks.savedToCookie = document.cookie.includes(`1w_vid=${id}`);
+
+  const reloaded = await import(`${sessionUrl}?case=reload`);
+  report.afterReload = reloaded.visitorId();
+  checks.sameAfterReload = report.afterReload === id;
+
+  localStorage.removeItem("1w.visitor");
+  const fromCookie = await import(`${sessionUrl}?case=cookie`);
+  report.fromCookieOnly = fromCookie.visitorId();
+  checks.survivesClearedStorage = report.fromCookieOnly === id;
+
+  document.cookie = "1w_vid=; Max-Age=0; Path=/";
+  localStorage.setItem("1w.visitor", JSON.stringify(id));
+  const fromStorage = await import(`${sessionUrl}?case=storage`);
+  report.fromStorageOnly = fromStorage.visitorId();
+  checks.survivesClearedCookie = report.fromStorageOnly === id;
+
+  // a browser that refuses storage entirely still keeps one id for the page
+  const blocked = new Proxy(
+    {},
+    {
+      get: () => () => {
+        throw new Error("storage blocked");
+      },
+    }
+  );
+  Object.defineProperty(globalThis, "localStorage", { value: blocked, configurable: true });
+  document.cookie = "1w_vid=; Max-Age=0; Path=/";
+  const privateMode = await import(`${sessionUrl}?case=private`);
+  report.privateModeId = privateMode.visitorId();
+  checks.oneIdWhenStorageBlocked =
+    /^[0-9]{6}$/.test(report.privateModeId) && privateMode.visitorId() === report.privateModeId;
+
+  const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name);
+  console.log(JSON.stringify({ mode: MODE, report, checks }, null, 2));
+  console.log("checks:", failed.length ? `FAILED ${failed.join(", ")}` : "all pass");
+  process.exit(failed.length ? 1 : 0);
+}
 
 const calls = [];
 let directInsert = null;
@@ -168,7 +225,7 @@ if (MODE !== "rpc") {
 
 // main process: run the other scenarios in their own module registries
 let exitCode = failed.length ? 1 : 0;
-for (const mode of ["fallback", "slow"]) {
+for (const mode of ["fallback", "slow", "identity"]) {
   const child = spawnSync(process.execPath, [fileURLToPath(import.meta.url)], {
     env: { ...process.env, VISIT_MODE: mode },
     encoding: "utf8",

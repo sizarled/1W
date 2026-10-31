@@ -31,6 +31,7 @@ create or replace function public.log_visit(
 language plpgsql security definer set search_path = public as $$
 declare
   v_visitor varchar(6);
+  v_digits  text;
   v_freq    int;
   v_visit   text;
   v_member_visit text;
@@ -46,7 +47,14 @@ begin
     v_address := null;                 -- a malformed address must never block the row
   end;
 
-  v_visitor := left(regexp_replace(coalesce(p_visitor, ''), '\D', '', 'g') || '000000', 6);
+  -- the id the browser keeps must be stored exactly; an unusable one is replaced
+  -- by a server-side number instead of being padded into someone else's id
+  v_digits := regexp_replace(coalesce(p_visitor, ''), '\D', '', 'g');
+  if v_digits ~ '^[0-9]{6}$' and v_digits <> '000000' then
+    v_visitor := v_digits;
+  else
+    v_visitor := lpad((floor(random() * 900000) + 100000)::text, 6, '0');
+  end if;
 
   if p_member is not null then
     select coalesce(count(*), 0) + 1 into v_freq from public.member_visits where member_id = p_member;

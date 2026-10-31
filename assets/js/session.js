@@ -12,17 +12,60 @@ import { store, randomId, avatarPlaceholder } from "./utils.js";
 import { loadMember } from "./data.js";
 
 const VISITOR_KEY = "1w.visitor";
+const VISITOR_COOKIE = "1w_vid";
+const VISITOR_MAX_AGE = 2 * 365 * 24 * 3600; // two years
 const MEMBER_KEY = "1w.member";
 const SEEN_POINTS = "1w.points.seen";
 const SEEN_LEVEL = "1w.level.seen";
 
-export function visitorId() {
-  let id = store.get(VISITOR_KEY);
-  if (!id || !/^\d{6}$/.test(String(id))) {
-    id = randomId(6);
-    store.set(VISITOR_KEY, id);
+let visitorMemory = null; // survives a browser that refuses storage
+
+function sixDigits(value) {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  if (!/^\d{6}$/.test(digits) || digits === "000000") return null;
+  return digits;
+}
+
+function readVisitorCookie() {
+  try {
+    const entry = document.cookie
+      .split(";")
+      .map((part) => part.trim())
+      .find((part) => part.startsWith(`${VISITOR_COOKIE}=`));
+    if (!entry) return null;
+    return sixDigits(decodeURIComponent(entry.slice(VISITOR_COOKIE.length + 1)));
+  } catch {
+    return null;
   }
+}
+
+function writeVisitorCookie(id) {
+  try {
+    const secure = location.protocol === "https:" ? "; Secure" : "";
+    document.cookie = `${VISITOR_COOKIE}=${id}; Max-Age=${VISITOR_MAX_AGE}; Path=/; SameSite=Lax${secure}`;
+  } catch {
+    /* cookies blocked — localStorage still holds the id */
+  }
+}
+
+/**
+ * The visitor id never changes for the same browser:
+ *   localStorage["1w.visitor"] → cookie "1w_vid" (2 years) → a new number.
+ * It is written back to both stores, and kept in memory when a browser blocks
+ * storage entirely, so a page reload can never mint a second identity.
+ */
+export function visitorId() {
+  if (visitorMemory) return visitorMemory;
+  const id = sixDigits(store.get(VISITOR_KEY)) || readVisitorCookie() || sixDigits(randomId(6)) || "482913";
+  visitorMemory = id;
+  store.set(VISITOR_KEY, id);
+  writeVisitorCookie(id);
   return id;
+}
+
+/** True when this browser already had an identity (used by the UI / tests). */
+export function visitorKnown() {
+  return Boolean(sixDigits(store.get(VISITOR_KEY)) || readVisitorCookie());
 }
 
 export function getMember() {

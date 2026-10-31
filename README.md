@@ -123,6 +123,16 @@ per member (`claim_milestone`).
 frequency, the purpose (`watching` / `joining`) and the source, then closes the row with
 `finish_visit()` — duration + end date — on hide or unload.
 
+**Visitor identity.** The six-digit `visitor_id` belongs to the browser and never
+changes: `localStorage["1w.visitor"]` is read first, then the first-party cookie `1w_vid`
+(two years, `SameSite=Lax`, `Secure` on https), and only then is a new number minted —
+every answer is written back to both stores, and kept in memory when a browser blocks
+storage entirely. Reloading, closing the browser, signing out (`signOut()` keeps it) or
+clearing one of the two stores never produces a second identity, so
+`visitor_frequency` really counts the visits of that one visitor. On the server a valid
+six-digit id is stored **exactly as sent**; an unusable value (empty, too short, `000000`)
+gets a generated number instead of being zero-padded into somebody else's id.
+
 **Visitor address + country.** `assets/js/geo.js` asks public geo-IP services for the
 visitor's address in the browser — `ipwho.is`, then `ipapi.co`, then `api.ipify.org` for
 the address alone — with a 3.5 s timeout each, no key and no cookies, and caches the answer
