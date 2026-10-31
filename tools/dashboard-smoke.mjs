@@ -61,7 +61,12 @@ function reply(data) {
 }
 
 function payload() {
-  const member = { ...MEMBER, status: scenario.status || "active", account_status: scenario.status || "active" };
+  const member = {
+    ...MEMBER,
+    status: scenario.status || "active",
+    account_status: scenario.status || "active",
+    account_activated_at: scenario.activatedAt || null,
+  };
   return {
     ok: true,
     member_id: member.member_id,
@@ -196,6 +201,19 @@ function expect(name, condition, detail = "") {
   expect("inactive: no dashboard tool", !p.qs("[data-code-form]"));
   expect("inactive: no errors", p.errors.length === 0, p.errors.join(" | "));
   report.pass1 = p.text("[data-main]").slice(0, 90);
+}
+
+/* ------------------------------------------------------------------ */
+/* pass 1b — inactive account that was activated before                */
+/* ------------------------------------------------------------------ */
+{
+  scenario = { status: "inactive", activatedAt: new Date(NOW - 120 * 864e5).toISOString() };
+  const p = await boot(99);
+  const link = p.qs("[data-gate-activate]");
+  expect("inactive again: two-door label", /Re-activate or upgrade/i.test(link?.textContent || ""));
+  expect("inactive again: deep link", (link?.getAttribute("href") || "").includes("mode=reactivate"));
+  expect("inactive again: still gated", p.qs("[data-side]").hidden === true);
+  expect("inactive again: no errors", p.errors.length === 0, p.errors.join(" | "));
 }
 
 /* ------------------------------------------------------------------ */

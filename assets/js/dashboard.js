@@ -304,7 +304,14 @@ function paintGate() {
   if (key === "inactive") {
     const member = state.data.member || {};
     const link = qs("[data-gate-activate]", main);
-    if (link) link.href = `activated.html?member=${encodeURIComponent(member.member_id || "")}`;
+    // an account that was activated before gets the two doors on that page
+    const again = Boolean(member.account_activated_at);
+    if (link) {
+      link.href = `activated.html?member=${encodeURIComponent(member.member_id || "")}${again ? "&mode=reactivate" : ""}`;
+      const label = link.querySelector("span");
+      if (label) label.textContent = again ? "Re-activate or upgrade" : "Activate account";
+      link.dataset.mode = again ? "reactivate" : "activate";
+    }
     const created = member.created_at ? new Date(member.created_at) : null;
     const note = qs("[data-gate-deadline]", main);
     if (note && created && !Number.isNaN(created.getTime())) {

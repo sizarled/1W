@@ -42,27 +42,37 @@ function stubFetch(url, opts = {}) {
   calls.push(href);
   const body = opts.body ? JSON.parse(opts.body) : {};
 
-  if (href.includes("/rpc/member_dashboard")) {
+  if (href.includes("/rpc/member_activation_state")) {
+    const status = scenario.status || "inactive";
+    const activated = scenario.activatedAt === undefined ? null : scenario.activatedAt;
+    const membership = scenario.membership || "free";
+    const first = !activated && status === "inactive" && membership === "free";
     return reply({
       ok: true,
-      member: { ...MEMBER, status: scenario.status || "inactive", account_status: scenario.status || "inactive" },
-      restricted: true,
-      ban: { reason: null, at: null, by: null, permanent: false },
-      overview: {},
-      codes: [],
-      devices: [],
-      notifications: [],
-      prefs: {},
-      lists: { favorite: [], later: [], complete: [] },
-      reports: [],
-      court: { active: null, history: [] },
-      prizes: [],
-      points_ledger: [],
-      history: [],
+      member: { ...MEMBER, status, account_status: status, membership, account_activated_at: activated, points: 1250 },
+      status,
+      membership,
+      activated_at: activated,
+      requested_at: scenario.requestedAt || null,
+      pending: Boolean(scenario.pending),
+      deadline: status === "inactive" ? new Date(Date.now() + 18 * 864e5).toISOString() : null,
+      first_activation: first,
+      can_activate: first,
+      can_reactivate: Boolean(activated) && ["inactive", "expired"].includes(status),
+      already_active: status === "active",
+      can_upgrade: status !== "banned",
+      mode: status === "banned" ? "blocked" : first ? "activate" : "choose",
     });
   }
   if (href.includes("/rpc/member_activation_request")) {
+    scenario.pending = true;
+    scenario.requestedAt = new Date().toISOString();
     if (scenario.already) return reply({ ok: true, already: true });
+    return reply({ ok: true, already: false });
+  }
+  if (href.includes("/rpc/member_reactivate_request")) {
+    scenario.pending = true;
+    scenario.requestedAt = new Date().toISOString();
     return reply({ ok: true, already: false });
   }
   if (href.includes("/rpc/member_court_history")) {
@@ -146,34 +156,94 @@ const expect = (name, condition, detail = "") => checks.push({ name, ok: Boolean
   scenario = { status: "inactive" };
   calls.length = 0;
   const p = await boot(1, { file: "activated.html", token: "" });
-  expect("activated: guest asks to sign in", /Sign in first/i.test(p.text(".dsh-gate__text")));
-  expect("activated: guest link", (p.qs(".dsh-gate__text a, [data-act-form] a")?.getAttribute("href") || "").includes("login.html"));
+  expect("activated: guest asks to sign in", /Sign in to activate/i.test(p.text(".dsh-gate__title")));
+  expect("activated: guest link", (p.qs("[data-act] a[href*=\"login.html\"]")?.getAttribute("href") || "").includes("login.html"));
+  expect("activated: guest no forms", p.qs("[data-act-form]") === null && p.qs("[data-act-choice]").hidden === true);
   expect("activated: guest no error", p.errors.length === 0, p.errors.join(" | "));
 }
 
-/* activated.html — inactive member asks --------------------------------- */
+/* activated.html — first activation (free plan, never activated) -------- */
 {
-  scenario = { status: "inactive" };
+  scenario = { status: "inactive", membership: "free", activatedAt: null };
   calls.length = 0;
   const p = await boot(2, { file: "activated.html", search: "?member=ID100042" });
-  expect("activated: member id filled", /ID100042/.test(p.text("[data-act-member]")));
-  expect("activated: status filled", /INACTIVE/i.test(p.text("[data-act-status]")));
-  expect("activated: 30-day note", /banned automatically/i.test(p.text("[data-act-deadline]")));
-  expect("activated: form present", Boolean(p.qs("[data-act-form]")));
+  expect("first: mode activate", p.qs("[data-act]").dataset.mode === "activate");
+  expect("first: title", /Activate your account/i.test(p.text("[data-act-title]")));
+  expect("first: member id filled", /ID100042/.test(p.text("[data-act-member]")));
+  expect("first: membership filled", /Free/i.test(p.text("[data-act-membership]")));
+  expect("first: never activated", /Never/i.test(p.text("[data-act-activated]")));
+  expect("first: status filled", /Inactive/i.test(p.text("[data-act-status]")));
+  expect("first: 30-day note", /banned automatically/i.test(p.text("[data-act-deadline]")));
+  expect("first: activation form visible", p.qs("[data-act-form]").hidden === false);
+  expect("first: no options yet", p.qs("[data-act-choice]").hidden === true);
   p.submit(p.qs("[data-act-form]"));
-  await p.wait(160);
-  expect("activated: request posted", calls.some((c) => c.includes("member_activation_request")));
-  expect("activated: confirmation", /moderator|received/i.test(p.text("[data-act-notice]")));
-  expect("activated: form hidden after", p.qs("[data-act-form]").hidden === true);
-  expect("activated: no error", p.errors.length === 0, p.errors.join(" | "));
+  await p.wait(200);
+  expect("first: request posted", calls.some((c) => c.includes("member_activation_request")));
+  expect("first: confirmation", /moderator|received/i.test(p.text("[data-act-notice]")));
+  expect("first: form closed after request", p.qs("[data-act-form]").hidden === true);
+  expect("first: no error", p.errors.length === 0, p.errors.join(" | "));
 }
 
-/* activated.html — already active --------------------------------------- */
+/* activated.html — paid plan, never activated: activation is included -- */
 {
-  scenario = { status: "active" };
+  scenario = { status: "inactive", membership: "gold", activatedAt: null };
+  calls.length = 0;
+  const p = await boot(98, { file: "activated.html", search: "?member=ID100042" });
+  expect("paid: mode choose", p.qs("[data-act]").dataset.mode === "choose");
+  expect("paid: no activation form", p.qs("[data-act-form]").hidden === true);
+  expect("paid: included in plan chip", /Included in plan/i.test(p.text("[data-react-state]")));
+  expect("paid: reactivation form hidden", p.qs("[data-react-form]").hidden === true);
+  expect("paid: plan shown", /Gold/i.test(p.text("[data-act-membership]")));
+  expect("paid: upgrade link", (p.qs("[data-upgrade]")?.getAttribute("href") || "").includes("actevite.html"));
+  expect("paid: no error", p.errors.length === 0, p.errors.join(" | "));
+}
+
+/* activated.html — after activation, account active: two options -------- */
+{
+  scenario = { status: "active", membership: "free", activatedAt: new Date(Date.now() - 40 * 864e5).toISOString() };
   const p = await boot(3, { file: "activated.html", search: "?member=ID100042" });
-  expect("activated: active shows notice", /already active/i.test(p.text("[data-act-notice]")));
-  expect("activated: active hides form", p.qs("[data-act-form]").hidden === true);
+  expect("choose: mode choose", p.qs("[data-act]").dataset.mode === "choose");
+  expect("choose: title", /Manage your activation/i.test(p.text("[data-act-title]")));
+  expect("choose: activation form hidden", p.qs("[data-act-form]").hidden === true);
+  expect("choose: two cards", p.qsa(".dsh-choice__card").length === 2);
+  expect("choose: reactivate card", Boolean(p.qs("[data-choice='reactivate']")));
+  expect("choose: upgrade card", Boolean(p.qs("[data-choice='upgrade']")));
+  expect("choose: active chip", /Active now/i.test(p.text("[data-react-state]")));
+  expect("choose: reactivation form hidden", p.qs("[data-react-form]").hidden === true);
+  expect("choose: upgrade link", (p.qs("[data-upgrade]")?.getAttribute("href") || "").includes("actevite.html?member=ID100042"));
+  expect("choose: plan shown", /Free/i.test(p.text("[data-upgrade-current]")));
+  expect("choose: first activated date", /\d{4}/.test(p.text("[data-act-activated]")));
+  expect("choose: no error", p.errors.length === 0, p.errors.join(" | "));
+}
+
+/* activated.html — after activation, account closed: request it again --- */
+{
+  scenario = { status: "expired", membership: "gold", activatedAt: new Date(Date.now() - 200 * 864e5).toISOString() };
+  calls.length = 0;
+  const p = await boot(4, { file: "activated.html", search: "?member=ID100042" });
+  expect("reactivate: mode choose", p.qs("[data-act]").dataset.mode === "choose");
+  expect("reactivate: plan shown", /Gold/i.test(p.text("[data-act-membership]")));
+  expect("reactivate: form visible", p.qs("[data-react-form]").hidden === false);
+  expect("reactivate: status chip", /Expired/i.test(p.text("[data-react-state]")));
+  p.submit(p.qs("[data-react-form]"));
+  await p.wait(220);
+  expect("reactivate: request posted", calls.some((c) => c.includes("member_reactivate_request")));
+  expect("reactivate: chip says sent", /Request sent/i.test(p.text("[data-react-state]")));
+  expect("reactivate: form closed after", p.qs("[data-react-form]").hidden === true);
+  expect("reactivate: no error", p.errors.length === 0, p.errors.join(" | "));
+}
+
+/* activated.html — banned: neither door is open ------------------------- */
+{
+  scenario = { status: "banned", membership: "free", activatedAt: new Date(Date.now() - 30 * 864e5).toISOString() };
+  const p = await boot(5, { file: "activated.html", search: "?member=ID100042" });
+  expect("banned: mode blocked", p.qs("[data-act]").dataset.mode === "blocked");
+  expect("banned: title", /banned/i.test(p.text("[data-act-title]")));
+  expect("banned: no activation form", p.qs("[data-act-form]").hidden === true);
+  expect("banned: no options", p.qs("[data-act-choice]").hidden === true);
+  expect("banned: trial path", /trial/i.test(p.text("[data-act-notice]")));
+  expect("banned: dashboard link", p.qsa(".dsh-gate__actions--banned a").some((a) => (a.getAttribute("href") || "").startsWith("dashboard.html")));
+  expect("banned: no error", p.errors.length === 0, p.errors.join(" | "));
 }
 
 /* court.html — guest ---------------------------------------------------- */

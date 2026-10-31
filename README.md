@@ -604,7 +604,9 @@ data.
 | `member_list_remove(token, list_id)` | drops a favorites / later / completed row |
 | `member_court_request(token)` | banned, non-permanent accounts ask for a trial |
 | `member_court_history(token)` | every case of the caller, for `court.html` |
-| `member_activation_request(token, note)` | activation request from `activated.html`, once an hour |
+| `member_activation_state(token)` | what `activated.html` may offer: `mode` (`activate` / `choose` / `blocked`), first activation, re-activation, upgrade, pending request, auto-ban date |
+| `member_activation_request(token, note)` | first activation: free plan, never activated, once an hour |
+| `member_reactivate_request(token, note)` | re-activation for an account activated before (inactive or expired), once an hour |
 | `admin_ban_member(member, reason, by, permanent)` | service role only |
 
 No table is readable from the browser: `viewing_codes`, `watch_code_devices`,
@@ -613,10 +615,27 @@ no policies, and the token is only ever compared inside `member_from_token()`.
 
 ### The two pages beside it
 
-`activated.html?member=ID_MEMBER` shows the member ID, username, current status, the 30-day
-auto-ban date and a note box. Sending the request writes a notification and a log row, and
-the page confirms it. A member who is already active or banned is told that activation is not
-the way back.
+`activated.html?member=ID_MEMBER` follows one rule: **activation happens once, on the free
+plan, and only on the first visit** — after that the page offers two doors, **re-activate the
+account** or **upgrade the membership**.
+
+| Situation | Page |
+| --- | --- |
+| Never activated · inactive · free | Single activation form, the 30-day auto-ban date, the note box → `member_activation_request()` |
+| Never activated · paid plan | No activation (it is a free-plan step): the two doors, re-activation disabled, upgrade ready |
+| Activated before · inactive | Two doors: re-activation (note + request → `member_reactivate_request()`) and upgrade |
+| Activated before · expired | Same two doors, re-activation labelled as reopening the plan |
+| Activated before · active | Two doors, re-activation shows **Active now** and stays closed, upgrade ready |
+| Banned | Neither door: the only path is the trial, with a link to the dashboard and to the court |
+
+“Never activated” is `members.account_activated_at is null` — the database stamps it the first
+time the status becomes `active` and never clears it, so the page cannot be talked into opening
+the first-activation form twice (the RPC also refuses it with `already_activated`, and refuses a
+paid plan with `plan`). Both request functions write a notification plus a log row
+(`activation_requested` / `reactivation_requested`) and are limited to one an hour; a pending
+request turns the form into a confirmation instead of allowing a second one. The dashboard's
+own gate button follows the same rule: **Activate account** on a fresh account, **Re-activate or
+upgrade** when the account was activated before.
 
 `court.html?id=ID_COURT` is the case file: case number, date and time, judge / defendant /
 plaintiff, reason, status, the absence warning and the verdict with the court note. A case id
@@ -626,8 +645,8 @@ returns the caller's cases.
 ### Tests
 
 ```bash
-node tools/dashboard-smoke.mjs   # 76 checks: the five gates, rail, popover, codes, sections
-node tools/court-smoke.mjs       # 22 checks: activation requests + the court room
+node tools/dashboard-smoke.mjs   # 80 checks: the five gates, rail, popover, codes, sections
+node tools/court-smoke.mjs       # 60 checks: first activation, the two doors, the court room
 ```
 
 `dashboard-smoke.mjs` boots the page in jsdom with a stubbed `member_dashboard` and walks the
@@ -635,9 +654,11 @@ five states: inactive (activation link with the member id, no rail, no menu), ba
 request → requested), scheduled (date, `court.html?id=…`, absence warning), upheld (closed,
 log out only) and active (12 rail items, drag-enabled rail, sidebar, overview numbers, the
 popover's filters and both paths, the two locked switches, the code generator, the devices
-tab and every section rendering). `court-smoke.mjs` covers the activation page as a guest,
-as an inactive member and as an active one, plus the court room for a guest, the owner and a
-foreign id.
+tab and every section rendering). `court-smoke.mjs` covers the activation page as a guest, on a first activation (request sent,
+form closed), after activation while active (**Active now**, upgrade link with the member id),
+after activation while expired (re-activation request → “Request sent”), a paid plan that was
+never activated (“Included in plan”, no request form) and while banned (no doors, trial links),
+plus the court room for a guest, the owner and a foreign id.
 
 ## Sounds
 
