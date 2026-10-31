@@ -13,6 +13,7 @@
 import { getMember, visitorId } from "./session.js";
 import { rpc } from "./data.js";
 import { SUPABASE } from "./config.js";
+import { lookupVisitor, lookupVisitorFast } from "./geo.js";
 
 const KEY = "1w.visit";
 const ERROR_KEY = "1w.visit.error";
@@ -146,13 +147,20 @@ export async function startVisitTracking() {
   const member = getMember();
   // only a real member uuid can be written (the local demo session uses numbers)
   const memberId = UUID.test(member?.id || "") ? member.id : null;
+
+  // the address and the country come from a geo-IP service; the row is written
+  // either way, and annotated later if the lookup needs more than 2.5 s
+  const geo = await lookupVisitorFast(2500);
   const payload = {
     p_visitor: visitorId(),
     p_link: document.referrer || null,
-    p_location: path,
+    p_page: path,
     p_purpose: purposeFor(page),
     p_source: "web",
     p_member: memberId,
+    p_address: geo?.ip || null,
+    p_country: geo?.country || null,
+    p_code: geo?.code || null,
   };
 
   try {
@@ -175,13 +183,40 @@ export async function startVisitTracking() {
       clearFailure();
       // visible proof for the console: <html data-visit="visit000123">
       document.documentElement.dataset.visit = state.visitId || "direct-row";
-      console.info("[1World] visit logged:", state.visitId || "(direct row)", path);
+      if (geo?.code || geo?.country) document.documentElement.dataset.country = geo.code || geo.country;
+      console.info(
+        "[1World] visit logged:",
+        state.visitId || "(direct row)",
+        path,
+        geo?.ip ? `${geo.ip} · ${geo.country || geo.code || "?"}` : "(address pending)"
+      );
+      if (!geo?.ip) annotateLater();
     }
   } catch (error) {
     // a blocked request must never break the page
     if (!lastVisitError()) noteFailure("rpc", error);
     console.warn("[1World] visit logging:", error.message);
   }
+}
+
+/** Fills address + country once a slow geo-IP lookup finally answers. */
+function annotateLater() {
+  lookupVisitor()
+    .then((geo) => {
+      if (!geo?.ip || (!state.visitId && !state.memberVisitId)) return;
+      document.documentElement.dataset.country = geo.code || geo.country || "";
+      return rpc("annotate_visit", {
+        p_visit: state.visitId,
+        p_visitor: visitorId(),
+        p_member_visit: state.memberVisitId,
+        p_address: geo.ip,
+        p_country: geo.country,
+        p_code: geo.code,
+      });
+    })
+    .catch(() => {
+      /* the row simply stays without an address */
+    });
 }
 
 /** Direct REST insert, used only when the RPC is unavailable. */
@@ -198,7 +233,10 @@ async function insertVisitRow(payload) {
       {
         visitor_id: payload.p_visitor,
         visitor_link: payload.p_link,
-        visitor_location: payload.p_location,
+        visitor_page: payload.p_page,
+        visitor_address: payload.p_address,
+        visitor_location: payload.p_country,
+        visitor_country_code: payload.p_code,
         visitor_frequency: 1,
         visitor_purpose: payload.p_purpose,
         visitor_source: payload.p_source,

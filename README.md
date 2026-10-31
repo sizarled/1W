@@ -123,6 +123,38 @@ per member (`claim_milestone`).
 frequency, the purpose (`watching` / `joining`) and the source, then closes the row with
 `finish_visit()` — duration + end date — on hide or unload.
 
+**Visitor address + country.** `assets/js/geo.js` asks public geo-IP services for the
+visitor's address in the browser — `ipwho.is`, then `ipapi.co`, then `api.ipify.org` for
+the address alone — with a 3.5 s timeout each, no key and no cookies, and caches the answer
+in `sessionStorage["1w.geo"]` for six hours. The row is written with whatever arrived in
+the first 2.5 s, so a slow service never delays a page; when the answer lands later,
+`annotate_visit()` fills the same row. Nothing is invented when every provider is blocked:
+the row is stored with a null address.
+
+| Column | Meaning |
+| --- | --- |
+| `visitor_address` | the visitor's IP (`inet`, IPv4 or IPv6) |
+| `visitor_location` | the country of that IP — e.g. `Morocco` |
+| `visitor_country_code` | ISO-2 code of that country — e.g. `MA` |
+| `visitor_page` | the page that was opened (this used to live in `visitor_location`) |
+| `member_ip` / `member_location` | the same pair on `member_visits` for signed-in members |
+
+```sql
+select visitor_country_code, count(*) as visits
+  from public.visitor_visits
+ group by 1 order by visits desc;
+
+select visitor_address, visitor_location, count(*) as pages
+  from public.visitor_visits
+ where visitor_address is not null
+ group by 1, 2 order by pages desc limit 20;
+```
+
+From the console: `OneW.geo.lookup()` prints `{ip, country, code, city, provider}` and
+`document.documentElement.dataset.country` shows the code that was stored. The address is
+resolved client-side, so treat it as best effort — a VPN or a blocked provider simply
+leaves it empty.
+
 > **Why the counters used to stay empty.** Both `visitor_visits` and `watchtime` are
 > protected by RLS with insert-only policies. PostgREST adds `RETURNING` when a request
 > asks for `Prefer: return=representation` (which our `rest()` helper did by default), and
@@ -131,7 +163,7 @@ frequency, the purpose (`watching` / `joining`) and the source, then closes the 
 > `log_watchtime`, and every other insert passes `minimal: true`. If an RPC call still
 > fails (proxy, outage, stale schema cache) the client inserts the row straight into
 > `visitor_visits` / `watchtime` with `Prefer: return=minimal`, so a page view is never
-> lost silently. Assets are linked as `...css?v=20261031b` / `app.js?v=20261031b` so a
+> lost silently. Assets are linked as `...css?v=<build>` / `app.js?v=<build>` so a
 > cached copy of the old tracker cannot keep running after a deploy.
 
 **Checking a visit from the browser.** Load any page, then in the console:
@@ -300,6 +332,8 @@ assets/js/notifications.js  bell panel with Now/Hour/Today/Yesterday/Week filter
 assets/js/shell.js          header + sidebar + footer templates and behaviour
 assets/js/home.js           homepage sections
 assets/js/app.js            entry point, mounts the shell on every page
+assets/js/visits.js         visit row + dwell time (IP, country, page)
+assets/js/geo.js            visitor address / country lookup (cached 6 h)
 assets/js/ui.js             toasts (+points banner, level-up)
 assets/js/sound.js          audio pool and mute state
 assets/js/icons.js          line icon set + brand glyphs (brands.js)

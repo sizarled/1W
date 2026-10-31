@@ -8,8 +8,9 @@ import { getMember, refreshMember, setMember, signOut, noteSeen } from "./sessio
 import { awardPoints, renderWallet, startWalletPolling, syncFromMember } from "./wallet.js";
 import { toast } from "./ui.js";
 import { avatarPlaceholder, enableDragScrollAll } from "./utils.js";
-import { startVisitTracking, finishVisit, lastVisitError } from "./visits.js?v=20261031c";
+import { startVisitTracking, finishVisit, lastVisitError } from "./visits.js?v=20261031f";
 import { initTheme, setTheme, toggleTheme, resetTheme, currentTheme, systemTheme } from "./theme.js";
+import { lookupVisitor, cachedVisitor } from "./geo.js";
 
 async function boot() {
   mountShell();
@@ -52,6 +53,7 @@ window.OneW = {
   setMember,
   enableDragScrollAll,
   visits: { start: startVisitTracking, finish: finishVisit, lastError: lastVisitError },
+  geo: { lookup: lookupVisitor, cached: cachedVisitor },
   theme: {
     current: currentTheme,
     system: systemTheme,

@@ -14,7 +14,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const BUILD = "20261031e"; // cache-bust for css/js
+const BUILD = "20261031f"; // cache-bust for css/js
 
 const PAGES = [
   ["search.html", "Search", "search", "Search across films, series, channels, articles, documents, answers and reviews.", "Reads ?q= from the URL."],
