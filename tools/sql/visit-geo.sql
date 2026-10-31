@@ -33,6 +33,7 @@ declare
   v_visitor varchar(6);
   v_digits  text;
   v_freq    int;
+  v_member_freq int;
   v_visit   text;
   v_member_visit text;
   v_address inet;
@@ -56,10 +57,16 @@ begin
     v_visitor := lpad((floor(random() * 900000) + 100000)::text, 6, '0');
   end if;
 
+  -- the repeat rate belongs to the page: how many times this visitor opened
+  -- this exact page (query string included) before, plus one
+  select coalesce(count(*), 0) + 1 into v_freq
+    from public.visitor_visits
+   where visitor_id = v_visitor and coalesce(visitor_page, '') = v_page;
+
   if p_member is not null then
-    select coalesce(count(*), 0) + 1 into v_freq from public.member_visits where member_id = p_member;
-  else
-    select coalesce(count(*), 0) + 1 into v_freq from public.visitor_visits where visitor_id = v_visitor;
+    select coalesce(count(*), 0) + 1 into v_member_freq
+      from public.member_visits
+     where member_id = p_member and coalesce(member_page, '') = v_page;
   end if;
 
   insert into public.visitor_visits (
@@ -76,7 +83,8 @@ begin
     insert into public.member_visits (
       member_id, visit_link, member_page, member_ip, member_location, visit_frequency, visit_source
     ) values (
-      p_member, left(coalesce(p_link, ''), 2000), v_page, v_address, v_country, v_freq,
+      p_member, left(coalesce(p_link, ''), 2000), v_page, v_address, v_country,
+      coalesce(v_member_freq, v_freq),
       left(coalesce(p_source, 'web'), 120)
     ) returning visit_id into v_member_visit;
   end if;

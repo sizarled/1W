@@ -297,6 +297,38 @@ if (MODE === "session") {
   report.afterStaleTab = fifth?.id || null;
   checks.staleTabIgnored = created === 3 && fifth?.id === "visit000003";
 
+  // 7 · the content id after "?" is part of the page identity
+  window.history.pushState({}, "", "/watch.html?movie=1765072");
+  window.dispatchEvent(new window.Event("pagehide"));
+  sessionStorage.setItem("1w.visit.tab", "tab-four");
+  await boot("p7");
+  const movieA = snapshot();
+  report.moviePage = movieA?.id || null;
+  checks.contentIdCreatesVisit = created === 5 && movieA?.id === "visit000005";
+
+  // 8 · reloading that same title is not a new visit
+  window.dispatchEvent(new window.Event("pagehide"));
+  await boot("p8");
+  const movieAReload = snapshot();
+  report.moviePageReload = movieAReload?.id || null;
+  checks.reloadOfTitleKeepsVisit = created === 5 && movieAReload?.id === "visit000005";
+
+  // 9 · another title after the "?" is a different page
+  window.history.pushState({}, "", "/watch.html?movie=550");
+  window.dispatchEvent(new window.Event("pagehide"));
+  await boot("p9");
+  const movieB = snapshot();
+  report.otherMoviePage = movieB?.id || null;
+  checks.otherContentIdCreatesVisit = created === 6 && movieB?.id === "visit000006";
+
+  // 10 · going back to the first title is a page change again
+  window.history.pushState({}, "", "/watch.html?movie=1765072");
+  window.dispatchEvent(new window.Event("pagehide"));
+  await boot("p10");
+  const movieAgain = snapshot();
+  report.backToFirstMovie = movieAgain?.id || null;
+  checks.returningToTitleCreatesVisit = created === 7 && movieAgain?.id === "visit000007";
+
   const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name);
   console.log(JSON.stringify({ mode: MODE, report, checks }, null, 2));
   console.log("checks:", failed.length ? `FAILED ${failed.join(", ")}` : "all pass");

@@ -131,6 +131,7 @@ the visitor opens, and only a real page change adds another one:
 | first page of a stay | new row through `log_visit()` |
 | reloading that same page (F5, or back to the same URL) | **no row** — same `visit_id` |
 | moving to another page of the site | **new row** + new `visit_id` |
+| the same page with another `?movie=` / `?tv=` / `?season=` | **new row** — the query string is part of the page |
 | a second tab on another page | new row (it is a different page) |
 | every page closed, visitor comes back later | new row |
 | browser crashed, tab silent for 2.5 min | new row |
@@ -140,9 +141,12 @@ open tab registers itself and beats every 10 s, a beaten tab counts as open for 
 minutes (browsers throttle background tabs), a page that loads within 15 s of the last one
 closing is a reload or a navigation rather than a new stay, and the recorded `path`
 decides between the two — same path reuses the row, another path starts a new visit.
-`visitor_duration` accumulates per row (`finish_visit` keeps the greatest duration and
-only moves the end date), so `visitor_frequency` counts the pages the visitor really
-opened.
+Each row is independent: its own `visitor_start_date`, its own `visitor_end_date`, its own
+`visitor_duration` (`finish_visit` keeps the greatest duration and only moves the end
+date) and its own `visitor_frequency`. The frequency is the **repeat rate of that exact
+page**: `1` the first time this `visitor_id` opens `/watch.html?movie=1765072`, `2` the
+second time, while `/watch.html?movie=550` starts again at `1`. Member rows count the same
+way per `member_page`.
 
 **Visitor identity.** The six-digit `visitor_id` belongs to the browser and never
 changes: `localStorage["1w.visitor"]` is read first, then the first-party cookie `1w_vid`
