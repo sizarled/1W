@@ -8,7 +8,7 @@ import { getMember, refreshMember, setMember, signOut, noteSeen } from "./sessio
 import { awardPoints, renderWallet, startWalletPolling, syncFromMember } from "./wallet.js";
 import { toast } from "./ui.js";
 import { avatarPlaceholder, enableDragScrollAll } from "./utils.js";
-import { startVisitTracking, finishVisit } from "./visits.js";
+import { startVisitTracking, finishVisit, lastVisitError } from "./visits.js?v=20261031c";
 import { initTheme, setTheme, toggleTheme, resetTheme, currentTheme, systemTheme } from "./theme.js";
 
 async function boot() {
@@ -51,7 +51,7 @@ window.OneW = {
   refreshMember,
   setMember,
   enableDragScrollAll,
-  visits: { start: startVisitTracking, finish: finishVisit },
+  visits: { start: startVisitTracking, finish: finishVisit, lastError: lastVisitError },
   theme: {
     current: currentTheme,
     system: systemTheme,

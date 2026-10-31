@@ -15,6 +15,7 @@ import { rpc } from "./data.js";
 import { SUPABASE } from "./config.js";
 
 const KEY = "1w.visit";
+const ERROR_KEY = "1w.visit.error";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MIN_GAP = 12000; // ignore a second log for the same page within 12 s
 
@@ -48,6 +49,42 @@ function recentLog(path) {
 function remember(path, payload) {
   try {
     sessionStorage.setItem(KEY, JSON.stringify({ path, at: Date.now(), ...payload }));
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Last failed attempt, kept for debugging: localStorage["1w.visit.error"]. */
+function noteFailure(stage, error, extra = {}) {
+  try {
+    localStorage.setItem(
+      ERROR_KEY,
+      JSON.stringify({
+        at: new Date().toISOString(),
+        stage,
+        message: error?.message || String(error),
+        status: error?.status || extra.status || null,
+        body: error?.body || extra.body || null,
+        path: pageLocation(),
+      })
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Reads the last failure (null when the last attempt worked). */
+export function lastVisitError() {
+  try {
+    return JSON.parse(localStorage.getItem(ERROR_KEY) || "null");
+  } catch {
+    return null;
+  }
+}
+
+function clearFailure() {
+  try {
+    localStorage.removeItem(ERROR_KEY);
   } catch {
     /* ignore */
   }
@@ -115,18 +152,23 @@ export async function startVisitTracking() {
       // the function may be missing from the API schema cache — fall back to the
       // table itself (it accepts anonymous inserts through its RLS policy)
       result = await insertVisitRow(payload);
-      if (!result) throw rpcError;
+      if (!result) {
+        noteFailure("insert", rpcError);
+        throw rpcError;
+      }
     }
     if (result && typeof result === "object") {
       state.visitId = result.visit_id || null;
       state.memberVisitId = result.member_visit_id || null;
       remember(path, { visitId: state.visitId, memberVisitId: state.memberVisitId, seconds: 0 });
+      clearFailure();
       // visible proof for the console: <html data-visit="visit000123">
       document.documentElement.dataset.visit = state.visitId || "direct-row";
       console.info("[1World] visit logged:", state.visitId || "(direct row)", path);
     }
   } catch (error) {
     // a blocked request must never break the page
+    if (!lastVisitError()) noteFailure("rpc", error);
     console.warn("[1World] visit logging:", error.message);
   }
 }
@@ -152,6 +194,12 @@ async function insertVisitRow(payload) {
       },
     ]),
   });
-  if (!res.ok) return null;
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    const error = new Error(`insert visitor_visits ${res.status} ${text.slice(0, 180)}`);
+    error.status = res.status;
+    error.body = text.slice(0, 400);
+    throw error;
+  }
   return { visit_id: null, member_visit_id: null, fallback: true };
 }
