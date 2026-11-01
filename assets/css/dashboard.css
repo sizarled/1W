@@ -432,6 +432,8 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
+/* `.dsh-side` is the <aside data-dsh-side>; the root `.dsh` owns `data-side`
+   (the fold state) — never look the menu up by `[data-side]`. */
 .dsh-side {
   position: sticky;
   top: 64px;

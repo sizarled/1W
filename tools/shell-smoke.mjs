@@ -8,7 +8,8 @@
  *          button, a stored preference opens it, the toggle flips it, and
  *          Escape leaves a *pinned* panel alone (it closes a floating one).
  * Pass 2 — the page that carries the site panel (watch.html): the <aside> is
- *          mounted, the header button and the edge tab are there.
+ *          mounted, the header button and the edge tab are there, and the menu
+ *          starts on the edge until the button pins it.
  * Pass 2b — profile.html has its own menu: no site <aside>, its own pin and
  *          its own edge tab.
  * Pass 3 — a page outside the set (movies.html): no <aside>, no menu button,
@@ -149,7 +150,13 @@ async function boot(file, { stored = null, member = null, desktop = true } = {})
   expect(`${file}: the menu button points at the aside`, p.qs('[data-action="toggle-sidebar"]')?.getAttribute("aria-controls") === "siteSidebar");
   expect(`${file}: an edge tab waits on the left edge`, Boolean(p.qs("[data-sidebar-edge]")));
   expect(`${file}: the panel carries a pin`, Boolean(p.qs("[data-sidebar-pin]")));
-  expect(`${file}: the page leaves room for the panel`, p.document.body.classList.contains("sb-open"));
+  // the player starts with its menu on the edge: the video keeps the width
+  expect(`${file}: the menu starts on the edge`, p.document.body.classList.contains("sb-rail"));
+  expect(`${file}: so the page starts without a rail`, !p.document.body.classList.contains("sb-open"));
+  p.click(p.qs('[data-action="toggle-sidebar"]'));
+  await p.wait(60);
+  expect(`${file}: the header button pins it`, p.document.body.classList.contains("sb-pinned"));
+  expect(`${file}: then the page leaves room for it`, p.document.body.classList.contains("sb-open"));
   expect(`${file}: no icons left unhydrated`, p.qsa("[data-icon]").length === 0, `${p.qsa("[data-icon]").length} left`);
   expect(`${file}: header still fixed`, p.window.getComputedStyle(p.qs(".site-header")).position === "fixed");
   expect(`${file}: no page errors`, p.errors.length === 0, p.errors.join(" | "));

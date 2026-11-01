@@ -282,7 +282,7 @@ function paintGate() {
   const key = gateKey();
   const main = qs("[data-main]");
   const dsh = qs("[data-dsh]");
-  const side = qs("[data-side]");
+  const side = qs("[data-dsh-side]");
   const rail = qs("[data-rail-wrap]");
 
   closePopover();
@@ -1593,7 +1593,7 @@ let sideRail = null;
 
 function paintSideState() {
   if (!sideRail) {
-    const panel = qs("[data-side]");
+    const panel = qs("[data-dsh-side]");
     if (!panel) return;
     sideRail = createEdgeRail({
       panel,

@@ -28,7 +28,12 @@ import { store } from "./utils.js";
 import { icon } from "./icons.js";
 
 export const PIN_KEY = "1w.sidebar.pin";
-const LEGACY_KEY = "1w.sidebar";
+/* A stored choice is only trusted from this build on: the old `1w.sidebar` flag
+   was the homepage's "is the panel open" switch (written when the panel was
+   closed), and an early build of the pin let a "0" hide the dashboard menu for
+   good. One stale value must never be the reason a menu is missing. */
+const PIN_VERSION_KEY = "1w.sidebar.pin.v";
+const PIN_VERSION = "2";
 
 /** The edge only exists on a desktop pointer. */
 export function isDesktop() {
@@ -37,21 +42,22 @@ export function isDesktop() {
 }
 
 /**
- * The saved pin. Without one, the old open/closed preference decides, and if
- * that is missing the page says what it wants: the homepage starts pinned, the
- * player, the profile and the dashboard start on the edge.
+ * The saved pin, or the page's own default: the homepage, the profile and the
+ * dashboard start pinned, the player starts on the edge. The legacy
+ * `1w.sidebar` flag is deliberately ignored — it was written by the old menu
+ * button when a panel was *closed*, so reading it hid every menu at once.
  */
 export function storedPin(defaultPinned = false) {
-  const saved = store.get(PIN_KEY, null);
+  const fresh = store.get(PIN_VERSION_KEY, null) === PIN_VERSION;
+  const saved = fresh ? store.get(PIN_KEY, null) : null;
   if (saved === "1" || saved === true) return true;
   if (saved === "0" || saved === false) return false;
-  const legacy = store.get(LEGACY_KEY, null);
-  if (legacy !== null) return Boolean(legacy);
   return Boolean(defaultPinned) && isDesktop();
 }
 
 function savePin(pinned) {
   store.set(PIN_KEY, pinned ? "1" : "0");
+  store.set(PIN_VERSION_KEY, PIN_VERSION);
 }
 
 /* One name for the toggle, its state in `aria-pressed`; the tooltip says what

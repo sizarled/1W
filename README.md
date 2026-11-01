@@ -554,7 +554,9 @@ top corner of the profile card, next to the fold button on the dashboard):
 | **Pinned** | the panel stays out and the page keeps room for it | `sb-pinned` · `pf-side-pinned` · `data-pin="on"` |
 | **On the edge** | the panel is gone and the page uses the whole width; moving the pointer within 34px of the left screen edge (or onto the thin tab on the edge) slides it in **over** the content, and it slides away 320ms after the pointer leaves it | `sb-rail` · `pf-side-rail` · `data-pin="off"` |
 
-The preference is `1w.sidebar.pin` (`"1"` / `"0"`), so pinning the menu on the profile pins it on
+The preference is `1w.sidebar.pin` (`"1"` / `"0"`, stamped with `1w.sidebar.pin.v` — a value from an
+older build is ignored, and the legacy `1w.sidebar` flag is never read: it was the homepage's
+"is the panel open" switch, so honouring it hid every menu at once), so pinning the menu on the profile pins it on
 the player too. Without a saved choice the homepage, the profile and the dashboard start **pinned**
 (they look exactly as they did before) and the player starts **on the edge** — the video needs the
 width, and its menu is the site panel you can also reach from the header button. The header menu button is the keyboard/pointer
@@ -960,6 +962,10 @@ in `members.level_unlocked` — the lifetime total keeps the points, so the badg
 Errors: `session · inactive · level · cap · already · step · points`.
 
 ### The dashboard sidebar
+
+The menu is `<aside class="dsh-side" data-dsh-side>` — the root `.dsh` owns `data-side` (the fold
+state), so the page looks the menu up by `data-dsh-side`, never by `[data-side]`, which also matches
+the root.
 
 The avatar and the username in the sidebar are a link to the member's own page
 (`profile.html?u=@username`, showing the member ID and the status). The menu follows the same pin

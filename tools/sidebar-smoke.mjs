@@ -136,6 +136,10 @@ async function boot(file, { desktop = true, stored = {}, dashboard = false } = {
 
   window.localStorage.clear();
   for (const [key, value] of Object.entries(stored)) window.localStorage.setItem(key, JSON.stringify(value));
+  // a saved pin is only trusted with the current version stamp (edge.js)
+  if ("1w.sidebar.pin" in stored) window.localStorage.setItem("1w.sidebar.pin.v", JSON.stringify("2"));
+  // a legacy `1w.sidebar` must never decide the pin
+  if ("1w.sidebar" in stored && !("1w.sidebar.pin" in stored)) window.localStorage.setItem("1w.sidebar.pin.v", JSON.stringify("2"));
   if (dashboard) window.localStorage.setItem("1w.session", "b".repeat(64));
 
   const entry = dashboard ? "assets/js/dashboard.js" : "assets/js/shell.js";
@@ -303,6 +307,9 @@ async function boot(file, { desktop = true, stored = {}, dashboard = false } = {
   const watch = await boot("watch.html", { stored: { "1w.sidebar.pin": "1" } });
   expect("watch: a pinned preference opens the site panel", watch.body.classList.contains("sb-open"));
 
+  const stale = await boot("watch.html", { stored: { "1w.sidebar": false } });
+  expect("watch: an old 1w.sidebar flag cannot hide the menu", stale.body.classList.contains("sb-rail"));
+
   const home = await boot("index.html");
   expect("home: the homepage starts pinned", home.body.classList.contains("sb-pinned"));
   expect("home: so its panel is out", home.body.classList.contains("sb-open"));
@@ -347,7 +354,7 @@ async function boot(file, { desktop = true, stored = {}, dashboard = false } = {
   const p = await boot("dashboard.html", { dashboard: true });
   const dsh = p.qs("[data-dsh]");
 
-  expect("dashboard: the menu is there", p.qs("[data-side]")?.hidden === false);
+  expect("dashboard: the menu is there", p.qs("[data-dsh-side]")?.hidden === false);
   expect("dashboard: it starts pinned", dsh?.dataset.pin === "on", dsh?.dataset.pin);
   expect("dashboard: so it is out", dsh?.dataset.sideReveal === "on");
   expect("dashboard: the panel carries a pin", Boolean(p.qs("[data-side-pin]")));

@@ -207,7 +207,7 @@ function expect(name, condition, detail = "") {
   expect("inactive: activate link", (p.qs("[data-gate-activate]")?.getAttribute("href") || "").includes("activated.html?member=ID100042"));
   expect("inactive: log out present", Boolean(p.qs("[data-main] [data-logout]")));
   expect("inactive: no rail", p.qs("[data-rail-wrap]").hidden === true);
-  expect("inactive: no menu", p.qs("[data-side]").hidden === true);
+  expect("inactive: no menu", p.qs("[data-dsh-side]").hidden === true);
   expect("inactive: 30-day deadline shown", /banned automatically/i.test(p.text("[data-gate-deadline]")));
   expect("inactive: no dashboard tool", !p.qs("[data-code-form]"));
   expect("inactive: no errors", p.errors.length === 0, p.errors.join(" | "));
@@ -223,7 +223,7 @@ function expect(name, condition, detail = "") {
   const link = p.qs("[data-gate-activate]");
   expect("inactive again: two-door label", /Re-activate or upgrade/i.test(link?.textContent || ""));
   expect("inactive again: deep link", (link?.getAttribute("href") || "").includes("mode=reactivate"));
-  expect("inactive again: still gated", p.qs("[data-side]").hidden === true);
+  expect("inactive again: still gated", p.qs("[data-dsh-side]").hidden === true);
   expect("inactive again: no errors", p.errors.length === 0, p.errors.join(" | "));
 }
 
@@ -243,7 +243,7 @@ function expect(name, condition, detail = "") {
   expect("banned: reason author", /moderator\.hassan/.test(p.text("[data-gate-ban-by]")));
   expect("banned: request trial", Boolean(p.qs("[data-court-request]")));
   expect("banned: log out", Boolean(p.qs("[data-main] [data-logout]")));
-  expect("banned: no menu", p.qs("[data-side]").hidden === true);
+  expect("banned: no menu", p.qs("[data-dsh-side]").hidden === true);
 
   p.click(p.qs("[data-court-request]"));
   await p.wait(220);
@@ -272,7 +272,7 @@ function expect(name, condition, detail = "") {
   expect("scheduled: go to trial link", (p.qs("[data-gate-court]")?.getAttribute("href") || "").includes("court.html?id=k1"));
   expect("scheduled: absence warning", /permanent/i.test(p.text(".dsh-gate__warn")));
   expect("scheduled: log out", Boolean(p.qs("[data-main] [data-logout]")));
-  expect("scheduled: no menu", p.qs("[data-side]").hidden === true);
+  expect("scheduled: no menu", p.qs("[data-dsh-side]").hidden === true);
   expect("scheduled: no errors", p.errors.length === 0, p.errors.join(" | "));
   report.pass3 = p.text("[data-main]").slice(0, 90);
 }
@@ -339,7 +339,7 @@ function expect(name, condition, detail = "") {
   expect("active: 12 rail sections", p.qsa("[data-rail] .dsh-rail__item").length === 12);
   expect("active: rail scrolls with drag", p.qs("[data-rail]").dataset.dragReady === "1");
   expect("active: rail arrow scrolls", p.qsa("[data-rail-dir]").length === 2);
-  expect("active: menu visible", p.qs("[data-side]").hidden === false);
+  expect("active: menu visible", p.qs("[data-dsh-side]").hidden === false);
   expect("active: admin group hidden", p.qs("[data-admin-group]").hidden === true);
   expect("active: identity", /@youssef\.amrani/.test(p.text("[data-me-username]")) && /ID100042/.test(p.text("[data-me-id]")));
   expect("active: overview stats", p.qsa(".dsh-stat").length >= 6);

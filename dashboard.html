@@ -11,10 +11,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="assets/css/base.css?v=20261101e" />
-    <link rel="stylesheet" href="assets/css/layout.css?v=20261101e" />
-    <link rel="stylesheet" href="assets/css/components.css?v=20261101e" />
-    <link rel="stylesheet" href="assets/css/dashboard.css?v=20261101e" />
+    <link rel="stylesheet" href="assets/css/base.css?v=20261101f" />
+    <link rel="stylesheet" href="assets/css/layout.css?v=20261101f" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261101f" />
+    <link rel="stylesheet" href="assets/css/dashboard.css?v=20261101f" />
     <script>
       /* apply the saved theme (or the OS preference) before first paint */
       (function () {
@@ -32,14 +32,14 @@
         } catch (e) {}
       })();
     </script>
-    <script type="module" src="assets/js/app.js?v=20261101e"></script>
-    <script type="module" src="assets/js/dashboard.js?v=20261101e"></script>
+    <script type="module" src="assets/js/app.js?v=20261101f"></script>
+    <script type="module" src="assets/js/dashboard.js?v=20261101f"></script>
   </head>
 
   <body data-page="dashboard" data-title="Dashboard" class="dsh-body">
     <a class="skip-link" href="#main">Skip to content</a>
 
-    <div class="dsh" data-dsh data-state="loading">
+    <div class="dsh" data-dsh data-state="loading" data-pin="on" data-side="open" data-side-reveal="on">
       <!-- ============================================================ -->
       <!-- header                                                      -->
       <!-- ============================================================ -->
@@ -127,7 +127,7 @@
           <i data-icon="chevronRight"></i>
         </button>
 
-        <aside class="dsh-side" data-side id="dsh-side" hidden aria-label="Dashboard menu">
+        <aside class="dsh-side" data-dsh-side id="dsh-side" hidden aria-label="Dashboard menu">
           <div class="dsh-side__me">
             <a class="dsh-side__profile" data-side-profile href="profile.html" title="Open your profile">
               <span class="dsh-side__avatar" data-side-avatar><i data-icon="user"></i></span>
