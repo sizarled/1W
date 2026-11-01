@@ -136,7 +136,7 @@ async function load() {
         `${data.profile?.name || "This member"} restricted who can open their profile.`
       );
     }
-    state.view = data.relationship?.is_owner ? "updates" : "updates";
+    if (!data.relationship?.is_owner && state.view === "activity") state.view = "updates";
     renderAll();
     document.body.dataset.view = data.relationship?.is_owner ? "owner" : "visitor";
   } catch (error) {
