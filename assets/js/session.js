@@ -151,6 +151,7 @@ export async function refreshMember() {
     avatar: fresh.avatar || local.avatar || "",
     username: fresh.username || local.username,
     level: fresh.level || local.level || 1,
+    level_unlocked: fresh.level_unlocked ?? local.level_unlocked ?? 0,
     membership: fresh.membership || local.membership || "free",
   };
   store.set(MEMBER_KEY, merged);
@@ -186,6 +187,8 @@ export function levelLabel(member = getMember()) {
   return levelInfo({
     points: Number(member.points) || 0,
     membership: member.membership || "free",
+    /* the level is the one the member paid for */
+    unlocked: member.level_unlocked,
   }).badge;
 }
 
@@ -200,7 +203,7 @@ export function pointsValue(member = getMember()) {
 export function noteSeen(member = getMember()) {
   if (!member) return;
   store.set(SEEN_POINTS, Number(member.points) || 0);
-  store.set(SEEN_LEVEL, Number(member.level) || 1);
+  store.set(SEEN_LEVEL, Number(member.level_unlocked) || 0);
 }
 
 export function consumeChanges(member = getMember()) {
@@ -208,7 +211,8 @@ export function consumeChanges(member = getMember()) {
   const prevPoints = store.get(SEEN_POINTS, null);
   const prevLevel = store.get(SEEN_LEVEL, null);
   const points = Number(member.points) || 0;
-  const level = Number(member.level) || 1;
+  /* the level is the one that was paid for */
+  const level = Number(member.level_unlocked) || 0;
 
   store.set(SEEN_POINTS, points);
   store.set(SEEN_LEVEL, level);

@@ -335,6 +335,7 @@ export function levelForPoints(points = 0) {
 
 /** `members.level` comes back as a number; 11 and above is the open level. */
 export function storedLevel(value) {
+  if (value === "max") return "max";
   const n = Number(value);
   if (!Number.isFinite(n) || n <= 0) return 0;
   return n >= LEVELS.length - 1 ? "max" : Math.trunc(n);
@@ -354,14 +355,18 @@ export function unlockFee(level) {
  * The next rung and its price — what the «Unlock now» button on the level page
  * is built from.
  *
- * `fee` is the level's own threshold (LV1 10 … LVMax 100 000 000 000) and it
- * is paid from the balance (`available`). `affordable` says whether the
- * balance covers it right now; when it does not, `missing` is how much has to
- * be topped up first. Nothing is offered past the membership ceiling or at
- * LVMax.
+ * The button appears when the rung is earned: the total points have reached
+ * the level's threshold (`info.eligible`). `fee` is that same threshold
+ * (LV1 10 … LVMax 100 000 000 000) and it is **paid** from the balance
+ * (`available`) — the level is granted by the payment, never by the points
+ * alone. `affordable` says whether the balance covers it right now; when it
+ * does not, `missing` is how much has to be topped up first. Nothing is
+ * offered past the membership ceiling or at LVMax.
  */
 export function unlockOffer(info, available = 0) {
   if (!info || info.level === "max" || info.capped) return null;
+  /* the rung has to be earned before it can be bought */
+  if (!info.eligible) return null;
   const next = nextLevel(info.level);
   if (!next) return null;
   const fee = unlockFee(next.level);
@@ -397,14 +402,14 @@ export function badgeFor(level, tens = 0, { capped = false } = {}) {
  */
 export function levelInfo({ points = 0, membership = "free", activated = true, unlocked = null } = {}) {
   const total = Math.max(0, Number(points) || 0);
+  /* The level is **paid for**, not accumulated: `unlocked` is the level the
+   * member bought (LV00 for everyone who never paid). The points are the
+   * currency — they have to reach the level's threshold before it can be
+   * bought, and they are spent when it is. */
   const paid = storedLevel(unlocked);
-  const earned = levelForPoints(total);
-  /* a level bought with points survives the drop that paying for it causes */
-  const rawLevel =
-    earned === "max" || paid === "max" ? "max" : Math.max(Number(earned) || 0, Number(paid) || 0);
   const cap = capFor(membership);
-  const capped = cap !== Infinity && rawLevel !== "max" ? rawLevel > cap : rawLevel === "max" && cap !== Infinity;
-  const level = capped ? cap : rawLevel;
+  const capped = cap !== Infinity && paid !== "max" ? paid > cap : paid === "max" && cap !== Infinity;
+  const level = capped ? cap : paid;
   const row = rowFor(level);
   const next = nextLevel(level);
   const floor = row.points;
@@ -418,7 +423,8 @@ export function levelInfo({ points = 0, membership = "free", activated = true, u
     points: total,
     activated,
     level,
-    rawLevel,
+    /** the level the points alone would justify, before any payment */
+    earnedLevel: levelForPoints(total),
     row,
     next,
     cap,
@@ -433,6 +439,8 @@ export function levelInfo({ points = 0, membership = "free", activated = true, u
     floor,
     ceiling,
     toNext: cappedNow || !next ? 0 : Math.max(0, next.points - total),
+    /** the points condition of the next rung is met — «Unlock now» can appear */
+    eligible: Boolean(next) && !cappedNow && total >= next.points,
     /** every quota of the level, already capped */
     quotas: cappedNow ? rowFor(level).quotas : row.quotas,
   };

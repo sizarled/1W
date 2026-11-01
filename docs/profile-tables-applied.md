@@ -245,6 +245,7 @@ a full send (recipient · subject · body · attachments), and the “Message”
 | --- | --- |
 | `level_unlock_paid` | `level_unlock(p_token, p_level)` — buys the next level with points (fee = the level's threshold), writes the `points_ledger` row and stores the level |
 | `level_unlocked_column` | adds `members.level_unlocked` (smallint, 0–11, default 0, `members_level_unlocked_check`), rewrites `level_unlock` to use it and `member_payload` to return it |
+| `level_unlock_earned_check` | `level_unlock` also refuses a rung whose points condition is not met (`error: 'earned'`); `profile_public` now publishes the **paid** level (`level` = `level_unlocked`, plus `level_unlocked`) instead of the legacy column |
 
 `members.level` (smallint, 1–10, default 1) is **legacy** and is not written by the new code — the
 level a member sees is `points` + `level_unlocked`, capped by the membership.
@@ -268,6 +269,12 @@ Fees: `10 · 100 · 1 000 · 10 000 · 100 000 · 1 000 000 · 10 000 000 · 100
 10 000 000 000 · 100 000 000 000` (LV1 … LVMax). Ceilings: Free `3`, Silver `5`, Gold `8`, Diamond
 `11`; an expired membership is treated as Free.
 
+### The level is the paid one
+
+`members.level_unlocked` **is** the level: `levelInfo({ …, unlocked })` reads it directly, and the
+points are only the condition to open a rung and the currency to pay for it. Points alone give `LV00`
+— with the earned rung named by `earnedLevel` and the button `Unlock now` on the ladder.
+
 ### Probe (2026-11-01, `@lv.probe` — deleted afterwards)
 
 | Call | Result |
@@ -277,6 +284,17 @@ Fees: `10 · 100 · 1 000 · 10 000 · 100 000 · 1 000 000 · 10 000 000 · 100
 | `level_unlock(token, 3)` at level 1 | `{ ok: false, error: "step", level: 1 }` |
 | `level_unlock(token, 2)` | `{ ok: true, level: 2, fee: 100, balance: 4890 }` |
 | `level_unlock(token, 4)` on a free plan | `{ ok: false, error: "cap", cap: 3 }` |
+
+Second probe (`@lv.probe2`, 10 000 points earned, Free → Gold, deleted afterwards):
+
+| Call | Result |
+| --- | --- |
+| `level_unlock(token, 1)` | `{ ok: true, level: 1, fee: 10, balance: 9990 }` |
+| `level_unlock(token, 2)` | `{ ok: true, level: 2, fee: 100, balance: 9890 }` |
+| `level_unlock(token, 3)` | `{ ok: true, level: 3, fee: 1 000, balance: 8890 }` |
+| `level_unlock(token, 4)` on Free | `{ ok: false, error: "cap", cap: 3 }` |
+| `level_unlock(token, 4)` after Gold (fee 10 000, balance 8 890) | `{ ok: false, error: "points", fee: 10000, balance: 8890 }` |
+| `level_unlock(token, 5)` at level 3 | `{ ok: false, error: "step", level: 3 }` |
 
 ### Lists and flags (no database)
 

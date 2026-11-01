@@ -569,7 +569,7 @@ function overviewView() {
         <div><dt>Member ID</dt><dd>${esc(member.member_id || "—")}</dd></div>
         <div><dt>Email</dt><dd>${esc(member.email || "—")}</dd></div>
         <div><dt>Phone</dt><dd>${esc(member.phone_number || "—")}</dd></div>
-        <div><dt>Level</dt><dd>${esc(levelInfo({ points: o.points_total || 0, membership: o.membership || "free" }).badge)}</dd></div>
+        <div><dt>Level</dt><dd>${esc(levelInfo({ points: o.points_total || 0, membership: o.membership || "free", unlocked: (state.data.member || {}).level_unlocked }).badge)}</dd></div>
         <div><dt>Last sign-in</dt><dd>${esc(member.last_login_at ? formatDate(member.last_login_at, { hour: "2-digit", minute: "2-digit" }) : "—")}</dd></div>
       </dl>
     </section>
@@ -1073,8 +1073,8 @@ function levelView() {
   const info = levelInfo({
     points: o.points_total || 0,
     membership: o.membership || "free",
-    /* a level bought with «Unlock now» is stored on the member */
-    unlocked: (state.data.member || {}).level_unlocked ?? null,
+    /* the level the member paid for with «Unlock now» */
+    unlocked: (state.data.member || {}).level_unlocked,
   });
   const offer = unlockOffer(info, o.points_available || 0);
   const current = info.row;
@@ -1093,8 +1093,8 @@ function levelView() {
   const rows = LEVELS.map((row) => {
     const mine = info.level === row.level || (info.level === "max" && row.level === "max");
     const reached = row.level === "max" ? info.level === "max" : info.level !== "max" && info.level >= row.level;
-    const state_ = mine ? "Current" : reached ? "Unlocked" : "Locked";
     const canBuy = Boolean(offer) && row.level !== "max" && row.level === offer.level;
+    const state_ = mine ? "Current" : reached ? "Unlocked" : canBuy ? "Ready" : "Locked";
     const buyCell = canBuy
       ? `<button class="dsh-btn dsh-btn--sm dsh-unlock" type="button" data-level-unlock="${row.level}"
            ${offer.affordable ? "" : "disabled"}
@@ -1109,7 +1109,7 @@ function levelView() {
       <td>${row.quotas.tasks === Infinity ? "—" : num(row.quotas.tasks)}</td>
       <td>${row.quotas.content === Infinity ? "unlimited" : `${num(row.quotas.content)} / day`}</td>
       <td>${row.quotas.server === Infinity ? "unlimited" : `${num(row.quotas.server)} / day`}</td>
-      <td><span class="dsh-chip" data-tone="${mine || reached ? "on" : "off"}">${state_}</span></td>
+      <td><span class="dsh-chip" data-tone="${mine || reached || canBuy ? "on" : "off"}">${state_}</span></td>
       <td class="dsh-table__act">${buyCell}</td>
     </tr>`;
   }).join("");
@@ -1137,7 +1137,7 @@ function levelView() {
           info.capped
             ? `You are held at <strong>${info.capBadge}</strong> by your ${esc(o.membership || "free")} membership. The points stay in your account — a higher membership lifts the ceiling and the level is granted straight away.`
             : next
-              ? `${num(info.toNext)} more points reach <strong>LV${next.level}0</strong> (${esc(next.name)}). The badge digit — the 5 in LV85 — is the tens of percent already earned towards it.`
+              ? `${num(info.toNext)} more points reach <strong>LV${next.level}0</strong> (${esc(next.name)}), and the level is taken with <strong>Unlock now</strong> — the badge digit, the 5 in LV85, is the tens of percent already earned towards it.`
               : "You are at the top of the ladder."
         }
       </p>
@@ -1156,11 +1156,13 @@ function levelView() {
         <thead><tr><th>Badge</th><th>Name</th><th>Points</th><th>Membership</th><th>Tasks</th><th>Publish</th><th>Servers</th><th>Status</th><th></th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
-      <p class="dsh-card__hint">Every level needs the points below it and one more task than the level before. Card: Free LV30 · Silver LV50 · Gold LV80 · Diamond open above LV80.</p>
+      <p class="dsh-card__hint">A level is granted when it is <strong>paid for</strong>: the points below it have to be reached first, then the level's own points leave your balance. Card: Free LV30 · Silver LV50 · Gold LV80 · Diamond open above LV80.</p>
       ${
         offer
-          ? `<p class="dsh-card__hint">Next rung: <strong>LV${offer.level}0</strong> for <strong>${num(offer.fee)} points</strong> taken from your balance (${num(offer.balance)} available). ${offer.affordable ? "Unlock now is open." : `Top up ${num(offer.missing)} points and Unlock now opens.`}</p>`
-          : ""
+          ? `<p class="dsh-card__hint">LV${offer.level}0 is earned — <strong>Unlock now</strong> asks for <strong>${num(offer.fee)} points</strong> from your balance (${num(offer.balance)} available). ${offer.affordable ? "The payment is open." : `Top up ${num(offer.missing)} points and it opens.`}</p>`
+          : next
+            ? `<p class="dsh-card__hint">${num(info.toNext)} more points and <strong>LV${next.level}0</strong> can be unlocked${info.capped ? ` — after the membership ceiling (${info.capBadge}) is lifted` : ""}.</p>`
+            : ""
       }
     </section>
 

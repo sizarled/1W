@@ -260,7 +260,7 @@ function renderHead() {
 
   const flags = [];
   {
-    const info = levelInfo({ points: p.wealth || 0, membership: p.membership || "free" });
+    const info = levelInfo({ points: p.wealth || 0, membership: p.membership || "free", unlocked: p.level_unlocked ?? p.level });
     flags.push(`<span class="badge badge--solid" title="${esc(info.row.summary)}">${esc(info.badge)} · ${esc(info.row.name)}</span>`);
   }
   if (p.wealth !== null && p.wealth !== undefined) flags.push(`<span class="badge"><i data-icon="gem"></i> ${num(p.wealth)} pts</span>`);

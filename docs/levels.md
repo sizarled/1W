@@ -109,10 +109,15 @@ instead of testing numbers.
 
 ## Unlock now — paying for the next level
 
-The level is normally earned with points, but the next rung can also be **bought**: the level page
-shows `Unlock now` on the next rung and the dialog names the price — the level's own threshold —
-paid from the balance. When the balance is short it says how much is missing and links to buying the
-rest, and the button itself carries the price in its tooltip either way.
+A level is **never granted before it is paid for**. The points are the currency: they must reach the
+level's threshold, and then the level's own points leave the balance and the level is stored in
+`members.level_unlocked`.
+
+The level page shows `Unlock now` on the next rung the moment its points condition is met (the rung
+reads **Ready** in the ladder); before that the row stays **Locked** and no button appears. The dialog
+names the price — the level's own threshold — and pays it from the balance. When the balance is short
+it says how much is missing and links to buying the rest, and the button carries the price in its
+tooltip either way.
 
 | Target | LV1 | LV2 | LV3 | LV4 | LV5 | LV6 | LV7 | LV8 | LV9 | LV10 | LVMax |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -127,22 +132,26 @@ Server side, `level_unlock(p_token, p_level)` finishes the whole thing in one tr
 2. the membership ceiling is applied — Free `3`, Silver `5`, Gold `8`, Diamond `11` — with an
    expired membership falling back to Free;
 3. only **one rung at a time** (`p_level = level_unlocked + 1`);
-4. the fee is written to `points_ledger` (`reason = 'level unlock'`, `source = 'level'`, negative) and
+4. the points condition is checked against the lifetime total
+   (`greatest(sum of positive ledger deltas, members.points)`);
+5. the fee is written to `points_ledger` (`reason = 'level unlock'`, `source = 'level'`, negative) and
    the trigger moves `members.points`;
-5. `members.level_unlocked` keeps the level, so the badge stays even though the balance went down —
-   `levelInfo({ …, unlocked })` takes `max(points level, bought level)` before the ceiling.
+6. `members.level_unlocked` stores the level — this column **is** the level, so
+   `levelInfo({ …, unlocked })` reads it directly (still capped by the membership).
 
 Errors come back as `{ ok: false, error }` with `session · inactive · level · cap · already · step ·
-points`; `cap` also returns `cap` and `membership`, `points` returns `fee` and `balance`.
+earned · points`; `cap` also returns `cap` and `membership`, `earned` returns `fee` and `earned`,
+`points` returns `fee` and `balance`.
 
 `members.level` (smallint, 1–10, default 1) is the legacy column and stays untouched: the level of a
-member is `points` + `level_unlocked`, never that field.
+member is `members.level_unlocked`, never that field — and never the points alone.
 
 ## Still to wire
 
-- `members.level` is still the legacy 1–10 column; the real level is derived in the client from the
-  total points plus `level_unlocked`. A `level_for_points()` SQL function and the section-quota
-  checks server-side are the next database step.
+- `members.level` is still the legacy 1–10 column; the real level is `members.level_unlocked`.
+  A `level_for_points()` SQL function (for the eligibility of a rung) and the section-quota checks
+  server-side are the next database step — today the client computes eligibility and the
+  `level_unlock` RPC re-checks it.
 - The task requirement (`tasks` in the quotas) and the membership duration conditions
   (`months` in the ladder rows) are shown, not yet enforced.
 - `tools/levels-smoke.mjs` holds **64 checks** over the thresholds, badges, caps, quotas and rights;

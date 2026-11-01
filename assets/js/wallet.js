@@ -20,7 +20,7 @@ export function renderWallet() {
   document.querySelectorAll("[data-wallet]").forEach((el) => {
     const valueEl = el.querySelector("[data-wallet-value]");
     const levelEl = el.querySelector("[data-wallet-level]");
-    const info = member ? levelInfo({ points, membership: member.membership || "free" }) : null;
+    const info = member ? levelInfo({ points, membership: member.membership || "free", unlocked: member.level_unlocked }) : null;
     if (valueEl) valueEl.textContent = member ? num(points) : "—";
     if (levelEl) levelEl.textContent = member ? info.badge : "Guest";
     el.setAttribute(
@@ -30,11 +30,11 @@ export function renderWallet() {
   });
 
   document.querySelectorAll("[data-level-fill]").forEach((el) => {
-    const info = member ? levelInfo({ points: pointsValue(member), membership: member.membership || "free" }) : null;
+    const info = member ? levelInfo({ points: pointsValue(member), membership: member.membership || "free", unlocked: member.level_unlocked }) : null;
     el.style.width = `${info ? info.progressPct : 0}%`;
   });
   document.querySelectorAll("[data-level-cap]").forEach((el) => {
-    const info = member ? levelInfo({ points: pointsValue(member), membership: member.membership || "free" }) : null;
+    const info = member ? levelInfo({ points: pointsValue(member), membership: member.membership || "free", unlocked: member.level_unlocked }) : null;
     if (!info) {
       el.textContent = "Guest";
       return;

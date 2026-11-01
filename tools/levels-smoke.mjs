@@ -15,7 +15,12 @@ import { LEVELS, levelForPoints, levelInfo, capFor, quotaFor, can, rowFor, unloc
 
 const checks = [];
 const expect = (name, ok, detail = "") => checks.push({ name, ok: Boolean(ok), detail });
-const badge = (points, membership = "diamond") => levelInfo({ points, membership }).badge;
+/* The level is paid for, never accumulated: these helpers model a member who
+ * has already bought every level his points allow — that is the badge the
+ * engine must print once the payment lands. */
+const paid = (points, membership = "diamond", extra = {}) =>
+  levelInfo({ points, membership, unlocked: levelForPoints(points), ...extra });
+const badge = (points, membership = "diamond") => paid(points, membership).badge;
 
 /* ------------------------------------------------------------------ */
 /* the ladder                                                          */
@@ -61,7 +66,7 @@ expect("badge: level 10 at 0 % is LV100", badge(10000000000) === "LV100", badge(
 expect("badge: the open level is LVMax", badge(100000000000) === "LVMax", badge(100000000000));
 expect("badge: never shows a tenth tens digit", badge(99999) === "LV49", badge(99999));
 
-const half = levelInfo({ points: 550000000, membership: "diamond" });
+const half = paid(550000000, "diamond");
 expect("progress: 50 % inside level 8", half.progressPct === 50, String(half.progressPct));
 expect("progress: the digit is 5", half.progressTens === 5, String(half.progressTens));
 expect("progress: the next level is 9", half.next.level === 9, String(half.next?.level));
@@ -76,7 +81,7 @@ expect("caps: gold LV80", capFor("gold") === 8);
 expect("caps: diamond is open", capFor("diamond") === Infinity);
 expect("caps: an unknown plan behaves like free", capFor("platinum") === 3);
 
-const freeHeld = levelInfo({ points: 1e9, membership: "free" });
+const freeHeld = paid(1e9, "free");
 expect("cap: a free member with a billion points stays at level 3", freeHeld.level === 3, String(freeHeld.level));
 expect("cap: the badge shows the ceiling", freeHeld.badge === "LV39", freeHeld.badge);
 expect("cap: flagged as capped", freeHeld.capped === true);
@@ -84,14 +89,14 @@ expect("cap: the cap badge is printed", freeHeld.capBadge === "LV30", freeHeld.c
 expect("cap: the bar reads full", freeHeld.progressPct === 100, String(freeHeld.progressPct));
 expect("cap: nothing left to climb", freeHeld.toNext === 0, String(freeHeld.toNext));
 
-const silverHeld = levelInfo({ points: 1e9, membership: "silver" });
+const silverHeld = paid(1e9, "silver");
 expect("cap: silver stops at level 5", silverHeld.level === 5 && silverHeld.badge === "LV59", silverHeld.badge);
 
-const goldFree = levelInfo({ points: 1200, membership: "gold" });
+const goldFree = paid(1200, "gold");
 expect("cap: a low level is not capped by a high plan", goldFree.capped === false);
 expect("cap: the badge is the earned one", goldFree.badge === "LV30", goldFree.badge);
 
-const diamondTop = levelInfo({ points: 1e11, membership: "diamond" });
+const diamondTop = paid(1e11, "diamond");
 expect("cap: diamond reaches LVMax", diamondTop.badge === "LVMax" && diamondTop.capped === false, diamondTop.badge);
 
 /* ------------------------------------------------------------------ */
@@ -119,7 +124,7 @@ expect("quotas: one prize entry per prize from LV10", rowFor(1).quotas.prizeEntr
 expect("labels: the Arabic actor names are kept", rowFor(0).nameAr === "مستكشف" && rowFor(3).nameAr === "ناشر");
 
 /* ------------------------------------------------------------------ */
-/* unlock now — the fee is the level's own threshold                  */
+/* unlock now — the level is granted by the payment, never by points   */
 /* ------------------------------------------------------------------ */
 const FEES = [10, 100, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11];
 expect(
@@ -128,31 +133,40 @@ expect(
   FEES.map((fee, index) => unlockFee(index + 1)).join(",")
 );
 
+/* points alone never give a level */
+const unpaid = levelInfo({ points: 20000, membership: "gold" });
+expect("pay: points alone give no level", unpaid.level === 0 && unpaid.badge === "LV09", unpaid.badge);
+expect("pay: the points still say which level is earned", unpaid.earnedLevel === 4, String(unpaid.earnedLevel));
+expect("pay: the earned rung can be unlocked", unpaid.eligible === true);
+
+/* the offer needs the rung to be earned */
 {
-  const info = levelInfo({ points: 150, membership: "gold" });
-  const offer = unlockOffer(info, 2000);
-  expect("unlock: the next rung is LV30", offer?.level === 3, String(offer?.level));
-  expect("unlock: its fee is 1 000", offer?.fee === 1000, String(offer?.fee));
-  expect("unlock: two thousand in the balance covers it", offer?.affordable === true && offer?.missing === 0);
-  const short = unlockOffer(levelInfo({ points: 120, membership: "gold" }), 200);
-  expect("unlock: a short balance still offers, and says how much", short?.affordable === false && short?.missing === 800, `${short?.missing}`);
-  expect("unlock: an empty balance still names the price", unlockOffer(levelInfo({ points: 5, membership: "gold" }), 0)?.fee === 10, String(unlockOffer(levelInfo({ points: 5, membership: "gold" }), 0)?.fee));
-  expect("unlock: LV00 is offered LV10 for ten points", unlockOffer(levelInfo({ points: 0 }), 0)?.level === 1);
+  const poor = levelInfo({ points: 5, membership: "gold" });
+  expect("unlock: nothing offered before the points are reached", unlockOffer(poor, 1e6) === null);
+  expect("unlock: ten points open LV10", unlockOffer(levelInfo({ points: 10 }), 10)?.level === 1);
+  const rich = levelInfo({ points: 12000, membership: "gold", unlocked: 3 });
+  const offer = unlockOffer(rich, 2000);
+  expect("unlock: the next rung is LV40", offer?.level === 4, String(offer?.level));
+  expect("unlock: its fee is 10 000", offer?.fee === 10000, String(offer?.fee));
+  expect("unlock: two thousand is not enough, and it says so", offer?.affordable === false && offer?.missing === 8000, String(offer?.missing));
+  const covered = unlockOffer(levelInfo({ points: 12000, membership: "gold", unlocked: 3 }), 12000);
+  expect("unlock: a covered balance opens the payment", covered?.affordable === true && covered?.missing === 0);
 }
 
 expect(
   "unlock: a capped member is not offered a rung past the ceiling",
-  unlockOffer(levelInfo({ points: 5000, membership: "free" }), 1e9) === null
+  unlockOffer(levelInfo({ points: 1e9, membership: "free", unlocked: 3 }), 1e9) === null
 );
-expect("unlock: LVMax is the end", unlockOffer(levelInfo({ points: 1e11, membership: "diamond" }), 1e11) === null);
+expect("unlock: LVMax is the end", unlockOffer(levelInfo({ points: 1e12, membership: "diamond", unlocked: 11 }), 1e12) === null);
 
-/* a bought level survives the payment that lowers the balance */
+/* the paid level survives the payment that lowers the balance */
 {
-  const paid = levelInfo({ points: 120, membership: "gold", unlocked: 5 });
-  expect("unlock: the bought level wins over the points", paid.level === 5, `${paid.level}`);
-  expect("unlock: stored 11 is the open level", storedLevel(11) === "max" && storedLevel(4) === 4 && storedLevel(0) === 0);
-  const capped = levelInfo({ points: 120, membership: "free", unlocked: 6 });
-  expect("unlock: the ceiling still caps a bought level", capped.level === 3 && capped.capped === true, `${capped.level}`);
+  const bought = levelInfo({ points: 900, membership: "gold", unlocked: 4 });
+  expect("pay: the bought level stands after the points are spent", bought.level === 4 && bought.badge.startsWith("LV4"), bought.badge);
+  expect("pay: stored 11 is the open level", storedLevel(11) === "max" && storedLevel(4) === 4 && storedLevel(0) === 0);
+  const capped = levelInfo({ points: 1e7, membership: "free", unlocked: 6 });
+  expect("pay: the membership ceiling still caps a bought level", capped.level === 3 && capped.capped === true, `${capped.level}`);
+  expect("pay: paying never happens twice for one rung", unlockOffer(levelInfo({ points: 1e7, membership: "free", unlocked: 3 }), 1e9) === null);
 }
 
 /* ------------------------------------------------------------------ */

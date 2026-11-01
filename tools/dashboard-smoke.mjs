@@ -31,6 +31,7 @@ const MEMBER = {
   phone_number: "+212600000000",
   avatar_url: "",
   level: 3,
+  level_unlocked: 3,
   points: 1250,
   membership: "gold",
   status: "active",
@@ -83,7 +84,7 @@ function payload() {
       membership_expires_at: new Date(NOW + 300 * 864e5).toISOString(),
       points_available: 1250,
       points_spent: 400,
-      points_total: 1650,
+      points_total: 12400,
       watch_minutes: 3820,
       level: 3,
       joined_at: member.created_at,
@@ -431,8 +432,20 @@ function expect(name, condition, detail = "") {
   expect("level: it asks for the rung's own points", /10,000 points|10000 points/.test(p.text(".dsh-table") + unlock?.getAttribute("title") || ""), unlock?.getAttribute("title") || "");
   expect("level: short balance keeps it disabled", unlock?.disabled === true);
 
+  expect("level: the paid level is the badge", /LV3/.test(p.text(".dsh-grid")), p.text(".dsh-grid").slice(0, 80));
+  expect("level: an earned rung reads Ready", /Ready/.test(p.text(".dsh-table")), "Ready");
+
+  /* a member who has not earned the next rung gets no button at all */
+  scenario = { overview: { points_total: 1650 } };
+  const poor = await boot("level-poor");
+  poor.click(poor.qs('[data-nav] [data-goto="level"]'));
+  await poor.wait(60);
+  expect("level: no unlock button before the points are reached", !poor.qs("[data-level-unlock]"));
+  expect("level: the paid level still stands", /LV3/.test(poor.text(".dsh-grid")), poor.text(".dsh-grid").slice(0, 80));
+  expect("level-poor: no errors", poor.errors.length === 0, poor.errors.join(" | "));
+
   /* with the balance covered, the dialog and the payment run */
-  scenario = { overview: { points_available: 200000, points_total: 1650 } };
+  scenario = { overview: { points_available: 200000, points_total: 12400 } };
   calls.length = 0;
   const pay = await boot("unlock");
   pay.click(pay.qs('[data-nav] [data-goto="level"]'));
@@ -449,7 +462,7 @@ function expect(name, condition, detail = "") {
   expect("unlock: no errors", pay.errors.length === 0, pay.errors.join(" | "));
 
   /* a refused payment explains itself and stays open */
-  scenario = { overview: { points_available: 200000, points_total: 1650 }, unlockFails: true };
+  scenario = { overview: { points_available: 200000, points_total: 12400 }, unlockFails: true };
   calls.length = 0;
   const refused = await boot("unlock-refused");
   refused.click(refused.qs('[data-nav] [data-goto="level"]'));

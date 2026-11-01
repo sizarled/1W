@@ -846,10 +846,12 @@ bucket with the `apikey` header only.
 
 ### Levels
 
-The level is the points: `10`, `100`, `1 000` … `100 000 000 000`, and the membership only sets the
-ceiling — Free `LV30`, Silver `LV50`, Gold `LV80`, Diamond open. The badge is `LV` + the level + the
-tens digit of the progress, so **`LV85` is level 8 with half of level 9 already earned**, `LV00` is a
-member with no points yet, and `LVMax` is the open level. Everything lives in
+A level costs points: `10`, `100`, `1 000` … `100 000 000 000`, and it is **granted only when it is
+paid for** — the points have to reach the level's threshold first, then they leave the balance and the
+level is stored on the member (`members.level_unlocked`). The membership only sets the ceiling — Free
+`LV30`, Silver `LV50`, Gold `LV80`, Diamond open. The badge is `LV` + the level + the tens digit of the
+progress, so **`LV85` is level 8 with half of level 9 already earned**, `LV00` is a member who has not
+bought a level yet, and `LVMax` is the open level. Everything lives in
 [`assets/js/levels.js`](assets/js/levels.js) — the header wallet, the sidebar meter, the login card,
 the profile flag and the dashboard level page read from it. Thresholds, quotas and rights are
 written down in [`docs/levels.md`](docs/levels.md).
@@ -911,9 +913,11 @@ After a successful registration the details card's **Log in** button goes straig
 
 ### Unlock now — buying a level
 
-On `dashboard.html#level` the next rung carries an **Unlock now** button. It opens a dialog that
-names the price — the level's own points threshold — and pays it from the balance; if the balance is
-short, the dialog says how much is missing and offers to buy the rest instead of paying:
+On `dashboard.html#level` the next rung carries an **Unlock now** button as soon as its points
+condition is met — the rung reads **Ready** in the ladder until it is paid. The dialog names the price
+(the level's own points threshold) and pays it from the balance; if the balance is short it says how
+much is missing and offers to buy the rest instead of paying. Nothing is ever granted by points
+alone:
 
 | Level | LV1 | LV2 | LV3 | LV4 | LV5 | LV6 | LV7 | LV8 | LV9 | LV10 | LVMax |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |

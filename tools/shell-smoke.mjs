@@ -156,7 +156,7 @@ async function boot(file, { stored = null, member = null } = {}) {
 {
   const p = await boot("index.html", {
     stored: false,
-    member: { id: "m1", username: "@sara", name: "Sara", points: 550000000, membership: "diamond", level: 8 },
+    member: { id: "m1", username: "@sara", name: "Sara", points: 550000000, membership: "diamond", level_unlocked: 8 },
   });
   expect(
     "wallet: the points chip opens dashboard.html#points",
@@ -172,7 +172,7 @@ async function boot(file, { stored = null, member = null } = {}) {
 {
   const p = await boot("index.html", {
     stored: false,
-    member: { id: "m2", username: "@amine", name: "Amine", points: 1000000000, membership: "free", level: 9 },
+    member: { id: "m2", username: "@amine", name: "Amine", points: 1000000000, membership: "free", level_unlocked: 9 },
   });
   expect("cap: a free member at a billion points shows LV39", p.qs("[data-wallet-level]")?.textContent === "LV39", p.qs("[data-wallet-level]")?.textContent);
   expect("cap: the meter says so", /LV39 \/ LV30 · cap/.test(p.qs("[data-level-cap]")?.textContent || ""), p.qs("[data-level-cap]")?.textContent);

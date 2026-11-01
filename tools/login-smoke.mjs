@@ -29,6 +29,7 @@ const MEMBER = {
   email: "youssef@example.com",
   avatar_url: "",
   level: 3,
+  level_unlocked: 2,
   points: 420,
   membership: "gold",
   status: "active",
