@@ -14,7 +14,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const BUILD = "20261031t"; // cache-bust for css/js
+const BUILD = "20261031u"; // cache-bust for css/js
 
 /* Hand-written pages are NOT in this list: index.html, login.html, register.html,
    watch.html, cast.html, dashboard.html, activated.html, court.html. */

@@ -676,9 +676,15 @@ function is service-role only, so it can be called by a scheduled job (`pg_cron`
 dashboard's scheduler) without exposing anything to the browser.
 
 **Storage.** The `source` bucket already holds the sounds; `users/profile/` is the only folder
-the browser may write to (`source_profile_insert`: insert only, `avatar_…` / `cover_…` names
-only), so a member cannot overwrite or delete anything. Replace the policy with signed uploads
-when real auth lands.
+the browser may write to, and only with the fixed names
+`avatar_ID123456.jpg` / `cover_ID123456.jpg` (`source_profile_insert`, insert only; a matching
+`source_profile_read` covers the API's own read-back). A publishable key must travel in the
+`apikey` header **only** — sending `Authorization: Bearer sb_publishable_…` makes the storage API
+parse a non-JWT and answer `403 new row violates row-level security policy`, so the page sends
+`apikey` first and retries with the Bearer form for deployments that still use the legacy anon
+key. A refused upload never traps the member in step 1: the profile is saved without the image,
+the reason is printed inline, and the image can be added later from `profile.html`. Replace the
+policy with signed uploads when real auth lands.
 
 `court.html?id=ID_COURT` is the case file: case number, date and time, judge / defendant /
 plaintiff, reason, status, the absence warning and the verdict with the court note. A case id
@@ -689,7 +695,7 @@ returns the caller's cases.
 
 ```bash
 node tools/dashboard-smoke.mjs   # 80 checks: the five gates, rail, popover, codes, sections
-node tools/court-smoke.mjs       # 102 checks: the four steps, both doors, the court room
+node tools/court-smoke.mjs       # 115 checks: the four steps, uploads, both doors, the court room
 ```
 
 `dashboard-smoke.mjs` boots the page in jsdom with a stubbed `member_dashboard` and walks the

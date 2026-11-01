@@ -859,3 +859,14 @@ create policy source_profile_insert on storage.objects
     and (storage.foldername(name))[2] = 'profile'
     and name ~ '^users/profile/(avatar|cover)_ID[0-9]{6}(\.[a-z]{2,5})?$'
   );
+
+-- Reads of the profile folder (public bucket, so this only matters for the
+-- storage API itself when it returns the object it just stored).
+drop policy if exists source_profile_read on storage.objects;
+create policy source_profile_read on storage.objects
+  for select to anon, authenticated
+  using (
+    bucket_id = 'source'
+    and (storage.foldername(name))[1] = 'users'
+    and (storage.foldername(name))[2] = 'profile'
+  );

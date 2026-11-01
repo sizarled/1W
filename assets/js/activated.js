@@ -228,7 +228,13 @@ function wireWizard(root) {
       const preview = qs(`[data-preview="${kind}"]`, root);
       const box = qs(`[data-preview-box="${kind}"]`, root);
       const clear = qs(`[data-clear="${kind}"]`, root);
-      if (preview) preview.src = URL.createObjectURL(file);
+      if (preview) {
+        try {
+          preview.src = URL.createObjectURL(file);
+        } catch (error) {
+          /* previews are a nicety — a browser without createObjectURL still uploads */
+        }
+      }
       if (box) box.hidden = false;
       if (clear) clear.hidden = false;
     });
@@ -395,11 +401,18 @@ async function saveProfile(root) {
     let avatar = app.uploaded.avatar;
     let cover = app.uploaded.cover;
 
-    if (app.files.avatar) {
-      avatar = await uploadImage(app.files.avatar, "avatar", memberId);
-      app.uploaded.avatar = avatar;
+    let uploadError = "";
+    for (const kind of ["avatar", "cover"]) {
+      if (!app.files[kind]) continue;
+      try {
+        const url = await uploadImage(app.files[kind], kind, memberId);
+        if (kind === "avatar") avatar = url;
+        else cover = url;
+        app.uploaded[kind] = url;
+      } catch (error) {
+        uploadError = String(error.message || error);
+      }
     }
-    if (app.files.cover) cover = await uploadImage(app.files.cover, "cover", memberId);
 
     const result = await rpc("activation_profile_save", {
       p_token: token,
@@ -419,7 +432,16 @@ async function saveProfile(root) {
     app.profile = result.profile || { name };
     setNameTags(root, memberId);
     setStep(root, 2);
-    toast({ title: "Profile saved", message: "Step 2 — create the viewing code." });
+    if (uploadError) {
+      note(
+        root,
+        `The profile was saved without the image (storage said: ${uploadError}). You can add it later from profile.html.`,
+        true
+      );
+      toast({ title: "Image not uploaded", message: uploadError.slice(0, 140) });
+    } else {
+      toast({ title: "Profile saved", message: "Step 2 — create the viewing code." });
+    }
   } catch (error) {
     toast({ title: "Upload failed", message: String(error.message || error).slice(0, 140) });
   } finally {
@@ -428,27 +450,43 @@ async function saveProfile(root) {
   }
 }
 
-/** Uploads to `source/users/profile/<kind>_<IDMEMBER>.<ext>` and returns the public URL. */
+/**
+ * Uploads to `source/users/profile/<kind>_<IDMEMBER>.<ext>` and returns the
+ * public URL. A publishable key goes in `apikey` only — sending it again as a
+ * Bearer token makes the storage API parse a non-JWT and answer
+ * `403 new row violates row-level security policy`. The Bearer form is kept as
+ * a fallback for deployments that still use the legacy anon key.
+ */
 async function uploadImage(file, kind, memberId) {
-  const ext = (String(file.name || "").split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+  const rawExt = String(file.name || "").split(".").pop() || "";
+  const ext = (rawExt.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg").slice(0, 5);
   const cleanId = String(memberId || "").replace(/[^A-Za-z0-9]/g, "");
   const name = `${kind}_${cleanId}.${ext}`;
   const path = `users/profile/${name}`;
-  const res = await fetch(`${SUPABASE.url}/storage/v1/object/${SUPABASE.storageBucket}/${path}`, {
-    method: "POST",
-    headers: {
-      apikey: SUPABASE.publishableKey,
-      Authorization: `Bearer ${SUPABASE.publishableKey}`,
-      "Content-Type": file.type || "image/jpeg",
-      "x-upsert": "false",
-    },
-    body: file,
-  });
-  if (!res.ok && res.status !== 409) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`${res.status} ${text.slice(0, 120)}`);
+  const url = `${SUPABASE.url}/storage/v1/object/${SUPABASE.storageBucket}/${path}`;
+  const base = {
+    "Content-Type": file.type || "image/jpeg",
+    "x-upsert": "false",
+    "cache-control": "3600",
+  };
+
+  const attempts = [
+    { apikey: SUPABASE.publishableKey, ...base },
+    { apikey: SUPABASE.publishableKey, Authorization: `Bearer ${SUPABASE.publishableKey}`, ...base },
+  ];
+
+  let last = "";
+  for (const headers of attempts) {
+    const res = await fetch(url, { method: "POST", headers, body: file }).catch((error) => {
+      last = String(error.message || error);
+      return null;
+    });
+    if (!res) continue;
+    if (res.ok || res.status === 409) return storageUrl(path); // 409 = already uploaded
+    last = `${res.status} ${(await res.text().catch(() => "")).slice(0, 160)}`;
+    if (res.status !== 401 && res.status !== 403) break;
   }
-  return storageUrl(path);
+  throw new Error(last || "upload failed");
 }
 
 function setNameTags(root, memberId) {

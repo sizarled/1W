@@ -42,7 +42,14 @@ function reply(data) {
 function stubFetch(url, opts = {}) {
   const href = String(url);
   calls.push(href);
-  const body = opts.body ? JSON.parse(opts.body) : {};
+  let body = {};
+  if (typeof opts.body === "string" && opts.body) {
+    try {
+      body = JSON.parse(opts.body);
+    } catch (error) {
+      body = {};
+    }
+  }
 
   if (href.includes("/rpc/member_activation_state")) {
     const status = scenario.status || "inactive";
@@ -89,6 +96,19 @@ function stubFetch(url, opts = {}) {
       },
       viewing_codes: scenario.viewingCodes || 0,
       mode: status === "banned" ? "blocked" : first ? "activate" : "choose",
+    });
+  }
+  if (href.includes("/storage/v1/object/")) {
+    scenario.uploads = (scenario.uploads || 0) + 1;
+    const plan = scenario.storage || [200];
+    const status = plan[Math.min(scenario.uploads - 1, plan.length - 1)];
+    if (status === 200) return reply({ Key: "users/profile/x.jpg", Id: "obj-1" });
+    if (status === 409) return reply({ statusCode: "409", error: "Duplicate" });
+    return Promise.resolve({
+      ok: false,
+      status,
+      json: async () => ({ statusCode: String(status), error: "Unauthorized", message: "new row violates row-level security policy", code: "AccessDenied" }),
+      text: async () => JSON.stringify({ statusCode: String(status), error: "Unauthorized", message: "new row violates row-level security policy", code: "AccessDenied" }),
     });
   }
   if (href.includes("/rpc/activation_profile_save")) {
@@ -330,6 +350,50 @@ const expect = (name, condition, detail = "") => checks.push({ name, ok: Boolean
   expect("step4: done visible", p.qs("[data-done]").hidden === false);
   expect("step4: finish links to dashboard", (p.qs("[data-done-finish]")?.getAttribute("href") || "").includes("dashboard.html"));
   expect("step4: no error", p.errors.length === 0, p.errors.join(" | "));
+}
+
+/* activated.html — the avatar upload retries without the Bearer token ---- */
+{
+  scenario = { status: "inactive", membership: "free", activatedAt: null, storage: [403, 200] };
+  calls.length = 0;
+  const p = await boot(21, { file: "activated.html", search: "?member=ID100042" });
+  const input = p.qs("[data-file='avatar']");
+  const file = new p.window.File([new Uint8Array([1, 2, 3])], "me.JPG", { type: "image/jpeg" });
+  Object.defineProperty(input, "files", { value: [file], configurable: true });
+  input.dispatchEvent(new p.window.Event("change", { bubbles: true }));
+  expect("upload: preview shown", p.qs("[data-preview-box='avatar']").hidden === false);
+
+  p.qs("[data-pf-name]").value = "Youssef A.";
+  p.submit(p.qs("[data-step='1']"));
+  await p.wait(300);
+
+  expect("upload: retried after the RLS refusal", scenario.uploads === 2);
+  const saved = calls.filter((c) => c.includes("activation_profile_save")).length;
+  expect("upload: profile still saved", saved === 1);
+  expect("upload: moved on to step 2", p.qs("[data-step='2']").hidden === false);
+  expect("upload: no blocked note", p.qs("[data-act-notice]").hidden === true);
+  expect("upload: no error", p.errors.length === 0, p.errors.join(" | "));
+}
+
+/* activated.html — a storage outage does not dead-end the wizard -------- */
+{
+  scenario = { status: "inactive", membership: "free", activatedAt: null, storage: [403, 403] };
+  calls.length = 0;
+  const p = await boot(22, { file: "activated.html", search: "?member=ID100042" });
+  const input = p.qs("[data-file='cover']");
+  const file = new p.window.File([new Uint8Array([9])], "cover.png", { type: "image/png" });
+  Object.defineProperty(input, "files", { value: [file], configurable: true });
+  input.dispatchEvent(new p.window.Event("change", { bubbles: true }));
+
+  p.qs("[data-pf-name]").value = "Youssef A.";
+  p.submit(p.qs("[data-step='1']"));
+  await p.wait(300);
+
+  expect("upload fail: both attempts made", scenario.uploads === 2);
+  expect("upload fail: profile saved without the image", calls.some((c) => c.includes("activation_profile_save")));
+  expect("upload fail: step 2 still reachable", p.qs("[data-step='2']").hidden === false);
+  expect("upload fail: explained inline", /without the image/i.test(p.text("[data-act-notice]")));
+  expect("upload fail: no error", p.errors.length === 0, p.errors.join(" | "));
 }
 
 /* activated.html — premium re-activation with points -------------------- */
