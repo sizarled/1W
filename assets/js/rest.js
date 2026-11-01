@@ -73,6 +73,7 @@ const MESSAGES = {
   email: "Enter a valid email address.",
   full_name: "Enter the full name written on the account.",
   view_code: "Enter the six-digit viewing code.",
+  view_code_server: "Those six digits are not an original code of this account on this device.",
   identity: "The name, phone, email and code do not describe one account.",
   device_not_bound:
     "That code is bound to another device. Enter the code that was created on this device — its original code.",
@@ -81,6 +82,9 @@ const MESSAGES = {
   device_unknown:
     "No code on this account was created on this browser, so it cannot be the linked device. Use the recovery code or the recovery link.",
   device: "This browser has no device id, so it cannot be the linked device.",
+  identity_name: "That is not the full name on this account.",
+  identity_phone: "That is not the phone number on this account.",
+  identity_email: "That is not the email address on this account.",
   server: "The request did not go through. Try again in a moment.",
 };
 
@@ -519,14 +523,54 @@ async function checkDevice() {
     paintDeviceState(`This device is ${id}. The check did not go through — try again.`);
     return;
   }
-  if (!result.identity) {
-    paintDeviceState(`${id}: this name, phone and email do not describe one account.`);
+  if (result.identity) {
+    paintDeviceState(
+      `${id}: this device holds the original code of ${result.username}. Enter that code below.`
+    );
   } else if (!result.bound) {
-    paintDeviceState(`${id}: no code on this account was created on this browser, so it cannot be the linked device.`);
+    paintDeviceState(
+      `${id}: no code on this account was created on this browser, so it cannot be the linked device. Use the recovery code or the link instead.`
+    );
   } else {
-    paintDeviceState(`${id}: this device holds an original code of the account. Enter that code below.`);
+    paintDeviceState(`${id}: ${describeMatches(result)}`);
   }
-  if (node) node.dataset.bound = result.bound ? "true" : "false";
+  if (node) {
+    node.dataset.bound = result.bound ? "true" : "false";
+    node.dataset.identity = result.identity ? "true" : "false";
+  }
+}
+
+/**
+ * The device holds the codes of one or more accounts. Say how many, and — when
+ * one of them nearly fits the typed identity — which field is the odd one out.
+ */
+function describeMatches(result) {
+  const rows = Array.isArray(result.matches) ? result.matches : [];
+  const names = rows.map((row) => row.username).filter(Boolean);
+
+  if (!rows.length) {
+    return "this device holds no code of the account.";
+  }
+
+  const near = rows
+    .map((row) => ({ ...row, score: [row.name, row.phone, row.email].filter(Boolean).length }))
+    .filter((row) => row.score >= 2)
+    .sort((a, b) => b.score - a.score)[0];
+
+  if (near) {
+    const wrong = [
+      near.name ? "" : "the full name",
+      near.phone ? "" : "the phone number",
+      near.email ? "" : "the email address",
+    ].filter(Boolean);
+    return `this device holds the original code of ${near.username}, and ${
+      wrong.length === 1 ? `${wrong[0]} is the only field that does not match it` : `${wrong.join(" and ")} do not match it`
+    }.`;
+  }
+
+  return `this device holds the original codes of ${names.length} account${
+    names.length === 1 ? "" : "s"
+  } (${names.join(", ")}) — the name, the phone and the email do not match any of them.`;
 }
 
 async function submitDevice() {
@@ -864,8 +908,14 @@ function busy(step, on) {
 /** A known server error code → the right field, or the alert box. */
 function fail(step, result) {
   const code = result?.error || "server";
-  const message = messageFor(code, result);
-  const field = SERVER_FIELD[step]?.[code];
+  // the client already checked the shape, so a "view_code" answer from the
+  // server means the code is not this account's original code on this device
+  const message =
+    step === "device" && code === "view_code" ? MESSAGES.view_code_server : messageFor(code, result);
+  let field = SERVER_FIELD[step]?.[code];
+  if (step === "device" && code === "identity") {
+    field = result?.field === "phone" ? "dev_phone" : result?.field === "email" ? "dev_email" : "full_name";
+  }
   if (field) setError(field, message);
   if (!field || !field.startsWith("dev_")) alertBox(step, message);
   const error = result?.error;
@@ -878,6 +928,12 @@ function fail(step, result) {
 function messageFor(code, result) {
   if (code === "device_not_bound") {
     return result?.reason === "other_device" ? MESSAGES.device_other : MESSAGES.device_unknown;
+  }
+  if (code === "identity") {
+    const which =
+      result?.field === "phone" ? "identity_phone" : result?.field === "email" ? "identity_email" : "identity_name";
+    const base = MESSAGES[which];
+    return result?.username ? `${base} This code belongs to ${result.username}.` : base;
   }
   if (code === "wait") {
     const wait = Number(result?.retry_after) || 60;

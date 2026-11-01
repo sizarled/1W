@@ -49,7 +49,7 @@ const server = {
   reset: "ok", // ok | password
   link: "ok", // ok | bad
   device: "ok", // ok | other_device | unknown_device
-  check: "bound", // bound | unbound | no_identity
+  check: "bound", // bound | unbound | near | no_identity
   attemptsLeft: 4,
 };
 
@@ -113,14 +113,47 @@ function stubFetch(url, opts = {}) {
   }
 
   if (href.includes("/rpc/recovery_device_status")) {
-    if (server.check === "unbound") return reply({ ok: true, device: true, identity: true, bound: false, codes: 1 });
-    if (server.check === "no_identity") return reply({ ok: true, device: true, identity: false, bound: false, codes: 0 });
-    return reply({ ok: true, device: true, identity: true, bound: true, codes: 1 });
+    if (server.check === "unbound") {
+      return reply({ ok: true, device: true, bound: false, accounts: 0, identity: false, username: null, matches: [] });
+    }
+    if (server.check === "near") {
+      return reply({
+        ok: true,
+        device: true,
+        bound: true,
+        accounts: 2,
+        identity: false,
+        username: null,
+        matches: [
+          { username: "@jhon007", member_id: "ID100015", name: false, phone: false, email: false },
+          { username: "@ledsizar", member_id: "ID100003", name: true, phone: true, email: false },
+        ],
+      });
+    }
+    if (server.check === "no_identity") {
+      return reply({ ok: true, device: true, bound: true, accounts: 1, identity: false, username: null, matches: [{ username: "@ledsizar", name: false, phone: false, email: false }] });
+    }
+    return reply({
+      ok: true,
+      device: true,
+      bound: true,
+      accounts: 2,
+      identity: true,
+      username: "@youssef.amrani",
+      member_id: MEMBER.member_id,
+      matches: [{ username: "@youssef.amrani", member_id: MEMBER.member_id, name: true, phone: true, email: true }],
+    });
   }
 
   if (href.includes("/rpc/recovery_device")) {
     if (server.device === "other_device") return reply({ ok: false, error: "device_not_bound", reason: "other_device" });
-    if (server.device === "unknown_device") return reply({ ok: false, error: "device_not_bound", reason: "unknown_device" });
+    if (server.device === "unknown_device") return reply({ ok: false, error: "view_code" });
+    if (server.device === "wrong_email") {
+      return reply({ ok: false, error: "identity", field: "email", username: "@ledsizar" });
+    }
+    if (server.device === "wrong_name") {
+      return reply({ ok: false, error: "identity", field: "full_name", username: "@ledsizar" });
+    }
     return reply({
       ok: true,
       via: "device",
@@ -482,11 +515,32 @@ function check(name, ok, detail) {
   report.checkBoundFlag = p.qs("[data-rc-device-state]").dataset.bound;
   report.checkPayload = bodies.find((c) => c.href.includes("recovery_device_status"))?.body || {};
 
+  server.check = "near";
+  p.click(p.qs("[data-rc-device-check]"));
+  await p.wait(140);
+  report.checkNearText = p.text("[data-rc-device-state]");
+  report.checkNearFlag = p.qs("[data-rc-device-state]").dataset.identity;
+
   server.check = "unbound";
   p.click(p.qs("[data-rc-device-check]"));
   await p.wait(140);
   report.checkUnboundText = p.text("[data-rc-device-state]");
   report.checkUnboundFlag = p.qs("[data-rc-device-state]").dataset.bound;
+
+  // one field wrong on the account this device holds — the field is named
+  server.device = "wrong_email";
+  server.check = "bound";
+  p.setInput("#rc-device-email", "someone.else@example.com");
+  p.submit("device");
+  await p.wait(160);
+  report.wrongEmailField = p.errorFor("dev_email");
+  report.wrongEmailOnName = p.errorFor("full_name");
+
+  server.device = "wrong_name";
+  p.setInput("#rc-device-email", "youssef@example.com");
+  p.submit("device");
+  await p.wait(160);
+  report.wrongNameField = p.errorFor("full_name");
 
 
   server.device = "ok";
@@ -497,9 +551,13 @@ function check(name, ok, detail) {
   report.deviceNewCode = p.text("[data-rc-code]");
   report.deviceVia = bodies.filter((c) => c.href.includes("recovery_device")).pop()?.body.p_view_code === "424242";
   check("a code of another device is refused", /belongs to another device/i.test(report.deviceRefusedField), report.deviceRefusedField);
-  check("an unbound browser is refused with its own words", /was created on this browser|not the linked device/i.test(report.deviceUnknownField), report.deviceUnknownField);
+  check("an unbound browser is told the code is not its own", /not an original code of this account/i.test(report.deviceUnknownField), report.deviceUnknownField);
   check("the check reports a bound device", report.checkBoundFlag === "true", report.checkBoundText);
+  check("the check names the account", /@youssef\.amrani/.test(report.checkBoundText), report.checkBoundText);
+  check("the check names the field that is off", /email address is the only field/i.test(report.checkNearText), report.checkNearText);
   check("the check reports an unbound device", report.checkUnboundFlag === "false", report.checkUnboundText);
+  check("a wrong email is put on the email field", /not the email address/i.test(report.wrongEmailField) && report.wrongEmailOnName === "", `${report.wrongEmailField} | ${report.wrongEmailOnName}`);
+  check("a wrong name is put on the name field", /not the full name/i.test(report.wrongNameField), report.wrongNameField);
   check("the device path finishes", report.deviceDone === "done", report.deviceDone);
   check("the device id travels with the request", report.deviceSendsId, JSON.stringify(report.devicePayload));
   check("the viewing code travels with the request", report.deviceVia);

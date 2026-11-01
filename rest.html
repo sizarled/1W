@@ -11,11 +11,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="assets/css/base.css?v=20261101h" />
-    <link rel="stylesheet" href="assets/css/layout.css?v=20261101h" />
-    <link rel="stylesheet" href="assets/css/components.css?v=20261101h" />
-    <link rel="stylesheet" href="assets/css/register.css?v=20261101h" />
-    <link rel="stylesheet" href="assets/css/rest.css?v=20261101h" />
+    <link rel="stylesheet" href="assets/css/base.css?v=20261101i" />
+    <link rel="stylesheet" href="assets/css/layout.css?v=20261101i" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261101i" />
+    <link rel="stylesheet" href="assets/css/register.css?v=20261101i" />
+    <link rel="stylesheet" href="assets/css/rest.css?v=20261101i" />
     <script>
       /* apply the saved theme (or the OS preference) before first paint */
       (function () {
@@ -34,7 +34,7 @@
       })();
     </script>
 
-    <script type="module" src="assets/js/app.js?v=20261101h"></script>
+    <script type="module" src="assets/js/app.js?v=20261101i"></script>
   </head>
   <body data-page="rest" data-title="Recover account">
     <a class="skip-link" href="#main">Skip to content</a>
@@ -336,7 +336,8 @@
 
             <p class="rc-device__lead">
               Your full name, your phone, your email and one of your six-digit viewing codes —
-              accepted only from a device that is already linked to one of those codes.
+              accepted only from the device that code belongs to. One device can hold the codes
+              of more than one account: the code decides which account is recovered.
             </p>
 
             <div class="rc-alert" data-rc-alert="device" role="alert" hidden>
@@ -359,6 +360,7 @@
                   <input id="rc-name" name="full_name" type="text" autocomplete="name"
                          placeholder="As written on the account" aria-required="true" />
                 </div>
+                <p class="rc-field__hint">Exactly as the account was registered — the order of the words does not matter.</p>
                 <p class="rc-field__error" data-err="full_name" role="alert" hidden></p>
               </div>
 
@@ -389,7 +391,7 @@
                   <input id="rc-view-code" name="view_code" type="text" inputmode="numeric" autocomplete="off"
                          placeholder="000000" aria-required="true" maxlength="6" />
                 </div>
-                <p class="rc-field__hint">The six digits you created when the account was activated.</p>
+                <p class="rc-field__hint">The six digits created on this device when the account was activated — its original code.</p>
                 <p class="rc-field__error" data-err="view_code" role="alert" hidden></p>
               </div>
 

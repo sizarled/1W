@@ -546,15 +546,31 @@ nothing else:
   `EL MEHDI MOUAOUINE` and `Mouaouine,  El-Mehdi` are the same person;
 - the phone is still the last nine digits.
 
-Two refusals, told apart so the page can say which one happened: `other_device` (the code is
-real but it belongs to another device) and `unknown_device` (this browser holds none of the
-account's original codes). A wrong name, phone or email is `identity`.
+**One device, several accounts.** Two accounts can be activated on the same browser, so the
+device id alone never decides whose code it is: **the code decides the account**, and name,
+phone and email only confirm it. When the code is this device's own, a mismatch comes back as
+`identity` with the `field` that is off and the `username` of the account it belongs to
+(`{"error":"identity","field":"email","username":"@ledsizar"}`), and the page puts the error
+on that field. When the code is real but belongs to another device, the answer depends on who
+is asking: the holder who also fits the account gets `device_not_bound` / `other_device`, and
+anyone else gets the same flat `view_code` as for a code that does not exist — a code cannot
+be probed for existence with a random six digits.
 
-The panel carries a **Check this device** button: `recovery_device_status(name, phone, email,
-device)` answers with three booleans — `device`, `identity`, `bound` — and never with a code,
-a device of somebody else or a name. That is how a member finds out, before typing anything,
-whether the browser in front of them is the one the account was activated on. The path ends
-the same way as the others: new password, new code, details to download.
+The panel carries a **Check this device** button. `recovery_device_status(name, phone, email,
+device)` answers with the accounts this browser holds original codes for, and for each one a
+verdict per field:
+
+```json
+{ "device": true, "bound": true, "accounts": 2, "identity": false,
+  "matches": [
+    { "username": "@jhon007",  "name": false, "phone": false, "email": false },
+    { "username": "@ledsizar", "name": true,  "phone": true,  "email": false } ] }
+```
+
+No code, no password and no device ever comes back. From that the page can say the useful
+sentence instead of a shrug — *"this device holds the original code of @ledsizar, and the email
+address is the only field that does not match it"*. The path ends the same way as the others:
+new password, new code, details to download.
 
 ### Delivery: the Google Apps Script and the bot
 
@@ -615,7 +631,7 @@ come back `false`, so the page can say so instead of pretending.
 | `recovery_link(code, ip, agent)` | The same, keyed by the code alone — that is what `?recovry=` calls |
 | `recovery_reset(ticket, password, ip, agent)` | The final step: new bcrypt password, sessions revoked, **new recovery code**, data + link returned |
 | `recovery_device(name, phone, email, view_code, device, password, ip, agent)` | The no-code path: the device's **original** code only, refused with `other_device` / `unknown_device` |
-| `recovery_device_status(name, phone, email, device)` | Three booleans — `device`, `identity`, `bound` — for the "check this device" button; nothing else leaves the server |
+| `recovery_device_status(name, phone, email, device)` | The accounts this browser holds original codes for, with a verdict per field, for the "check this device" button; nothing else leaves the server |
 | `recovery_device_key(text)` / `recovery_name_key(text)` | The device and the name in one comparable shape |
 | `recovery_send(member, code)` | Builds the email and the Telegram message and posts them with `pg_net` (internal) |
 | `recovery_code_hash(text)` / `recovery_code_key(text)` | One canonical shape — `OW-XXXX-XXXX-XXXX`, upper case, dashes — so old registration hashes keep working |
@@ -632,8 +648,9 @@ phone, unknown account, wrong phone, then the pair that matches), the resend coo
 (malformed code never reaching the server, wrong code with the attempts left, expired code,
 the right code), step 3 (short password, mismatch, strength hint, the change itself with the
 new code, the link and the `.txt`), the recovery link (good and spent), the device path
-(without a device id, a code of another device, a browser that never held one, the verdict of
-"check this device", then the success) and the markup itself.
+(without a device id, a code of another device, a browser that never held one, a wrong email
+and a wrong name landing on their own fields, the verdicts of "check this device" including
+the two-accounts-on-one-device case, then the success) and the markup itself.
 
 ---
 

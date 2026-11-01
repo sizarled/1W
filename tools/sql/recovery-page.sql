@@ -615,6 +615,11 @@ $$;
 --     device for good and cannot be unlinked — it is the device's original code.
 --     The other codes may be linked to other devices, and unlinked again. So the
 --     path accepts the original code of *this* device and nothing else.
+--
+--     One device can hold the codes of **several accounts** (two people, or one
+--     person with two accounts). The code — not the email — therefore decides
+--     which account is being recovered; the name, the phone and the email only
+--     confirm it, and a mismatch names the field that does not fit.
 -- ------------------------------------------------------------------
 create or replace function public.recovery_device_status(
   p_name   text,
@@ -628,41 +633,87 @@ security definer
 set search_path to 'public', 'extensions', 'pg_temp'
 as $$
 declare
-  v_name   text := public.recovery_name_key(p_name);
-  v_email  text := lower(btrim(coalesce(p_email, '')));
-  v_phone  text := public.recovery_phone_key(p_phone);
-  v_device text := public.recovery_device_key(p_device);
-  v_row    public.members%rowtype;
-  v_codes  integer := 0;
+  v_name     text := public.recovery_name_key(p_name);
+  v_email    text := lower(btrim(coalesce(p_email, '')));
+  v_phone    text := public.recovery_phone_key(p_phone);
+  v_device   text := public.recovery_device_key(p_device);
+  v_accounts integer := 0;
+  v_matches  jsonb := '[]'::jsonb;
+  v_user     text;
+  v_member   text;
+  v_hits     integer := 0;
 begin
-  select * into v_row from public.members m where lower(btrim(m.email)) = v_email limit 1;
+  if v_device = '' then
+    return jsonb_build_object('ok', true, 'device', false, 'bound', false, 'identity', false, 'accounts', 0, 'matches', '[]'::jsonb);
+  end if;
 
-  -- every flag is a boolean: this call never returns a code, a name or a device
+  -- every account holding an original code on this device, with the three
+  -- field verdicts for the identity that was typed
+  with bound as (
+    select distinct m.id, m.username, m.member_id, m.full_name, m.phone_number, m.email
+      from public.members m
+     where exists (
+             select 1 from public.viewing_codes c
+              where c.member_id = m.id
+                and (
+                  public.recovery_device_key(c.device_mac) = v_device
+                  or exists (select 1 from public.watch_code_devices d
+                              where d.code_id = c.id and d.idmember = m.id
+                                and public.recovery_device_key(d.device_id) = v_device)
+                )
+           )
+  ), scored as (
+    select b.username, b.member_id,
+           public.recovery_name_key(b.full_name) = v_name as name_ok,
+           public.recovery_phone_key(b.phone_number) = v_phone as phone_ok,
+           lower(btrim(b.email)) = v_email as email_ok
+      from bound b
+  )
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'username', s.username, 'member_id', s.member_id,
+           'name', s.name_ok, 'phone', s.phone_ok, 'email', s.email_ok
+         ) order by s.username), '[]'::jsonb),
+         count(*)
+    into v_matches, v_accounts
+    from scored s;
+
+  select s.username, s.member_id into v_user, v_member
+    from (
+      select b.username, b.member_id,
+             public.recovery_name_key(b.full_name) = v_name and
+             public.recovery_phone_key(b.phone_number) = v_phone and
+             lower(btrim(b.email)) = v_email as full_ok
+        from public.members b
+       where exists (
+               select 1 from public.viewing_codes c
+                where c.member_id = b.id
+                  and (
+                    public.recovery_device_key(c.device_mac) = v_device
+                    or exists (select 1 from public.watch_code_devices d
+                                where d.code_id = c.id and d.idmember = b.id
+                                  and public.recovery_device_key(d.device_id) = v_device)
+                  )
+             )
+    ) s
+   where s.full_ok
+   limit 1;
+
+  if v_user is not null then v_hits := 1; end if;
+
+  -- one verdict per account on this device, and never a code or a device
   return jsonb_build_object(
     'ok', true,
-    'device', v_device <> '',
-    'identity', v_row.id is not null
-      and public.recovery_phone_key(v_row.phone_number) = v_phone
-      and public.recovery_name_key(v_row.full_name) = v_name,
-    'bound', v_row.id is not null and exists (
-      select 1
-        from public.viewing_codes c
-       where c.member_id = v_row.id
-         and (
-           public.recovery_device_key(c.device_mac) = v_device
-           or exists (
-             select 1 from public.watch_code_devices d
-              where d.code_id = c.id and d.idmember = v_row.id
-                and public.recovery_device_key(d.device_id) = v_device
-           )
-         )
-    ),
-    'codes', case when v_row.id is null then 0 else (
-      select count(*) from public.viewing_codes c where c.member_id = v_row.id
-    ) end
+    'device', true,
+    'bound', v_accounts > 0,
+    'accounts', v_accounts,
+    'matches', v_matches,
+    'identity', v_hits > 0,
+    'username', v_user,
+    'member_id', v_member
   );
 end;
 $$;
+
 create or replace function public.recovery_device(
   p_name      text,
   p_phone     text,
@@ -687,6 +738,7 @@ declare
   v_row    public.members%rowtype;
   v_code   public.viewing_codes%rowtype;
   v_bound  boolean := false;
+  v_ident  boolean := false;
   v_new    text;
 begin
   if length(coalesce(p_password, '')) < 8 or length(p_password) > 72 then
@@ -699,58 +751,76 @@ begin
     return jsonb_build_object('ok', false, 'error', 'device');
   end if;
 
-  select * into v_row
-    from public.members m
-   where lower(btrim(m.email)) = v_email
-   limit 1;
+  -- the code decides the account: one device may hold the codes of several
+  -- accounts, so nothing is resolved from the email alone any more
+  select * into v_code from public.viewing_codes c where c.code = v_view limit 1;
 
-  if v_row.id is null
-     or public.recovery_phone_key(v_row.phone_number) <> v_phone
-     or public.recovery_name_key(v_row.full_name) <> v_name then
-    perform public.member_log_write(v_row.id, null, 'recovery_failed',
-      jsonb_build_object('reason', 'device_identity'), p_ip, p_agent);
-    return jsonb_build_object('ok', false, 'error', 'identity');
+  if v_code.id is not null then
+    select * into v_row from public.members m where m.id = v_code.member_id;
   end if;
 
-  if v_row.status = 'banned' and coalesce(v_row.ban_permanent, false) then
-    return jsonb_build_object('ok', false, 'error', 'closed');
-  end if;
-
-  select * into v_code
-    from public.viewing_codes c
-   where c.member_id = v_row.id and c.code = v_view
-   limit 1;
-
-  if v_code.id is null then
-    perform public.member_log_write(v_row.id, null, 'recovery_failed',
+  if v_row.id is null then
+    perform public.member_log_write(null, null, 'recovery_failed',
       jsonb_build_object('reason', 'view_code'), p_ip, p_agent);
     return jsonb_build_object('ok', false, 'error', 'view_code');
   end if;
 
+  v_ident := public.recovery_phone_key(v_row.phone_number) = v_phone
+             and public.recovery_name_key(v_row.full_name) = v_name
+             and lower(btrim(v_row.email)) = v_email;
+
   -- is this code the original code of this device?
   select exists (
-    select 1
-      from public.viewing_codes c
+    select 1 from public.viewing_codes c
      where c.id = v_code.id
        and (
          public.recovery_device_key(c.device_mac) = v_device
          or exists (
-           select 1 from public.watch_code_devices d
-            where d.code_id = c.id and d.idmember = v_row.id
-              and public.recovery_device_key(d.device_id) = v_device
-         )
+              select 1 from public.watch_code_devices d
+               where d.code_id = c.id and d.idmember = v_row.id
+                 and public.recovery_device_key(d.device_id) = v_device
+            )
        )
   ) into v_bound;
 
   if not v_bound then
-    -- two different refusals, so the page can say which one happened:
-    -- `other_device`  the code exists but it is bound to another device
-    -- `unknown_device` this device holds none of the account's original codes
     perform public.member_log_write(v_row.id, null, 'recovery_failed',
-      jsonb_build_object('reason', 'device_not_bound', 'code', v_view), p_ip, p_agent);
-    return jsonb_build_object('ok', false, 'error', 'device_not_bound',
-      'reason', case when public.recovery_device_key(v_code.device_mac) <> ''
-                     then 'other_device' else 'unknown_device' end);
+      jsonb_build_object('reason', 'device_not_bound', 'code', v_view,
+                         'known_identity', v_ident), p_ip, p_agent);
+    -- a stranger who happens to type a real code learns nothing: the answer is
+    -- the same as for a code that does not exist, unless the identity fits the
+    -- account, in which case the holder is told which device the code belongs to
+    if not v_ident then
+      return jsonb_build_object('ok', false, 'error', 'view_code');
+    end if;
+    return jsonb_build_object('ok', false, 'error', 'device_not_bound', 'reason', 'other_device');
+  end if;
+
+  -- from here on the caller is on the account's own device: name the field that
+  -- does not fit instead of one vague refusal
+  if public.recovery_name_key(v_row.full_name) <> v_name then
+    perform public.member_log_write(v_row.id, null, 'recovery_failed',
+      jsonb_build_object('reason', 'device_identity', 'field', 'full_name'), p_ip, p_agent);
+    return jsonb_build_object('ok', false, 'error', 'identity', 'field', 'full_name',
+                              'username', v_row.username);
+  end if;
+
+  if public.recovery_phone_key(v_row.phone_number) <> v_phone then
+    perform public.member_log_write(v_row.id, null, 'recovery_failed',
+      jsonb_build_object('reason', 'device_identity', 'field', 'phone'), p_ip, p_agent);
+    return jsonb_build_object('ok', false, 'error', 'identity', 'field', 'phone',
+                              'username', v_row.username);
+  end if;
+
+  if lower(btrim(v_row.email)) <> v_email then
+    perform public.member_log_write(v_row.id, null, 'recovery_failed',
+      jsonb_build_object('reason', 'device_identity', 'field', 'email'), p_ip, p_agent);
+    return jsonb_build_object('ok', false, 'error', 'identity', 'field', 'email',
+                              'username', v_row.username);
+  end if;
+
+  if v_row.status = 'banned' and coalesce(v_row.ban_permanent, false) then
+    return jsonb_build_object('ok', false, 'error', 'closed');
   end if;
 
   v_new := public.member_recovery_code();
