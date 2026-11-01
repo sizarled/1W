@@ -23,14 +23,14 @@ import {
 import { isPremium, getMember } from "./session.js";
 import { refreshBlockMap, filterBlocked } from "./blocks.js";
 import { toast } from "./ui.js";
-import { groupChannels } from "./playlists.js";
+import { groupChannels, loadPlaylist } from "./playlists.js";
 import { playSound } from "./sound.js";
 
 const state = {
   movies: [],
   series: [],
   hero: { mode: "movies", index: 0, timer: null, raf: null, start: 0 },
-  channels: { free: [], premium: [], tab: "free" },
+  channels: { free: [], premium: [], tab: "free", loading: false },
 };
 
 const HERO_COUNT = 5;
@@ -409,11 +409,12 @@ function renderChannels() {
   const list = state.channels[state.channels.tab];
   const groups = groupChannels(list);
   const shown = sampleByGroup(list, 40);
+  const waiting = state.channels.tab === "premium" && state.channels.loading;
   setHTML(
     track,
     shown.length
       ? shown.map((c) => channelCard(c, c.premium && locked)).join("")
-      : `<p class="muted">No channels published yet.</p>`
+      : `<p class="muted">${waiting ? "Opening the premium playlist…" : "No channels published yet."}</p>`
   );
   qsa("[data-iptv-tab]", section).forEach((tab) => {
     const active = tab.dataset.iptvTab === state.channels.tab;
@@ -430,6 +431,26 @@ function renderChannels() {
   updateRailButtons(section);
 }
 
+/** The premium playlist is three megabytes: read it when its tab is opened. */
+async function ensureChannels(tab) {
+  if (tab !== "premium" || state.channels.premium.length || state.channels.loading) return;
+  state.channels.loading = true;
+  const note = qs("[data-iptv-note]");
+  if (note) note.innerHTML = `${icon("clock")} Reading the premium playlist…`;
+  try {
+    const rows = await loadPlaylist("premium");
+    if (rows.length) state.channels.premium = rows;
+    else {
+      const { loadChannels } = await import("./data.js");
+      const fallback = await loadChannels().catch(() => null);
+      state.channels.premium = (fallback && fallback.premium) || [];
+    }
+  } finally {
+    state.channels.loading = false;
+    renderChannels();
+  }
+}
+
 function initIptv() {
   const section = qs("#iptv");
   if (!section) return;
@@ -438,6 +459,7 @@ function initIptv() {
     if (tab) {
       state.channels.tab = tab.dataset.iptvTab;
       renderChannels();
+      ensureChannels(state.channels.tab);
       return;
     }
     const lockedCard = event.target.closest("[data-locked]");

@@ -109,8 +109,10 @@ instead of testing numbers.
 
 ## Unlock now — paying for the next level
 
-The level is normally earned with points, but the next rung can also be **bought**: the dashboard
-shows `Unlock now` as soon as the balance covers the level's own threshold.
+The level is normally earned with points, but the next rung can also be **bought**: the level page
+shows `Unlock now` on the next rung and the dialog names the price — the level's own threshold —
+paid from the balance. When the balance is short it says how much is missing and links to buying the
+rest, and the button itself carries the price in its tooltip either way.
 
 | Target | LV1 | LV2 | LV3 | LV4 | LV5 | LV6 | LV7 | LV8 | LV9 | LV10 | LVMax |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |

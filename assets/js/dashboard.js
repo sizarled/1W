@@ -1098,7 +1098,7 @@ function levelView() {
     const buyCell = canBuy
       ? `<button class="dsh-btn dsh-btn--sm dsh-unlock" type="button" data-level-unlock="${row.level}"
            ${offer.affordable ? "" : "disabled"}
-           title="${offer.affordable ? `Pay ${num(offer.fee)} points to unlock LV${row.level}0` : `Needs ${num(offer.fee)} points`}">
+           title="Pay ${num(offer.fee)} points to unlock LV${offer.level}0${offer.affordable ? "" : ` — ${num(offer.missing)} short`}">
            <i data-icon="key"></i>Unlock now</button>`
       : "";
     return `<tr>
@@ -1159,7 +1159,7 @@ function levelView() {
       <p class="dsh-card__hint">Every level needs the points below it and one more task than the level before. Card: Free LV30 · Silver LV50 · Gold LV80 · Diamond open above LV80.</p>
       ${
         offer
-          ? `<p class="dsh-card__hint">Next rung: <strong>LV${offer.level}0</strong> for <strong>${num(offer.fee)} points</strong> taken from your balance (${num(offer.balance)} available). ${offer.affordable ? "Unlock now is open." : `You still need ${num(offer.fee - offer.balance)} points.`}</p>`
+          ? `<p class="dsh-card__hint">Next rung: <strong>LV${offer.level}0</strong> for <strong>${num(offer.fee)} points</strong> taken from your balance (${num(offer.balance)} available). ${offer.affordable ? "Unlock now is open." : `Top up ${num(offer.missing)} points and Unlock now opens.`}</p>`
           : ""
       }
     </section>
@@ -1611,18 +1611,38 @@ function openUnlock(level) {
       </div>
       <p class="dsh-modal__text">
         Advancing to <strong>LV${level}0 · ${esc(row.name)}</strong> asks for
-        <strong>${num(fee)} points</strong>. You hold <strong>${num(available)}</strong> points now.
+        <strong>${num(fee)} points</strong>. Your balance holds <strong>${num(available)}</strong> points${
+          available >= fee ? "" : ` — <strong>${num(fee - available)}</strong> short`
+        }.
       </p>
       <p class="dsh-modal__hint">
         The points are paid from your balance; your lifetime total keeps them, so the level stays yours.
       </p>
       <div class="dsh-modal__actions">
         <button class="dsh-btn dsh-btn--ghost" type="button" data-level-cancel>Not now</button>
-        <button class="dsh-btn" type="button" data-level-pay="${level}" ${available >= fee ? "" : "disabled"}>
-          <i data-icon="key"></i>Pay ${num(fee)} points
-        </button>
+        ${
+          available >= fee
+            ? `<button class="dsh-btn" type="button" data-level-pay="${level}"><i data-icon="key"></i>Pay ${num(fee)} points</button>`
+            : `<a class="dsh-btn" href="index.html#membership"><i data-icon="zap"></i>Buy ${num(fee - available)} points</a>`
+        }
       </div>
     </div>`;
+
+  /* the dialog lives on <body> and handles its own clicks */
+  wrap.addEventListener("click", (event) => {
+    if (event.target.closest("[data-level-cancel]")) {
+      event.preventDefault();
+      closeUnlock();
+      return;
+    }
+    const pay = event.target.closest("[data-level-pay]");
+    if (pay) {
+      event.preventDefault();
+      payUnlock(Number(pay.dataset.levelPay), pay);
+      return;
+    }
+    if (event.target === wrap) closeUnlock();
+  });
 
   document.body.append(wrap);
   document.body.classList.add("dsh-modal-open");
@@ -1702,6 +1722,8 @@ function onClick(event) {
     logout();
     return;
   }
+
+  if (event.target.closest("[data-level-modal]")) return;
 
   const unlock = event.target.closest("[data-level-unlock]");
   if (unlock) {

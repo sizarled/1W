@@ -911,9 +911,9 @@ After a successful registration the details card's **Log in** button goes straig
 
 ### Unlock now — buying a level
 
-On `dashboard.html#level` the next rung carries an **Unlock now** button as soon as the member can
-afford it. It opens a dialog that names the price — the level's own points threshold — and pays it
-from the balance:
+On `dashboard.html#level` the next rung carries an **Unlock now** button. It opens a dialog that
+names the price — the level's own points threshold — and pays it from the balance; if the balance is
+short, the dialog says how much is missing and offers to buy the rest instead of paying:
 
 | Level | LV1 | LV2 | LV3 | LV4 | LV5 | LV6 | LV7 | LV8 | LV9 | LV10 | LVMax |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |

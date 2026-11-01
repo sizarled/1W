@@ -88,6 +88,7 @@ function payload() {
       level: 3,
       joined_at: member.created_at,
       last_login_at: null,
+      ...(scenario.overview || {}),
     },
     codes: scenario.codes || [],
     devices: scenario.devices || [],
@@ -117,6 +118,10 @@ function stubFetch(url, opts = {}) {
   if (href.includes("/rpc/member_device_delete")) return reply({ ok: true });
   if (href.includes("/rpc/member_notify_set")) return reply({ ok: true, source: body.p_source, enabled: body.p_enabled });
   if (href.includes("/rpc/member_notify_read")) return reply({ ok: true });
+  if (href.includes("/rpc/level_unlock")) {
+    if (scenario.unlockFails) return reply({ ok: false, error: "points", fee: 10000, balance: 10 });
+    return reply({ ok: true, level: Number(body.p_level || 4), fee: 10000, balance: 190000 });
+  }
   if (href.includes("/rpc/member_logout")) return reply({ ok: true });
   return reply([]);
 }
@@ -396,6 +401,65 @@ function expect(name, condition, detail = "") {
     const view = p.qs(`[data-view="${key}"]`);
     expect(`section: ${key}`, Boolean(view) && view.textContent.length > 40);
   }
+
+  /* the sidebar: own profile behind the avatar, and the fold into a rail */
+  const sideLink = p.qs("[data-side-profile]")?.getAttribute("href") || "";
+  expect("active: sidebar avatar opens the own profile", sideLink === "profile.html?u=%40youssef.amrani", sideLink);
+  const chipLink = p.qs("[data-me-link]")?.getAttribute("href") || "";
+  expect("active: header chip opens the own profile", chipLink === "profile.html?u=%40youssef.amrani", chipLink);
+  expect("active: sidebar starts open", p.qs("[data-dsh]")?.dataset.side === "open", p.qs("[data-dsh]")?.dataset.side);
+
+  const headerBefore = p.qs(".dsh-top")?.outerHTML || "";
+  p.click(p.qs("[data-side-toggle]"));
+  await p.wait(40);
+  expect("active: the toggle folds the menu", p.qs("[data-dsh]")?.dataset.side === "collapsed");
+  expect("active: collapsed is remembered", p.window.localStorage.getItem("1w.dsh.side") === "collapsed");
+  expect("active: the header did not change", (p.qs(".dsh-top")?.outerHTML || "") === headerBefore);
+  expect("active: the site header did not change", !p.document.body.classList.contains("sb-open"));
+
+  p.click(p.qs("[data-side-open]"));
+  await p.wait(40);
+  expect("active: the menu opens again", p.qs("[data-dsh]")?.dataset.side === "open");
+  expect("active: label shows the menu", p.qs("[data-side-open]")?.hidden !== true);
+
+  /* the level page: Unlock now, its price, and the paid promotion */
+  p.click(p.qs('[data-nav] [data-goto="level"]'));
+  await p.wait(60);
+  const unlock = p.qs("[data-level-unlock]");
+  expect("level: an unlock button is offered", Boolean(unlock), unlock?.outerHTML?.slice(0, 60) || "none");
+  expect("level: the next rung is LV40", unlock?.dataset.levelUnlock === "4", unlock?.dataset.levelUnlock || "");
+  expect("level: it asks for the rung's own points", /10,000 points|10000 points/.test(p.text(".dsh-table") + unlock?.getAttribute("title") || ""), unlock?.getAttribute("title") || "");
+  expect("level: short balance keeps it disabled", unlock?.disabled === true);
+
+  /* with the balance covered, the dialog and the payment run */
+  scenario = { overview: { points_available: 200000, points_total: 1650 } };
+  calls.length = 0;
+  const pay = await boot("unlock");
+  pay.click(pay.qs('[data-nav] [data-goto="level"]'));
+  await pay.wait(60);
+  const btn = pay.qs("[data-level-unlock]");
+  expect("unlock: the button opens up with the balance", btn?.disabled === false, String(btn?.disabled));
+  pay.click(btn);
+  await pay.wait(80);
+  expect("unlock: a dialog names the price", /10,000 points/.test(pay.text("[data-level-modal]")), pay.text("[data-level-modal]").slice(0, 120));
+  pay.click(pay.qs("[data-level-pay]"));
+  await pay.wait(260);
+  expect("unlock: the payment is sent", calls.some((c) => c.includes("level_unlock")), calls.slice(-3).join(" | "));
+  expect("unlock: the dialog closes", !pay.qs("[data-level-modal]"));
+  expect("unlock: no errors", pay.errors.length === 0, pay.errors.join(" | "));
+
+  /* a refused payment explains itself and stays open */
+  scenario = { overview: { points_available: 200000, points_total: 1650 }, unlockFails: true };
+  calls.length = 0;
+  const refused = await boot("unlock-refused");
+  refused.click(refused.qs('[data-nav] [data-goto="level"]'));
+  await refused.wait(60);
+  refused.click(refused.qs("[data-level-unlock]"));
+  await refused.wait(80);
+  refused.click(refused.qs("[data-level-pay]"));
+  await refused.wait(260);
+  expect("unlock refused: the dialog stays", Boolean(refused.qs("[data-level-modal]")));
+  expect("unlock refused: it says how much is missing", /10,000|need/i.test(refused.document.body.textContent));
 
   expect("active: no errors", p.errors.length === 0, p.errors.join(" | "));
   report.pass5 = p.qs("[data-view]")?.dataset.view || "";

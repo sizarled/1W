@@ -158,6 +158,11 @@ async function boot(file, { stored = null, member = null } = {}) {
     stored: false,
     member: { id: "m1", username: "@sara", name: "Sara", points: 550000000, membership: "diamond", level: 8 },
   });
+  expect(
+    "wallet: the points chip opens dashboard.html#points",
+    p.qs("[data-wallet]")?.getAttribute("href") === "dashboard.html#points",
+    p.qs("[data-wallet]")?.getAttribute("href")
+  );
   expect("badge: the wallet prints LV85", p.qs("[data-wallet-level]")?.textContent === "LV85", p.qs("[data-wallet-level]")?.textContent);
   expect("badge: the meter names the ceiling", /LV85 \/ LVMax/.test(p.qs("[data-level-cap]")?.textContent || ""), p.qs("[data-level-cap]")?.textContent);
   expect("badge: the bar reads 50 %", p.qs("[data-level-fill]")?.style.width === "50%", p.qs("[data-level-fill]")?.style.width);

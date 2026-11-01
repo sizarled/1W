@@ -343,15 +343,17 @@ async function loadChannelTable(table, premium) {
   return rows.map((row, i) => mapChannel(row, i, premium));
 }
 
-export async function loadChannels() {
+export async function loadChannels({ premiumFile = true } = {}) {
   /* The two playlists are the source: free channels from `IPTV-Free.m3u`,
    * premium channels from `IPTV Premuim.m3u`. The tables and the demo list
-   * only cover the case where a playlist cannot be reached at all. */
+   * only cover the case where a playlist cannot be reached at all.
+   * `premiumFile: false` skips the premium file — the homepage only reads it
+   * when the premium tab is opened, because both files are megabytes. */
   const [freeList, premiumList, freeTable, premiumTable] = await Promise.all([
     loadPlaylist("free"),
-    loadPlaylist("premium"),
+    premiumFile ? loadPlaylist("premium") : Promise.resolve([]),
     loadChannelTable("iptvfree", false),
-    loadChannelTable("iptvpremium", true),
+    premiumFile ? loadChannelTable("iptvpremium", true) : Promise.resolve(null),
   ]);
   const fallback = (list, isPremium) =>
     list.map((item, i) => ({
@@ -487,7 +489,7 @@ export async function loadHomeData() {
     loadMovies(),
     loadSeries(),
     loadFeatures(),
-    loadChannels(),
+    loadChannels({ premiumFile: false }),
   ]);
   return { movies, series, features, channels };
 }

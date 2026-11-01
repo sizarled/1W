@@ -200,7 +200,11 @@ async function boot() {
   const note = qs("[data-iptv-status]");
   if (note) note.hidden = false;
 
-  await Promise.all([fill("free"), fill("premium")]);
+  /* the free list paints first; the premium file is three megabytes and only
+   * has to be ready when its tab is opened */
+  await fill("free");
+  const wantsPremium = state.list === "premium" || Boolean(deep);
+  if (wantsPremium) await fill("premium");
 
   if (!currentRows().length) {
     /* nothing readable — fall back to whatever the tables hold */
@@ -226,6 +230,15 @@ async function boot() {
 
   enableDragScrollAll();
   paint();
+
+  if (!wantsPremium) {
+    fill("premium")
+      .then(() => {
+        paintGroups();
+        if (state.list === "premium") paintGrid();
+      })
+      .catch(() => null);
+  }
 }
 
 export function initIptv() {

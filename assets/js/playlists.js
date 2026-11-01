@@ -142,6 +142,10 @@ function readCache(kind) {
 }
 
 function writeCache(kind, rows) {
+  /* a fast skip for a playlist of tens of thousands of channels: the session
+   * storage quota is far smaller than that, and the browser cache holds the
+   * file anyway */
+  if (!rows.length || rows.length > 5000) return;
   try {
     sessionStorage.setItem(CACHE_PREFIX + kind, JSON.stringify({ at: Date.now(), rows }));
   } catch {
@@ -167,7 +171,8 @@ export async function loadPlaylist(kind) {
 
   const run = (async () => {
     try {
-      const res = await fetch(playlistUrl(kind), { cache: "no-store", credentials: "omit" });
+      /* the file is a few megabytes — the browser cache is the point */
+      const res = await fetch(playlistUrl(kind), { credentials: "omit" });
       if (!res.ok) return [];
       const text = await res.text();
       const rows = parseM3U(text, { premium: entry.premium, kind });

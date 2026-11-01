@@ -345,17 +345,36 @@ export function storedLevel(value) {
  * points threshold. LV1 10 · LV2 100 · LV3 1 000 … LVMax 100 000 000 000.
  */
 export function unlockFee(level) {
-  return rowFor(level).points;
+  /* 11 is the open level, the same way `members.level_unlocked` stores it */
+  const key = typeof level === "number" && level >= LEVELS.length - 1 ? "max" : level;
+  return rowFor(key).points;
 }
 
-/** The next level, when it can be bought now with the available balance. */
+/**
+ * The next rung and its price — what the «Unlock now» button on the level page
+ * is built from.
+ *
+ * `fee` is the level's own threshold (LV1 10 … LVMax 100 000 000 000) and it
+ * is paid from the balance (`available`). `affordable` says whether the
+ * balance covers it right now; when it does not, `missing` is how much has to
+ * be topped up first. Nothing is offered past the membership ceiling or at
+ * LVMax.
+ */
 export function unlockOffer(info, available = 0) {
   if (!info || info.level === "max" || info.capped) return null;
   const next = nextLevel(info.level);
   if (!next) return null;
   const fee = unlockFee(next.level);
   const balance = Math.max(0, Number(available) || 0);
-  return { level: next.level, fee, row: next, affordable: balance >= fee, balance };
+  return {
+    level: next.level,
+    fee,
+    row: next,
+    affordable: balance >= fee,
+    missing: Math.max(0, fee - balance),
+    balance,
+    earned: Math.max(0, Number(info.points) || 0),
+  };
 }
 
 export function nextLevel(level) {

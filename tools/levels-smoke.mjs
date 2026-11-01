@@ -11,7 +11,7 @@
  *     level 8 with half of the points to level 9 already earned
  *   · zero points is LV00, and the last level is LVMax
  */
-import { LEVELS, levelForPoints, levelInfo, capFor, quotaFor, can, rowFor } from "../assets/js/levels.js";
+import { LEVELS, levelForPoints, levelInfo, capFor, quotaFor, can, rowFor, unlockFee, unlockOffer, storedLevel } from "../assets/js/levels.js";
 
 const checks = [];
 const expect = (name, ok, detail = "") => checks.push({ name, ok: Boolean(ok), detail });
@@ -117,6 +117,43 @@ expect("quotas: LVMax has no ceiling", rowFor("max").quotas.content === Infinity
 expect("quotas: tasks grow with the level", LEVELS.slice(1, 11).every((row, index) => row.quotas.tasks === index + 1));
 expect("quotas: one prize entry per prize from LV10", rowFor(1).quotas.prizeEntries === 1 && rowFor(0).quotas.prizeEntries === 0);
 expect("labels: the Arabic actor names are kept", rowFor(0).nameAr === "مستكشف" && rowFor(3).nameAr === "ناشر");
+
+/* ------------------------------------------------------------------ */
+/* unlock now — the fee is the level's own threshold                  */
+/* ------------------------------------------------------------------ */
+const FEES = [10, 100, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11];
+expect(
+  "unlock: the fee table is the ladder",
+  FEES.every((fee, index) => unlockFee(index + 1) === fee) && unlockFee("max") === 1e11,
+  FEES.map((fee, index) => unlockFee(index + 1)).join(",")
+);
+
+{
+  const info = levelInfo({ points: 150, membership: "gold" });
+  const offer = unlockOffer(info, 2000);
+  expect("unlock: the next rung is LV30", offer?.level === 3, String(offer?.level));
+  expect("unlock: its fee is 1 000", offer?.fee === 1000, String(offer?.fee));
+  expect("unlock: two thousand in the balance covers it", offer?.affordable === true && offer?.missing === 0);
+  const short = unlockOffer(levelInfo({ points: 120, membership: "gold" }), 200);
+  expect("unlock: a short balance still offers, and says how much", short?.affordable === false && short?.missing === 800, `${short?.missing}`);
+  expect("unlock: an empty balance still names the price", unlockOffer(levelInfo({ points: 5, membership: "gold" }), 0)?.fee === 10, String(unlockOffer(levelInfo({ points: 5, membership: "gold" }), 0)?.fee));
+  expect("unlock: LV00 is offered LV10 for ten points", unlockOffer(levelInfo({ points: 0 }), 0)?.level === 1);
+}
+
+expect(
+  "unlock: a capped member is not offered a rung past the ceiling",
+  unlockOffer(levelInfo({ points: 5000, membership: "free" }), 1e9) === null
+);
+expect("unlock: LVMax is the end", unlockOffer(levelInfo({ points: 1e11, membership: "diamond" }), 1e11) === null);
+
+/* a bought level survives the payment that lowers the balance */
+{
+  const paid = levelInfo({ points: 120, membership: "gold", unlocked: 5 });
+  expect("unlock: the bought level wins over the points", paid.level === 5, `${paid.level}`);
+  expect("unlock: stored 11 is the open level", storedLevel(11) === "max" && storedLevel(4) === 4 && storedLevel(0) === 0);
+  const capped = levelInfo({ points: 120, membership: "free", unlocked: 6 });
+  expect("unlock: the ceiling still caps a bought level", capped.level === 3 && capped.capped === true, `${capped.level}`);
+}
 
 /* ------------------------------------------------------------------ */
 const failed = checks.filter((c) => !c.ok);
