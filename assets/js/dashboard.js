@@ -32,6 +32,7 @@ import {
 import { hydrateIcons, icon } from "./icons.js";
 import { toast } from "./ui.js";
 import { setMember, signOut, sessionToken, clearSessionToken } from "./session.js";
+import { createEdgeRail } from "./edge.js";
 
 /* ================================================================== */
 /* vocabulary                                                          */
@@ -290,6 +291,7 @@ function paintGate() {
     dsh.dataset.state = "active";
     if (side) side.hidden = false;
     if (rail) rail.hidden = false;
+    setEdgeTabVisible(true);
     const pending = initialView();
     setView(pending, { first: true });
     return;
@@ -298,6 +300,7 @@ function paintGate() {
   dsh.dataset.state = key;
   if (side) side.hidden = true;
   if (rail) rail.hidden = true;
+  setEdgeTabVisible(false);
   main.innerHTML = "";
   main.append(gateNode(key));
   hydrateIcons(main);
@@ -1574,6 +1577,8 @@ function setSideCollapsed(collapsed) {
   dsh.dataset.side = collapsed ? "collapsed" : "open";
   qsa("[data-side-toggle]").forEach((btn) => {
     btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    btn.setAttribute("aria-label", collapsed ? "Unfold the menu" : "Fold the menu");
+    btn.setAttribute("title", collapsed ? "Unfold the menu" : "Fold the menu");
   });
   try {
     localStorage.setItem(SIDE_KEY, collapsed ? "collapsed" : "open");
@@ -1582,7 +1587,25 @@ function setSideCollapsed(collapsed) {
   }
 }
 
+/* the pin (edge.js) drives the panel: pinned it stays out, unpinned it waits
+   on the screen edge and floats back in over the content */
+let sideRail = null;
+
 function paintSideState() {
+  if (!sideRail) {
+    const panel = qs("[data-side]");
+    if (!panel) return;
+    sideRail = createEdgeRail({
+      panel,
+      tab: qs("[data-side-edge]"),
+      root: qs("[data-dsh]"),
+      pinSelector: "[data-side-pin]",
+      // the floating panel is always the full menu, never the folded rail
+      onPin: () => setSideCollapsed(false),
+    });
+  }
+  sideRail.sync();
+
   let saved = "";
   try {
     saved = localStorage.getItem(SIDE_KEY) || "";
@@ -1590,6 +1613,11 @@ function paintSideState() {
     saved = "";
   }
   setSideCollapsed(saved === "collapsed");
+}
+
+function setEdgeTabVisible(visible) {
+  const tab = qs("[data-side-edge]");
+  if (tab) tab.hidden = !visible;
 }
 
 /* ---------------------------------------------------------------- */

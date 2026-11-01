@@ -25,6 +25,12 @@ export const ICONS = {
   chevronRight: S("M9.5 6l6 6-6 6"),
   chevronLeft: S("M14.5 6l-6 6 6 6"),
   chevronUp: S("M6 14.5l6-6 6 6"),
+  /* pin — the sidebar is held open; pinOff — it waits at the screen edge */
+  pin: S("M9.4 3.6h5.2l-.7 4.5 3 3.1v2.1H7.1v-2.1l3-3.1-.7-4.5Z") + S("M12 13.3V20.4"),
+  pinOff:
+    S("M9.4 3.6h5.2l-.7 4.5 3 3.1v2.1H7.1v-2.1l3-3.1-.7-4.5Z") +
+    S("M12 13.3V20.4") +
+    S("M3.6 4.2 20.4 19.8", 'stroke-opacity=".85"'),
   arrowRight: S("M4 12h15") + S("M13.5 6.5 20 12l-6.5 5.5"),
   arrowLeft: S("M20 12H5") + S("M10.5 6.5 4 12l6.5 5.5"),
   arrowUpRight: S("M7 17 17 7") + S("M8.5 7H17v8.5"),

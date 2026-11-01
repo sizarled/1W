@@ -1,17 +1,20 @@
 /**
- * Shell smoke test — the sidebar belongs to the homepage only, and showing it
- * must not move the header.
+ * Shell smoke test — where the sidebar lives, and that showing it never moves
+ * the header.
  *
  *   node tools/shell-smoke.mjs
  *
  * Pass 1 — index.html: the sidebar is mounted, the header carries the menu
- *          button, a stored preference opens it, the toggle flips the body
- *          class, Escape closes it.
- * Pass 2 — an inner page (profile.html) with `1w.sidebar = true` in storage:
- *          no <aside>, no menu button, the body never gets `sb-open`, and the
- *          main column keeps its full width.
- * Pass 3 — the stylesheet: no rule widens the header bar when the sidebar is
+ *          button, a stored preference opens it, the toggle flips it, and
+ *          Escape leaves a *pinned* panel alone (it closes a floating one).
+ * Pass 2 — the pages that carry the panel (profile.html, watch.html): the
+ *          <aside> is mounted, the header button and the edge tab are there,
+ *          and the panel starts on the edge instead of taking page width.
+ * Pass 3 — a page outside the set (movies.html): no <aside>, no menu button,
+ *          the container stays empty.
+ * Pass 4 — the stylesheet: no rule widens the header bar when the sidebar is
  *          open (jsdom ignores @media, so the cascade is asserted at source).
+ * Pass 5 — the level badge in the header.
  */
 import { JSDOM } from "jsdom";
 import { readFileSync } from "node:fs";
@@ -31,7 +34,7 @@ function page(file) {
   return readFileSync(join(root, file), "utf8").replace(/<script[^>]*src="[^"]*"[^>]*><\/script>/g, "");
 }
 
-async function boot(file, { stored = null, member = null } = {}) {
+async function boot(file, { stored = null, member = null, desktop = true } = {}) {
   const dom = new JSDOM(page(file), { url: `http://localhost/${file}`, pretendToBeVisual: true });
   const { window } = dom;
   const errors = [];
@@ -55,7 +58,7 @@ async function boot(file, { stored = null, member = null } = {}) {
   globalThis.requestAnimationFrame = window.requestAnimationFrame.bind(window);
   globalThis.cancelAnimationFrame = window.cancelAnimationFrame.bind(window);
   globalThis.matchMedia = (q) => ({
-    matches: false,
+    matches: desktop && /min-width:\s*1024px/.test(q),
     media: q,
     addEventListener() {},
     removeEventListener() {},
@@ -117,27 +120,51 @@ async function boot(file, { stored = null, member = null } = {}) {
   await p.wait(80);
   expect("home: toggle opens it again", p.document.body.classList.contains("sb-open"));
 
+  // pinned, the panel is not something Escape should take away
   p.document.dispatchEvent(new p.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
   await p.wait(80);
-  expect("home: Escape closes it", !p.document.body.classList.contains("sb-open"));
+  expect("home: Escape leaves a pinned panel alone", p.document.body.classList.contains("sb-open"));
+  expect("home: escaping keeps it pinned", p.document.body.classList.contains("sb-pinned"));
+
+  // the pin lives in the panel and in the header button
+  expect("home: the panel carries a pin", Boolean(p.qs("[data-sidebar-pin]")));
+  expect("home: the pin reads pressed", p.qs("[data-sidebar-pin]")?.getAttribute("aria-pressed") === "true");
+  expect("home: the edge tab exists but stays hidden while pinned", Boolean(p.qs("[data-sidebar-edge]")));
 
   expect("home: the header is fixed", p.window.getComputedStyle(p.qs(".site-header")).position === "fixed");
   expect("home: no page errors", p.errors.length === 0, p.errors.join(" | "));
 }
 
 /* ------------------------------------------------------------------ */
-/* pass 2 — an inner page                                              */
+/* pass 2 — the pages that carry the panel                            */
+/* ------------------------------------------------------------------ */
+for (const file of ["profile.html", "watch.html"]) {
+  const p = await boot(file, { stored: true });
+
+  expect(`${file}: header mounted`, Boolean(p.qs(".site-header")));
+  expect(`${file}: the sidebar is mounted`, Boolean(p.qs(".sidebar#siteSidebar")));
+  expect(`${file}: the header carries the menu button`, Boolean(p.qs('[data-action="toggle-sidebar"]')));
+  expect(`${file}: the menu button points at the aside`, p.qs('[data-action="toggle-sidebar"]')?.getAttribute("aria-controls") === "siteSidebar");
+  expect(`${file}: an edge tab waits on the left edge`, Boolean(p.qs("[data-sidebar-edge]")));
+  expect(`${file}: the panel carries a pin`, Boolean(p.qs("[data-sidebar-pin]")));
+  expect(`${file}: the page leaves room for the panel`, p.document.body.classList.contains("sb-open"));
+  expect(`${file}: header still fixed`, p.window.getComputedStyle(p.qs(".site-header")).position === "fixed");
+  expect(`${file}: no page errors`, p.errors.length === 0, p.errors.join(" | "));
+}
+
+/* ------------------------------------------------------------------ */
+/* pass 2b — a page outside the set                                    */
 /* ------------------------------------------------------------------ */
 {
-  const p = await boot("profile.html", { stored: true });
+  const p = await boot("movies.html", { stored: true });
 
-  expect("inner: header mounted", Boolean(p.qs(".site-header")));
-  expect("inner: no sidebar rendered", !p.qs(".sidebar") && !p.qs("#siteSidebar"));
-  expect("inner: no menu button", !p.qs('[data-action="toggle-sidebar"]'));
-  expect("inner: stored preference is ignored", !p.document.body.classList.contains("sb-open"));
-  expect("inner: the sidebar container stays empty", p.qs("[data-site-sidebar]")?.children.length === 0);
-  expect("inner: header still fixed", p.window.getComputedStyle(p.qs(".site-header")).position === "fixed");
-  expect("inner: no page errors", p.errors.length === 0, p.errors.join(" | "));
+  expect("other: header mounted", Boolean(p.qs(".site-header")));
+  expect("other: no sidebar rendered", !p.qs(".sidebar") && !p.qs("#siteSidebar"));
+  expect("other: no menu button", !p.qs('[data-action="toggle-sidebar"]'));
+  expect("other: stored preference is ignored", !p.document.body.classList.contains("sb-open"));
+  expect("other: the sidebar container stays empty", p.qs("[data-site-sidebar]")?.children.length === 0);
+  expect("other: header still fixed", p.window.getComputedStyle(p.qs(".site-header")).position === "fixed");
+  expect("other: no page errors", p.errors.length === 0, p.errors.join(" | "));
 }
 
 /* ------------------------------------------------------------------ */

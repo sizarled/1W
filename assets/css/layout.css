@@ -830,6 +830,86 @@ html[data-theme="light"] .site-header::before {
   }
 }
 
+/* pinned or on the edge ---------------------------------------------- */
+/* The pin holds the panel out (the class is painted by edge.js). Unpinned,
+   the panel is gone, the page uses the whole width, and the panel floats back
+   over the content whenever the pointer reaches the left edge. */
+.pin-glyph {
+  display: inline-flex;
+}
+
+.pin-glyph .ico {
+  width: 14px;
+  height: 14px;
+}
+
+.tool-btn[data-sidebar-pin].is-on {
+  color: var(--text);
+  border-color: var(--line-3);
+  background: var(--surface-2);
+}
+
+/* the sliver that waits on the screen edge while the panel is unpinned */
+.edge-tab {
+  position: fixed;
+  left: 0;
+  top: 50%;
+  z-index: 121;
+  display: none;
+  align-items: center;
+  gap: 0.3rem;
+  transform: translateY(-50%);
+  padding: 0.85rem 0.25rem;
+  border: 1px solid var(--line-2);
+  border-left: 0;
+  border-radius: 0 12px 12px 0;
+  background: color-mix(in srgb, var(--bg-soft) 92%, transparent);
+  backdrop-filter: blur(14px);
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.2s var(--ease), transform 0.3s var(--ease-out), color 0.2s var(--ease);
+}
+
+.edge-tab .ico {
+  width: 15px;
+  height: 15px;
+}
+
+.edge-tab:hover,
+.edge-tab:focus-visible {
+  opacity: 1;
+  color: var(--text);
+  transform: translateY(-50%) translateX(3px);
+}
+
+/* the pin needs a mouse: below the breakpoint the drawer does the job */
+@media (max-width: 1023px) {
+  .tool-btn[data-sidebar-pin],
+  .edge-tab {
+    display: none !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  /* the tab is only there while the panel is away */
+  body.sb-rail:not(.sb-open) .edge-tab {
+    display: inline-flex;
+  }
+
+  body.sb-rail .sidebar {
+    box-shadow: 34px 0 80px rgba(0, 0, 0, 0.45);
+  }
+
+  /* the floating panel never takes room from the page */
+  body.sb-rail .site-main,
+  body.sb-rail.sb-open .site-main,
+  body.sb-rail .site-footer,
+  body.sb-rail.sb-open .site-footer {
+    padding-left: 0;
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* footer                                                             */
 /* ------------------------------------------------------------------ */

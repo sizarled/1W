@@ -1,10 +1,15 @@
 /**
- * Site shell — header, footer and the homepage sidebar.
+ * Site shell — header, footer and the sidebar.
  *
- * The sidebar belongs to the homepage alone: every other page renders the
- * header without its menu button and never mounts the `<aside>`. It slides in
- * *under* the header, so the header keeps its exact position and the content
- * is what moves.
+ * The sidebar is mounted on the pages that live around the site navigation:
+ * the homepage, the player (`watch.html`) and the profile. It slides in *under*
+ * the header, so the header keeps its exact position and the content is what
+ * moves. Everywhere else the header simply renders without its menu button.
+ *
+ * The panel is pinned by default: it stays out and the page keeps room for it.
+ * Unpin it (the pin in the sidebar tools) and it leaves the screen — the page
+ * then uses the whole width and the panel slides back in over the content
+ * whenever the pointer reaches the left edge. See `edge.js`.
  */
 import { PRIMARY_NAV, SIDEBAR_NAV, FOOTER_NAV, PLATFORMS, SITE } from "./config.js";
 import { brand } from "./brands.js";
@@ -24,14 +29,24 @@ import { initNotifications } from "./notifications.js";
 import { toast } from "./ui.js";
 import { hydrateIcons } from "./icons.js";
 import { initTheme, toggleTheme, currentTheme, flashTransition } from "./theme.js";
+import { createEdgeRail, isDesktop } from "./edge.js";
 
-const SIDEBAR_KEY = "1w.sidebar";
+/** Pages that mount the site navigation panel. */
+const SIDEBAR_PAGES = new Set(["index.html", "watch.html", "profile.html"]);
 
-/** The sidebar is a homepage-only navigation panel. */
-function isHomePage() {
-  const file = window.location.pathname.split("/").pop() || "index.html";
-  return file === "index.html" || document.body?.dataset.page === "home";
+function pageFile() {
+  return window.location.pathname.split("/").pop() || "index.html";
 }
+
+/** Homepage, player and profile carry the panel; the rest of the site does not. */
+function hasSidebar() {
+  if (SIDEBAR_PAGES.has(pageFile())) return true;
+  const page = document.body?.dataset.page;
+  return page === "home" || page === "watch" || page === "profile";
+}
+
+/* the rail instance, shared with the header button */
+let sidebarRail = null;
 
 /* ------------------------------------------------------------------ */
 /* markup                                                             */
@@ -166,6 +181,9 @@ function sidebarTemplate() {
 
       <div class="sidebar__foot">
         <div class="sidebar__tools">
+          <button class="tool-btn" type="button" data-sidebar-pin aria-pressed="true" aria-label="Pin the menu">
+            <span class="pin-glyph" data-pin-glyph></span><span data-pin-text>Pinned</span>
+          </button>
           <button class="tool-btn" type="button" data-theme-toggle data-variant="label" title="Light theme">
             ${icon("sun")}<span>Light</span>
           </button>
@@ -177,6 +195,9 @@ function sidebarTemplate() {
       </div>
     </div>
   </aside>
+  <button class="edge-tab" type="button" data-sidebar-edge aria-controls="siteSidebar" aria-expanded="false" aria-label="Show the menu" title="Show the menu">
+    ${icon("chevronRight")}
+  </button>
   <div class="scrim" data-scrim></div>`;
 }
 
@@ -311,47 +332,48 @@ function syncThemeToggles() {
 /* ------------------------------------------------------------------ */
 /* sidebar                                                            */
 /* ------------------------------------------------------------------ */
-function setSidebar(open, { persist = true } = {}) {
-  const isDesktop = window.matchMedia("(min-width: 1024px)").matches;
-  document.body.classList.toggle("sb-open", open);
-  const sidebar = document.getElementById("siteSidebar");
-  const scrim = document.querySelector("[data-scrim]");
-  const toggle = document.querySelector('[data-action="toggle-sidebar"]');
-  sidebar?.classList.toggle("is-open", open);
-  sidebar?.setAttribute("aria-hidden", String(!open));
-  if (toggle) {
-    toggle.setAttribute("aria-expanded", String(open));
-    toggle.setAttribute("aria-label", open ? "Close navigation" : "Open navigation");
-    toggle.innerHTML = icon(open ? "close" : "menu");
-  }
-  if (scrim) {
-    scrim.classList.toggle("is-on", open && !isDesktop);
-  }
-  if (persist) store.set(SIDEBAR_KEY, open);
-}
-
+/**
+ * The panel is painted by `edge.js`: it owns the open/closed state and the
+ * pinned preference, this is only the chrome that follows it — the header
+ * button and the scrim (which exists for the touch drawer alone).
+ */
 function initSidebar() {
-  const stored = store.get(SIDEBAR_KEY, null);
-  const initial = stored === null ? window.matchMedia("(min-width: 1280px)").matches : Boolean(stored);
-  setSidebar(initial, { persist: false });
+  const panel = document.getElementById("siteSidebar");
+  if (!panel) return;
 
-  const scrim = document.querySelector("[data-scrim]");
-  scrim?.addEventListener("click", () => setSidebar(false));
+  const tab = document.querySelector("[data-sidebar-edge]");
+  const toggle = document.querySelector('[data-action="toggle-sidebar"]');
+  // the shell's own scrim — some pages carry a stray `[data-scrim]` placeholder
+  const scrim = document.querySelector(".scrim");
 
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && document.body.classList.contains("sb-open")) setSidebar(false);
+  const paint = ({ open }) => {
+    if (toggle) {
+      toggle.setAttribute("aria-expanded", String(open));
+      toggle.setAttribute("aria-label", open ? "Hide navigation" : "Show navigation");
+      toggle.innerHTML = icon(open ? "close" : "menu");
+    }
+    scrim?.classList.toggle("is-on", open && !isDesktop());
+  };
+
+  sidebarRail = createEdgeRail({
+    panel,
+    tab,
+    pinSelector: "[data-sidebar-pin]",
+    defaultPinned: pageFile() === "index.html" || document.body?.dataset.page === "home",
+    onOpen: paint,
+    onClose: paint,
   });
+  paint({ open: sidebarRail.open });
+
+  scrim?.addEventListener("click", () => sidebarRail.hide());
 
   window.addEventListener("resize", () => {
-    if (window.matchMedia("(min-width: 1024px)").matches) {
-      document.querySelector("[data-scrim]")?.classList.remove("is-on");
-    } else if (document.body.classList.contains("sb-open")) {
-      document.querySelector("[data-scrim]")?.classList.add("is-on");
-    }
+    if (isDesktop()) scrim?.classList.remove("is-on");
+    else if (sidebarRail.open) scrim?.classList.add("is-on");
   });
 
   // mark the current page
-  const path = window.location.pathname.split("/").pop() || "index.html";
+  const path = pageFile();
   document.querySelectorAll("[data-sidebar-link]").forEach((link) => {
     if (link.getAttribute("data-sidebar-link") === path) {
       link.classList.add("is-active");
@@ -420,7 +442,11 @@ function bindActions() {
     const action = actionEl.getAttribute("data-action");
 
     if (action === "toggle-sidebar") {
-      setSidebar(!document.body.classList.contains("sb-open"));
+      if (!sidebarRail) return;
+      // a mouse user pins and unpins the panel; a finger opens and closes the drawer
+      if (isDesktop()) sidebarRail.setPinned(!sidebarRail.pinned);
+      else sidebarRail.toggle();
+      return;
     }
     if (action === "logout") {
       handleLogout();
@@ -451,21 +477,23 @@ function bindActions() {
 export function mountShell() {
   initTheme();
 
-  const isHome = isHomePage();
+  const withSidebar = hasSidebar();
   const headerMount = document.querySelector("[data-site-header]");
   const sidebarMount = document.querySelector("[data-site-sidebar]");
   const footerMount = document.querySelector("[data-site-footer]");
-  if (headerMount) headerMount.innerHTML = headerTemplate(isHome);
-  if (sidebarMount) sidebarMount.innerHTML = isHome ? sidebarTemplate() : "";
+  if (headerMount) headerMount.innerHTML = headerTemplate(withSidebar);
+  if (sidebarMount) sidebarMount.innerHTML = withSidebar ? sidebarTemplate() : "";
   if (footerMount) footerMount.innerHTML = footerTemplate();
-  if (!isHome) document.body.classList.remove("sb-open");
+  if (!withSidebar) {
+    document.body.classList.remove("sb-open", "sb-pinned", "sb-rail");
+  }
 
   renderAccount();
   renderAuth();
   renderWallet();
   syncThemeToggles();
   renderSoundLabel();
-  if (isHome) initSidebar();
+  if (withSidebar) initSidebar();
   initScrollEffects();
   bindActions();
   initNotifications();

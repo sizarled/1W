@@ -28,7 +28,7 @@ folder structure intact because the JS uses native ES modules.
 | Section | Behaviour |
 | --- | --- |
 | **Header** | Logo + wordmark, section nav, notification bell with filters, points & level wallet, Log in / Register (swaps to Dashboard / Log out when signed in). |
-| **Sidebar** | Collapsible rail pinned left. Visitor or member card (`Visitor - 482913` / `Member - 000482`), level meter, then the full site map: Search · Watch · Browse · Earn · Pages. State is remembered. |
+| **Sidebar** | Left rail that is **pinned or waiting on the screen edge**. Visitor or member card (`Visitor - 482913` / `Member - 000482`), level meter, then the full site map: Search · Watch · Browse · Earn · Pages. The pin is remembered. |
 | **Hero** | Slideshow of 5 trending films and 5 trending series (toggle between the two), synopsis, rating, genres, and numbered thumbnails with a progress bar. |
 | **Features** | Hairline grid fed by the `features` table (`Feature Title / Description / Icon / Link / Clicks`). |
 | **Search** | Full-width search box → `search.html?q=…`. |
@@ -531,18 +531,33 @@ yesterday, week), a **Settings** button that jumps to the notification settings 
 **View all** → `notifications.html`. Unread items carry a dot on the bell and a counter in the
 sidebar.
 
-### The navigation rail is a homepage panel
+### The navigation rail: pinned, or waiting on the edge
 
-The menu button and the `<aside id="siteSidebar">` exist **on `index.html` only**. Every other
-page mounts the header without the button and leaves the sidebar container empty, so there is no
-rail to open and no `sb-open` class to inherit from a stored preference.
+The menu button and the `<aside id="siteSidebar">` exist on **`index.html`, `watch.html` and
+`profile.html`**. Every other page mounts the header without the button and leaves the sidebar
+container empty — no rail to open and no `sb-open` class to inherit from a stored preference.
+
+The rail has two states, and the **pin** at the bottom of the panel moves between them:
+
+| State | What happens | Class |
+| --- | --- | --- |
+| **Pinned** | the panel stays out and the page keeps room for it | `body.sb-pinned` |
+| **On the edge** | the panel is gone and the page uses the whole width; moving the pointer within 34px of the left screen edge (or onto the thin tab on the edge) slides it in **over** the content, and it slides away 320ms after the pointer leaves it | `body.sb-rail` |
+
+The preference is `1w.sidebar.pin` (`"1"` / `"0"`), so pinning the menu on the profile pins it on
+the player too. Without a saved choice the homepage starts pinned (as it always has) and the player,
+the profile and the dashboard start on the edge. The header menu button is the keyboard/pointer
+shortcut for the same thing: it pins and unpins on a desktop, and opens the drawer with its scrim
+below 1024px — where the pin and the edge tab are hidden, because there is no edge to reach with a
+finger. `Escape` closes a floating panel and leaves a pinned one alone.
 
 The rail slides in *under* the header (`top: var(--header-h)`, `z-index: 120` against the header's
 `130`). Opening it never touches `.site-header` or `.site-header__bar` — no padding, no width, no
-translate — so the brand, the section rail and the wallet stay exactly where they are; only
-`.site-main` and `.site-footer` step aside by `--sidebar-w`. `tools/shell-smoke.mjs` asserts both
-halves: the homepage opens and closes the rail, an inner page never renders it, and the stylesheet
-contains no `body.sb-open .site-header__bar` rule.
+translate — so the brand, the section rail and the wallet stay exactly where they are; pinned,
+`.site-main` and `.site-footer` step aside by `--sidebar-w`, and floating they do not move at all.
+`tools/shell-smoke.mjs` asserts where the panel lives, `tools/sidebar-smoke.mjs` asserts the edge,
+the pin, the Escape key, the mobile drawer and the dashboard menu, and the stylesheets are checked
+to contain no `body.sb-open .site-header__bar` rule.
 
 ### Sidebar
 
@@ -707,7 +722,8 @@ returns the caller's cases.
 ### Tests
 
 ```bash
-node tools/dashboard-smoke.mjs   # 100 checks: the five gates, rail, popover, codes, sections, Unlock now
+node tools/dashboard-smoke.mjs   # the five gates, rail, popover, codes, sections, Unlock now
+node tools/sidebar-smoke.mjs     # 67 checks: the edge, the pin, Escape, the mobile drawer, the dashboard menu
 node tools/court-smoke.mjs       # 115 checks: the four steps, uploads, both doors, the court room
 node tools/iptv-smoke.mjs        # 43 checks: the playlists, the groups, the page, the deep links
 node tools/activated-smoke.mjs   # 35 checks: hidden panels, image link, ad pause, code return
@@ -932,10 +948,17 @@ Errors: `session · inactive · level · cap · already · step · points`.
 ### The dashboard sidebar
 
 The avatar and the username in the sidebar are a link to the member's own page
-(`profile.html?u=@username`, showing the member ID and the status), and the sidebar folds into a
-narrow icon rail from its own toggle — `dsh[data-side="collapsed"]`. The header keeps its geometry
-either way; the state is remembered in `localStorage`. The header wallet opens
-`dashboard.html#points`.
+(`profile.html?u=@username`, showing the member ID and the status). The menu follows the same pin
+as the site rail (`1w.sidebar.pin`):
+
+- **pinned** (`dsh[data-pin="on"]`) it is the first column of the shell and can be folded into a
+  narrow icon rail from its own chevron — `dsh[data-side="collapsed"]`, remembered in
+  `1w.dsh.side`;
+- **unpinned** (`dsh[data-pin="off"]`) it leaves the grid, the main column takes the whole width, and
+  the menu floats back in over the content when the pointer reaches the left edge
+  (`dsh[data-side-reveal="on"]`), with the same thin tab on the edge.
+
+The header keeps its geometry either way; the header wallet opens `dashboard.html#points`.
 
 ## Sounds
 
@@ -1086,6 +1109,7 @@ assets/js/session.js        visitor id, member session, change detection
 assets/js/wallet.js         points + level rendering, polling, awardPoints
 assets/js/notifications.js  bell panel with Now/Hour/Today/Yesterday/Week filters
 assets/js/shell.js          header + sidebar + footer templates and behaviour
+assets/js/edge.js           the pin and the edge reveal shared by both sidebars
 assets/js/home.js           homepage sections
 assets/js/app.js            entry point, mounts the shell on every page
 assets/js/visits.js         visit row + dwell time (IP, country, page)
@@ -1111,6 +1135,7 @@ tools/cast-smoke.mjs        jsdom cast page test (guest + member dials)
 tools/register-smoke.mjs    registration test (form, duplicates, member ID, success, .txt)
 tools/login-smoke.mjs       sign-in test (states, success card, restore, log out)
 tools/dashboard-smoke.mjs   dashboard test (five gates, rail, popover, codes, sections)
+tools/sidebar-smoke.mjs     sidebar rail test (edge reveal, pin, Escape, mobile drawer, dashboard menu)
 tools/court-smoke.mjs       activation wizard + court room test
 tools/visit-smoke.mjs       visit tracker test (5 modes)
 ```

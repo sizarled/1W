@@ -149,6 +149,7 @@ async function boot(pass) {
   globalThis.requestAnimationFrame = window.requestAnimationFrame.bind(window);
   globalThis.cancelAnimationFrame = window.cancelAnimationFrame.bind(window);
   globalThis.matchMedia = (q) => ({ matches: false, media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
+  window.matchMedia = globalThis.matchMedia;
   globalThis.Audio = window.Audio = class {
     constructor() {
       this.volume = 1;

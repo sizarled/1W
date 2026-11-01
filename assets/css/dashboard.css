@@ -502,6 +502,37 @@
   height: 14px;
 }
 
+/* the pin keeps the menu out; unpinned it waits on the screen edge */
+.dsh-side__pin {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.dsh-side__pin.is-on {
+  color: var(--text);
+  border-color: var(--line-3);
+  background: color-mix(in srgb, var(--accent, #fff) 14%, var(--surface-2));
+}
+
+.dsh-side__pin:hover {
+  color: var(--text);
+  border-color: var(--line-3);
+}
+
+.dsh-side__pin .pin-glyph .ico,
+.dsh-side__pin .ico {
+  width: 14px;
+  height: 14px;
+}
+
 /* collapsed: an icon rail, the main column takes the rest, the header never moves */
 .dsh[data-side="collapsed"] .dsh-shell {
   grid-template-columns: 74px minmax(0, 1fr);
@@ -537,6 +568,113 @@
 .dsh[data-side="collapsed"] .dsh-nav__group + .dsh-nav__group {
   border-top: 1px solid var(--line-2);
   padding-top: 0.5rem;
+}
+
+/* ------------------------------------------------------------------ */
+/* unpinned: the menu leaves the grid and waits on the screen edge     */
+/* ------------------------------------------------------------------ */
+.dsh[data-pin="off"] .dsh-shell {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.dsh[data-pin="off"] .dsh-side {
+  position: fixed;
+  top: 64px;
+  left: 0;
+  bottom: 0;
+  width: 268px;
+  max-height: none;
+  z-index: 62;
+  background: color-mix(in srgb, var(--bg-soft) 96%, transparent);
+  backdrop-filter: blur(20px);
+  border-right: 1px solid var(--line-2);
+  box-shadow: 30px 0 70px rgba(0, 0, 0, 0.45);
+  transform: translateX(-101%);
+  visibility: hidden;
+  transition: transform 0.38s var(--ease-out), visibility 0.38s;
+}
+
+.dsh[data-pin="off"][data-side-reveal="on"] .dsh-side {
+  transform: none;
+  visibility: visible;
+}
+
+/* the floating menu is always the full one */
+.dsh[data-pin="off"] .dsh-side__collapse {
+  display: none;
+}
+
+.dsh[data-pin="off"] .dsh-side__ident,
+.dsh[data-pin="off"] .dsh-side__go,
+.dsh[data-pin="off"] .dsh-nav__label,
+.dsh[data-pin="off"] .dsh-nav__count,
+.dsh[data-pin="off"] .dsh-side__back span {
+  display: revert;
+}
+
+.dsh[data-pin="off"] .dsh-side__me {
+  justify-content: flex-start;
+}
+
+.dsh[data-pin="off"] .dsh-nav__item {
+  justify-content: flex-start;
+  padding-inline: revert;
+}
+
+.dsh[data-pin="off"] .dsh-nav__item span {
+  display: inline;
+}
+
+.dsh[data-pin="off"] .dsh-nav__group + .dsh-nav__group {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.dsh[data-pin="off"] .dsh-side__back {
+  display: none;
+}
+
+/* the sliver on the edge — only while the menu is away */
+.dsh-edge {
+  position: fixed;
+  left: 0;
+  top: 50%;
+  z-index: 61;
+  display: none;
+  place-items: center;
+  width: 15px;
+  height: 76px;
+  padding: 0;
+  transform: translateY(-50%);
+  border: 1px solid var(--line-2);
+  border-left: 0;
+  border-radius: 0 10px 10px 0;
+  background: var(--surface-2);
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.2s var(--ease), width 0.2s var(--ease), color 0.2s var(--ease);
+}
+
+.dsh[data-pin="off"] .dsh-edge:not([hidden]) {
+  display: grid;
+}
+
+.dsh[data-pin="off"][data-side-reveal="on"] .dsh-edge {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dsh-edge:hover,
+.dsh-edge:focus-visible {
+  opacity: 1;
+  color: var(--text);
+  width: 19px;
+}
+
+.dsh-edge .ico {
+  width: 13px;
+  height: 13px;
 }
 
 .dsh-side__avatar {
@@ -1543,6 +1681,27 @@
 
   .dsh-shell {
     grid-template-columns: 236px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1023px) {
+  .dsh-side__pin,
+  .dsh-edge {
+    display: none !important;
+  }
+
+  /* below the breakpoint the menu is a plain block above the content */
+  .dsh[data-pin="off"] .dsh-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dsh[data-pin="off"] .dsh-side {
+    position: static;
+    width: auto;
+    max-height: none;
+    transform: none;
+    visibility: visible;
+    box-shadow: none;
   }
 }
 
