@@ -816,12 +816,11 @@ html[data-theme="light"] .site-header::before {
   transition: padding-left 0.42s var(--ease-out);
 }
 
+/* The sidebar slides in under the header: the header keeps its width, its
+   padding and its position — only the content clears the rail. */
 @media (min-width: 1024px) {
   body.sb-open .site-main {
     padding-left: var(--sidebar-w);
-  }
-  body.sb-open .site-header__bar {
-    padding-left: calc(var(--sidebar-w) + var(--gutter));
   }
   body.sb-open .site-footer {
     padding-left: var(--sidebar-w);

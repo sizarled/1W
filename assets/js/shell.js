@@ -1,6 +1,10 @@
 /**
- * Site shell — header + sidebar, rendered from one template so every page
- * (index, search, watch, dashboard …) stays in sync automatically.
+ * Site shell — header, footer and the homepage sidebar.
+ *
+ * The sidebar belongs to the homepage alone: every other page renders the
+ * header without its menu button and never mounts the `<aside>`. It slides in
+ * *under* the header, so the header keeps its exact position and the content
+ * is what moves.
  */
 import { PRIMARY_NAV, SIDEBAR_NAV, FOOTER_NAV, PLATFORMS, SITE } from "./config.js";
 import { brand } from "./brands.js";
@@ -23,6 +27,12 @@ import { initTheme, toggleTheme, currentTheme, flashTransition } from "./theme.j
 
 const SIDEBAR_KEY = "1w.sidebar";
 
+/** The sidebar is a homepage-only navigation panel. */
+function isHomePage() {
+  const file = window.location.pathname.split("/").pop() || "index.html";
+  return file === "index.html" || document.body?.dataset.page === "home";
+}
+
 /* ------------------------------------------------------------------ */
 /* markup                                                             */
 /* ------------------------------------------------------------------ */
@@ -44,13 +54,17 @@ function notifPanel() {
     </div>`;
 }
 
-function headerTemplate() {
+function headerTemplate(withSections = true) {
   return `
   <header class="site-header" data-header>
     <div class="site-header__bar">
-      <button class="icon-btn header__menu" data-action="toggle-sidebar" aria-label="Open navigation" aria-controls="siteSidebar" aria-expanded="false">
+      ${
+        withSections
+          ? `<button class="icon-btn header__menu" data-action="toggle-sidebar" aria-label="Open navigation" aria-controls="siteSidebar" aria-expanded="false">
         ${icon("menu")}
-      </button>
+      </button>`
+          : ""
+      }
 
       <a class="brand" href="index.html" aria-label="${SITE.name} — home">
         <span class="brand__mark" aria-hidden="true">1W</span>
@@ -437,19 +451,21 @@ function bindActions() {
 export function mountShell() {
   initTheme();
 
+  const isHome = isHomePage();
   const headerMount = document.querySelector("[data-site-header]");
   const sidebarMount = document.querySelector("[data-site-sidebar]");
   const footerMount = document.querySelector("[data-site-footer]");
-  if (headerMount) headerMount.innerHTML = headerTemplate();
-  if (sidebarMount) sidebarMount.innerHTML = sidebarTemplate();
+  if (headerMount) headerMount.innerHTML = headerTemplate(isHome);
+  if (sidebarMount) sidebarMount.innerHTML = isHome ? sidebarTemplate() : "";
   if (footerMount) footerMount.innerHTML = footerTemplate();
+  if (!isHome) document.body.classList.remove("sb-open");
 
   renderAccount();
   renderAuth();
   renderWallet();
   syncThemeToggles();
   renderSoundLabel();
-  initSidebar();
+  if (isHome) initSidebar();
   initScrollEffects();
   bindActions();
   initNotifications();

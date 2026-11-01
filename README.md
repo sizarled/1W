@@ -531,6 +531,19 @@ yesterday, week), a **Settings** button that jumps to the notification settings 
 **View all** → `notifications.html`. Unread items carry a dot on the bell and a counter in the
 sidebar.
 
+### The navigation rail is a homepage panel
+
+The menu button and the `<aside id="siteSidebar">` exist **on `index.html` only**. Every other
+page mounts the header without the button and leaves the sidebar container empty, so there is no
+rail to open and no `sb-open` class to inherit from a stored preference.
+
+The rail slides in *under* the header (`top: var(--header-h)`, `z-index: 120` against the header's
+`130`). Opening it never touches `.site-header` or `.site-header__bar` — no padding, no width, no
+translate — so the brand, the section rail and the wallet stay exactly where they are; only
+`.site-main` and `.site-footer` step aside by `--sidebar-w`. `tools/shell-smoke.mjs` asserts both
+halves: the homepage opens and closes the rail, an inner page never renders it, and the stylesheet
+contains no `body.sb-open .site-header__bar` rule.
+
 ### Sidebar
 
 Avatar, `@username`, `IDXXXXXX` and the account status chip, then the groups:
