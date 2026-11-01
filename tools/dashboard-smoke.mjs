@@ -39,6 +39,10 @@ const MEMBER = {
 };
 
 const NOW = Date.now();
+// Keep the "recency" fixtures inside both the last hour and today, even when
+// the suite runs just after local midnight.
+const MIDNIGHT = new Date(NOW).setHours(0, 0, 0, 0);
+const RECENT = Math.min(NOW - 30e3, Math.max(NOW - 600e3, MIDNIGHT + 1e3));
 const CODE_ROW = {
   id: "c1",
   code: "654321",
@@ -307,7 +311,7 @@ function expect(name, condition, detail = "") {
       },
     ],
     notifications: [
-      { id: "n1", source: "movies", title: "New release", subject: "Dune: Part Two is in your list.", read: false, created_at: new Date(NOW - 600e3).toISOString() },
+      { id: "n1", source: "movies", title: "New release", subject: "Dune: Part Two is in your list.", read: false, created_at: new Date(RECENT).toISOString() },
       { id: "n2", source: "court", title: "Trial scheduled", subject: "Case CRT-1 on Friday.", read: true, created_at: new Date(NOW - 3 * 864e5).toISOString() },
     ],
     prefs: { movies: false },

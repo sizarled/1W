@@ -604,9 +604,16 @@ data.
 | `member_list_remove(token, list_id)` | drops a favorites / later / completed row |
 | `member_court_request(token)` | banned, non-permanent accounts ask for a trial |
 | `member_court_history(token)` | every case of the caller, for `court.html` |
-| `member_activation_state(token)` | what `activated.html` may offer: `mode` (`activate` / `choose` / `blocked`), first activation, re-activation, upgrade, pending request, auto-ban date |
-| `member_activation_request(token, note)` | first activation: free plan, never activated, once an hour |
-| `member_reactivate_request(token, note)` | re-activation for an account activated before (inactive or expired), once an hour |
+| `member_activation_state(token)` | what `activated.html` may offer: `mode` (`activate` / `choose` / `blocked`), `first_activation`, `can_reactivate`, `can_upgrade`, `upgrade_targets`, `prices`, `durations`, `ad_url`, profile, 30-day deadline |
+| `activation_profile_save(token, name, description, avatar, cover, language, country)` | step 1 — writes `members` (name, bio, avatar/cover URL, language, country) and mirrors the row into `profiles` |
+| `activation_viewing_code_save(token, code, months, age, device, device_name)` | step 2 — six digits, unique, age rating, device/MAC bound in `viewing_codes` + `watch_code_devices`; free ⇒ one month |
+| `activation_ad_open(token, type, target, duration)` | step 3 — opens a pending ad session, returns the ad URL and the 30-second rule |
+| `activation_ad_claim(token, session)` | issues the code **only** when 30 s have really passed on the server (`too_soon, remaining` before that) |
+| `activation_ad_cancel(token, session)` | abandons a pending ad session |
+| `activation_pay_points(token, type, target, duration)` | premium: deducts the points (`points_ledger`), writes `payment` + `paymentlog` and issues the code in one transaction |
+| `activation_redeem(token, code, type, target, duration)` | consumes the code and moves the membership (`free` after the first activation, the same plan on re-activation, the higher tier on an upgrade) |
+| `member_activation_request(token, note)` / `member_reactivate_request(token, note)` | the earlier moderator-request pair, kept for old links |
+| `member_purge_stale(dry_run)` | service role only — the 30-day policy: never-activated or lapsed accounts are deleted, payments are kept with `member_ref` |
 | `admin_ban_member(member, reason, by, permanent)` | service role only |
 
 No table is readable from the browser: `viewing_codes`, `watch_code_devices`,
@@ -615,27 +622,63 @@ no policies, and the token is only ever compared inside `member_from_token()`.
 
 ### The two pages beside it
 
-`activated.html?member=ID_MEMBER` follows one rule: **activation happens once, on the free
-plan, and only on the first visit** — after that the page offers two doors, **re-activate the
-account** or **upgrade the membership**.
+`activated.html?member=ID_MEMBER` follows one rule: **first activation happens once, on the
+free plan, and only on the first visit** — after that the page offers two doors, **re-activate
+the membership** or **upgrade it**. Which doors exist is decided by `member_activation_state()`.
 
 | Situation | Page |
 | --- | --- |
-| Never activated · inactive · free | Single activation form, the 30-day auto-ban date, the note box → `member_activation_request()` |
-| Never activated · paid plan | No activation (it is a free-plan step): the two doors, re-activation disabled, upgrade ready |
-| Activated before · inactive | Two doors: re-activation (note + request → `member_reactivate_request()`) and upgrade |
-| Activated before · expired | Same two doors, re-activation labelled as reopening the plan |
-| Activated before · active | Two doors, re-activation shows **Active now** and stays closed, upgrade ready |
+| Never activated · inactive · free | The four-step wizard; the 30-day deadline is printed above it |
+| Never activated · paid plan | No wizard (activation is a free-plan step): the doors, with a note that the paid plan opens by itself |
+| Activated before · inactive / expired | Two doors: re-activation (ad gate on free, Patreon or points on premium) and upgrade |
+| Activated before · active | Two doors — renewing early is allowed, the new period starts where the old one ends |
+| Diamond | Re-activation only: no tier above it, so the upgrade card is disabled |
 | Banned | Neither door: the only path is the trial, with a link to the dashboard and to the court |
 
-“Never activated” is `members.account_activated_at is null` — the database stamps it the first
-time the status becomes `active` and never clears it, so the page cannot be talked into opening
-the first-activation form twice (the RPC also refuses it with `already_activated`, and refuses a
-paid plan with `plan`). Both request functions write a notification plus a log row
-(`activation_requested` / `reactivation_requested`) and are limited to one an hour; a pending
-request turns the form into a confirmation instead of allowing a second one. The dashboard's
-own gate button follows the same rule: **Activate account** on a fresh account, **Re-activate or
-upgrade** when the account was activated before.
+**Step 1 — create profile.** Profile name, description, avatar, cover, language and country (the
+country comes from the IP lookup and stays editable). Images are previewed locally, uploaded to
+Supabase Storage `source/users/profile/` as `avatar_IDMEMBER.ext` / `cover_IDMEMBER.ext`, and the
+URLs are saved through `activation_profile_save()`.
+
+**Step 2 — create viewing code.** Six digits, typed or generated, unique across the platform; an
+age rating (Unspecified / 13+ / 16+ / 18+); duration fixed to one month on the free plan; the
+device identifier is detected in the browser (it is what player apps report as a MAC) and bound
+to the code in the same call.
+
+**Step 3 — get activation code.** *Get Activation Code* opens the ad in a new tab and starts a
+30-second countdown. The timer is **server-side**: `activation_ad_open()` records `ad_started_at`,
+`activation_ad_claim()` refuses with `{error: too_soon, remaining}` until 30 real seconds have
+passed, and only then mints a code (`ACT-XXXX-XXXX`, unique, 7-day expiry). Closing the ad page
+pauses the countdown (re-opening resumes the same session, it never resets it), the code is
+filled into the box automatically, and *Activate Account* appears once a code is present.
+
+**Step 4 — activate account.** *Activate Account* → “Activating Your Account…”, the progress bar,
+`activation_redeem('initial')`, then “Account Activated Successfully!” and *Finish* → dashboard.
+The RPC refuses a wrong, used, expired or foreign code, a second first activation
+(`already_activated`), a paid plan (`plan`) and a duration other than one month.
+
+**Re-activation** extends the plan without ever changing the tier. Free membership renews one
+month at a time through the same ad gate; premium plans choose 3, 6, 9, 12, 18 or 24 months and
+pay with **Patreon** (redirect, then paste the code you receive) or **points** (the price is
+shown first, the points are deducted and the code issued in one transaction). The code must be
+valid, unused, of type `reactivation`, for the same plan and for the chosen duration.
+
+**Upgrade** is premium-only and strictly upwards — Free → Silver/Gold/Diamond, Silver →
+Gold/Diamond, Gold → Diamond; Diamond has no upgrade. Same payment paths, and the code must be
+type `upgrade`, unused, for the target tier and the chosen duration. The membership changes and
+the code is consumed in one transaction, then “Membership Upgraded Successfully!”.
+
+**The 30-day policy.** `member_purge_stale(true)` counts and `member_purge_stale(false)` deletes
+accounts that were never activated within 30 days, and accounts whose membership expired more
+than 30 days ago without a re-activation. Financial records survive: `payment` keeps the row with
+`member_ref` (the member id) and `member_id` set to null, and `paymentlog` keeps the trail. The
+function is service-role only, so it can be called by a scheduled job (`pg_cron` or the
+dashboard's scheduler) without exposing anything to the browser.
+
+**Storage.** The `source` bucket already holds the sounds; `users/profile/` is the only folder
+the browser may write to (`source_profile_insert`: insert only, `avatar_…` / `cover_…` names
+only), so a member cannot overwrite or delete anything. Replace the policy with signed uploads
+when real auth lands.
 
 `court.html?id=ID_COURT` is the case file: case number, date and time, judge / defendant /
 plaintiff, reason, status, the absence warning and the verdict with the court note. A case id
@@ -646,7 +689,7 @@ returns the caller's cases.
 
 ```bash
 node tools/dashboard-smoke.mjs   # 80 checks: the five gates, rail, popover, codes, sections
-node tools/court-smoke.mjs       # 60 checks: first activation, the two doors, the court room
+node tools/court-smoke.mjs       # 102 checks: the four steps, both doors, the court room
 ```
 
 `dashboard-smoke.mjs` boots the page in jsdom with a stubbed `member_dashboard` and walks the
@@ -657,8 +700,12 @@ popover's filters and both paths, the two locked switches, the code generator, t
 tab and every section rendering). `court-smoke.mjs` covers the activation page as a guest, on a first activation (request sent,
 form closed), after activation while active (**Active now**, upgrade link with the member id),
 after activation while expired (re-activation request → “Request sent”), a paid plan that was
-never activated (“Included in plan”, no request form) and while banned (no doors, trial links),
-plus the court room for a guest, the owner and a foreign id.
+never activated (no wizard, the doors) and while banned (no doors, trial links), plus the court
+room for a guest, the owner and a foreign id. The activation passes walk the whole wizard — step
+1 saves the profile, step 2 generates a viewing code, step 3 opens the ad and receives the code
+after the (stubbed) 30 s, step 4 activates — and then a premium re-activation with points, a free
+re-activation through the ad, a Gold → Diamond upgrade, and the Diamond case where the upgrade
+door is closed.
 
 ## Sounds
 
@@ -825,7 +872,7 @@ assets/css/login.css        sign-in form + signed-in card
 assets/js/login.js          sign-in controller (member_login / member_session / member_logout)
 assets/css/dashboard.css    app shell: header rail, sidebar, gates, section views
 assets/js/dashboard.js      dashboard controller (member_dashboard + code/notify/court actions)
-assets/js/activated.js      activation request page (member_activation_request)
+assets/js/activated.js      activation wizard (profile → viewing code → ad gate → activate), reactivation, upgrade
 assets/js/court.js          court room page (member_court_history)
 tools/build-pages.mjs       regenerates the placeholder pages
 tools/smoke.mjs             jsdom smoke test (renders the homepage offline)
@@ -834,7 +881,7 @@ tools/cast-smoke.mjs        jsdom cast page test (guest + member dials)
 tools/register-smoke.mjs    registration test (form, duplicates, member ID, success, .txt)
 tools/login-smoke.mjs       sign-in test (states, success card, restore, log out)
 tools/dashboard-smoke.mjs   dashboard test (five gates, rail, popover, codes, sections)
-tools/court-smoke.mjs       activation page + court room test
+tools/court-smoke.mjs       activation wizard + court room test
 tools/visit-smoke.mjs       visit tracker test (5 modes)
 ```
 

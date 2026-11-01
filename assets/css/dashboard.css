@@ -1739,3 +1739,497 @@
   opacity: 0.5;
   pointer-events: none;
 }
+
+/* ------------------------------------------------------------------
+   activated.html — the four-step wizard, reactivation, upgrade
+   ------------------------------------------------------------------ */
+.dsh-wizard {
+  display: grid;
+  gap: 0.7rem;
+  margin-top: 1rem;
+  text-align: left;
+}
+
+/* steps ----------------------------------------------------------- */
+.dsh-steps {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dsh-steps__item {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.2;
+}
+
+.dsh-steps__num {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  border: 1px solid var(--line-3);
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.dsh-steps__label {
+  font-weight: 550;
+  letter-spacing: 0.01em;
+}
+
+.dsh-steps__item[data-state="current"] {
+  border-color: var(--text);
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.dsh-steps__item[data-state="current"] .dsh-steps__num {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--surface);
+}
+
+.dsh-steps__item[data-state="done"] {
+  color: var(--text);
+}
+
+.dsh-steps__item[data-state="done"] .dsh-steps__num {
+  border-color: var(--text);
+  color: var(--text);
+}
+
+.dsh-steps__hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.dsh-progress--run {
+  height: 6px;
+  margin-top: 0.5rem;
+}
+
+.dsh-progress__bar {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--text);
+  transition: width 0.35s ease;
+}
+
+/* one step -------------------------------------------------------- */
+.dsh-step {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.9rem 1rem 1rem;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.dsh-step[hidden] {
+  display: none;
+}
+
+.dsh-step__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  justify-content: flex-end;
+  margin-top: 0.2rem;
+}
+
+.dsh-textarea {
+  min-height: 84px;
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+.dsh-input--code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-size: 0.92rem;
+}
+
+.dsh-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* uploads --------------------------------------------------------- */
+.dsh-uploads {
+  display: grid;
+  gap: 0.6rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.dsh-drop {
+  display: grid;
+  gap: 0.35rem;
+  justify-items: start;
+  padding: 0.75rem 0.85rem 0.85rem;
+  border: 1px dashed var(--line-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.dsh-drop__icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line-2);
+  border-radius: 9px;
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.dsh-drop__title {
+  color: var(--text);
+  font-size: 0.84rem;
+  font-weight: 650;
+}
+
+.dsh-drop__text {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.dsh-drop__text code {
+  color: var(--text);
+  font-size: 0.72rem;
+}
+
+.dsh-drop__preview {
+  width: 100%;
+  max-width: 96px;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  background: var(--surface-3);
+}
+
+.dsh-drop__preview--wide {
+  max-width: 100%;
+  aspect-ratio: 16 / 7;
+}
+
+.dsh-drop__preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.dsh-drop .dsh-btn {
+  margin-top: 0.15rem;
+}
+
+/* device ---------------------------------------------------------- */
+.dsh-device {
+  display: flex;
+  gap: 0.65rem;
+  align-items: flex-start;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.dsh-device__icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line-2);
+  border-radius: 9px;
+  color: var(--text);
+}
+
+.dsh-device b {
+  color: var(--text);
+  font-size: 0.82rem;
+}
+
+.dsh-device p {
+  margin: 0.15rem 0 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.dsh-device code {
+  color: var(--text);
+  font-size: 0.74rem;
+}
+
+/* summary + run --------------------------------------------------- */
+.dsh-kv--summary {
+  margin: 0.1rem 0 0.35rem;
+}
+
+.dsh-run {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.dsh-run__label {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* flow panels ----------------------------------------------------- */
+.dsh-panel--flow {
+  margin-top: 1rem;
+  padding: 1rem 1.1rem 1.15rem;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  text-align: left;
+}
+
+.dsh-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.dsh-panel__title {
+  margin: 0.15rem 0 0.25rem;
+  color: var(--text);
+  font-size: 1.02rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.dsh-panel__text {
+  margin: 0 0 0.4rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+
+/* payment --------------------------------------------------------- */
+.dsh-pay {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.dsh-pay__price {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.dsh-pay__price span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.dsh-pay__price b {
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.dsh-pay__price em {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-style: normal;
+}
+
+.dsh-pay__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  justify-content: flex-end;
+}
+
+.dsh-pay .dsh-help {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+/* done ------------------------------------------------------------ */
+.dsh-done {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: center;
+  text-align: center;
+  margin-top: 1rem;
+  padding: 1.3rem 1.2rem 1.4rem;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.dsh-done__icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  border: 1px solid var(--text);
+  color: var(--text);
+  background: var(--surface);
+}
+
+.dsh-done__title {
+  margin: 0.2rem 0 0;
+  color: var(--text);
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.dsh-done__text {
+  margin: 0;
+  max-width: 46ch;
+  color: var(--muted);
+  font-size: 0.83rem;
+  line-height: 1.6;
+}
+
+.dsh-done .dsh-kv {
+  width: 100%;
+  max-width: 380px;
+}
+
+/* ad gate --------------------------------------------------------- */
+.dsh-ad {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(4, 4, 6, 0.78);
+  backdrop-filter: blur(6px);
+}
+
+.dsh-ad[hidden] {
+  display: none;
+}
+
+.dsh-ad__panel {
+  width: min(440px, 100%);
+  display: grid;
+  gap: 0.5rem;
+  padding: 1.2rem 1.25rem 1.3rem;
+  border: 1px solid var(--line-3);
+  border-radius: var(--radius);
+  background: var(--surface);
+  text-align: left;
+}
+
+.dsh-ad__title {
+  margin: 0;
+  color: var(--text);
+  font-size: 1.02rem;
+  font-weight: 700;
+}
+
+.dsh-ad__text {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+
+.dsh-ad__count {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  margin-top: 0.2rem;
+}
+
+.dsh-ad__count b {
+  color: var(--text);
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.dsh-ad__count span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.dsh-ad__status {
+  margin: 0.1rem 0 0;
+  color: var(--text);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.dsh-ad__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.35rem;
+}
+
+@media (max-width: 640px) {
+  .dsh-steps {
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+  }
+
+  .dsh-steps__item {
+    padding: 0.4rem 0.5rem;
+  }
+
+  .dsh-pay {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dsh-pay__actions {
+    justify-content: flex-start;
+  }
+}

@@ -4,17 +4,17 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Activate your account — 1World Web</title>
-    <meta name="description" content="Request activation for your 1World member account." />
+    <meta name="description" content="Activate, re-activate or upgrade your 1World member account." />
     <meta name="theme-color" content="#060607" />
     <meta name="robots" content="noindex" />
     <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="assets/css/base.css?v=20261031s" />
-    <link rel="stylesheet" href="assets/css/layout.css?v=20261031s" />
-    <link rel="stylesheet" href="assets/css/components.css?v=20261031s" />
-    <link rel="stylesheet" href="assets/css/dashboard.css?v=20261031s" />
+    <link rel="stylesheet" href="assets/css/base.css?v=20261031t" />
+    <link rel="stylesheet" href="assets/css/layout.css?v=20261031t" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261031t" />
+    <link rel="stylesheet" href="assets/css/dashboard.css?v=20261031t" />
     <script>
       (function () {
         try {
@@ -29,8 +29,8 @@
         } catch (e) {}
       })();
     </script>
-    <script type="module" src="assets/js/app.js?v=20261031s"></script>
-    <script type="module" src="assets/js/activated.js?v=20261031s"></script>
+    <script type="module" src="assets/js/app.js?v=20261031t"></script>
+    <script type="module" src="assets/js/activated.js?v=20261031t"></script>
   </head>
 
   <body data-page="activated" data-title="Activate account">
@@ -54,9 +54,8 @@
           <p class="dsh-eyebrow" data-act-eyebrow>Account activation</p>
           <h1 class="dsh-gate__title" data-act-title>Activate your account</h1>
           <p class="dsh-gate__text" data-act-lead>
-            New accounts start as <b>inactive</b>. A moderator reviews every request — normally within
-            24 hours. Until then you can sign in, keep your profile and see your member ID, but the
-            dashboard, viewing codes and points stay closed.
+            Activation happens once, on the free plan. Four short steps: create your profile, create a viewing
+            code, collect your activation code, then switch the account on.
           </p>
 
           <dl class="dsh-kv dsh-kv--gate">
@@ -69,40 +68,220 @@
 
           <p class="dsh-gate__note" data-act-deadline hidden></p>
 
-          <!-- 1 · first activation — free membership, never activated -->
-          <form class="dsh-form" data-act-form>
-            <div class="dsh-field dsh-field--wide">
-              <label for="act-note">Anything we should know? (optional)</label>
-              <input class="dsh-input" id="act-note" name="note" maxlength="280" placeholder="How you found 1World, what you plan to watch…" />
-            </div>
-            <div class="dsh-field dsh-field--wide">
-              <button class="dsh-btn dsh-btn--primary" type="submit"><i data-icon="send"></i>Send activation request</button>
-              <a class="dsh-btn" href="dashboard.html"><i data-icon="arrowLeft"></i>Back to dashboard</a>
-            </div>
-          </form>
+          <!-- ========================================================= -->
+          <!-- first activation — four sequential steps                  -->
+          <!-- ========================================================= -->
+          <div class="dsh-wizard" data-wizard hidden>
+            <ol class="dsh-steps" data-steps>
+              <li class="dsh-steps__item" data-step-dot="1" data-state="current">
+                <span class="dsh-steps__num">1</span>
+                <span class="dsh-steps__label">Create profile</span>
+              </li>
+              <li class="dsh-steps__item" data-step-dot="2" data-state="todo">
+                <span class="dsh-steps__num">2</span>
+                <span class="dsh-steps__label">Create viewing code</span>
+              </li>
+              <li class="dsh-steps__item" data-step-dot="3" data-state="todo">
+                <span class="dsh-steps__num">3</span>
+                <span class="dsh-steps__label">Get activation code</span>
+              </li>
+              <li class="dsh-steps__item" data-step-dot="4" data-state="todo">
+                <span class="dsh-steps__num">4</span>
+                <span class="dsh-steps__label">Activate account</span>
+              </li>
+            </ol>
 
-          <!-- 2 · after the first activation — re-activate or upgrade -->
+            <div class="dsh-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="25" data-progressbar>
+              <span class="dsh-progress__bar" data-progress style="width:25%"></span>
+            </div>
+            <p class="dsh-steps__hint" data-step-hint>Step 1 of 4 — your profile is the face of the account.</p>
+
+            <!-- 1 · profile ------------------------------------------------ -->
+            <form class="dsh-form dsh-form--stack dsh-step" data-step="1" autocomplete="off">
+              <div class="dsh-field dsh-field--wide">
+                <label class="dsh-field__label" for="act-name">Profile name</label>
+                <input class="dsh-input" id="act-name" name="name" maxlength="60" required placeholder="How the profile is shown" data-pf-name />
+                <p class="dsh-help">2–60 characters. Changeable later from <a href="profile.html">your profile</a>.</p>
+              </div>
+
+              <div class="dsh-field dsh-field--wide">
+                <label class="dsh-field__label" for="act-desc">Description</label>
+                <textarea class="dsh-input dsh-textarea" id="act-desc" name="description" rows="3" maxlength="300" placeholder="A line about you and what you watch" data-pf-desc></textarea>
+                <p class="dsh-help"><span data-pf-desc-count>0</span>/300</p>
+              </div>
+
+              <div class="dsh-uploads">
+                <div class="dsh-drop" data-drop="avatar">
+                  <span class="dsh-drop__icon"><i data-icon="image"></i></span>
+                  <b class="dsh-drop__title">Avatar</b>
+                  <p class="dsh-drop__text">Square image, up to 4 MB. Saved as <code data-file-name="avatar">avatar_ID…</code></p>
+                  <div class="dsh-drop__preview" data-preview-box="avatar" hidden>
+                    <img alt="Avatar preview" data-preview="avatar" />
+                  </div>
+                  <label class="dsh-btn dsh-btn--sm" for="act-avatar"><i data-icon="upload"></i>Choose image</label>
+                  <input class="dsh-sr-only" id="act-avatar" type="file" accept="image/*" data-file="avatar" />
+                  <button class="dsh-btn dsh-btn--sm dsh-btn--ghost" type="button" data-clear="avatar" hidden>Remove</button>
+                </div>
+
+                <div class="dsh-drop" data-drop="cover">
+                  <span class="dsh-drop__icon"><i data-icon="film"></i></span>
+                  <b class="dsh-drop__title">Cover</b>
+                  <p class="dsh-drop__text">Wide image, up to 6 MB. Saved as <code data-file-name="cover">cover_ID…</code></p>
+                  <div class="dsh-drop__preview dsh-drop__preview--wide" data-preview-box="cover" hidden>
+                    <img alt="Cover preview" data-preview="cover" />
+                  </div>
+                  <label class="dsh-btn dsh-btn--sm" for="act-cover"><i data-icon="upload"></i>Choose image</label>
+                  <input class="dsh-sr-only" id="act-cover" type="file" accept="image/*" data-file="cover" />
+                  <button class="dsh-btn dsh-btn--sm dsh-btn--ghost" type="button" data-clear="cover" hidden>Remove</button>
+                </div>
+              </div>
+
+              <div class="dsh-form__row">
+                <div class="dsh-field">
+                  <label class="dsh-field__label" for="act-lang">Language</label>
+                  <select class="dsh-input" id="act-lang" data-pf-lang>
+                    <option value="en">English</option>
+                    <option value="ar">العربية</option>
+                    <option value="fr">Français</option>
+                    <option value="es">Español</option>
+                    <option value="de">Deutsch</option>
+                    <option value="it">Italiano</option>
+                    <option value="pt">Português</option>
+                    <option value="tr">Türkçe</option>
+                    <option value="ru">Русский</option>
+                    <option value="hi">हिन्दी</option>
+                    <option value="zh">中文</option>
+                    <option value="ja">日本語</option>
+                    <option value="nl">Nederlands</option>
+                    <option value="sv">Svenska</option>
+                    <option value="pl">Polski</option>
+                    <option value="ur">اردو</option>
+                  </select>
+                </div>
+                <div class="dsh-field">
+                  <label class="dsh-field__label" for="act-country">Country</label>
+                  <input class="dsh-input" id="act-country" data-pf-country placeholder="Detected from your connection" />
+                  <p class="dsh-help" data-country-hint>Automatic from the IP; you can correct it.</p>
+                </div>
+              </div>
+
+              <div class="dsh-step__actions">
+                <button class="dsh-btn dsh-btn--primary" type="submit" data-step-next="1">
+                  <i data-icon="chevronRight"></i>Next — viewing code
+                </button>
+              </div>
+            </form>
+
+            <!-- 2 · viewing code ------------------------------------------- -->
+            <form class="dsh-form dsh-form--stack dsh-step" data-step="2" hidden autocomplete="off">
+              <div class="dsh-field dsh-field--wide">
+                <label class="dsh-field__label" for="act-vcode">Viewing code</label>
+                <div class="dsh-inline">
+                  <input class="dsh-input dsh-input--code" id="act-vcode" inputmode="numeric" maxlength="6" placeholder="6 digits" data-vc-code />
+                  <button class="dsh-btn" type="button" data-vc-generate><i data-icon="refresh"></i>Generate</button>
+                </div>
+                <p class="dsh-help">Six digits, unique across 1World. Type your own or let us generate one.</p>
+              </div>
+
+              <div class="dsh-form__row">
+                <div class="dsh-field">
+                  <label class="dsh-field__label" for="act-age">Age rating</label>
+                  <select class="dsh-input" id="act-age" data-vc-age>
+                    <option value="unspecified">Unspecified</option>
+                    <option value="13">13+</option>
+                    <option value="16">16+</option>
+                    <option value="18">18+</option>
+                  </select>
+                </div>
+                <div class="dsh-field">
+                  <label class="dsh-field__label" for="act-months">Duration</label>
+                  <select class="dsh-input" id="act-months" data-vc-months>
+                    <option value="1" selected>1 month</option>
+                  </select>
+                  <p class="dsh-help">The free plan covers one month per code.</p>
+                </div>
+              </div>
+
+              <div class="dsh-device" data-device-box>
+                <span class="dsh-device__icon"><i data-icon="tv"></i></span>
+                <div>
+                  <b>Device detected</b>
+                  <p><span data-device-name>This browser</span> · <code data-device-id>—</code></p>
+                  <p class="dsh-help">The code is bound to this device. Player apps report the same identifier as a MAC address.</p>
+                </div>
+              </div>
+
+              <div class="dsh-step__actions">
+                <button class="dsh-btn" type="button" data-step-back="2"><i data-icon="arrowLeft"></i>Back</button>
+                <button class="dsh-btn dsh-btn--primary" type="submit" data-step-next="2">
+                  <i data-icon="chevronRight"></i>Next — activation code
+                </button>
+              </div>
+            </form>
+
+            <!-- 3 · activation code ---------------------------------------- -->
+            <div class="dsh-step" data-step="3" hidden>
+              <div class="dsh-field dsh-field--wide">
+                <label class="dsh-field__label" for="act-acode">Activation code</label>
+                <div class="dsh-inline">
+                  <input class="dsh-input dsh-input--code" id="act-acode" maxlength="14" placeholder="ACT-XXXX-XXXX" data-ac-code />
+                  <button class="dsh-btn dsh-btn--primary" type="button" data-ac-get><i data-icon="sparkle"></i>Get Activation Code</button>
+                </div>
+                <p class="dsh-help" data-ac-hint>
+                  Open the short ad to unlock the code. The 30-second timer starts when the ad opens, and the code
+                  is filled in here automatically.
+                </p>
+              </div>
+
+              <div class="dsh-step__actions">
+                <button class="dsh-btn" type="button" data-step-back="3"><i data-icon="arrowLeft"></i>Back</button>
+                <button class="dsh-btn dsh-btn--primary" type="button" data-step-next="3" data-ac-next disabled>
+                  <i data-icon="chevronRight"></i>Next — activate
+                </button>
+              </div>
+            </div>
+
+            <!-- 4 · activate ----------------------------------------------- -->
+            <div class="dsh-step" data-step="4" hidden>
+              <dl class="dsh-kv dsh-kv--summary">
+                <div><dt>Profile</dt><dd data-sum-profile>—</dd></div>
+                <div><dt>Viewing code</dt><dd data-sum-viewing>—</dd></div>
+                <div><dt>Device</dt><dd data-sum-device>—</dd></div>
+                <div><dt>Activation code</dt><dd data-sum-code>—</dd></div>
+                <div><dt>Plan</dt><dd>Free · 1 month</dd></div>
+              </dl>
+
+              <div class="dsh-run" data-run="activate" hidden>
+                <p class="dsh-run__label" data-run-label>Activating Your Account…</p>
+                <div class="dsh-progress dsh-progress--run"><span class="dsh-progress__bar" data-run-bar style="width:0%"></span></div>
+              </div>
+
+              <div class="dsh-step__actions">
+                <button class="dsh-btn" type="button" data-step-back="4"><i data-icon="arrowLeft"></i>Back</button>
+                <button class="dsh-btn dsh-btn--primary dsh-btn--lg" type="button" data-activate>
+                  <i data-icon="unlock"></i>Activate Account
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ========================================================= -->
+          <!-- already activated — the two doors                          -->
+          <!-- ========================================================= -->
           <div class="dsh-choice" data-act-choice hidden>
             <article class="dsh-choice__card" data-choice="reactivate">
               <span class="dsh-choice__icon"><i data-icon="refresh"></i></span>
               <div class="dsh-choice__head">
-                <h2 class="dsh-choice__title">Re-activate account</h2>
+                <h2 class="dsh-choice__title">Re-activate membership</h2>
                 <span class="dsh-chip" data-react-state hidden></span>
               </div>
               <p class="dsh-choice__text" data-react-text>
-                Open the account again without changing the plan. A moderator reopens it within 24 hours.
+                Extend the plan you already have. Free membership renews one month at a time; premium plans
+                choose 3, 6, 9, 12, 18 or 24 months. The plan itself never changes.
               </p>
-              <form class="dsh-form dsh-form--stack" data-react-form>
-                <div class="dsh-field dsh-field--wide">
-                  <label class="dsh-field__label" for="react-note">Why should we reopen it? (optional)</label>
-                  <input class="dsh-input" id="react-note" name="note" maxlength="280" placeholder="Explain the situation" />
-                </div>
-                <div class="dsh-field dsh-field--wide">
-                  <button class="dsh-btn dsh-btn--primary" type="submit">
-                    <i data-icon="refresh"></i>Send re-activation request
-                  </button>
-                </div>
-              </form>
+              <button class="dsh-btn dsh-btn--primary" type="button" data-open-react>
+                <i data-icon="refresh"></i>Re-activate
+              </button>
             </article>
 
             <article class="dsh-choice__card" data-choice="upgrade">
@@ -111,19 +290,170 @@
                 <h2 class="dsh-choice__title">Upgrade membership</h2>
                 <span class="dsh-chip" data-upgrade-state hidden></span>
               </div>
-              <p class="dsh-choice__text">
-                Move from the free plan to <b>Silver</b>, <b>Gold</b> or <b>Diamond</b> — more viewing codes,
-                more devices, higher level caps and points that never expire.
+              <p class="dsh-choice__text" data-upgrade-text>
+                Move up a tier — never sideways, never down. Free → Silver, Gold or Diamond; Silver → Gold or
+                Diamond; Gold → Diamond. Diamond is the top tier.
               </p>
-              <dl class="dsh-kv">
-                <div><dt>Current plan</dt><dd data-upgrade-current>Free</dd></div>
-                <div><dt>Points</dt><dd data-upgrade-points>—</dd></div>
-                <div><dt>Rate</dt><dd>100 points = $1</dd></div>
-              </dl>
-              <a class="dsh-btn dsh-btn--primary" data-upgrade href="actevite.html">
-                <i data-icon="crown"></i>Choose a plan
-              </a>
+              <button class="dsh-btn dsh-btn--primary" type="button" data-open-upgrade>
+                <i data-icon="crown"></i>Upgrade
+              </button>
             </article>
+          </div>
+
+          <!-- reactivation panel ---------------------------------------- -->
+          <div class="dsh-panel dsh-panel--flow" data-react hidden>
+            <header class="dsh-panel__head">
+              <div>
+                <p class="dsh-eyebrow">Re-activation</p>
+                <h2 class="dsh-panel__title">Extend your <span data-react-plan>Free</span> membership</h2>
+                <p class="dsh-panel__text" data-react-lead>
+                  Your plan stays exactly as it is. Days left on the current period are kept: the new period
+                  starts where the old one ends.
+                </p>
+              </div>
+              <button class="dsh-icon-btn" type="button" data-close-panel="react" aria-label="Close"><i data-icon="close"></i></button>
+            </header>
+
+            <dl class="dsh-kv">
+              <div><dt>Current plan</dt><dd data-react-current>—</dd></div>
+              <div><dt>Expires</dt><dd data-react-expiry>—</dd></div>
+              <div><dt>Points</dt><dd data-react-points>—</dd></div>
+            </dl>
+
+            <div class="dsh-form dsh-form--stack">
+              <div class="dsh-form__row">
+                <div class="dsh-field">
+                  <label class="dsh-field__label" for="react-months">Duration</label>
+                  <select class="dsh-input" id="react-months" data-react-months></select>
+                  <p class="dsh-help" data-react-months-hint></p>
+                </div>
+                <div class="dsh-field">
+                  <label class="dsh-field__label" for="react-code">Activation code</label>
+                  <div class="dsh-inline">
+                    <input class="dsh-input dsh-input--code" id="react-code" maxlength="14" placeholder="ACT-XXXX-XXXX" data-react-code />
+                    <button class="dsh-btn" type="button" data-react-get><i data-icon="sparkle"></i>Get code</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="dsh-pay" data-react-pay hidden>
+                <div class="dsh-pay__price">
+                  <span>Points price</span>
+                  <b data-react-price>—</b>
+                  <em data-react-rate>100 points = $1</em>
+                </div>
+                <div class="dsh-pay__actions">
+                  <button class="dsh-btn" type="button" data-react-patreon><i data-icon="external"></i>Pay with Patreon</button>
+                  <button class="dsh-btn dsh-btn--primary" type="button" data-react-points><i data-icon="zap"></i>Pay with Points</button>
+                </div>
+                <p class="dsh-help" data-react-pay-hint>
+                  Patreon returns a code you paste above; points are deducted the moment your code is issued.
+                </p>
+              </div>
+
+              <div class="dsh-run" data-run="react" hidden>
+                <p class="dsh-run__label" data-run-label>Reactivating Your Membership…</p>
+                <div class="dsh-progress dsh-progress--run"><span class="dsh-progress__bar" data-run-bar style="width:0%"></span></div>
+              </div>
+
+              <div class="dsh-step__actions">
+                <button class="dsh-btn dsh-btn--primary" type="button" data-react-go>
+                  <i data-icon="refresh"></i>Reactivate Account
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- upgrade panel --------------------------------------------- -->
+          <div class="dsh-panel dsh-panel--flow" data-upgrade hidden>
+            <header class="dsh-panel__head">
+              <div>
+                <p class="dsh-eyebrow">Upgrade</p>
+                <h2 class="dsh-panel__title">Move up a tier</h2>
+                <p class="dsh-panel__text">
+                  Pick the tier and the duration. Only higher tiers are offered, and the new period starts where
+                  the current one ends.
+                </p>
+              </div>
+              <button class="dsh-icon-btn" type="button" data-close-panel="upgrade" aria-label="Close"><i data-icon="close"></i></button>
+            </header>
+
+            <dl class="dsh-kv">
+              <div><dt>Current plan</dt><dd data-upgrade-current>—</dd></div>
+              <div><dt>Points</dt><dd data-upgrade-points>—</dd></div>
+            </dl>
+
+            <div class="dsh-form dsh-form--stack">
+              <div class="dsh-form__row">
+                <div class="dsh-field">
+                  <label class="dsh-field__label" for="up-tier">New plan</label>
+                  <select class="dsh-input" id="up-tier" data-up-tier></select>
+                </div>
+                <div class="dsh-field">
+                  <label class="dsh-field__label" for="up-months">Duration</label>
+                  <select class="dsh-input" id="up-months" data-up-months></select>
+                </div>
+              </div>
+
+              <div class="dsh-field dsh-field--wide">
+                <label class="dsh-field__label" for="up-code">Activation code</label>
+                <div class="dsh-inline">
+                  <input class="dsh-input dsh-input--code" id="up-code" maxlength="14" placeholder="ACT-XXXX-XXXX" data-up-code />
+                  <button class="dsh-btn" type="button" data-up-get><i data-icon="sparkle"></i>Get code</button>
+                </div>
+              </div>
+
+              <div class="dsh-pay">
+                <div class="dsh-pay__price">
+                  <span>Points price</span>
+                  <b data-up-price>—</b>
+                  <em data-up-rate>100 points = $1</em>
+                </div>
+                <div class="dsh-pay__actions">
+                  <button class="dsh-btn" type="button" data-up-patreon><i data-icon="external"></i>Pay with Patreon</button>
+                  <button class="dsh-btn dsh-btn--primary" type="button" data-up-points><i data-icon="zap"></i>Pay with Points</button>
+                </div>
+                <p class="dsh-help" data-up-pay-hint>
+                  Paying with points issues the code immediately and deducts the points in the same transaction.
+                </p>
+              </div>
+
+              <div class="dsh-run" data-run="upgrade" hidden>
+                <p class="dsh-run__label" data-run-label>Upgrading Your Membership…</p>
+                <div class="dsh-progress dsh-progress--run"><span class="dsh-progress__bar" data-run-bar style="width:0%"></span></div>
+              </div>
+
+              <div class="dsh-step__actions">
+                <button class="dsh-btn dsh-btn--primary" type="button" data-up-go>
+                  <i data-icon="crown"></i>Upgrade Account
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- paid, never activated ------------------------------------- -->
+          <div class="dsh-panel dsh-panel--flow" data-paid-note hidden>
+            <h2 class="dsh-panel__title">This membership is already paid</h2>
+            <p class="dsh-panel__text">
+              The account was never activated on the free plan, and first activation is free-only. A paid
+              membership opens by itself once the payment is confirmed — check the dashboard, or contact
+              support with your member ID.
+            </p>
+            <a class="dsh-btn dsh-btn--primary" href="dashboard.html"><i data-icon="dashboard"></i>Open the dashboard</a>
+          </div>
+
+          <!-- success ---------------------------------------------------- -->
+          <div class="dsh-done" data-done hidden>
+            <span class="dsh-done__icon"><i data-icon="check"></i></span>
+            <h2 class="dsh-done__title" data-done-title>Account Activated Successfully!</h2>
+            <p class="dsh-done__text" data-done-text></p>
+            <dl class="dsh-kv dsh-kv--summary">
+              <div><dt>Plan</dt><dd data-done-plan>—</dd></div>
+              <div><dt>Active until</dt><dd data-done-until>—</dd></div>
+            </dl>
+            <a class="dsh-btn dsh-btn--primary dsh-btn--lg" href="dashboard.html" data-done-finish>
+              <i data-icon="dashboard"></i>Finish — go to the dashboard
+            </a>
           </div>
 
           <p class="dsh-gate__warn" data-act-notice hidden>
@@ -135,6 +465,36 @@
           </p>
         </section>
       </main>
+    </div>
+
+    <!-- ad gate ------------------------------------------------------ -->
+    <div class="dsh-ad" data-ad hidden>
+      <div class="dsh-ad__panel" role="dialog" aria-modal="true" aria-labelledby="ad-title">
+        <p class="dsh-eyebrow">Activation code</p>
+        <h2 class="dsh-ad__title" id="ad-title">Open the ad to unlock your code</h2>
+        <p class="dsh-ad__text">
+          Click <b>Open the ad</b> — the page opens in a new tab and the countdown starts. Keep it open until
+          the timer reaches zero; the code appears here and is filled into the box automatically.
+        </p>
+
+        <div class="dsh-ad__count">
+          <b data-ad-time>30</b>
+          <span>seconds</span>
+        </div>
+
+        <div class="dsh-progress dsh-progress--run">
+          <span class="dsh-progress__bar" data-ad-bar style="width:0%"></span>
+        </div>
+
+        <p class="dsh-ad__status" data-ad-status>The timer starts when the ad opens.</p>
+
+        <div class="dsh-ad__actions">
+          <a class="dsh-btn dsh-btn--primary" data-ad-link href="#" target="_blank" rel="noopener noreferrer">
+            <i data-icon="external"></i>Open the ad
+          </a>
+          <button class="dsh-btn" type="button" data-ad-close>Cancel</button>
+        </div>
+      </div>
     </div>
   </body>
 </html>
