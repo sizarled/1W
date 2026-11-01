@@ -23,6 +23,7 @@ import {
 import { isPremium, getMember } from "./session.js";
 import { refreshBlockMap, filterBlocked } from "./blocks.js";
 import { toast } from "./ui.js";
+import { groupChannels } from "./playlists.js";
 import { playSound } from "./sound.js";
 
 const state = {
@@ -374,10 +375,30 @@ function channelCard(channel, locked) {
         <span class="chcard__name">${esc(channel.name)}</span>
         <span class="chcard__meta">
           <span>${esc(channel.category)}</span><span class="dot"></span><span>${esc(channel.group)}</span>
-          <span class="dot"></span><span class="chcard__views">${compact(channel.views)}/min</span>
+          ${channel.views ? `<span class="dot"></span><span class="chcard__views">${compact(channel.views)}/min</span>` : ""}
         </span>
       </span>
     </a>`;
+}
+
+/** A rail cannot hold thousands of channels: take a fair sample of every group. */
+function sampleByGroup(list, size = 40) {
+  const buckets = groupChannels(list);
+  const out = [];
+  let round = 0;
+  while (out.length < size) {
+    let added = 0;
+    for (const bucket of buckets) {
+      const channel = bucket.channels[round];
+      if (!channel) continue;
+      out.push(channel);
+      added += 1;
+      if (out.length >= size) break;
+    }
+    if (!added) break;
+    round += 1;
+  }
+  return out;
 }
 
 function renderChannels() {
@@ -386,7 +407,14 @@ function renderChannels() {
   if (!track) return;
   const locked = !isPremium();
   const list = state.channels[state.channels.tab];
-  setHTML(track, list.length ? list.map((c) => channelCard(c, c.premium && locked)).join("") : `<p class="muted">No channels published yet.</p>`);
+  const groups = groupChannels(list);
+  const shown = sampleByGroup(list, 40);
+  setHTML(
+    track,
+    shown.length
+      ? shown.map((c) => channelCard(c, c.premium && locked)).join("")
+      : `<p class="muted">No channels published yet.</p>`
+  );
   qsa("[data-iptv-tab]", section).forEach((tab) => {
     const active = tab.dataset.iptvTab === state.channels.tab;
     tab.classList.toggle("is-active", active);
@@ -394,9 +422,10 @@ function renderChannels() {
   });
   const note = qs("[data-iptv-note]", section);
   if (note) {
+    const count = `<a href="iptv.html?list=${state.channels.tab}">All ${num(list.length)} ${state.channels.tab} channels in ${groups.length} groups</a>`;
     note.innerHTML = locked
-      ? `${icon("lock")} Premium channels unlock with a Silver, Gold or Diamond membership — free channels are open to every member.`
-      : `${icon("shield")} Premium access active. Enjoy free and premium channels without ads.`;
+      ? `${icon("lock")} Premium channels unlock with a Silver, Gold or Diamond membership — free channels are open to every member. ${count}`
+      : `${icon("shield")} Premium access active — free and premium channels without ads. ${count}`;
   }
   updateRailButtons(section);
 }

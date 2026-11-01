@@ -16,7 +16,7 @@
  */
 
 import { rpc } from "./data.js";
-import { LEVELS, levelInfo, rowFor as levelRow } from "./levels.js";
+import { LEVELS, levelInfo, rowFor as levelRow, unlockOffer, unlockFee } from "./levels.js";
 import {
   qs,
   qsa,
@@ -148,6 +148,7 @@ export async function initDashboard() {
   if (data.member) setMember(data.member);
 
   paintIdentity();
+  paintSideState();
   paintGate();
 }
 
@@ -191,7 +192,9 @@ function wireChrome() {
   });
 
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && state.popOpen) closePopover();
+    if (event.key !== "Escape") return;
+    if (closeUnlock()) return;
+    if (state.popOpen) closePopover();
   });
 
   window.addEventListener("hashchange", () => {
@@ -215,6 +218,14 @@ function paintIdentity() {
 
   qsa("[data-me-id], [data-side-id]").forEach((el) => {
     el.textContent = member.member_id || "—";
+  });
+
+  /* the avatar and the username open the member's own profile */
+  const handle = member.username || "";
+  const profileHref = handle ? `profile.html?u=${encodeURIComponent(handle)}` : "profile.html";
+  qsa("[data-me-link], [data-side-profile]").forEach((link) => {
+    link.setAttribute("href", profileHref);
+    link.setAttribute("title", `Open ${handle || "your profile"}`);
   });
 
   const status = qs("[data-side-status]");
@@ -1059,7 +1070,13 @@ function pointsView() {
 /* ---------------------------------------------------------------- */
 function levelView() {
   const o = state.data.overview || {};
-  const info = levelInfo({ points: o.points_total || 0, membership: o.membership || "free" });
+  const info = levelInfo({
+    points: o.points_total || 0,
+    membership: o.membership || "free",
+    /* a level bought with «Unlock now» is stored on the member */
+    unlocked: (state.data.member || {}).level_unlocked ?? null,
+  });
+  const offer = unlockOffer(info, o.points_available || 0);
   const current = info.row;
   const next = info.next;
 
@@ -1077,6 +1094,13 @@ function levelView() {
     const mine = info.level === row.level || (info.level === "max" && row.level === "max");
     const reached = row.level === "max" ? info.level === "max" : info.level !== "max" && info.level >= row.level;
     const state_ = mine ? "Current" : reached ? "Unlocked" : "Locked";
+    const canBuy = Boolean(offer) && row.level !== "max" && row.level === offer.level;
+    const buyCell = canBuy
+      ? `<button class="dsh-btn dsh-btn--sm dsh-unlock" type="button" data-level-unlock="${row.level}"
+           ${offer.affordable ? "" : "disabled"}
+           title="${offer.affordable ? `Pay ${num(offer.fee)} points to unlock LV${row.level}0` : `Needs ${num(offer.fee)} points`}">
+           <i data-icon="key"></i>Unlock now</button>`
+      : "";
     return `<tr>
       <td><strong>${row.level === "max" ? "LVMax" : `LV${row.level}0`}</strong></td>
       <td>${esc(row.name)}</td>
@@ -1086,6 +1110,7 @@ function levelView() {
       <td>${row.quotas.content === Infinity ? "unlimited" : `${num(row.quotas.content)} / day`}</td>
       <td>${row.quotas.server === Infinity ? "unlimited" : `${num(row.quotas.server)} / day`}</td>
       <td><span class="dsh-chip" data-tone="${mine || reached ? "on" : "off"}">${state_}</span></td>
+      <td class="dsh-table__act">${buyCell}</td>
     </tr>`;
   }).join("");
 
@@ -1128,10 +1153,15 @@ function levelView() {
         <span class="dsh-chip">points decide the level · membership decides the ceiling</span>
       </div>
       <div class="dsh-table-wrap"><table class="dsh-table">
-        <thead><tr><th>Badge</th><th>Name</th><th>Points</th><th>Membership</th><th>Tasks</th><th>Publish</th><th>Servers</th><th></th></tr></thead>
+        <thead><tr><th>Badge</th><th>Name</th><th>Points</th><th>Membership</th><th>Tasks</th><th>Publish</th><th>Servers</th><th>Status</th><th></th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
       <p class="dsh-card__hint">Every level needs the points below it and one more task than the level before. Card: Free LV30 · Silver LV50 · Gold LV80 · Diamond open above LV80.</p>
+      ${
+        offer
+          ? `<p class="dsh-card__hint">Next rung: <strong>LV${offer.level}0</strong> for <strong>${num(offer.fee)} points</strong> taken from your balance (${num(offer.balance)} available). ${offer.affordable ? "Unlock now is open." : `You still need ${num(offer.fee - offer.balance)} points.`}</p>`
+          : ""
+      }
     </section>
 
     <section class="dsh-card">
@@ -1533,6 +1563,115 @@ function settingsPlatformsView() {
 /* ================================================================== */
 /* wiring                                                              */
 /* ================================================================== */
+const SIDE_KEY = "1w.dsh.side";
+
+/* the menu folds into an icon rail; the header keeps its geometry either way */
+function setSideCollapsed(collapsed) {
+  const dsh = qs("[data-dsh]");
+  if (!dsh) return;
+  dsh.dataset.side = collapsed ? "collapsed" : "open";
+  qsa("[data-side-toggle]").forEach((btn) => {
+    btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+  });
+  try {
+    localStorage.setItem(SIDE_KEY, collapsed ? "collapsed" : "open");
+  } catch {
+    /* storage may be blocked — the state still applies for this page */
+  }
+}
+
+function paintSideState() {
+  let saved = "";
+  try {
+    saved = localStorage.getItem(SIDE_KEY) || "";
+  } catch {
+    saved = "";
+  }
+  setSideCollapsed(saved === "collapsed");
+}
+
+/* ---------------------------------------------------------------- */
+/* unlock now — pay the level's own points from the balance          */
+/* ---------------------------------------------------------------- */
+function openUnlock(level) {
+  closeUnlock();
+  const o = state.data.overview || {};
+  const row = levelRow(level);
+  const fee = unlockFee(level);
+  const available = Number(o.points_available || 0);
+
+  const wrap = document.createElement("div");
+  wrap.className = "dsh-modal";
+  wrap.setAttribute("data-level-modal", "");
+  wrap.innerHTML = `
+    <div class="dsh-modal__card" role="dialog" aria-modal="true" aria-labelledby="dsh-unlock-title">
+      <div class="dsh-modal__head">
+        <h2 class="dsh-modal__title" id="dsh-unlock-title">Unlock LV${level}0</h2>
+        <button class="dsh-icon-btn" type="button" data-level-cancel aria-label="Close"><i data-icon="close"></i></button>
+      </div>
+      <p class="dsh-modal__text">
+        Advancing to <strong>LV${level}0 · ${esc(row.name)}</strong> asks for
+        <strong>${num(fee)} points</strong>. You hold <strong>${num(available)}</strong> points now.
+      </p>
+      <p class="dsh-modal__hint">
+        The points are paid from your balance; your lifetime total keeps them, so the level stays yours.
+      </p>
+      <div class="dsh-modal__actions">
+        <button class="dsh-btn dsh-btn--ghost" type="button" data-level-cancel>Not now</button>
+        <button class="dsh-btn" type="button" data-level-pay="${level}" ${available >= fee ? "" : "disabled"}>
+          <i data-icon="key"></i>Pay ${num(fee)} points
+        </button>
+      </div>
+    </div>`;
+
+  document.body.append(wrap);
+  document.body.classList.add("dsh-modal-open");
+  hydrateIcons(wrap);
+  qs("[data-level-pay]", wrap)?.focus?.();
+}
+
+function closeUnlock() {
+  const wrap = qs("[data-level-modal]");
+  if (!wrap) return false;
+  wrap.remove();
+  document.body.classList.remove("dsh-modal-open");
+  return true;
+}
+
+async function payUnlock(level, button) {
+  const fee = unlockFee(level);
+  if (button) button.disabled = true;
+  try {
+    const res = await rpc("level_unlock", { p_token: token, p_level: level });
+    if (!res || res.ok !== true) {
+      const reason = res?.error || "unknown";
+      const text =
+        reason === "points"
+          ? `You need ${num(res.fee)} points and hold ${num(res.balance)}.`
+          : reason === "cap"
+            ? `Your ${res.membership || "current"} membership stops at LV${Number(res.cap) * 10}.`
+            : reason === "already"
+              ? "That level is already yours."
+              : reason === "step"
+                ? "Levels are unlocked one rung at a time."
+                : "The level could not be unlocked.";
+      toast({ tone: "error", title: "Unlock now", message: text });
+      if (button) button.disabled = false;
+      return;
+    }
+    closeUnlock();
+    toast({
+      tone: "level",
+      title: `Level up — you are now LV${level}0`,
+      message: `${num(fee)} points paid — ${num(res.balance)} left in your balance.`,
+    });
+    await reload();
+  } catch (error) {
+    if (button) button.disabled = false;
+    toast({ tone: "error", title: "Unlock now", message: error.message });
+  }
+}
+
 function onClick(event) {
   const dsh = qs("[data-dsh]");
 
@@ -1561,6 +1700,44 @@ function onClick(event) {
   if (event.target.closest("[data-logout]")) {
     event.preventDefault();
     logout();
+    return;
+  }
+
+  const unlock = event.target.closest("[data-level-unlock]");
+  if (unlock) {
+    event.preventDefault();
+    openUnlock(Number(unlock.dataset.levelUnlock));
+    return;
+  }
+
+  const pay = event.target.closest("[data-level-pay]");
+  if (pay) {
+    event.preventDefault();
+    payUnlock(Number(pay.dataset.levelPay), pay);
+    return;
+  }
+
+  if (event.target.closest("[data-level-cancel]")) {
+    event.preventDefault();
+    closeUnlock();
+    return;
+  }
+
+  if (event.target.matches("[data-level-modal]")) {
+    event.preventDefault();
+    closeUnlock();
+    return;
+  }
+
+  if (event.target.closest("[data-side-toggle]")) {
+    event.preventDefault();
+    setSideCollapsed(true);
+    return;
+  }
+
+  if (event.target.closest("[data-side-open]")) {
+    event.preventDefault();
+    setSideCollapsed(false);
     return;
   }
 

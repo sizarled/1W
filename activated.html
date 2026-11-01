@@ -11,10 +11,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="assets/css/base.css?v=20261031u" />
-    <link rel="stylesheet" href="assets/css/layout.css?v=20261031u" />
-    <link rel="stylesheet" href="assets/css/components.css?v=20261031u" />
-    <link rel="stylesheet" href="assets/css/dashboard.css?v=20261031u" />
+    <link rel="stylesheet" href="assets/css/base.css?v=20261101a" />
+    <link rel="stylesheet" href="assets/css/layout.css?v=20261101a" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261101a" />
+    <link rel="stylesheet" href="assets/css/dashboard.css?v=20261101a" />
     <script>
       (function () {
         try {
@@ -29,8 +29,8 @@
         } catch (e) {}
       })();
     </script>
-    <script type="module" src="assets/js/app.js?v=20261031u"></script>
-    <script type="module" src="assets/js/activated.js?v=20261031u"></script>
+    <script type="module" src="assets/js/app.js?v=20261101a"></script>
+    <script type="module" src="assets/js/activated.js?v=20261101a"></script>
   </head>
 
   <body data-page="activated" data-title="Activate account">
@@ -122,7 +122,17 @@
                   </div>
                   <label class="dsh-btn dsh-btn--sm" for="act-avatar"><i data-icon="upload"></i>Choose image</label>
                   <input class="dsh-sr-only" id="act-avatar" type="file" accept="image/*" data-file="avatar" />
-                  <button class="dsh-btn dsh-btn--sm dsh-btn--ghost" type="button" data-clear="avatar" hidden>Remove</button>
+                  <div class="dsh-drop__row">
+                    <button class="dsh-btn dsh-btn--sm dsh-btn--ghost" type="button" data-crop="avatar" hidden>
+                      <i data-icon="crop"></i>Crop
+                    </button>
+                    <button class="dsh-btn dsh-btn--sm dsh-btn--ghost" type="button" data-clear="avatar" hidden>Remove</button>
+                  </div>
+                  <div class="dsh-drop__url">
+                    <input class="dsh-input" type="url" inputmode="url" data-url-input="avatar"
+                           placeholder="…or paste an image link" aria-label="Image link for the avatar" />
+                    <button class="dsh-btn dsh-btn--sm" type="button" data-url-apply="avatar">Use link</button>
+                  </div>
                 </div>
 
                 <div class="dsh-drop" data-drop="cover">
@@ -134,7 +144,17 @@
                   </div>
                   <label class="dsh-btn dsh-btn--sm" for="act-cover"><i data-icon="upload"></i>Choose image</label>
                   <input class="dsh-sr-only" id="act-cover" type="file" accept="image/*" data-file="cover" />
-                  <button class="dsh-btn dsh-btn--sm dsh-btn--ghost" type="button" data-clear="cover" hidden>Remove</button>
+                  <div class="dsh-drop__row">
+                    <button class="dsh-btn dsh-btn--sm dsh-btn--ghost" type="button" data-crop="cover" hidden>
+                      <i data-icon="crop"></i>Crop
+                    </button>
+                    <button class="dsh-btn dsh-btn--sm dsh-btn--ghost" type="button" data-clear="cover" hidden>Remove</button>
+                  </div>
+                  <div class="dsh-drop__url">
+                    <input class="dsh-input" type="url" inputmode="url" data-url-input="cover"
+                           placeholder="…or paste an image link" aria-label="Image link for the cover" />
+                    <button class="dsh-btn dsh-btn--sm" type="button" data-url-apply="cover">Use link</button>
+                  </div>
                 </div>
               </div>
 

@@ -1890,3 +1890,253 @@ html[data-theme="light"] .plan--featured {
     top: calc(var(--header-h) + 8px);
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* iptv.html — the channel lists                                      */
+/* ------------------------------------------------------------------ */
+.iptv-page {
+  display: grid;
+  gap: 1.1rem;
+  width: min(1320px, 100% - 2rem);
+  margin-inline: auto;
+  padding-block: 1.6rem 3rem;
+}
+
+.iptv-hero {
+  display: grid;
+  gap: 0.7rem;
+  padding: 1.3rem 1.4rem;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.iptv-hero__title {
+  font-size: clamp(1.5rem, 3vw, 2.1rem);
+  line-height: 1.2;
+  color: var(--text);
+}
+
+.iptv-hero__text {
+  max-width: 70ch;
+  font-size: 0.9rem;
+  line-height: 1.8;
+  color: var(--text-2);
+}
+
+.iptv-hero__text code {
+  font-size: 0.85em;
+  padding: 0.05rem 0.3rem;
+  border-radius: 5px;
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.iptv-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  margin-top: 0.3rem;
+}
+
+.iptv-tabs {
+  display: inline-flex;
+  gap: 0.35rem;
+  padding: 0.25rem;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+
+.iptv-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.42rem 0.9rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.83rem;
+  cursor: pointer;
+}
+
+.iptv-tab .ico {
+  width: 15px;
+  height: 15px;
+}
+
+.iptv-tab.is-active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--line-3);
+}
+
+.iptv-search {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex: 1 1 260px;
+  max-width: 380px;
+  padding: 0.42rem 0.6rem;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+
+.iptv-search .ico {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--muted);
+}
+
+.iptv-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.iptv-search input:focus {
+  outline: none;
+}
+
+.iptv-search__clear {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.iptv-search__clear:hover {
+  color: var(--text);
+}
+
+.iptv-search__clear .ico {
+  width: 13px;
+  height: 13px;
+}
+
+.iptv-status {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.iptv-status .ico {
+  width: 15px;
+  height: 15px;
+}
+
+.iptv-groups {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  padding-bottom: 0.35rem;
+  scrollbar-width: thin;
+}
+
+.iptv-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex: none;
+  padding: 0.36rem 0.72rem;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 0.79rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.iptv-chip small {
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+
+.iptv-chip:hover {
+  border-color: var(--line-3);
+  color: var(--text);
+}
+
+.iptv-chip.is-active {
+  border-color: var(--text);
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.iptv-section {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.iptv-section__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.iptv-section__title {
+  font-size: 1.05rem;
+  color: var(--text);
+}
+
+.iptv-section__meta {
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.iptv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 0.75rem;
+}
+
+.iptv-empty {
+  padding: 1.6rem;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--muted);
+  border: 1px dashed var(--line-2);
+  border-radius: var(--radius);
+}
+
+.iptv-more {
+  display: flex;
+  justify-content: center;
+  padding-block: 0.4rem;
+}
+
+@media (max-width: 640px) {
+  .iptv-page {
+    width: min(100% - 1.2rem, 1320px);
+  }
+
+  .iptv-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+
+  .iptv-search {
+    max-width: none;
+  }
+}

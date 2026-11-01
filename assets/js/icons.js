@@ -52,6 +52,7 @@ export const ICONS = {
   video: `<rect x="2.6" y="6" width="13.4" height="12" rx="2.6" fill="none" stroke="currentColor" stroke-width="1.6"/>${S("M16 10.4 21.4 7v10L16 13.6")}`,
   mic: `<rect x="9.2" y="2.6" width="5.6" height="11" rx="2.8" fill="none" stroke="currentColor" stroke-width="1.6"/>${S("M5.6 11.4a6.4 6.4 0 0 0 12.8 0M12 17.8V21M8.6 21h6.8")}`,
   image: `<rect x="3" y="4.4" width="18" height="15.2" rx="2.4" fill="none" stroke="currentColor" stroke-width="1.6"/>${CIRC(8.6, 9.6, 1.6)}${S("M3.6 17.6 9.4 12l4 4 3-2.8 4 4.4")}`,
+  crop: S("M6.4 3v11.2a2.4 2.4 0 0 0 2.4 2.4H20") + S("M3 6.4h12.2a2.4 2.4 0 0 1 2.4 2.4V21"),
   file: S("M13.6 3.4H7.4A2 2 0 0 0 5.4 5.4v13.2a2 2 0 0 0 2 2h9.2a2 2 0 0 0 2-2V8.6z") + S("M13.4 3.6v5h5.2"),
   article: S("M13.6 3.4H7.4A2 2 0 0 0 5.4 5.4v13.2a2 2 0 0 0 2 2h9.2a2 2 0 0 0 2-2V8.6z") + S("M13.4 3.6v5h5.2M8.8 12.6h6.4M8.8 16.2h4.4"),
   help: CIRC(12, 12, 8.4) + S("M9.6 9.4a2.6 2.6 0 0 1 5 1c0 1.7-2.6 2-2.6 3.8") + `<circle cx="12" cy="17.4" r=".95" fill="currentColor"/>`,

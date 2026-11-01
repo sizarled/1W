@@ -11,10 +11,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="assets/css/base.css?v=20261031u" />
-    <link rel="stylesheet" href="assets/css/layout.css?v=20261031u" />
-    <link rel="stylesheet" href="assets/css/components.css?v=20261031u" />
-    <link rel="stylesheet" href="assets/css/dashboard.css?v=20261031u" />
+    <link rel="stylesheet" href="assets/css/base.css?v=20261101a" />
+    <link rel="stylesheet" href="assets/css/layout.css?v=20261101a" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261101a" />
+    <link rel="stylesheet" href="assets/css/dashboard.css?v=20261101a" />
     <script>
       /* apply the saved theme (or the OS preference) before first paint */
       (function () {
@@ -32,8 +32,8 @@
         } catch (e) {}
       })();
     </script>
-    <script type="module" src="assets/js/app.js?v=20261031u"></script>
-    <script type="module" src="assets/js/dashboard.js?v=20261031u"></script>
+    <script type="module" src="assets/js/app.js?v=20261101a"></script>
+    <script type="module" src="assets/js/dashboard.js?v=20261101a"></script>
   </head>
 
   <body data-page="dashboard" data-title="Dashboard" class="dsh-body">
@@ -125,12 +125,18 @@
       <div class="dsh-shell">
         <aside class="dsh-side" data-side hidden aria-label="Dashboard menu">
           <div class="dsh-side__me">
-            <span class="dsh-side__avatar" data-side-avatar><i data-icon="user"></i></span>
-            <div class="dsh-side__ident">
-              <strong data-side-username>—</strong>
-              <span data-side-id>—</span>
-              <span class="dsh-status" data-side-status hidden></span>
-            </div>
+            <a class="dsh-side__profile" data-side-profile href="profile.html" title="Open your profile">
+              <span class="dsh-side__avatar" data-side-avatar><i data-icon="user"></i></span>
+              <span class="dsh-side__ident">
+                <strong data-side-username>—</strong>
+                <span data-side-id>—</span>
+                <span class="dsh-status" data-side-status hidden></span>
+              </span>
+              <i class="dsh-side__go" data-icon="arrowUpRight" aria-hidden="true"></i>
+            </a>
+            <button class="dsh-side__collapse" type="button" data-side-toggle aria-label="Hide the menu" title="Hide the menu">
+              <i data-icon="chevronLeft"></i>
+            </button>
           </div>
 
           <nav class="dsh-nav" data-nav aria-label="Dashboard sections">
@@ -186,6 +192,9 @@
             </div>
           </nav>
 
+          <button class="dsh-side__back" type="button" data-side-open aria-label="Show the menu">
+            <i data-icon="chevronRight"></i><span>Show the menu</span>
+          </button>
           <a class="dsh-side__back" href="index.html"><i data-icon="arrowLeft"></i><span>Back to the site</span></a>
         </aside>
 

@@ -237,7 +237,26 @@ function wireWizard(root) {
       }
       if (box) box.hidden = false;
       if (clear) clear.hidden = false;
+      const crop = qs(`[data-crop="${kind}"]`, root);
+      if (crop) crop.hidden = false;
     });
+  });
+
+  /* a direct image link, and cropping the chosen image */
+  qsa("[data-url-apply]", root).forEach((btn) => {
+    btn.addEventListener("click", () => applyImageUrl(root, btn.dataset.urlApply));
+  });
+
+  qsa("[data-url-input]", root).forEach((input) => {
+    input.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      applyImageUrl(root, input.dataset.urlInput);
+    });
+  });
+
+  qsa("[data-crop]", root).forEach((btn) => {
+    btn.addEventListener("click", () => openCrop(root, btn.dataset.crop));
   });
 
   qsa("[data-clear]", root).forEach((btn) => {
@@ -252,6 +271,10 @@ function wireWizard(root) {
       if (box) box.hidden = true;
       if (preview) preview.removeAttribute("src");
       btn.hidden = true;
+      const crop = qs(`[data-crop="${kind}"]`, root);
+      if (crop) crop.hidden = true;
+      const url = qs(`[data-url-input="${kind}"]`, root);
+      if (url) url.value = "";
     });
   });
 
@@ -355,6 +378,208 @@ function showExisting(root, kind, url) {
   preview.src = url;
   box.hidden = false;
   app.uploaded[kind] = url;
+}
+
+/* ------------------------------------------------------------------ */
+/* avatar + cover: link, upload, crop                                 */
+/* ------------------------------------------------------------------ */
+/* An avatar is square, a cover is three wide for one high. Both are
+ * cropped on a canvas before they are uploaded, so what the member sees
+ * in the preview is exactly what the profile shows. */
+const CROP_SHAPE = {
+  avatar: { ratio: 1, width: 512, height: 512, label: "the avatar" },
+  cover: { ratio: 3, width: 1200, height: 400, label: "the cover" },
+};
+
+const crop = { kind: "", img: null, zoom: 1, x: 0, y: 0, src: "" };
+
+function paintMedia(root, kind, src) {
+  const preview = qs(`[data-preview="${kind}"]`, root);
+  const box = qs(`[data-preview-box="${kind}"]`, root);
+  if (preview) preview.src = src;
+  if (box) box.hidden = false;
+  const clear = qs(`[data-clear="${kind}"]`, root);
+  if (clear) clear.hidden = false;
+  const cropBtn = qs(`[data-crop="${kind}"]`, root);
+  if (cropBtn) cropBtn.hidden = false;
+}
+
+/** A direct image link: usable as it is, and croppable when the host allows it. */
+function applyImageUrl(root, kind) {
+  const input = qs(`[data-url-input="${kind}"]`, root);
+  const value = String((input && input.value) || "").trim();
+  if (!/^https?:\/\/[^\s]+$/i.test(value)) {
+    toast({ title: "That is not an image link", message: "A link starts with http:// or https://." });
+    return;
+  }
+  app.files[kind] = null;
+  app.uploaded[kind] = value;
+  paintMedia(root, kind, value);
+  toast({ title: "Image link set", message: "It is used as it is — crop it if the host allows it." });
+}
+
+/** Open the cropper over the current file or link. */
+function openCrop(root, kind) {
+  const file = app.files[kind];
+  const remote = app.uploaded[kind];
+  const src = file ? URL.createObjectURL(file) : remote;
+  if (!src) {
+    toast({ title: "Nothing to crop", message: "Choose an image or paste a link first." });
+    return;
+  }
+
+  const shape = CROP_SHAPE[kind] || CROP_SHAPE.avatar;
+  const img = new Image();
+  if (!file) img.crossOrigin = "anonymous";
+
+  img.onload = () => {
+    crop.kind = kind;
+    crop.img = img;
+    crop.zoom = 1;
+    crop.x = 0;
+    crop.y = 0;
+    crop.src = src;
+    paintCropper(root, shape);
+  };
+  img.onerror = () => {
+    toast({ title: "Image not loaded", message: "The link did not answer with an image." });
+  };
+  img.src = src;
+}
+
+function paintCropper(root, shape) {
+  qs("[data-crop-modal]")?.remove();
+  const wrap = document.createElement("div");
+  wrap.className = "dsh-crop";
+  wrap.setAttribute("data-crop-modal", "");
+  wrap.innerHTML = `
+    <div class="dsh-crop__card" role="dialog" aria-modal="true" aria-label="Crop the image">
+      <div class="dsh-crop__head">
+        <h2 class="dsh-crop__title">Crop ${shape.label}</h2>
+        <button class="dsh-icon-btn" type="button" data-crop-cancel aria-label="Close"><i data-icon="close"></i></button>
+      </div>
+      <div class="dsh-crop__stage" data-crop-stage style="--crop-ratio:${shape.ratio}">
+        <img class="dsh-crop__img" data-crop-image alt="" draggable="false" />
+      </div>
+      <label class="dsh-crop__zoom">
+        <span>Zoom</span>
+        <input type="range" min="1" max="3" step="0.01" value="1" data-crop-zoom />
+      </label>
+      <p class="dsh-crop__hint">Drag the image to choose the part that stays. ${shape.width} × ${shape.height} on save.</p>
+      <div class="dsh-crop__actions">
+        <button class="dsh-btn dsh-btn--ghost" type="button" data-crop-cancel>Cancel</button>
+        <button class="dsh-btn dsh-btn--primary" type="button" data-crop-apply><i data-icon="check"></i>Use this crop</button>
+      </div>
+    </div>`;
+  document.body.append(wrap);
+  hydrateIcons(wrap);
+
+  const stage = qs("[data-crop-stage]", wrap);
+  const image = qs("[data-crop-image]", wrap);
+  const zoom = qs("[data-crop-zoom]", wrap);
+  image.src = crop.src;
+  layoutCrop(stage, image);
+
+  qs("[data-crop-zoom]", wrap)?.addEventListener("input", (event) => {
+    crop.zoom = Number(event.target.value) || 1;
+    layoutCrop(stage, image);
+  });
+
+  let drag = null;
+  const start = (event) => {
+    const point = event.touches ? event.touches[0] : event;
+    drag = { x: point.clientX, y: point.clientY, ox: crop.x, oy: crop.y };
+  };
+  const move = (event) => {
+    if (!drag) return;
+    const point = event.touches ? event.touches[0] : event;
+    crop.x = drag.ox + (point.clientX - drag.x);
+    crop.y = drag.oy + (point.clientY - drag.y);
+    layoutCrop(stage, image);
+    event.preventDefault();
+  };
+  const end = () => {
+    drag = null;
+  };
+  stage.addEventListener("mousedown", start);
+  stage.addEventListener("touchstart", start, { passive: true });
+  window.addEventListener("mousemove", move);
+  window.addEventListener("touchmove", move, { passive: false });
+  window.addEventListener("mouseup", end);
+  window.addEventListener("touchend", end);
+
+  qsa("[data-crop-cancel]", wrap).forEach((btn) => btn.addEventListener("click", () => wrap.remove()));
+  qs("[data-crop-apply]", wrap)?.addEventListener("click", () => applyCrop(root, wrap, stage, image, shape));
+}
+
+/** The image always covers the stage; `crop.x/y` is the drag offset in px. */
+function layoutCrop(stage, image) {
+  if (!stage || !image) return;
+  const sw = stage.clientWidth || 320;
+  const sh = stage.clientHeight || Math.round(sw / 1);
+  const nw = image.naturalWidth || sw;
+  const nh = image.naturalHeight || sh;
+  const base = Math.max(sw / nw, sh / nh);
+  const scale = base * crop.zoom;
+  const dw = nw * scale;
+  const dh = nh * scale;
+  const maxX = 0;
+  const minX = Math.min(0, sw - dw);
+  const minY = Math.min(0, sh - dh);
+  const maxY = 0;
+  crop.x = clamp(crop.x, minX, maxX);
+  crop.y = clamp(crop.y, minY, maxY);
+  image.style.width = `${dw}px`;
+  image.style.height = `${dh}px`;
+  image.style.left = `${(sw - dw) / 2 + crop.x}px`;
+  image.style.top = `${(sh - dh) / 2 + crop.y}px`;
+  crop.metrics = { sw, sh, nw, nh, scale };
+}
+
+function applyCrop(root, wrap, stage, image, shape) {
+  const m = crop.metrics || {};
+  const left = parseFloat(image.style.left || "0") || 0;
+  const top = parseFloat(image.style.top || "0") || 0;
+  const scale = m.scale || 1;
+  const sx = Math.max(0, -left / scale);
+  const sy = Math.max(0, -top / scale);
+  const sw = Math.min(m.nw || 1, (m.sw || 1) / scale);
+  const sh = Math.min(m.nh || 1, (m.sh || 1) / scale);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = shape.width;
+  canvas.height = shape.height;
+  const ctx = canvas.getContext ? canvas.getContext("2d") : null;
+  if (!ctx) {
+    wrap.remove();
+    toast({ title: "Cropping unavailable", message: "This browser cannot crop — the image is used whole." });
+    return;
+  }
+
+  try {
+    ctx.drawImage(crop.img, sx, sy, sw, sh, 0, 0, shape.width, shape.height);
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        wrap.remove();
+        toast({ title: "Crop failed", message: "The image is used whole." });
+        return;
+      }
+      const ext = blob.type.includes("png") ? "png" : "jpg";
+      const file = new File([blob], `${crop.kind}_crop.${ext}`, { type: blob.type || "image/jpeg" });
+      app.files[crop.kind] = file;
+      app.uploaded[crop.kind] = null;
+      paintMedia(root, crop.kind, URL.createObjectURL(file));
+      wrap.remove();
+      toast({ title: "Cropped", message: "The preview is exactly what gets saved." });
+    }, "image/jpeg", 0.92);
+  } catch (error) {
+    /* the host of a remote image may refuse CORS — keep the link as it is */
+    wrap.remove();
+    toast({
+      title: "This image cannot be cropped",
+      message: "Its host does not allow it. The link is saved as it is.",
+    });
+  }
 }
 
 async function autoCountry(root) {
@@ -577,6 +802,14 @@ function wireAdModal() {
   const modal = qs("[data-ad]");
   if (!modal) return;
 
+  /* the countdown only runs while the member is watching the ad: leaving the
+   * page, hiding it or closing the ad tab stops it on the spot */
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") pauseAd("hidden");
+  });
+  window.addEventListener("pagehide", () => stopAd());
+  window.addEventListener("beforeunload", () => stopAd());
+
   qs("[data-ad-close]", modal)?.addEventListener("click", async () => {
     const session = app.ad && app.ad.session;
     stopAd();
@@ -625,6 +858,21 @@ async function runAd() {
       win.opener = null;
     } catch (error) {}
     ad.win = win;
+  } else {
+    /* blocked pop-up or blocked ad page (an ad blocker on the ad host does
+     * this) — say it plainly and keep the clock at zero */
+    ad.opened = false;
+    setModal(
+      "[data-ad-status]",
+      "The ad page was blocked. Allow pop-ups for this site — or pause the ad blocker on this page — then press the link again."
+    );
+    toast({
+      tone: "error",
+      iconName: "shield",
+      title: "The ad page was blocked",
+      message: "Your browser or an ad blocker refused to open it. Allow it here, then try again.",
+    });
+    return;
   }
 
   // resuming after the tab was closed: the server clock keeps running
@@ -663,8 +911,12 @@ function startAdTimers() {
   clearInterval(ad.timer);
   clearInterval(ad.poll);
   ad.timer = setInterval(() => {
+    if (document.visibilityState === "hidden") {
+      pauseAd("hidden");
+      return;
+    }
     if (ad.win && ad.win.closed) {
-      pauseAd();
+      pauseAd("closed");
       return;
     }
     ad.remaining = Math.max(0, ad.remaining - 1);
@@ -683,15 +935,21 @@ function paintAdClock() {
   if (bar) bar.style.width = `${Math.round(((ad.seconds - ad.remaining) / ad.seconds) * 100)}%`;
 }
 
-function pauseAd() {
+function pauseAd(reason = "closed") {
   const ad = app.ad;
   if (!ad) return;
+  if (!ad.timer && !ad.poll) return;
   clearInterval(ad.timer);
   clearInterval(ad.poll);
   ad.timer = null;
   ad.poll = null;
   ad.opened = false;
-  setModal("[data-ad-status]", "Paused — the ad page was closed. Open the ad again to finish the countdown.");
+  setModal(
+    "[data-ad-status]",
+    reason === "hidden"
+      ? "Paused — you left the activation page. Come back and open the ad again to finish the countdown."
+      : "Paused — the ad page was closed. Open the ad again to finish the countdown."
+  );
 }
 
 function stopAd() {
@@ -718,6 +976,7 @@ async function claimAd() {
     setTimeout(() => {
       const modal = qs("[data-ad]");
       if (modal) modal.hidden = true;
+      returnToActivation();
     }, 900);
     return;
   }
@@ -744,6 +1003,32 @@ function deliverCode(code) {
   if (next) next.disabled = false;
   toast({ title: "Activation code ready", message: code });
   hydrateIcons(document);
+}
+
+/**
+ * The countdown is over: the ad tab is closed and the activation page takes
+ * the focus back, with the code field in view.
+ */
+function returnToActivation() {
+  const ad = app.ad;
+  if (ad && ad.win) {
+    try {
+      if (!ad.win.closed) ad.win.close();
+    } catch (error) {
+      /* a tab the browser keeps open is fine — focus is what matters */
+    }
+    ad.win = null;
+  }
+  try {
+    window.focus();
+  } catch (error) {}
+  const input = qs(ad && ad.input ? ad.input : "[data-ac-code]") || qs("[data-ac-code]");
+  if (input) {
+    input.scrollIntoView?.({ block: "center", behavior: "smooth" });
+    try {
+      input.focus?.({ preventScroll: true });
+    } catch (error) {}
+  }
 }
 
 function setModal(selector, text) {

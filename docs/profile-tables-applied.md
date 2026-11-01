@@ -234,3 +234,63 @@ same panel with the username already in the To field, and the menu carries the u
 `tools/messages-smoke.mjs` repeats the walk in jsdom with the network stubbed — **36 checks**:
 the panel, the counts, the rows, the bubbles, the attachments, the filters, online-only, a reply,
 a full send (recipient · subject · body · attachments), and the “Message” button prefilling.
+
+---
+
+## Round 2 — levels, channels, countries (2026-11-01)
+
+### Migrations this round
+
+| Migration | What it does |
+| --- | --- |
+| `level_unlock_paid` | `level_unlock(p_token, p_level)` — buys the next level with points (fee = the level's threshold), writes the `points_ledger` row and stores the level |
+| `level_unlocked_column` | adds `members.level_unlocked` (smallint, 0–11, default 0, `members_level_unlocked_check`), rewrites `level_unlock` to use it and `member_payload` to return it |
+
+`members.level` (smallint, 1–10, default 1) is **legacy** and is not written by the new code — the
+level a member sees is `points` + `level_unlocked`, capped by the membership.
+
+### `level_unlock` contract
+
+```jsonc
+// ok
+{ "ok": true, "level": 2, "fee": 100, "balance": 4890 }
+// refusals
+{ "ok": false, "error": "session" }
+{ "ok": false, "error": "inactive" }
+{ "ok": false, "error": "level" }                                  // outside 1..11
+{ "ok": false, "error": "cap", "cap": 3, "membership": "free" }
+{ "ok": false, "error": "already", "level": 2 }
+{ "ok": false, "error": "step", "level": 1 }                       // one rung at a time
+{ "ok": false, "error": "points", "fee": 1000, "balance": 400 }
+```
+
+Fees: `10 · 100 · 1 000 · 10 000 · 100 000 · 1 000 000 · 10 000 000 · 100 000 000 · 1 000 000 000 ·
+10 000 000 000 · 100 000 000 000` (LV1 … LVMax). Ceilings: Free `3`, Silver `5`, Gold `8`, Diamond
+`11`; an expired membership is treated as Free.
+
+### Probe (2026-11-01, `@lv.probe` — deleted afterwards)
+
+| Call | Result |
+| --- | --- |
+| `level_unlock(token, 2)` at level 0 | `{ ok: false, error: "step", level: 0 }` |
+| `level_unlock(token, 1)` with 5 000 points | `{ ok: true, level: 1, fee: 10, balance: 4990 }` |
+| `level_unlock(token, 3)` at level 1 | `{ ok: false, error: "step", level: 1 }` |
+| `level_unlock(token, 2)` | `{ ok: true, level: 2, fee: 100, balance: 4890 }` |
+| `level_unlock(token, 4)` on a free plan | `{ ok: false, error: "cap", cap: 3 }` |
+
+### Lists and flags (no database)
+
+- `assets/js/playlists.js` — `PLAYLISTS`, `playlistUrl`, `parseM3U`, `splitGroups`, `loadPlaylist`,
+  `groupChannels`, `searchChannels`. `group-title="General;News"` ⇒ the channel is in **both** groups;
+  the parser never builds a joined name and never lists a channel twice inside one group.
+- `assets/js/iptv.js` — the `iptv.html` page (list tabs, group chips, search, `?M3U=` and `?list=`).
+- `assets/js/countries.js` + `assets/flags/*.svg` — 249 ISO countries with real SVG flags
+  (`flag-icons`, MIT) and `flagSrc` / `countryByCode` / `countryByName` / `searchCountries`.
+  The register picker uses `geo.js` to guess the visitor's country first.
+
+### Tests added this round
+
+| Suite | Result |
+| --- | --- |
+| `tools/iptv-smoke.mjs` | 43/43 — parser, groups, semicolons, the page, the lock, the deep links |
+| `tools/activated-smoke.mjs` | 35/35 — hidden panels, image link, blocked ad, pause on hidden/closed tab, code return |

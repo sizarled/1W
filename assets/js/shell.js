@@ -97,7 +97,7 @@ function headerTemplate(withSections = true) {
           ${notifPanel()}
         </div>
 
-        <a class="wallet" data-wallet href="bank.html" title="Your points and level — open the bank">
+        <a class="wallet" data-wallet href="dashboard.html#points" title="Your points and level — open the points page">
           <span class="wallet__icon" aria-hidden="true">${icon("zap")}</span>
           <span class="wallet__main">
             <span class="wallet__label">Your points</span>

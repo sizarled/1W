@@ -11,10 +11,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="assets/css/base.css?v=20261031u" />
-    <link rel="stylesheet" href="assets/css/layout.css?v=20261031u" />
-    <link rel="stylesheet" href="assets/css/components.css?v=20261031u" />
-    <link rel="stylesheet" href="assets/css/register.css?v=20261031u" />
+    <link rel="stylesheet" href="assets/css/base.css?v=20261101a" />
+    <link rel="stylesheet" href="assets/css/layout.css?v=20261101a" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261101a" />
+    <link rel="stylesheet" href="assets/css/register.css?v=20261101a" />
     <script>
       /* apply the saved theme (or the OS preference) before first paint */
       (function () {
@@ -33,7 +33,7 @@
       })();
     </script>
 
-    <script type="module" src="assets/js/app.js?v=20261031u"></script>
+    <script type="module" src="assets/js/app.js?v=20261101a"></script>
   </head>
   <body data-page="register" data-title="Create account">
     <a class="skip-link" href="#main">Skip to content</a>
@@ -170,9 +170,26 @@
             </div>
 
             <div class="reg-field" data-field="country">
-              <label for="reg-country">Country</label>
-              <input id="reg-country" name="country" type="text" list="reg-countries" autocomplete="country-name" placeholder="Morocco" aria-required="true" />
-              <datalist id="reg-countries"></datalist>
+              <label for="reg-country-btn">Country</label>
+              <div class="reg-select" data-country-picker>
+                <button id="reg-country-btn" class="reg-select__btn" type="button" data-country-toggle
+                        aria-haspopup="listbox" aria-expanded="false" aria-controls="reg-country-pop">
+                  <span class="reg-select__flag" data-country-flag aria-hidden="true"></span>
+                  <span class="reg-select__name" data-country-name>Detecting your country…</span>
+                  <i data-icon="chevronDown" class="reg-select__chev" aria-hidden="true"></i>
+                </button>
+                <input id="reg-country" name="country" type="hidden" value="" />
+                <div class="reg-select__pop" id="reg-country-pop" data-country-pop hidden>
+                  <div class="reg-select__search">
+                    <i data-icon="search" aria-hidden="true"></i>
+                    <input type="search" data-country-search placeholder="Search a country" autocomplete="off"
+                           aria-label="Search a country" data-lpignore="true" />
+                  </div>
+                  <ul class="reg-select__list" data-country-list role="listbox" aria-label="Countries"></ul>
+                  <p class="reg-select__empty" data-country-empty hidden>No country matches that name.</p>
+                </div>
+              </div>
+              <p class="reg-field__hint" data-country-hint>Guessed from your connection — change it whenever you like.</p>
               <p class="reg-field__error" data-err="country" role="alert" hidden></p>
             </div>
 
@@ -235,9 +252,9 @@
             <button class="btn btn--primary" type="button" data-reg-download>
               <i data-icon="download"></i> Download details (.txt)
             </button>
-            <button class="btn btn--ghost" type="button" data-reg-login>
+            <a class="btn btn--ghost" href="dashboard.html" data-reg-login>
               <i data-icon="login"></i> Log in
-            </button>
+            </a>
           </div>
 
           <p class="reg-alert reg-alert--inline reg-success__note" data-reg-login-note hidden></p>

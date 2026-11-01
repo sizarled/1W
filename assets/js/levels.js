@@ -333,6 +333,31 @@ export function levelForPoints(points = 0) {
   return level;
 }
 
+/** `members.level` comes back as a number; 11 and above is the open level. */
+export function storedLevel(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return n >= LEVELS.length - 1 ? "max" : Math.trunc(n);
+}
+
+/**
+ * What a level costs when it is bought instead of earned: the level's own
+ * points threshold. LV1 10 · LV2 100 · LV3 1 000 … LVMax 100 000 000 000.
+ */
+export function unlockFee(level) {
+  return rowFor(level).points;
+}
+
+/** The next level, when it can be bought now with the available balance. */
+export function unlockOffer(info, available = 0) {
+  if (!info || info.level === "max" || info.capped) return null;
+  const next = nextLevel(info.level);
+  if (!next) return null;
+  const fee = unlockFee(next.level);
+  const balance = Math.max(0, Number(available) || 0);
+  return { level: next.level, fee, row: next, affordable: balance >= fee, balance };
+}
+
 export function nextLevel(level) {
   if (level === "max") return null;
   const index = LEVELS.findIndex((row) => row.level === Number(level));
@@ -351,9 +376,13 @@ export function badgeFor(level, tens = 0, { capped = false } = {}) {
  *
  * @param {{points?: number, membership?: string, activated?: boolean}} input
  */
-export function levelInfo({ points = 0, membership = "free", activated = true } = {}) {
+export function levelInfo({ points = 0, membership = "free", activated = true, unlocked = null } = {}) {
   const total = Math.max(0, Number(points) || 0);
-  const rawLevel = levelForPoints(total);
+  const paid = storedLevel(unlocked);
+  const earned = levelForPoints(total);
+  /* a level bought with points survives the drop that paying for it causes */
+  const rawLevel =
+    earned === "max" || paid === "max" ? "max" : Math.max(Number(earned) || 0, Number(paid) || 0);
   const cap = capFor(membership);
   const capped = cap !== Infinity && rawLevel !== "max" ? rawLevel > cap : rawLevel === "max" && cap !== Infinity;
   const level = capped ? cap : rawLevel;

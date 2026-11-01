@@ -150,7 +150,18 @@ await wait(60);
 
 const report = { calls: [] };
 report.fields = document.querySelectorAll(".reg-form .reg-field").length;
-report.countries = document.querySelectorAll("#reg-countries option").length;
+/* the country picker: open it and count the SVG-flagged rows */
+click(qs("[data-country-toggle]"));
+await wait(40);
+report.countries = document.querySelectorAll("[data-country-list] button").length;
+report.countryFlags = Array.from(document.querySelectorAll("[data-country-list] button img"))
+  .filter((img) => (img.getAttribute("src") || "").startsWith("assets/flags/") && img.getAttribute("src").endsWith(".svg")).length;
+report.countryHiddenValue = qs("#reg-country")?.value || "";
+click(qs("[data-country-pop] [data-country-code], [data-country-list] [data-country-code]:last-child"));
+await wait(40);
+report.countryPicked = qs("#reg-country")?.value || "";
+report.countryButton = text("[data-country-name]");
+report.countryPopClosed = qs("[data-country-pop]")?.hidden === true;
 report.prefixInDom = document.querySelectorAll(".reg-input__prefix, .reg-input__state").length;
 report.handleIdle = text("[data-handle-preview]");
 report.maxBirth = qs("#reg-birth")?.max || "";
@@ -243,17 +254,10 @@ click(qs("[data-reg-copy-id]"));
 await wait(80);
 report.idCopyLabel = qs("[data-reg-copy-id] span").textContent;
 
-/* 7. login button ------------------------------------------------ */
-click(qs("[data-reg-login]"));
-await wait(160);
-report.inactiveNoteShown = qs("[data-reg-login-note]").hidden === false;
-report.inactiveNote = text("[data-reg-login-note]");
-report.noNavigationYet = location.href.includes("register.html");
-
-accountStatus = "active";
-click(qs("[data-reg-login]"));
-await wait(160);
-report.activeLoginHref = location.href;
+/* 7. login button → the dashboard -------------------------------- */
+report.loginHref = qs("[data-reg-login]")?.getAttribute("href") || "";
+report.loginTag = qs("[data-reg-login]")?.tagName || "";
+report.stillOnRegister = location.href.includes("register.html");
 
 /* ------------------------------------------------------------------ */
 /* checks                                                             */
@@ -261,7 +265,12 @@ report.activeLoginHref = location.href;
 const checks = {
   fields: report.fields === 9,
   noOverlayOnInputs: report.prefixInDom === 0 && report.handleIdle === "@yourname",
-  countries: report.countries > 90,
+  countries:
+    report.countries > 200 &&
+    report.countryFlags === report.countries &&
+    report.countryPicked.length > 1 &&
+    report.countryPicked === report.countryButton &&
+    report.countryPopClosed,
   birthLimit: report.maxBirth.length === 10,
   planFromUrl: report.planChip.includes("Gold") && report.planMeta.includes("3 months"),
   emptyValidation: report.emptyFullNameError.length > 0 && report.emptyTermsError.length > 0 && report.emptySubmitNoCall,
@@ -298,8 +307,7 @@ const checks = {
     report.downloadText.includes("ONEWORLD") &&
     report.downloadText.includes("Recovery Code: OW-7K9P-4X2M-8Q6R") &&
     report.downloadType.includes("text/plain"),
-  inactiveLogin: report.inactiveNoteShown && report.inactiveNote.toLowerCase().includes("inactive") && report.noNavigationYet,
-  activeLogin: report.activeLoginHref.startsWith("login.html?") && report.activeLoginHref.includes("youssef.amrani"),
+  loginToDashboard: report.loginHref === "dashboard.html" && report.loginTag === "A" && report.stillOnRegister,
   noErrors: errors.length === 0,
 };
 

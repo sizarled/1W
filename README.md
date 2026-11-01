@@ -709,6 +709,8 @@ returns the caller's cases.
 ```bash
 node tools/dashboard-smoke.mjs   # 80 checks: the five gates, rail, popover, codes, sections
 node tools/court-smoke.mjs       # 115 checks: the four steps, uploads, both doors, the court room
+node tools/iptv-smoke.mjs        # 43 checks: the playlists, the groups, the page, the deep links
+node tools/activated-smoke.mjs   # 35 checks: hidden panels, image link, ad pause, code return
 ```
 
 `dashboard-smoke.mjs` boots the page in jsdom with a stubbed `member_dashboard` and walks the
@@ -725,6 +727,12 @@ room for a guest, the owner and a foreign id. The activation passes walk the who
 after the (stubbed) 30 s, step 4 activates — and then a premium re-activation with points, a free
 re-activation through the ad, a Gold → Diamond upgrade, and the Diamond case where the upgrade
 door is closed.
+
+`iptv-smoke.mjs` parses both playlists with `General;News`-style groups and walks the page (chips,
+search, the premium lock, `?M3U=` and `?list=`); `activated-smoke.mjs` proves that the first visit
+shows the wizard alone, that the second visit shows the two doors with the success card still hidden,
+that an image link becomes the preview, and that the ad clock stops when the page is hidden or the ad
+tab closes — and returns to the activation page with the code when it finishes.
 
 ## Profile, posts and reach — the schema plan
 
@@ -855,6 +863,75 @@ suspended until the recipient answers or accepts — or immediately when they fo
 turned `auto_accept_message` on. Attachments go to `users/messages/…` with the `apikey` header only,
 and a block with the message flag stops both directions. The panel is described in
 [`docs/profile-tables-applied.md`](docs/profile-tables-applied.md).
+
+### Channels — the two playlists
+
+The channel lists come from the two M3U files in the public `source` bucket:
+
+```
+IPTV/IPTV-Free.m3u      → free channels   (homepage #iptv tab «Free», iptv.html?list=free)
+IPTV/IPTV Premuim.m3u   → premium channels (homepage tab «Premium», iptv.html?list=premium)
+```
+
+[`assets/js/playlists.js`](assets/js/playlists.js) reads them (`parseM3U`), and
+[`assets/js/iptv.js`](assets/js/iptv.js) draws the page. The one rule that matters: a
+`group-title="General;News"` puts the **same channel in both groups** — the semicolon is a separator,
+so no `General;News` group ever exists and a channel is never duplicated inside a single group.
+The homepage rail shows a fair sample of every group and links to the full page; `iptv.html?M3U=<id>`
+opens on one channel. If a playlist cannot be reached, the `iptvfree` / `iptvpremium` tables (then the
+demo list) keep the section alive.
+
+### The country field is a picker
+
+`register.html` no longer asks the member to type a country. The field is a searchable list of every
+ISO country, each with its **real SVG flag** (`assets/flags/<code>.svg`, bundled from `flag-icons`,
+MIT — see `assets/flags/LICENSE`), and the country is guessed from the visitor's IP (`assets/js/geo.js`)
+before they touch it. Nothing is fetched from another host, so the flags also work offline.
+The list itself lives in [`assets/js/countries.js`](assets/js/countries.js).
+After a successful registration the details card's **Log in** button goes straight to
+`dashboard.html`.
+
+### Activation images, ads and the second visit
+
+`activated.html` keeps three rules the brief is explicit about:
+
+- **Avatar and cover** take a file, a **direct image link**, or a crop: the cropper draws the chosen
+  part on a canvas (512 × 512 avatar, 1200 × 400 cover), so the preview is exactly what is uploaded to
+  `users/profile/avatar|cover_IDXXXXXX`.
+- **The ad countdown only runs while the member is watching.** Leaving the activation page (the tab
+  hidden), closing the ad tab or a blocked pop-up stops the clock on the spot; when the countdown
+  finishes the ad tab is closed and the focus returns to the activation page with the code filled in.
+  A page blocked by an ad blocker says so instead of hanging. The clock itself is server-side
+  (`activation_ad_open` / `activation_ad_claim`).
+- **The second visit only.** First activation shows the four steps and nothing else —
+  no «Re-activate», no «Upgrade», no success card. Those appear once the account has been activated
+  before, and «Account Activated Successfully!» + Plan + Active until + «Finish» come only after the
+  last step. All of it is a `hidden` attribute, and `base.css` now carries a global
+  `[hidden] { display: none !important }` so the page works without a `.dsh` wrapper.
+
+### Unlock now — buying a level
+
+On `dashboard.html#level` the next rung carries an **Unlock now** button as soon as the member can
+afford it. It opens a dialog that names the price — the level's own points threshold — and pays it
+from the balance:
+
+| Level | LV1 | LV2 | LV3 | LV4 | LV5 | LV6 | LV7 | LV8 | LV9 | LV10 | LVMax |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Points | 10 | 100 | 1 000 | 10 000 | 100 000 | 1 000 000 | 10 000 000 | 100 000 000 | 1 000 000 000 | 10 000 000 000 | 100 000 000 000 |
+
+`level_unlock(token, level)` in the database does the work in one transaction: it checks the session,
+the active status, the membership ceiling (Free `LV30`, Silver `LV50`, Gold `LV80`, Diamond open) and
+one-rung-at-a-time, then writes the `points_ledger` row (`level unlock`, negative) and stores the level
+in `members.level_unlocked` — the lifetime total keeps the points, so the badge holds the level.
+Errors: `session · inactive · level · cap · already · step · points`.
+
+### The dashboard sidebar
+
+The avatar and the username in the sidebar are a link to the member's own page
+(`profile.html?u=@username`, showing the member ID and the status), and the sidebar folds into a
+narrow icon rail from its own toggle — `dsh[data-side="collapsed"]`. The header keeps its geometry
+either way; the state is remembered in `localStorage`. The header wallet opens
+`dashboard.html#points`.
 
 ## Sounds
 

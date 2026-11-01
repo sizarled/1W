@@ -6,6 +6,7 @@
  * ready yet, the UI keeps rendering with the local editorial fallback below.
  */
 import { SUPABASE, TMDB } from "./config.js";
+import { loadPlaylist } from "./playlists.js";
 import {
   pick,
   isTruthy,
@@ -343,7 +344,12 @@ async function loadChannelTable(table, premium) {
 }
 
 export async function loadChannels() {
-  const [free, premium] = await Promise.all([
+  /* The two playlists are the source: free channels from `IPTV-Free.m3u`,
+   * premium channels from `IPTV Premuim.m3u`. The tables and the demo list
+   * only cover the case where a playlist cannot be reached at all. */
+  const [freeList, premiumList, freeTable, premiumTable] = await Promise.all([
+    loadPlaylist("free"),
+    loadPlaylist("premium"),
     loadChannelTable("iptvfree", false),
     loadChannelTable("iptvpremium", true),
   ]);
@@ -356,8 +362,13 @@ export async function loadChannels() {
       href: `iptv.html?M3U=${encodeURIComponent(item.id)}`,
     }));
   return {
-    free: free && free.length ? free : fallback(FALLBACK_CHANNELS, false),
-    premium: premium && premium.length ? premium : fallback(PREMIUM_CHANNELS, true),
+    free: freeList.length ? freeList : freeTable && freeTable.length ? freeTable : fallback(FALLBACK_CHANNELS, false),
+    premium:
+      premiumList.length
+        ? premiumList
+        : premiumTable && premiumTable.length
+          ? premiumTable
+          : fallback(PREMIUM_CHANNELS, true),
   };
 }
 

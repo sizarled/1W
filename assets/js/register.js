@@ -22,30 +22,15 @@ import { icon, hydrateIcons } from "./icons.js";
 import { toast } from "./ui.js";
 import { playSound } from "./sound.js";
 import { rpc } from "./data.js";
+import { countryByCode, searchCountries } from "./countries.js";
+import { lookupVisitorFast } from "./geo.js";
 
 /* ================================================================== */
 /* countries                                                          */
 /* ================================================================== */
-const COUNTRIES = [
-  "Afghanistan", "Albania", "Algeria", "Andorra", "Angola", "Argentina", "Armenia", "Australia", "Austria",
-  "Azerbaijan", "Bahrain", "Bangladesh", "Belarus", "Belgium", "Belize", "Benin", "Bhutan", "Bolivia",
-  "Bosnia and Herzegovina", "Botswana", "Brazil", "Brunei", "Bulgaria", "Burkina Faso", "Burundi", "Cambodia",
-  "Cameroon", "Canada", "Cape Verde", "Chad", "Chile", "China", "Colombia", "Comoros", "Costa Rica", "Croatia",
-  "Cuba", "Cyprus", "Czechia", "Denmark", "Djibouti", "Dominican Republic", "Ecuador", "Egypt", "El Salvador",
-  "Estonia", "Eswatini", "Ethiopia", "Fiji", "Finland", "France", "Gabon", "Gambia", "Georgia", "Germany",
-  "Ghana", "Greece", "Guatemala", "Guinea", "Guyana", "Haiti", "Honduras", "Hong Kong", "Hungary", "Iceland",
-  "India", "Indonesia", "Iran", "Iraq", "Ireland", "Italy", "Ivory Coast", "Jamaica", "Japan", "Jordan",
-  "Kazakhstan", "Kenya", "Kuwait", "Kyrgyzstan", "Laos", "Latvia", "Lebanon", "Lesotho", "Liberia", "Libya",
-  "Liechtenstein", "Lithuania", "Luxembourg", "Madagascar", "Malawi", "Malaysia", "Maldives", "Mali", "Malta",
-  "Mauritania", "Mauritius", "Mexico", "Moldova", "Monaco", "Mongolia", "Montenegro", "Morocco", "Mozambique",
-  "Myanmar", "Namibia", "Nepal", "Netherlands", "New Zealand", "Nicaragua", "Niger", "Nigeria", "North Macedonia",
-  "Norway", "Oman", "Pakistan", "Palestine", "Panama", "Paraguay", "Peru", "Philippines", "Poland", "Portugal",
-  "Qatar", "Romania", "Russia", "Rwanda", "Saudi Arabia", "Senegal", "Serbia", "Seychelles", "Sierra Leone",
-  "Singapore", "Slovakia", "Slovenia", "Somalia", "South Africa", "South Korea", "Spain", "Sri Lanka", "Sudan",
-  "Suriname", "Sweden", "Switzerland", "Syria", "Taiwan", "Tajikistan", "Tanzania", "Thailand", "Togo",
-  "Trinidad and Tobago", "Tunisia", "Turkey", "Turkmenistan", "Uganda", "Ukraine", "United Arab Emirates",
-  "United Kingdom", "United States", "Uruguay", "Uzbekistan", "Venezuela", "Vietnam", "Yemen", "Zambia", "Zimbabwe",
-];
+/* The list and the flag files live in `countries.js` — every country of
+ * ISO 3166-1 with a real SVG flag under `assets/flags/`. The visitor's
+ * country is guessed from the IP (`geo.js`) and stays changeable. */
 
 /* ================================================================== */
 /* state                                                              */
@@ -98,7 +83,8 @@ export async function initRegister() {
   const form = qs("[data-regform]");
   if (!form) return;
 
-  fillCountries();
+  paintCountry("");
+  wireCountryPicker();
   readPlan();
   renderPlan();
   wireReveal();
@@ -107,14 +93,153 @@ export async function initRegister() {
   wireSubmit();
   wireSuccessActions();
   setMaxBirthDate();
+  detectCountry();
 
   qs("#reg-full-name")?.focus();
 }
 
-function fillCountries() {
-  const list = qs("#reg-countries");
+/* ------------------------------------------------------------------ */
+/* country picker                                                     */
+/* ------------------------------------------------------------------ */
+const countryState = { code: "", open: false, index: -1, rows: [] };
+
+function flagFor(code, className = "") {
+  const row = countryByCode(code);
+  if (!row) return "";
+  return `<img class="${className}" src="assets/flags/${row.code}.svg" alt="" width="24" height="18" loading="lazy" decoding="async" />`;
+}
+
+/** Paint the closed button with the chosen country (or the detecting state). */
+function paintCountry(code) {
+  const row = countryByCode(code);
+  countryState.code = row ? row.code : "";
+  const input = qs("#reg-country");
+  if (input) input.value = row ? row.name : "";
+  const flag = qs("[data-country-flag]");
+  if (flag) flag.innerHTML = row ? flagFor(row.code) : "";
+  const name = qs("[data-country-name]");
+  if (name) name.textContent = row ? row.name : "Detecting your country…";
+  const hint = qs("[data-country-hint]");
+  if (hint) {
+    hint.textContent = row
+      ? "Guessed from your connection — change it whenever you like."
+      : "Pick your country from the list.";
+  }
+  qsa("[data-country-list] button").forEach((btn) => {
+    btn.setAttribute("aria-selected", btn.dataset.countryCode === (row ? row.code : "") ? "true" : "false");
+  });
+  setError("country", "");
+  return row;
+}
+
+function renderCountryList(query = "") {
+  const list = qs("[data-country-list]");
   if (!list) return;
-  list.innerHTML = COUNTRIES.map((name) => `<option value="${esc(name)}"></option>`).join("");
+  const rows = searchCountries(query, 400);
+  countryState.rows = rows;
+  countryState.index = -1;
+  list.innerHTML = rows
+    .map(
+      (row) => `<li><button type="button" role="option" data-country-code="${row.code}"
+        aria-selected="${row.code === countryState.code ? "true" : "false"}">
+        ${flagFor(row.code)}<span>${esc(row.name)}</span></button></li>`
+    )
+    .join("");
+  const empty = qs("[data-country-empty]");
+  if (empty) empty.hidden = rows.length > 0;
+}
+
+function openCountryList(open) {
+  const pop = qs("[data-country-pop]");
+  const box = qs("[data-country-picker]");
+  const toggle = qs("[data-country-toggle]");
+  if (!pop || !box) return;
+  countryState.open = Boolean(open);
+  pop.hidden = !countryState.open;
+  box.dataset.open = countryState.open ? "true" : "false";
+  toggle?.setAttribute("aria-expanded", countryState.open ? "true" : "false");
+  if (countryState.open) {
+    renderCountryList("");
+    const search = qs("[data-country-search]");
+    if (search) {
+      search.value = "";
+      if (search.focus) search.focus();
+    }
+    paintCountry(countryState.code);
+  }
+}
+
+function wireCountryPicker() {
+  const toggle = qs("[data-country-toggle]");
+  if (!toggle) return;
+
+  toggle.addEventListener("click", () => openCountryList(!countryState.open));
+
+  const search = qs("[data-country-search]");
+  search?.addEventListener("input", () => renderCountryList(search.value));
+
+  search?.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      openCountryList(false);
+      if (toggle.focus) toggle.focus();
+      return;
+    }
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp" && event.key !== "Enter") return;
+    event.preventDefault();
+    const buttons = qsa("[data-country-list] button");
+    if (!buttons.length) return;
+    if (event.key === "Enter" && countryState.index >= 0) {
+      buttons[countryState.index].click();
+      return;
+    }
+    const step = event.key === "ArrowUp" ? -1 : 1;
+    countryState.index = Math.min(buttons.length - 1, Math.max(0, countryState.index + step));
+    const active = buttons[countryState.index];
+    if (active.focus) active.focus();
+    if (active.scrollIntoView) active.scrollIntoView({ block: "nearest" });
+  });
+
+  qs("[data-country-list]")?.addEventListener("click", (event) => {
+    const choice = event.target.closest("[data-country-code]");
+    if (!choice) return;
+    paintCountry(choice.dataset.countryCode);
+    openCountryList(false);
+    if (toggle.focus) toggle.focus();
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!countryState.open) return;
+    if (event.target.closest("[data-country-picker]")) return;
+    openCountryList(false);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && countryState.open) openCountryList(false);
+  });
+}
+
+/** Guess the country from the visitor's IP — never blocks the form. */
+async function detectCountry() {
+  if (countryState.code) return;
+  try {
+    const found = await lookupVisitorFast(2000);
+    const code = found?.country_code || found?.countryCode || "";
+    const row = countryByCode(code);
+    if (row && !countryState.code) {
+      paintCountry(row.code);
+      const hint = qs("[data-country-hint]");
+      if (hint) hint.textContent = "Guessed from your connection — change it whenever you like.";
+      if (countryState.open) renderCountryList(qs("[data-country-search]")?.value || "");
+    }
+  } catch {
+    /* offline or blocked — the list is still there to pick from */
+  }
+  if (!countryState.code) {
+    const name = qs("[data-country-name]");
+    if (name) name.textContent = "Choose your country";
+    const hint = qs("[data-country-hint]");
+    if (hint) hint.textContent = "Pick your country from the list.";
+  }
 }
 
 function readPlan() {
@@ -561,7 +686,6 @@ function wireSuccessActions() {
     toast({ title: "Details downloaded", message: "Keep the file and the recovery code safe.", tone: "success", iconName: "download" });
   });
 
-  qs("[data-reg-login]")?.addEventListener("click", checkLogin);
 }
 
 function txtBody() {
@@ -615,40 +739,6 @@ function downloadText(filename, text) {
   anchor.click();
   anchor.remove();
   if (url.startsWith("blob:")) setTimeout(() => URL.revokeObjectURL(url), 2000);
-}
-
-async function checkLogin() {
-  const note = qs("[data-reg-login-note]");
-  const login = state.member?.username || "";
-  if (!login) return;
-
-  let status = null;
-  try {
-    status = await rpc("member_status", { p_login: login });
-  } catch {
-    status = null;
-  }
-
-  const active = status && status.found && status.status === "active";
-  if (active) {
-    const query = new URLSearchParams({ username: login });
-    if (state.plan) query.set("plan", state.plan);
-    location.href = `login.html?${query.toString()}`;
-    return;
-  }
-
-  state.saved = true; // the code is no longer the only thing on screen
-  if (note) {
-    note.hidden = false;
-    note.innerHTML = `${icon("clock")} <span>Your account is still <b>inactive</b>. You will be able to sign in as soon as it has been activated — keep your recovery code until then.</span>`;
-  }
-  playSound("notefcation", 0.28);
-  toast({
-    title: "Account not active yet",
-    message: "Sign-in unlocks once the account is activated.",
-    tone: "info",
-    iconName: "clock",
-  });
 }
 
 /* exposed only for the jsdom test */

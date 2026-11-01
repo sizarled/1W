@@ -107,11 +107,40 @@ instead of testing numbers.
 | `profile.html` | `LV85 · High elite` beside the display name |
 | `dashboard.html → Level` | badge, ceiling, progress, the whole ladder, and the rights of the current level |
 
+## Unlock now — paying for the next level
+
+The level is normally earned with points, but the next rung can also be **bought**: the dashboard
+shows `Unlock now` as soon as the balance covers the level's own threshold.
+
+| Target | LV1 | LV2 | LV3 | LV4 | LV5 | LV6 | LV7 | LV8 | LV9 | LV10 | LVMax |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Fee (points) | 10 | 100 | 1 000 | 10 000 | 100 000 | 1 000 000 | 10 000 000 | 100 000 000 | 1 000 000 000 | 10 000 000 000 | 100 000 000 000 |
+
+`levels.js` exposes the price and the offer as data — `unlockFee(level)` and
+`unlockOffer(info, available)` — so no page keeps its own copy of the numbers.
+
+Server side, `level_unlock(p_token, p_level)` finishes the whole thing in one transaction:
+
+1. the session (`member_from_token`) and `status = 'active'` are required;
+2. the membership ceiling is applied — Free `3`, Silver `5`, Gold `8`, Diamond `11` — with an
+   expired membership falling back to Free;
+3. only **one rung at a time** (`p_level = level_unlocked + 1`);
+4. the fee is written to `points_ledger` (`reason = 'level unlock'`, `source = 'level'`, negative) and
+   the trigger moves `members.points`;
+5. `members.level_unlocked` keeps the level, so the badge stays even though the balance went down —
+   `levelInfo({ …, unlocked })` takes `max(points level, bought level)` before the ceiling.
+
+Errors come back as `{ ok: false, error }` with `session · inactive · level · cap · already · step ·
+points`; `cap` also returns `cap` and `membership`, `points` returns `fee` and `balance`.
+
+`members.level` (smallint, 1–10, default 1) is the legacy column and stays untouched: the level of a
+member is `points` + `level_unlocked`, never that field.
+
 ## Still to wire
 
-- `profiles.level` in the database is still the stored column; the level is derived in the client
-  from the total points (`primary_points_earned`). A `level_for_points()` SQL function and the
-  section-quota checks server-side are the next database step.
+- `members.level` is still the legacy 1–10 column; the real level is derived in the client from the
+  total points plus `level_unlocked`. A `level_for_points()` SQL function and the section-quota
+  checks server-side are the next database step.
 - The task requirement (`tasks` in the quotas) and the membership duration conditions
   (`months` in the ladder rows) are shown, not yet enforced.
 - `tools/levels-smoke.mjs` holds **64 checks** over the thresholds, badges, caps, quotas and rights;
