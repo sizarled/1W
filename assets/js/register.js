@@ -38,6 +38,7 @@ import { lookupVisitorFast } from "./geo.js";
 const state = {
   member: null,
   code: "",
+  link: "",
   plan: "",
   duration: "",
   busy: false,
@@ -589,6 +590,9 @@ function showSuccess(result) {
   const member = result.member || {};
   state.member = member;
   state.code = result.recovery_code || "";
+  // the recovery link is the same secret in URL shape: rest.html?recovry=<code>
+  // (the misspelled parameter is the agreed one; rest.js accepts it and `recovery=`)
+  state.link = state.code ? `rest.html?recovry=${state.code}` : "";
 
   const formCard = qs("[data-reg-form]");
   const success = qs("[data-reg-success]");
@@ -597,6 +601,9 @@ function showSuccess(result) {
 
   const code = qs("[data-reg-code]");
   if (code) code.textContent = state.code;
+
+  const link = qs("[data-reg-link]");
+  if (link) link.textContent = state.link || "—";
 
   const idNode = qs("[data-reg-member-id]");
   if (idNode) idNode.textContent = member.member_id || "—";
@@ -674,6 +681,10 @@ function wireSuccessActions() {
     copyValue(state.code, qs("[data-reg-copy]"), "Copy code", "[data-reg-code]");
   });
 
+  qs("[data-reg-copy-link]")?.addEventListener("click", () => {
+    copyValue(state.link, qs("[data-reg-copy-link]"), "Copy link", "[data-reg-link]");
+  });
+
   qs("[data-reg-copy-id]")?.addEventListener("click", () => {
     copyValue(state.member?.member_id || "", qs("[data-reg-copy-id]"), "Copy ID", "[data-reg-member-id]");
   });
@@ -706,13 +717,15 @@ function txtBody() {
     `Country: ${m.country || ""}`,
     "",
     `Recovery Code: ${state.code || ""}`,
+    `Recovery Link: ${state.link || ""}`,
     "",
     "Account Status: Inactive",
     `Registration Date: ${registered.toISOString().slice(0, 19).replace("T", " ")} UTC`,
     "",
     "================================",
     "IMPORTANT:",
-    "Keep your recovery code secure.",
+    "Keep your recovery code and the recovery link secure.",
+    "The code works once: the next recovery replaces it.",
     "Do not share it with anyone.",
     "================================",
     "",

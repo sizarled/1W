@@ -336,7 +336,7 @@ const details = report.detailRows || [];
 const checks = {
   form: report.formVisible && report.successHidden && report.fields === 2 && report.prefill === "@youssef.amrani",
   rememberDefault: report.rememberDefault === false,
-  links: report.forgotHref === "help.html" && report.signupHref.includes("register.html"),
+  links: report.forgotHref === "rest.html" && report.signupHref.includes("register.html"),
   emptySubmit: report.emptyError.length > 0 && report.emptyNoCall,
   emptyPassword: report.emptyPasswordError.length > 0,
   wrongPassword:

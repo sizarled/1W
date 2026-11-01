@@ -766,6 +766,32 @@ html[data-theme="dark"] .reg-field input[type="date"] {
   user-select: all;
 }
 
+/* the recovery link sits under the code: same secret, a different shape */
+.reg-recovery__link {
+  display: grid;
+  gap: 0.3rem;
+  padding-top: 0.75rem;
+  margin-top: 0.35rem;
+  border-top: 1px solid var(--line);
+}
+
+.reg-recovery__linkvalue {
+  margin: 0;
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.reg-copyrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
 .reg-recovery__note {
   margin: 0;
   font-size: 0.75rem;

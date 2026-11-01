@@ -44,6 +44,11 @@ async function boot() {
     initIptv();
   }
 
+  if (document.body.dataset.page === "rest") {
+    const { initRest } = await import("./rest.js");
+    initRest().catch((error) => console.warn("[1World] recovery page:", error));
+  }
+
   if (document.body.dataset.page === "register") {
     const { initRegister } = await import("./register.js");
     initRegister().catch((error) => console.warn("[1World] register page:", error));

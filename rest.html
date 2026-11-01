@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Recover your account — 1World Web</title>
+    <meta name="description" content="Recover a 1World account in three steps: your email and phone, the recovery code we send you, then a new password. The recovery link and the linked-device path are here too." />
+    <meta name="theme-color" content="#060607" />
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="assets/css/base.css?v=20261101g" />
+    <link rel="stylesheet" href="assets/css/layout.css?v=20261101g" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261101g" />
+    <link rel="stylesheet" href="assets/css/register.css?v=20261101g" />
+    <link rel="stylesheet" href="assets/css/rest.css?v=20261101g" />
+    <script>
+      /* apply the saved theme (or the OS preference) before first paint */
+      (function () {
+        try {
+          var saved = JSON.parse(localStorage.getItem("1w.theme") || "null");
+          var theme =
+            saved === "light" || saved === "dark"
+              ? saved
+              : window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
+                ? "light"
+                : "dark";
+          document.documentElement.dataset.theme = theme;
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute("content", theme === "light" ? "#f4f4f5" : "#060607");
+        } catch (e) {}
+      })();
+    </script>
+
+    <script type="module" src="assets/js/app.js?v=20261101g"></script>
+  </head>
+  <body data-page="rest" data-title="Recover account">
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <div data-site-header></div>
+    <div data-site-sidebar></div>
+    <div data-scrim hidden></div>
+
+    <main class="site-main rc" id="main">
+      <nav class="rc__crumbs" aria-label="Breadcrumb">
+        <a href="index.html">Home</a><span aria-hidden="true">/</span>
+        <a href="login.html">Log in</a><span aria-hidden="true">/</span>
+        <span>Recover account</span>
+      </nav>
+
+      <div class="rc__grid">
+        <!-- intro + stepper --------------------------------------- -->
+        <aside class="rc__aside">
+          <p class="eyebrow"><span class="eyebrow__dot"></span>Recovery</p>
+          <h1 class="rc__title">Get your account <span class="serif">back</span></h1>
+          <p class="rc__lead">
+            Three steps: confirm the email and the phone number on the account, enter the
+            recovery code we send you, then choose a new password. Nothing changes until the
+            last step.
+          </p>
+
+          <ol class="rc-steps" data-rc-steps aria-label="Recovery steps">
+            <li class="rc-steps__item" data-rc-stepdot="identity" aria-current="step">
+              <span class="rc-steps__num">1</span>
+              <div>
+                <b>Email and phone</b>
+                <span>Both must belong to the same account.</span>
+              </div>
+            </li>
+            <li class="rc-steps__item" data-rc-stepdot="code">
+              <span class="rc-steps__num">2</span>
+              <div>
+                <b>Recovery code</b>
+                <span>Sent to your email and your Telegram.</span>
+              </div>
+            </li>
+            <li class="rc-steps__item" data-rc-stepdot="password">
+              <span class="rc-steps__num">3</span>
+              <div>
+                <b>New password</b>
+                <span>The old one stops working immediately.</span>
+              </div>
+            </li>
+          </ol>
+
+          <ul class="rc-notes">
+            <li>
+              <span class="rc-notes__icon"><i data-icon="link"></i></span>
+              <div>
+                <b>The recovery link</b>
+                <span><code>rest.html?recovry=…</code> carries the same code — opening it goes straight to the password field.</span>
+              </div>
+            </li>
+            <li>
+              <span class="rc-notes__icon"><i data-icon="monitor"></i></span>
+              <div>
+                <b>Lost the code?</b>
+                <span>A device that is already linked to one of your viewing codes can recover the account without it.</span>
+              </div>
+            </li>
+            <li>
+              <span class="rc-notes__icon"><i data-icon="refresh"></i></span>
+              <div>
+                <b>One use per code</b>
+                <span>Every recovery mints a new code — the page hands you the fresh one with a .txt download.</span>
+              </div>
+            </li>
+          </ul>
+        </aside>
+
+        <!-- the card ---------------------------------------------- -->
+        <section class="rc-card">
+          <!-- step 1 ------------------------------------------------ -->
+          <div class="rc-panel" data-rc-panel="identity">
+            <header class="rc-card__head">
+              <p class="rc-card__step">Step 1 of 3</p>
+              <h2 class="rc-card__title">Your email and phone</h2>
+            </header>
+
+            <div class="rc-alert" data-rc-alert="identity" role="alert" hidden>
+              <i data-icon="info"></i>
+              <div><p data-rc-alert-text></p></div>
+            </div>
+
+            <form class="rc-form" data-rc-form="identity" novalidate autocomplete="on">
+              <div class="rc-field" data-field="email">
+                <label for="rc-email">Email address</label>
+                <div class="rc-input">
+                  <i data-icon="mail"></i>
+                  <input id="rc-email" name="email" type="email" inputmode="email" autocomplete="email"
+                         placeholder="you@example.com" aria-required="true" spellcheck="false" autocapitalize="none" />
+                </div>
+                <p class="rc-field__error" data-err="email" role="alert" hidden></p>
+              </div>
+
+              <div class="rc-field" data-field="phone">
+                <label for="rc-phone">Phone number</label>
+                <div class="rc-input">
+                  <i data-icon="smartphone"></i>
+                  <input id="rc-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel"
+                         placeholder="+212 6 00 00 00 00" aria-required="true" />
+                </div>
+                <p class="rc-field__hint">The number on the account — with or without the country code.</p>
+                <p class="rc-field__error" data-err="phone" role="alert" hidden></p>
+              </div>
+
+              <button class="btn btn--primary rc-submit" type="submit" data-rc-submit="identity">
+                <i data-icon="arrowRight"></i><span data-rc-submit-label>Next — send the code</span>
+              </button>
+            </form>
+
+            <p class="rc-card__foot">
+              No code, but this is a device you already watch on?
+              <button class="rc-link" type="button" data-rc-go="device">Recover from this device</button>
+            </p>
+          </div>
+
+          <!-- step 2 ------------------------------------------------ -->
+          <div class="rc-panel" data-rc-panel="code" hidden>
+            <header class="rc-card__head">
+              <p class="rc-card__step">Step 2 of 3</p>
+              <h2 class="rc-card__title">Enter the recovery code</h2>
+            </header>
+
+            <div class="rc-sent" data-rc-sent hidden>
+              <i data-icon="send"></i>
+              <div>
+                <p class="rc-sent__title" data-rc-sent-title>The code has been sent.</p>
+                <p class="rc-sent__text" data-rc-sent-text></p>
+              </div>
+            </div>
+
+            <div class="rc-alert" data-rc-alert="code" role="alert" hidden>
+              <i data-icon="info"></i>
+              <div><p data-rc-alert-text></p></div>
+            </div>
+
+            <form class="rc-form" data-rc-form="code" novalidate>
+              <div class="rc-field" data-field="code">
+                <label for="rc-code">Recovery code</label>
+                <div class="rc-input rc-input--code">
+                  <i data-icon="key"></i>
+                  <input id="rc-code" name="code" type="text" inputmode="text" autocomplete="one-time-code"
+                         placeholder="OW-XXXX-XXXX-XXXX" aria-required="true" spellcheck="false"
+                         autocapitalize="characters" maxlength="19" />
+                </div>
+                <p class="rc-field__hint">Four groups of four characters. Dashes and lower case are fine.</p>
+                <p class="rc-field__error" data-err="code" role="alert" hidden></p>
+              </div>
+
+              <div class="rc-row">
+                <button class="btn btn--ghost rc-back" type="button" data-rc-go="identity">
+                  <i data-icon="arrowLeft"></i> Back
+                </button>
+                <button class="btn btn--primary rc-submit" type="submit" data-rc-submit="code">
+                  <i data-icon="arrowRight"></i><span data-rc-submit-label>Next</span>
+                </button>
+              </div>
+            </form>
+
+            <div class="rc-resend">
+              <p class="rc-resend__text">Nothing arrived? Check the spam folder first.</p>
+              <button class="btn btn--quiet" type="button" data-rc-resend>
+                <i data-icon="refresh"></i> <span data-rc-resend-label>Send a new code</span>
+              </button>
+              <p class="rc-resend__wait" data-rc-countdown hidden></p>
+            </div>
+
+            <p class="rc-card__foot">
+              Have the recovery link instead?
+              <span><code>rest.html?recovry=…</code> opens the password step directly.</span>
+            </p>
+          </div>
+
+          <!-- step 3 ------------------------------------------------ -->
+          <div class="rc-panel" data-rc-panel="password" hidden>
+            <header class="rc-card__head">
+              <p class="rc-card__step">Step 3 of 3</p>
+              <h2 class="rc-card__title">Choose a new password</h2>
+            </header>
+
+            <div class="rc-who" data-rc-who hidden>
+              <div class="rc-who__head">
+                <span class="rc-who__badge"><i data-icon="check"></i></span>
+                <div>
+                  <p class="rc-who__title" data-rc-who-title>This account is verified</p>
+                  <p class="rc-who__text" data-rc-who-text></p>
+                </div>
+              </div>
+              <dl class="rc-who__details" data-rc-account></dl>
+            </div>
+
+            <div class="rc-alert" data-rc-alert="password" role="alert" hidden>
+              <i data-icon="info"></i>
+              <div><p data-rc-alert-text></p></div>
+            </div>
+
+            <form class="rc-form" data-rc-form="password" novalidate autocomplete="off">
+              <div class="rc-field" data-field="password">
+                <label for="rc-password">New password</label>
+                <div class="rc-input">
+                  <i data-icon="lock"></i>
+                  <input id="rc-password" name="password" type="password" autocomplete="new-password"
+                         placeholder="At least 8 characters" aria-required="true" />
+                  <button class="rc-input__toggle" type="button" data-rc-reveal="password"
+                          aria-label="Show password" aria-pressed="false"><i data-icon="eye"></i></button>
+                </div>
+                <div class="rc-strength" data-rc-strength hidden>
+                  <span class="rc-strength__bar" data-rc-strength-bar></span>
+                  <p class="rc-strength__label" data-rc-strength-label></p>
+                </div>
+                <p class="rc-field__error" data-err="password" role="alert" hidden></p>
+              </div>
+
+              <div class="rc-field" data-field="password2">
+                <label for="rc-password2">Repeat the new password</label>
+                <div class="rc-input">
+                  <i data-icon="lock"></i>
+                  <input id="rc-password2" name="password2" type="password" autocomplete="new-password"
+                         placeholder="Type it again" aria-required="true" />
+                  <button class="rc-input__toggle" type="button" data-rc-reveal="password2"
+                          aria-label="Show password" aria-pressed="false"><i data-icon="eye"></i></button>
+                </div>
+                <p class="rc-field__error" data-err="password2" role="alert" hidden></p>
+              </div>
+
+              <div class="rc-row">
+                <button class="btn btn--ghost rc-back" type="button" data-rc-back="code">
+                  <i data-icon="arrowLeft"></i> Back
+                </button>
+                <button class="btn btn--primary rc-submit" type="submit" data-rc-submit="password">
+                  <i data-icon="shield"></i><span data-rc-submit-label>Change the password</span>
+                </button>
+              </div>
+            </form>
+
+            <p class="rc-card__foot">
+              Every session on the account is closed when the password changes.
+            </p>
+          </div>
+
+          <!-- done -------------------------------------------------- -->
+          <div class="rc-panel" data-rc-panel="done" hidden aria-live="polite">
+            <header class="rc-card__head">
+              <p class="rc-card__step rc-card__step--ok"><i data-icon="check"></i> Done</p>
+              <h2 class="rc-card__title">Password changed</h2>
+            </header>
+
+            <p class="rc-done__lead">
+              Your account is yours again. Here is the account as it stands — and your
+              <b>new</b> recovery code, because the one you used has just been spent.
+            </p>
+
+            <dl class="rc-details" data-rc-details></dl>
+
+            <div class="reg-recovery">
+              <p class="reg-recovery__label">New recovery code</p>
+              <p class="reg-recovery__code" data-rc-code>OW-XXXX-XXXX-XXXX</p>
+              <p class="reg-recovery__note">
+                Keep it somewhere safe. It works once — the next recovery replaces it again.
+              </p>
+              <div class="rc-copy-row">
+                <button class="reg-copy" type="button" data-rc-copy-code>
+                  <i data-icon="file"></i><span>Copy code</span>
+                </button>
+                <button class="reg-copy" type="button" data-rc-copy-link>
+                  <i data-icon="link"></i><span>Copy link</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="rc-linkbox">
+              <p class="rc-linkbox__label">Recovery link</p>
+              <p class="rc-linkbox__value" data-rc-link>rest.html?recovry=…</p>
+              <p class="rc-linkbox__note">Save the link as well — it opens this page at the password step.</p>
+            </div>
+
+            <div class="rc-done__actions">
+              <button class="btn btn--primary" type="button" data-rc-download>
+                <i data-icon="download"></i> Download the details (.txt)
+              </button>
+              <a class="btn btn--ghost" href="login.html">
+                <i data-icon="login"></i> Log in with the new password
+              </a>
+            </div>
+          </div>
+
+          <!-- the device path --------------------------------------- -->
+          <div class="rc-panel" data-rc-panel="device" hidden>
+            <header class="rc-card__head">
+              <p class="rc-card__step">No code needed</p>
+              <h2 class="rc-card__title">Recover from this device</h2>
+            </header>
+
+            <p class="rc-device__lead">
+              Your full name, your phone, your email and one of your six-digit viewing codes —
+              accepted only from a device that is already linked to one of those codes.
+            </p>
+
+            <div class="rc-alert" data-rc-alert="device" role="alert" hidden>
+              <i data-icon="info"></i>
+              <div><p data-rc-alert-text></p></div>
+            </div>
+
+            <p class="rc-device__state" data-rc-device-state hidden></p>
+
+            <form class="rc-form" data-rc-form="device" novalidate>
+              <div class="rc-field" data-field="full_name">
+                <label for="rc-name">Full name</label>
+                <div class="rc-input">
+                  <i data-icon="user"></i>
+                  <input id="rc-name" name="full_name" type="text" autocomplete="name"
+                         placeholder="As written on the account" aria-required="true" />
+                </div>
+                <p class="rc-field__error" data-err="full_name" role="alert" hidden></p>
+              </div>
+
+              <div class="rc-field" data-field="dev_phone">
+                <label for="rc-device-phone">Phone number</label>
+                <div class="rc-input">
+                  <i data-icon="smartphone"></i>
+                  <input id="rc-device-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel"
+                         placeholder="+212 6 00 00 00 00" aria-required="true" />
+                </div>
+                <p class="rc-field__error" data-err="dev_phone" role="alert" hidden></p>
+              </div>
+
+              <div class="rc-field" data-field="dev_email">
+                <label for="rc-device-email">Email address</label>
+                <div class="rc-input">
+                  <i data-icon="mail"></i>
+                  <input id="rc-device-email" name="email" type="email" inputmode="email" autocomplete="email"
+                         placeholder="you@example.com" aria-required="true" spellcheck="false" autocapitalize="none" />
+                </div>
+                <p class="rc-field__error" data-err="dev_email" role="alert" hidden></p>
+              </div>
+
+              <div class="rc-field" data-field="view_code">
+                <label for="rc-view-code">Viewing code</label>
+                <div class="rc-input rc-input--code">
+                  <i data-icon="key"></i>
+                  <input id="rc-view-code" name="view_code" type="text" inputmode="numeric" autocomplete="off"
+                         placeholder="000000" aria-required="true" maxlength="6" />
+                </div>
+                <p class="rc-field__hint">The six digits you created when the account was activated.</p>
+                <p class="rc-field__error" data-err="view_code" role="alert" hidden></p>
+              </div>
+
+              <div class="rc-field" data-field="dev_password">
+                <label for="rc-device-password">New password</label>
+                <div class="rc-input">
+                  <i data-icon="lock"></i>
+                  <input id="rc-device-password" name="password" type="password" autocomplete="new-password"
+                         placeholder="At least 8 characters" aria-required="true" />
+                  <button class="rc-input__toggle" type="button" data-rc-reveal="device-password"
+                          aria-label="Show password" aria-pressed="false"><i data-icon="eye"></i></button>
+                </div>
+                <p class="rc-field__error" data-err="dev_password" role="alert" hidden></p>
+              </div>
+
+              <div class="rc-row">
+                <button class="btn btn--ghost rc-back" type="button" data-rc-go="identity">
+                  <i data-icon="arrowLeft"></i> Back
+                </button>
+                <button class="btn btn--primary rc-submit" type="submit" data-rc-submit="device">
+                  <i data-icon="unlock"></i><span data-rc-submit-label>Recover the account</span>
+                </button>
+              </div>
+            </form>
+
+            <p class="rc-card__foot">
+              This path is refused on a device that was never linked to a code on this account.
+            </p>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <div data-site-footer></div>
+  </body>
+</html>

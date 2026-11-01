@@ -492,7 +492,125 @@ no longer accepted, and a restored session for an inactive account (notice shown
 
 ---
 
-## The dashboard
+## The recovery page
+
+`rest.html` gets a locked-out member back in. It was asked for in three steps and it stays in
+three steps — each **Next** only moves on once the step in front of it has answered:
+
+1. **Email and phone.** Both are typed and both must belong to the same row of `members`;
+   the phone is compared on its last nine digits, so `+212 6 12 34 56 78` and
+   `0612345678` are the same number. The pair is matched by `recovery_start()`, which also
+   **issues the code** and sends it.
+2. **The recovery code.** `OW-XXXX-XXXX-XXXX`, typed in any case, with or without the dashes.
+   `recovery_verify()` compares its sha256 fingerprint with `members.recovery_code_hash` and,
+   on a match, hands back a **ticket** good for twenty minutes. Five wrong codes lock the
+   account for thirty minutes; a code that was never requested, or one that has expired,
+   is refused with its own message.
+3. **The new password.** `recovery_reset(ticket, password)` stores the bcrypt hash, **closes
+   every open session**, and — the part the flow insists on — **mints a new recovery code**,
+   because the one that was just used is spent. The page shows the account, the fresh code
+   and the recovery link again, with **copy** buttons and the **.txt download**, exactly as
+   the registration card does.
+
+### The recovery link
+
+`rest.html?recovry=OW-XXXX-XXXX-XXXX` is the same secret in URL shape. The parameter is
+spelled `recovry` because that is how it was specified; `recovery=` and `code=` are accepted
+too, and so is a whole link pasted into the code field. The link is registered as
+`recovery_link()`: it looks the code up across `members` and opens the page **at the password
+step**, with the account details already on screen. The code is saved at registration —
+`register.html` now prints the code **and** the link, and the `.txt` carries both.
+
+Because a link can outlive the thirty minutes of a mailed code, `recovery_link()` ignores
+`recovery_expires_at` and honours only a lock. Every use still rotates the code, so an old
+link dies the moment a new one is minted.
+
+### The device path — no code at all
+
+The second way in, for a member who has lost the code: **full name + phone + email + one of
+the six-digit viewing codes** created at activation (`viewing_codes`). `recovery_device()`
+accepts it **only** when this browser's `1w.device` id — the same id the player writes on
+first use — is already bound to one of the account's codes in `watch_code_devices`. A
+stranger with the name and the phone gets `device_not_bound`; a wrong name gets `identity`.
+The path ends the same way: new password, new code, details to download.
+
+### Delivery: the Google Apps Script and the bot
+
+The code leaves the database through `recovery_send()` and `pg_net`, never through the
+browser:
+
+| Channel | Where it goes | What it needs in `site_secrets` |
+| --- | --- | --- |
+| Email | the member's email, sent by a Google Apps Script web app | `gs_mail_url`, `gs_mail_token`, optional `gs_mail_cc` |
+| Telegram | `sendMessage` to the member's chat, or to the site's chat | `telegram_bot_token`, `telegram_chat_id` |
+
+`site_secrets` has RLS on and **no policies** — only the `security definer` functions read
+it, so neither the endpoint nor the bot token can be fetched with the publishable key. Each
+send writes a row in `recovery_delivery` (channel, masked target, status, `pg_net` request
+id, error) and the whole flow writes to `log` (`recovery_request`, `recovery_verified`,
+`recovery_link_used`, `recovery_reset`, `recovery_failed` with its reason).
+
+The mailer lives in the repo: `tools/apps-script/recovery-mailer.gs`. Deploy it once
+(script.google.com → Web app → *Execute as: me*, *Access: anyone*), then store the URL:
+
+```sql
+insert into public.site_secrets (key, value)
+values ('gs_mail_url',  'https://script.google.com/macros/s/XXXX/exec'),
+       ('gs_mail_token', '<the same TOKEN as in the script>')
+on conflict (key) do update set value = excluded.value, updated_at = now();
+```
+
+The Telegram bot is **Cineaura** (`@cineaura2bot`). Its token is in `site_secrets`; the chat
+id is captured the first time somebody writes to the bot:
+
+```sql
+-- the database can read Telegram itself
+select net.http_get(url := 'https://api.telegram.org/bot'
+  || public.site_secret('telegram_bot_token') || '/getUpdates');
+select content::text from net._http_response order by id desc limit 1;
+-- then, for the chat that comes back:
+insert into public.site_secrets (key, value) values ('telegram_chat_id', '123456789')
+on conflict (key) do update set value = excluded.value, updated_at = now();
+```
+
+`gs_mail_cc` is an optional copy — the operator's own address, so a test recovery can be
+read while the script is still new. Remove the row when the mailer is trusted:
+
+```sql
+delete from public.site_secrets where key = 'gs_mail_cc';
+```
+
+A member can carry their own Telegram chat in `members.telegram_chat_id`, which wins over the
+site default. If neither channel is configured the code is still issued and both `channels` flags
+come back `false`, so the page can say so instead of pretending.
+
+### Functions
+
+| Function | What it does |
+| --- | --- |
+| `recovery_start(email, phone, ip, agent)` | Matches email + phone, refuses unknown, mismatched, closed and locked accounts, applies a 60-second cooldown, issues a code (30 minutes) and sends it to both channels |
+| `recovery_verify(email, phone, code, ip, agent)` | Compares the fingerprint, counts the attempts (5 → 30-minute lock) and returns a 20-minute ticket plus the member's public data |
+| `recovery_link(code, ip, agent)` | The same, keyed by the code alone — that is what `?recovry=` calls |
+| `recovery_reset(ticket, password, ip, agent)` | The final step: new bcrypt password, sessions revoked, **new recovery code**, data + link returned |
+| `recovery_device(name, phone, email, view_code, device, password, ip, agent)` | The no-code path, bound to a device that already opened one of the codes |
+| `recovery_send(member, code)` | Builds the email and the Telegram message and posts them with `pg_net` (internal) |
+| `recovery_code_hash(text)` / `recovery_code_key(text)` | One canonical shape — `OW-XXXX-XXXX-XXXX`, upper case, dashes — so old registration hashes keep working |
+| `recovery_phone_key(text)` | Last nine digits, so the country code never matters |
+| `site_secret(key)` | Reads one secret; executable by nobody |
+
+DDL + functions: `tools/sql/recovery-page.sql`. The old, unused recovery experiment (six-digit
+codes in a `recovery_codes` table that never existed, plus a `recovery_delivery(delivery_id)`
+short-cut that handed the plain code back to whoever held the id) is dropped at the top of
+that file.
+
+`tools/rest-smoke.mjs` runs the page six times in jsdom: step 1 (empty, bad email, short
+phone, unknown account, wrong phone, then the pair that matches), the resend cooldown, step 2
+(malformed code never reaching the server, wrong code with the attempts left, expired code,
+the right code), step 3 (short password, mismatch, strength hint, the change itself with the
+new code, the link and the `.txt`), the recovery link (good and spent), the device path
+(without a device id, refused off the bound device, then the success) and the markup itself.
+
+---
 
 `dashboard.html` is the member's control room. It is drawn from **one** server call —
 `member_dashboard(token)` — and it gates itself **before** it draws a single tool, so an
@@ -1119,6 +1237,7 @@ state locally (no server call). `OneW.signOut()` returns to the guest view.
 
 ```
 index.html                  homepage
+rest.html                   account recovery (three steps, recovery link, device path)
 *.html                      one placeholder page per planned route (nav never 404s)
 assets/css/base.css         tokens, themes, typography, buttons, forms
 assets/css/layout.css       header, notifications, sidebar, footer
@@ -1144,6 +1263,9 @@ assets/css/register.css     registration form + success card (high-contrast, bot
 assets/js/register.js       registration controller (member_register RPC, .txt export)
 assets/css/login.css        sign-in form + signed-in card
 assets/js/login.js          sign-in controller (member_login / member_session / member_logout)
+assets/css/rest.css         recovery page: stepper, card, panels, code + link blocks
+assets/js/rest.js           recovery controller (recovery_start/verify/reset/link/device)
+tools/apps-script/recovery-mailer.gs  the Google Apps Script that mails the code
 assets/css/dashboard.css    app shell: header rail, sidebar, gates, section views
 assets/js/dashboard.js      dashboard controller (member_dashboard + code/notify/court actions)
 assets/js/activated.js      activation wizard (profile → viewing code → ad gate → activate), reactivation, upgrade
@@ -1154,6 +1276,7 @@ tools/watch-smoke.mjs       jsdom watch page test (player, gates, watch-time)
 tools/cast-smoke.mjs        jsdom cast page test (guest + member dials)
 tools/register-smoke.mjs    registration test (form, duplicates, member ID, success, .txt)
 tools/login-smoke.mjs       sign-in test (states, success card, restore, log out)
+tools/rest-smoke.mjs        recovery test (three steps, link, device path, .txt)
 tools/dashboard-smoke.mjs   dashboard test (five gates, rail, popover, codes, sections)
 tools/sidebar-smoke.mjs     sidebar rail test (edge reveal, pin, Escape, mobile drawer, dashboard menu)
 tools/court-smoke.mjs       activation wizard + court room test
