@@ -231,7 +231,7 @@ function stubFetch(url, opts = {}) {
     });
   }
   if (href.includes("/rpc/post_react")) {
-    scenario.reaction = body.p_value;
+    scenario.reaction = body.p_value || null;
     return reply({
       ok: true,
       reaction: body.p_value || null,
@@ -242,8 +242,10 @@ function stubFetch(url, opts = {}) {
   if (href.includes("/rpc/post_comments")) {
     return reply({
       ok: true,
+      reaction: scenario.reaction || null,
+      can_comment: Boolean(scenario.reaction),
       comments: [
-        { id: "c1", body: "Great piece", parent_id: null, polarity: 1, likes: 2, dislikes: 0, mine: false, edited: false, created_at: new Date(Date.now() - 60000).toISOString(), author: { id: "f1", username: "@sara", name: "Sara Bennani", avatar: null } },
+        { id: "c1", body: "Great piece", parent_id: null, sentiment: 1, likes: 2, dislikes: 0, mine: false, edited: false, created_at: new Date(Date.now() - 60000).toISOString(), author: { id: "f1", username: "@sara", name: "Sara Bennani", avatar: null } },
       ],
     });
   }
@@ -515,6 +517,8 @@ function expect(name, condition, detail = "") {
   await p.wait(160);
   expect("comments: input unlocked after the like", p.qs("[data-pc-input]")?.disabled === false, String(p.qs("[data-pc-input]")?.disabled));
 
+  expect("comments: chip carries the stored sentiment", /positive/.test(p.text("[data-pc-comment-list]")), p.text("[data-pc-comment-list]").slice(0, 80));
+
   const input = p.qs("[data-pc-input]");
   input.value = "Well written";
   p.click(p.qs('[data-pc-act="send-comment"]'));
@@ -522,6 +526,17 @@ function expect(name, condition, detail = "") {
   const commentCall = calls.find((c) => c.href.endsWith("/rpc/post_comment"));
   expect("comments: rpc called", Boolean(commentCall));
   expect("comments: body sent", commentCall?.body?.p_body === "Well written", JSON.stringify(commentCall?.body));
+
+  // switching the reaction must not flip the comment already written
+  p.click(p.qs('[data-pc-act="dislike"]'));
+  await p.wait(300);
+  if (p.qs("[data-pc-comments]")?.hidden) {
+    p.click(p.qs('[data-pc-act="comments"]'));
+    await p.wait(300);
+  }
+  expect("sentiment: old comment keeps positive", /positive/.test(p.text("[data-pc-comment-list]")), p.text("[data-pc-comment-list]").slice(0, 80));
+  expect("sentiment: old comment never turns negative", !/negative/.test(p.text("[data-pc-comment-list]")), p.text("[data-pc-comment-list]").slice(0, 80));
+  expect("comments: rule restated for the new reaction", /negative/.test(p.text("[data-pc-hint]")), p.text("[data-pc-hint]"));
 
   // members behind a counter
   p.click(p.qs('[data-pc-count="likes"]'));

@@ -798,14 +798,14 @@ directly, only the RPCs can.
 | --- | --- |
 | `posts_core` | `posts`, `post_audience_rules`, `post_authorized_profiles`, `post_translations` |
 | `keywords_core` | `keywords`, `post_keywords`, `keyword_follows`, `post_related_content`, `site_archive` |
-| `interactions_core` | `post_reshare`, `post_reports`, plus `comment.edited_at / polarity / like_count / dislike_count` |
+| `interactions_core` | `post_reshare`, `post_reports`, plus `comment.edited_at / sentiment / like_count / dislike_count` |
 | `reach_rank` | `profile_reach_transactions`, `post_reach_allocation`, `post_reach_delivery`, `post_analytics_events`, `post_analytics_daily` |
 | `search_publish_links` | `search_history`, `search_analytics`, `keyword_analytics`, `profile_publish_links` |
 | `messaging_core` | `conversations`, `conversation_participants`, `conversation_messages` |
 
 The database now enforces the rules the brief states, so a page cannot break them by accident:
 3 main keywords per post and 5 sub-keywords per main, a comment refused until the member reacted
-(the comment inherits that ±1 polarity), counters recounted from the source rows, `read_minutes_cap`
+(the comment is written with the member’s reaction as its ±1 `sentiment`, and a later change of reaction never rewrites it), counters recounted from the source rows, `read_minutes_cap`
 derived from the word count, one reach point per target per day released after ten minutes, and a
 30-day `site_archive` window for anything deleted.
 

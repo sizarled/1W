@@ -29,7 +29,7 @@ the pages go through `SECURITY DEFINER` RPCs, the same pattern as `member_*` and
 | a sub-keyword needs a main keyword, and that main must be on the same post | `post_keywords_guard()` |
 | `keywords.posts_count` and `keywords.followers_count` follow their rows | `keyword_posts_count_sync()`, `keyword_follows_count_sync()` |
 | a comment is refused unless the member liked or disliked the post | `comment_requires_reaction()` |
-| the comment's **polarity is the reaction's value** (±1) and never changes afterwards | same trigger, `comment.polarity` |
+| the comment's **sentiment is the reaction's value at the moment of writing** (±1) and never changes afterwards | same trigger, `comment.sentiment` |
 | `comment.edited_at` is set when the text changes | `comment_touch_edit()` |
 | `posts.likes / dislikes / comments_pos / comments_neg / reshares / reports` are recount-ed from their source tables | `post_counters_sync()` |
 | `comment.like_count` / `dislike_count` follow `comment_reaction` | `comment_reaction_counts_sync()` |
@@ -54,7 +54,7 @@ the pages go through `SECURITY DEFINER` RPCs, the same pattern as `member_*` and
 
 A probe member published a 450-word post → `PST-001000`, `read_minutes_cap = 3`, `published_at`
 set; three keywords linked (2 mains + 1 sub) and the 4th main refused, an orphan sub refused; one
-like + one comment (polarity inherited) + one reshare gave the counters `1 / 0 / 1 / 1` and
+like + one comment (sentiment inherited) + one reshare gave the counters `1 / 0 / 1 / 1` and
 `rank_points = 105`; a comment without a reaction was refused; a stale reservation was released and
 the allocation showed `points_released = 1`; a conversation touched `last_message_at`; audience
 rules, authorized profiles, search history, keyword analytics and publish links all accepted their
@@ -136,3 +136,41 @@ repost, and a full composer run whose payload is asserted (keywords, audience ru
 - The composer does not yet show live keyword reach/rank or the “Explore keywords” button, and
   guest publishing (`host`) has no profile picker — `publish-here` passes the profile it is on.
 - Reach allocation, messaging, the keyword page and post statistics are still to build.
+
+## Correction — the comment keeps the reaction it was written with
+
+The brief says a comment is **refused until the member has liked or disliked the post**, that the
+comment is then counted **positive for a like and negative for a dislike**, and that changing the
+reaction later **never flips a comment that is already written**. Three things were wrong or
+missing, and `comment_sentiment` + `comment_sentiment_rpc` + `comment_sentiment_read` fixed them:
+
+1. The column is now **`comment.sentiment`** (was `polarity`), `smallint` with a
+   `check (sentiment is null or sentiment in (-1, 1))`. `polarity` was never written by the
+   insert — the trigger relied on `post_comment` leaving it alone, and a probe comment had landed
+   with `null`.
+2. `comment_requires_reaction` now does both halves explicitly: on `INSERT` it refuses the row
+   (`23514`) when no `content_reaction` exists for that location and member, otherwise it stamps
+   `new.sentiment := <that value>`; on `UPDATE` it forces `new.sentiment := old.sentiment`, so an
+   edit — or a later dislike — cannot rewrite history.
+3. `post_counters_sync` counts `comments_pos` / `comments_neg` from `comment.sentiment` **and ends
+   with `perform public.post_rank_recompute(v_post)`** — before this, likes, comments, reshares and
+   reports moved the counters but the post's `rank_points` never moved at all.
+
+`post_comment` returns `sentiment` alongside the comment, `post_comments` returns each comment's
+`sentiment` plus `can_comment` and the caller's current `reaction`, so the page can lock the box
+from the server's answer instead of guessing.
+
+### Probe (2026-11-01, throw-away member `@probe.sent` / `ID100011`)
+
+| Step | Result |
+| --- | --- |
+| `post_comment` with no reaction | `{ ok: false, error: "reaction" }` |
+| `post_react(1)` then `post_comment` | `sentiment: 1`, post `comments_pos: 1` |
+| `post_react(-1)` afterwards | comment still `sentiment: 1`; post `likes 0 / dislikes 1 / comments_pos 1 / comments_neg 0`, `rank_points: -15` |
+| a second comment, now with the dislike | `sentiment: -1`, `comments_neg: 1`, `rank_points: -30` |
+| edit of the first comment's text | `sentiment` still `1` |
+
+Every probe row was deleted afterwards (posts 0, post comments 0, probe members 0). The page now
+labels the chip **positive** / **negative** from `sentiment`, and the hint under the box reads
+“New comments are counted negative (your dislike). Changing your reaction later leaves the
+comments you already wrote as they are.” — `tools/profile-smoke.mjs`: **111/111**.

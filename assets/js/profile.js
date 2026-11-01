@@ -673,23 +673,7 @@ async function renderCommentList(id, pane) {
   const input = pane.querySelector("[data-pc-input]");
   const send = pane.querySelector('[data-pc-act="send-comment"]');
   const hint = pane.querySelector("[data-pc-hint]");
-  const post = findPost(id);
-  const reaction = post?.mine?.reaction ?? null;
   const signedIn = Boolean(state.token);
-
-  const locked = !signedIn || !reaction;
-  if (input) {
-    input.disabled = locked;
-    input.placeholder = !signedIn ? "Sign in to comment" : !reaction ? "Like or dislike the post first" : "Write a comment…";
-  }
-  if (send) send.disabled = locked;
-  if (hint) {
-    hint.textContent = !signedIn
-      ? "Sign in to comment."
-      : reaction
-        ? `Comments you write carry your ${reaction === 1 ? "like" : "dislike"}.`
-        : "Like or dislike the post before commenting — the comment takes that reaction.";
-  }
 
   let res = null;
   try {
@@ -697,6 +681,29 @@ async function renderCommentList(id, pane) {
   } catch {
     res = null;
   }
+
+  /* the server owns the rule: a comment needs a reaction, and the reaction it
+     takes belongs to the moment it was written — not to a later change */
+  const post = findPost(id);
+  const reaction = res?.reaction ?? post?.mine?.reaction ?? null;
+  const canComment = Boolean(signedIn && (res ? res.can_comment !== false : Boolean(reaction)));
+  if (post && res?.reaction !== undefined) {
+    post.mine = Object.assign({}, post.mine, { reaction: res.reaction ?? null });
+  }
+
+  if (input) {
+    input.disabled = !canComment;
+    input.placeholder = !signedIn ? "Sign in to comment" : !reaction ? "Like or dislike the post first" : "Write a comment…";
+  }
+  if (send) send.disabled = !canComment;
+  if (hint) {
+    hint.textContent = !signedIn
+      ? "Sign in to comment."
+      : !reaction
+        ? "Like or dislike the post before commenting — the comment takes that reaction."
+        : `New comments are counted ${reaction === 1 ? "positive" : "negative"} (your ${reaction === 1 ? "like" : "dislike"}). Changing your reaction later leaves the comments you already wrote as they are.`;
+  }
+
   const comments = res?.comments || [];
   state.comments.set(id, comments);
   if (!list) return;
@@ -712,7 +719,7 @@ async function renderCommentList(id, pane) {
               <b>${esc(author.name || author.username || "Member")}</b>
               ${esc(author.username || "")}
               <span aria-hidden="true">·</span>${esc(timeAgo(comment.created_at))}
-              ${comment.polarity === 1 ? '<span class="badge badge--outline">liked</span>' : comment.polarity === -1 ? '<span class="badge badge--outline">disliked</span>' : ""}
+              ${comment.sentiment === 1 ? '<span class="badge badge--outline">positive</span>' : comment.sentiment === -1 ? '<span class="badge badge--outline">negative</span>' : ""}
               ${comment.edited ? '<span class="badge badge--outline">edited</span>' : ""}
             </span>
             <span class="pc__comment-text">${esc(comment.body)}</span>
