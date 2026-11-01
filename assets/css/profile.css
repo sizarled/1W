@@ -1388,3 +1388,352 @@ html[data-theme="light"] .pf-modal__panel {
 html[data-theme="light"] .pc__act:hover {
   background: #f2f2f5;
 }
+
+/* ================================================================== */
+/* messages                                                            */
+/* ================================================================== */
+.pf-choice b {
+  margin-left: 0.35rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
+
+.msg-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.pf-msg-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-top: 0.2rem;
+}
+
+.pf-attach {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.pf-attach__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.pf-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.4rem 0.25rem 0.55rem;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 0.75rem;
+  color: var(--text-2);
+  max-width: 100%;
+}
+
+a.pf-file:hover {
+  color: var(--text);
+  border-color: var(--line-3);
+}
+
+.pf-file .ico {
+  width: 13px;
+  height: 13px;
+  flex: none;
+}
+
+.pf-file__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 190px;
+}
+
+.pf-file__size {
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.msg-split {
+  display: grid;
+  grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
+  gap: 0.9rem;
+  align-items: stretch;
+}
+
+@media (max-width: 880px) {
+  .msg-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.msg-list {
+  display: grid;
+  gap: 0.25rem;
+  align-content: start;
+  max-height: 520px;
+  overflow-y: auto;
+}
+
+.msg-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.6rem;
+  align-items: flex-start;
+  width: 100%;
+  text-align: left;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: background 0.16s var(--ease), border-color 0.16s var(--ease);
+}
+
+.msg-row:hover {
+  background: var(--surface-2);
+}
+
+.msg-row.is-active {
+  background: var(--surface-3);
+  border-color: var(--line-2);
+}
+
+.msg-row .pf-person__avatar {
+  position: relative;
+  flex: none;
+}
+
+.msg-row__dot {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--line-3);
+  border: 2px solid var(--surface);
+}
+
+.msg-row__dot.is-on {
+  background: #46d38a;
+}
+
+.msg-row__body {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.msg-row__top,
+.msg-row__bottom {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.msg-row__top b {
+  font-size: 0.83rem;
+  font-weight: 650;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.msg-row__top time {
+  margin-left: auto;
+  font-size: 0.68rem;
+  color: var(--faint);
+  flex: none;
+}
+
+.msg-row__preview {
+  font-size: 0.76rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.msg-row__unread {
+  margin-left: auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 0.66rem;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+.msg-row__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.68rem;
+  color: var(--faint);
+  flex-wrap: wrap;
+}
+
+.msg-pane {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface-2) 55%, transparent);
+  padding: 0.7rem;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 0.6rem;
+  min-height: 380px;
+}
+
+.msg-pane__empty {
+  grid-row: 1 / -1;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.5rem;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.82rem;
+  padding: 2rem 1rem;
+}
+
+.msg-pane__empty .ico {
+  width: 26px;
+  height: 26px;
+  opacity: 0.6;
+}
+
+.msg-pane__head {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.msg-pane__who {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.msg-pane__who b {
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.msg-pane__who span {
+  font-size: 0.7rem;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.msg-pane__head .icon-btn {
+  margin-left: auto;
+}
+
+.msg-thread {
+  display: grid;
+  gap: 0.45rem;
+  align-content: start;
+  max-height: 420px;
+  overflow-y: auto;
+  padding: 0.2rem;
+}
+
+.msg-bubble {
+  max-width: min(78%, 520px);
+  padding: 0.5rem 0.7rem;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text-2);
+  display: grid;
+  gap: 0.25rem;
+}
+
+.msg-bubble p {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.msg-bubble time {
+  font-size: 0.64rem;
+  color: var(--faint);
+}
+
+/* sent: white on black in the dark theme, inverted in the light one */
+.msg-bubble.is-mine {
+  justify-self: end;
+  background: var(--text);
+  border-color: transparent;
+  color: var(--bg);
+}
+
+.msg-bubble.is-mine time {
+  color: color-mix(in srgb, var(--bg) 60%, transparent);
+}
+
+html[data-theme="light"] .msg-bubble.is-mine {
+  background: #0c0c0e;
+  color: #f6f6f7;
+}
+
+html[data-theme="light"] .msg-bubble.is-mine time {
+  color: rgba(246, 246, 247, 0.6);
+}
+
+.msg-bubble__files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.msg-bubble.is-mine .pf-file {
+  background: color-mix(in srgb, var(--bg) 12%, transparent);
+  border-color: color-mix(in srgb, var(--bg) 22%, transparent);
+  color: inherit;
+}
+
+html[data-theme="light"] .msg-bubble.is-mine .pf-file {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.msg-reply {
+  display: grid;
+  gap: 0.35rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.55rem;
+}
+
+.msg-reply .pf-searchbar {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}

@@ -174,3 +174,63 @@ Every probe row was deleted afterwards (posts 0, post comments 0, probe members 
 labels the chip **positive** / **negative** from `sentiment`, and the hint under the box reads
 “New comments are counted negative (your dislike). Changing your reaction later leaves the
 comments you already wrote as they are.” — `tools/profile-smoke.mjs`: **111/111**.
+
+## The messages round — send a message, then the conversations
+
+`messaging_core` had the three tables; this round adds the functions that use them and the panel
+inside `profile.html → Messages`.
+
+| Migration | Functions |
+| --- | --- |
+| `messaging_rpc_send` | `msg_direct(me, other)`, `msg_send(token, ref, subject, body, attachments)` |
+| `messaging_rpc_read` | `msg_conv(ref)`, `msg_reply(token, conversation, body, attachments)`, `msg_list(token, filter, online_only, limit, offset)`, `msg_thread(token, conversation, limit)`, `msg_unread(token)` |
+| `messaging_pending_state` | widened `conversation_participants_state_check` to `active / pending / suspended / blocked`; filters read “suspended” as “anything not active” |
+| `messaging_people_storage` | `msg_people(token, query, limit)` + `users/messages/…` storage policies |
+
+### The rules the database enforces
+
+- **A recipient is a username, a member ID or a uuid** — `profile_resolve()` accepts all three, so
+  the send form needs nothing else.
+- **One direct conversation per pair.** `msg_direct()` finds a conversation with exactly those two
+  participants; sending again appends to it instead of opening a second thread.
+- **Suspended until accepted.** The first message creates the thread with the sender `active` and
+  the recipient `pending`, unless the recipient has `auto_accept_message` on or a follow exists in
+  either direction. A pending thread shows under the **Suspended** tab; one reply from either side
+  promotes both participants to `active`.
+- **Blocks cascade.** A block with the `message` flag stops the send in both directions, and
+  `msg_people()` hides that member from the recipient suggestions.
+- **Text or at least one file.** `conversation_messages_body_or_file` refuses an empty message;
+  the RPC checks the same thing before inserting and caps the text at 8 000 characters, five
+  attachments, a 160-character subject.
+- **Attachments** upload to `users/messages/…` in the `source` bucket with the `apikey` header only
+  and a filename whitelist (image, PDF, text, Word, ZIP, MP3, MP4, 5 MB each).
+- **Reading marks read.** `msg_thread()` moves the caller's `last_read_at` before returning, so the
+  unread counts from `msg_list` / `msg_unread` drop on open.
+
+### The panel
+
+`profile.html → Messages` has two blocks. **Send a message**: recipient with a datalist from
+`msg_people`, optional subject, body, up to five attachments, Send. **Direct messages**: tabs
+`All / Active / Suspended` with their counts, an “online only” switch (filters on
+`profiles.last_seen_at` within three minutes and `is_online_visible`), the conversation list
+(avatar, online dot, name, preview, unread badge, conversation code) and the thread pane with
+bubbles — sent on the right, white-on-black in the dark theme and inverted in the light one — plus
+the reply box with its own attachments. The **Message** button on a visitor's profile opens the
+same panel with the username already in the To field, and the menu carries the unread count.
+
+### Probe (2026-11-01, two throw-away members)
+
+| Step | Result |
+| --- | --- |
+| `msg_send('@msg.two', subject, body, 1 attachment)` | `CNV-001003`, sender `active`, recipient `pending` |
+| `msg_list` as the sender | 1 conversation, state `active`, unread 0 |
+| `msg_list` as the recipient | 1 conversation, state `pending`, unread 1; `suspended` filter → 1, `active` → 0 |
+| `msg_unread` as the recipient | `{ unread: 1, suspended: 1 }` |
+| `msg_reply('CNV-001003', …)` as the recipient | both participants `active`, message 2 inserted |
+| `msg_thread` as the sender | 2 bubbles in order, `mine` true/false, the PDF attachment intact |
+| `msg_unread` after the reply | `{ unread: 0, suspended: 0 }` |
+| `msg_people('msg.two')` | 1 suggestion (fixed to join `members` on `id`, because `profiles.member_id` is nullable) |
+
+`tools/messages-smoke.mjs` repeats the walk in jsdom with the network stubbed — **36 checks**:
+the panel, the counts, the rows, the bubbles, the attachments, the filters, online-only, a reply,
+a full send (recipient · subject · body · attachments), and the “Message” button prefilling.

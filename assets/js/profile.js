@@ -74,6 +74,21 @@ const state = {
   comments: new Map(),
   openComments: new Set(),
   draft: null,
+  messages: {
+    filter: "all",
+    online: false,
+    list: [],
+    counts: {},
+    unread: 0,
+    selected: null,
+    thread: null,
+    people: [],
+    to: "",
+    subject: "",
+    body: "",
+    files: [],
+    busy: false,
+  },
 };
 
 /* ================================================================== */
@@ -157,6 +172,7 @@ async function load() {
     if (!data.relationship?.is_owner && state.view === "activity") state.view = "updates";
     renderAll();
     document.body.dataset.view = data.relationship?.is_owner ? "owner" : "visitor";
+    if (data.relationship?.is_owner) refreshUnread();
   } catch (error) {
     showState(
       "info",
@@ -343,10 +359,10 @@ function renderMenu() {
     ${item("blocks", "shield", "Blocks")}
     ${item("search", "search", "Search")}
     <p class="pf-menu__title">Account</p>
+    ${item("messages", "mail", "Messages", state.messages?.unread ? `<em>${state.messages.unread} new</em>` : "")}
     ${item("settings", "settings", "Settings")}
     <p class="pf-menu__title">In build</p>
     ${item("manage", "target", "Manage posts")}
-    ${item("messages", "send", "Messages")}
     ${item("publishers", "broadcast", "Publisher list")}
     ${item("participants", "users", "Participant list")}`;
   hydrateIcons(host);
@@ -405,7 +421,12 @@ async function renderPanel() {
     return;
   }
 
-  if (state.view === "manage" || state.view === "messages" || state.view === "publishers" || state.view === "participants") {
+  if (state.view === "messages") {
+    await renderMessagesPanel();
+    return;
+  }
+
+  if (state.view === "manage" || state.view === "publishers" || state.view === "participants") {
     host.innerHTML = renderSoon(state.view);
     hydrateIcons(host);
     return;
@@ -1854,7 +1875,7 @@ document.addEventListener("click", (event) => {
     case "publish-here":
       return openComposer(state.ref || "");
     case "message":
-      return toast({ title: "Messages land with M7", message: "The direct-message tables are the next step after publishing.", tone: "info" });
+      return startMessage(state.data?.profile?.username || "");
     case "link-save":
       return saveLink(target.dataset.platform);
     case "link-remove":
@@ -1863,6 +1884,93 @@ document.addEventListener("click", (event) => {
       return runSearch();
     default:
       return undefined;
+  }
+});
+
+
+/* ------------------------------------------------------------------ */
+/* messages — events                                                   */
+/* ------------------------------------------------------------------ */
+document.addEventListener("click", (event) => {
+  const filter = event.target.closest("[data-msg-filter]");
+  if (filter) {
+    state.messages.filter = filter.dataset.msgFilter;
+    qsa("[data-msg-filter]").forEach((node) => node.classList.toggle("is-active", node === filter));
+    loadMessageList();
+    return;
+  }
+
+  const online = event.target.closest("[data-msg-online]");
+  if (online) {
+    state.messages.online = !state.messages.online;
+    online.classList.toggle("is-active", state.messages.online);
+    online.setAttribute("aria-pressed", String(state.messages.online));
+    loadMessageList();
+    return;
+  }
+
+  const open = event.target.closest("[data-msg-open]");
+  if (open) {
+    openThread(open.dataset.msgOpen);
+    return;
+  }
+
+  if (event.target.closest("[data-msg-send]")) return sendMessage();
+  if (event.target.closest("[data-msg-reply]")) return replyMessage();
+
+  const refresh = event.target.closest("[data-msg-refresh]");
+  if (refresh && state.messages.selected) return openThread(state.messages.selected);
+
+  const removeCompose = event.target.closest("[data-msg-file-remove]");
+  if (removeCompose) {
+    state.messages.files.splice(Number(removeCompose.dataset.msgFileRemove), 1);
+    const host = el("[data-msg-file-list]");
+    if (host) {
+      host.innerHTML = state.messages.files.length
+        ? state.messages.files
+            .map(
+              (file, index) => `<span class="pf-file"><i data-icon="file"></i>
+                <span class="pf-file__name">${esc(file.name)}</span>
+                <span class="pf-file__size">${sizeLabel(file.bytes)}</span>
+                <button class="icon-btn" type="button" data-msg-file-remove="${index}" aria-label="Remove"><i data-icon="close"></i></button></span>`
+            )
+            .join("")
+        : '<span class="pf-row__hint">No attachment.</span>';
+      hydrateIcons(host);
+    }
+    return;
+  }
+
+  const removeReply = event.target.closest("[data-msg-reply-file-remove]");
+  if (removeReply) {
+    state.messages.replyFiles.splice(Number(removeReply.dataset.msgReplyFileRemove), 1);
+    paintReplyFiles();
+  }
+});
+
+document.addEventListener("change", (event) => {
+  const files = event.target.closest("[data-msg-files]");
+  if (files) {
+    addMessageFiles(files.files, "compose");
+    files.value = "";
+    return;
+  }
+  const replyFiles = event.target.closest("[data-msg-reply-input-file]");
+  if (replyFiles) {
+    addMessageFiles(replyFiles.files, "reply");
+    replyFiles.value = "";
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  if (event.target.matches("[data-msg-reply-input]") && !event.shiftKey) {
+    event.preventDefault();
+    replyMessage();
+  }
+  if (event.target.matches("[data-msg-body]") && (event.metaKey || event.ctrlKey)) {
+    event.preventDefault();
+    sendMessage();
   }
 });
 
@@ -2111,4 +2219,506 @@ if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", boot, { once: true });
 } else {
   boot();
+}
+
+/* ================================================================== */
+/* messages — send a message, then the direct conversations            */
+/* ================================================================== */
+const MSG_FILTERS = [
+  ["all", "All"],
+  ["active", "Active"],
+  ["suspended", "Suspended"],
+];
+
+const MSG_ACCEPT = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".webp": "image/webp",
+  ".gif": "image/gif",
+  ".pdf": "application/pdf",
+  ".txt": "text/plain",
+  ".doc": "application/msword",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".zip": "application/zip",
+  ".mp3": "audio/mpeg",
+  ".mp4": "video/mp4",
+};
+
+async function refreshUnread() {
+  if (!state.token) return;
+  try {
+    const res = await rpc("msg_unread", { p_token: state.token });
+    state.messages.unread = Number(res?.unread || 0);
+  } catch {
+    state.messages.unread = 0;
+  }
+  renderMenu();
+}
+
+async function startMessage(ref = "") {
+  if (!state.token) {
+    return toast({ title: "Sign in to send a message", message: "Messages need a member session.", tone: "error" });
+  }
+  state.messages.to = ref;
+  await switchView("messages");
+  const input = el("[data-msg-to]");
+  if (input) {
+    input.focus?.();
+    input.scrollIntoView?.({ block: "center", behavior: "smooth" });
+  }
+}
+
+async function renderMessagesPanel() {
+  const host = el("[data-pf-panel]");
+  if (!state.token) {
+    host.innerHTML = `<div class="pf-block">${emptyBlock("lock", "Sign in first", "Messages belong to a member account.")}</div>`;
+    hydrateIcons(host);
+    return;
+  }
+  host.innerHTML = messagesShell();
+  hydrateIcons(host);
+  await Promise.all([loadMessageList(), loadMessagePeople()]);
+  if (state.messages.selected) await openThread(state.messages.selected);
+}
+
+function messagesShell() {
+  const draft = state.messages;
+  const files = draft.files
+    .map(
+      (file, index) => `
+      <span class="pf-file">
+        <i data-icon="file"></i>
+        <span class="pf-file__name">${esc(file.name)}</span>
+        <span class="pf-file__size">${sizeLabel(file.bytes)}</span>
+        <button class="icon-btn" type="button" data-msg-file-remove="${index}" aria-label="Remove ${esc(file.name)}"><i data-icon="close"></i></button>
+      </span>`
+    )
+    .join("");
+
+  return `
+    <div class="pf-block">
+      <div class="pf-block__head">
+        <span class="pf-block__title"><i data-icon="send"></i> Send a message</span>
+        <span class="pf-block__note">By username or member ID.</span>
+      </div>
+      <div class="pf-grid-2">
+        <div class="pf-row">
+          <span class="pf-row__label">To</span>
+          <input class="input" type="text" data-msg-to list="pf-msg-people" autocomplete="off"
+            placeholder="@username or ID100003" value="${esc(draft.to)}" aria-label="Recipient" />
+          <datalist id="pf-msg-people"></datalist>
+        </div>
+        <div class="pf-row">
+          <span class="pf-row__label">Subject <span class="pf-row__hint">optional</span></span>
+          <input class="input" type="text" maxlength="160" data-msg-subject value="${esc(draft.subject)}" aria-label="Subject" />
+        </div>
+      </div>
+      <div class="pf-row">
+        <span class="pf-row__label">Message</span>
+        <textarea class="textarea" rows="4" maxlength="8000" data-msg-body placeholder="Write your message…" aria-label="Message">${esc(draft.body)}</textarea>
+      </div>
+      <div class="pf-row">
+        <span class="pf-row__label">Attachments <span class="pf-row__hint">5 files, 5 MB each</span></span>
+        <div class="pf-attach">
+          <label class="btn btn--ghost btn--sm" style="cursor: pointer">
+            <i data-icon="upload"></i> Add a file
+            <input type="file" hidden multiple data-msg-files />
+          </label>
+          <div class="pf-attach__list" data-msg-file-list>${files || '<span class="pf-row__hint">No attachment.</span>'}</div>
+        </div>
+      </div>
+      <div class="pf-msg-actions">
+        <span class="pf-block__note" data-msg-note></span>
+        <button class="btn btn--primary" type="button" data-msg-send><i data-icon="send"></i> Send</button>
+      </div>
+    </div>
+
+    <div class="pf-block">
+      <div class="pf-block__head">
+        <span class="pf-block__title"><i data-icon="mail"></i> Direct messages</span>
+        <div class="msg-tools">
+          ${MSG_FILTERS.map(
+            ([key, label]) =>
+              `<button class="pf-choice ${state.messages.filter === key ? "is-active" : ""}" type="button" data-msg-filter="${key}">
+                 ${label}<b data-msg-count="${key}">0</b>
+               </button>`
+          ).join("")}
+          <button class="pf-choice ${state.messages.online ? "is-active" : ""}" type="button" data-msg-online aria-pressed="${state.messages.online}">
+            <i data-icon="zap"></i> Online only
+          </button>
+        </div>
+      </div>
+      <div class="msg-split">
+        <div class="msg-list" data-msg-list aria-live="polite"><div class="pf-block__note">Loading conversations…</div></div>
+        <div class="msg-pane" data-msg-pane></div>
+      </div>
+    </div>`;
+}
+
+async function loadMessageList() {
+  const list = el("[data-msg-list]");
+  if (list) list.innerHTML = `<div class="pf-block__note">Loading conversations…</div>`;
+  try {
+    const res = await rpc("msg_list", {
+      p_token: state.token,
+      p_filter: state.messages.filter,
+      p_online_only: state.messages.online,
+      p_limit: 30,
+      p_offset: 0,
+    });
+    state.messages.list = res?.conversations || [];
+    state.messages.counts = res?.counts || {};
+    state.messages.unread = Number(res?.counts?.unread || 0);
+  } catch {
+    state.messages.list = [];
+  }
+  paintMessageList();
+  paintMessageCounts();
+}
+
+function paintMessageCounts() {
+  const counts = state.messages.counts || {};
+  qsa("[data-msg-count]").forEach((node) => {
+    const key = node.dataset.msgCount;
+    node.textContent = String(Number(counts[key] || 0));
+  });
+}
+
+function paintMessageList() {
+  const list = el("[data-msg-list]");
+  if (!list) return;
+  const rows = state.messages.list;
+  if (!rows.length) {
+    list.innerHTML = `<div class="pf-block__note">${
+      state.messages.filter === "suspended"
+        ? "No suspended conversation — everyone you write to accepts you."
+        : state.messages.online
+          ? "Nobody online right now."
+          : "No conversation yet. Send the first message above."
+    }</div>`;
+    return;
+  }
+  list.innerHTML = rows
+    .map(
+      (row) => `
+    <button class="msg-row ${state.messages.selected === row.id ? "is-active" : ""}" type="button" data-msg-open="${esc(row.id)}">
+      <span class="pf-person__avatar">
+        <img src="${esc(row.other?.avatar || avatarPlaceholder(row.other?.name || "?"))}" alt="" width="38" height="38" loading="lazy" />
+        <i class="msg-row__dot ${row.other?.online ? "is-on" : ""}" aria-hidden="true"></i>
+      </span>
+      <span class="msg-row__body">
+        <span class="msg-row__top">
+          <b>${esc(row.other?.name || "Member")}</b>
+          <time>${esc(timeAgo(row.last_message_at) || "")}</time>
+        </span>
+        <span class="msg-row__bottom">
+          <span class="msg-row__preview">${esc(row.preview || "…")}</span>
+          ${Number(row.unread) > 0 ? `<span class="msg-row__unread">${num(row.unread)}</span>` : ""}
+        </span>
+        <span class="msg-row__meta">
+          ${esc(row.other?.username || "")}
+          ${row.state !== "active" ? '<span class="badge badge--outline">suspended</span>' : ""}
+          ${row.subject ? `<span class="badge">${esc(row.subject)}</span>` : ""}
+        </span>
+      </span>
+    </button>`
+    )
+    .join("");
+  hydrateIcons(list);
+}
+
+async function openThread(id) {
+  state.messages.selected = id;
+  const pane = el("[data-msg-pane]");
+  if (pane) pane.innerHTML = `<div class="pf-block__note">Loading the conversation…</div>`;
+  try {
+    const res = await rpc("msg_thread", { p_token: state.token, p_conversation: id, p_limit: 50 });
+    if (!res || res.ok === false) {
+      state.messages.thread = null;
+      if (pane) pane.innerHTML = `<div class="pf-block__note">${esc(msgError(res?.error))}</div>`;
+      return;
+    }
+    state.messages.thread = res;
+  } catch {
+    state.messages.thread = null;
+  }
+  paintMessageList();
+  paintThread();
+  await refreshUnread();
+}
+
+function paintThread() {
+  const pane = el("[data-msg-pane]");
+  if (!pane) return;
+  const thread = state.messages.thread;
+  if (!thread) {
+    pane.innerHTML = `<div class="msg-pane__empty">
+        <i data-icon="mail"></i>
+        <p>Pick a conversation on the left, or send the first message above.</p>
+      </div>`;
+    hydrateIcons(pane);
+    return;
+  }
+  const other = thread.conversation?.other || {};
+  const messages = thread.messages || [];
+
+  pane.innerHTML = `
+    <div class="msg-pane__head">
+      <span class="pf-person__avatar">
+        <img src="${esc(other.avatar || avatarPlaceholder(other.name || "?"))}" alt="" width="36" height="36" loading="lazy" />
+      </span>
+      <span class="msg-pane__who">
+        <a href="${esc(profileUrl(other.username))}"><b>${esc(other.name || "Member")}</b></a>
+        <span>${esc(other.username || "")} · ${esc(thread.conversation?.code || "")}
+          ${other.online ? '<span class="badge badge--outline">online</span>' : ""}
+          ${thread.conversation?.state !== "active" ? '<span class="badge">suspended</span>' : ""}
+        </span>
+      </span>
+      <button class="icon-btn" type="button" data-msg-refresh aria-label="Refresh"><i data-icon="refresh"></i></button>
+    </div>
+
+    <div class="msg-thread" data-msg-thread>
+      ${messages
+        .map(
+          (message) => `
+        <div class="msg-bubble ${message.mine ? "is-mine" : ""}">
+          ${message.body ? `<p>${esc(message.body)}</p>` : ""}
+          ${
+            (message.attachments || []).length
+              ? `<div class="msg-bubble__files">${message.attachments
+                  .map(
+                    (file) => `<a class="pf-file" href="${esc(file.url || storageUrl(file.path || ""))}" target="_blank" rel="noopener noreferrer">
+                      <i data-icon="file"></i>
+                      <span class="pf-file__name">${esc(file.name || "file")}</span>
+                      <span class="pf-file__size">${sizeLabel(file.bytes)}</span>
+                    </a>`
+                  )
+                  .join("")}</div>`
+              : ""
+          }
+          <time>${esc(timeAgo(message.created_at) || "")}</time>
+        </div>`
+        )
+        .join("")}
+    </div>
+
+    <div class="msg-reply">
+      <div class="pf-attach__list" data-msg-reply-files></div>
+      <div class="pf-searchbar">
+        <label class="icon-btn" aria-label="Attach a file" style="cursor: pointer">
+          <i data-icon="upload"></i>
+          <input type="file" hidden multiple data-msg-reply-input-file />
+        </label>
+        <input class="input" type="text" maxlength="8000" placeholder="Write a direct message…" data-msg-reply-input aria-label="Reply" />
+        <button class="btn btn--primary" type="button" data-msg-reply><i data-icon="send"></i> Send</button>
+      </div>
+    </div>`;
+  hydrateIcons(pane);
+  const scroller = pane.querySelector("[data-msg-thread]");
+  if (scroller) scroller.scrollTop = scroller.scrollHeight;
+  paintReplyFiles();
+}
+
+function paintReplyFiles() {
+  const host = el("[data-msg-reply-files]");
+  if (!host) return;
+  const files = state.messages.replyFiles || [];
+  host.innerHTML = files
+    .map(
+      (file, index) => `
+      <span class="pf-file">
+        <i data-icon="file"></i>
+        <span class="pf-file__name">${esc(file.name)}</span>
+        <span class="pf-file__size">${sizeLabel(file.bytes)}</span>
+        <button class="icon-btn" type="button" data-msg-reply-file-remove="${index}" aria-label="Remove"><i data-icon="close"></i></button>
+      </span>`
+    )
+    .join("");
+  hydrateIcons(host);
+}
+
+function msgError(error) {
+  return (
+    {
+      session: "Sign in to read your messages.",
+      not_found: "That member or conversation does not exist.",
+      self: "You cannot send a message to yourself.",
+      blocked: "A block is in place between you.",
+      empty: "Write something or attach a file.",
+      long: "The message is too long.",
+      subject_long: "The subject is too long (160 characters).",
+      attachments: "Five files at most.",
+      forbidden: "This conversation is not yours.",
+    }[error] || "Please try again."
+  );
+}
+
+function sizeLabel(bytes) {
+  const size = Number(bytes) || 0;
+  if (!size) return "";
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function readDraftFields() {
+  const draft = state.messages;
+  draft.to = el("[data-msg-to]")?.value?.trim() || draft.to;
+  draft.subject = el("[data-msg-subject]")?.value || "";
+  draft.body = el("[data-msg-body]")?.value || "";
+  return draft;
+}
+
+async function loadMessagePeople() {
+  const list = el("#pf-msg-people");
+  if (!list) return;
+  try {
+    const res = await rpc("msg_people", { p_token: state.token, p_query: "", p_limit: 20 });
+    state.messages.people = res?.people || [];
+  } catch {
+    state.messages.people = [];
+  }
+  list.innerHTML = state.messages.people
+    .map(
+      (person) =>
+        `<option value="${esc(person.username)}">${esc(person.name)}${person.member_id ? ` · ${esc(person.member_id)}` : ""}</option>`
+    )
+    .join("");
+}
+
+async function uploadMessageFile(file) {
+  const raw = file.name || "file";
+  const ext = (raw.split(".").pop() || "").toLowerCase();
+  if (!MSG_ACCEPT[`.${ext}`]) {
+    throw new Error("That file type is not allowed (image, PDF, text, Word, ZIP, MP3 or MP4).");
+  }
+  if (file.size > 5 * 1024 * 1024) throw new Error("5 MB at most per file.");
+  const safe = raw.replace(/[^A-Za-z0-9._-]/g, "_").slice(-40);
+  const path = `users/messages/${Date.now()}_${Math.random().toString(36).slice(2, 7)}_${safe}`;
+  const res = await fetch(`${SUPABASE.url}/storage/v1/object/source/${path}`, {
+    method: "POST",
+    headers: {
+      apikey: SUPABASE.publishableKey,
+      "Content-Type": file.type || MSG_ACCEPT[`.${ext}`],
+      "x-upsert": "true",
+    },
+    body: file,
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(text.slice(0, 120) || `Upload failed (HTTP ${res.status}).`);
+  }
+  return { name: raw, path, mime: file.type || MSG_ACCEPT[`.${ext}`], bytes: file.size, url: storageUrl(path) };
+}
+
+async function addMessageFiles(files, target) {
+  const bucket = target === "reply" ? (state.messages.replyFiles = state.messages.replyFiles || []) : state.messages.files;
+  const note = el("[data-msg-note]");
+  for (const file of Array.from(files || [])) {
+    if (bucket.length >= 5) {
+      if (note) note.textContent = "Five files at most.";
+      break;
+    }
+    try {
+      bucket.push(await uploadMessageFile(file));
+    } catch (error) {
+      if (note) note.textContent = error?.message || "Upload failed.";
+      toast({ title: "Upload failed", message: error?.message || "Please try again.", tone: "error" });
+    }
+  }
+  if (target === "reply") paintReplyFiles();
+  else {
+    const host = el("[data-msg-file-list]");
+    if (host) {
+      host.innerHTML = bucket.length
+        ? bucket
+            .map(
+              (file, index) => `
+            <span class="pf-file">
+              <i data-icon="file"></i>
+              <span class="pf-file__name">${esc(file.name)}</span>
+              <span class="pf-file__size">${sizeLabel(file.bytes)}</span>
+              <button class="icon-btn" type="button" data-msg-file-remove="${index}" aria-label="Remove"><i data-icon="close"></i></button>
+            </span>`
+            )
+            .join("")
+        : '<span class="pf-row__hint">No attachment.</span>';
+      hydrateIcons(host);
+    }
+  }
+}
+
+async function sendMessage() {
+  const draft = readDraftFields();
+  if (!draft.to) {
+    return toast({ title: "Who is it for?", message: "A username or a member ID is required.", tone: "error" });
+  }
+  if (!draft.body.trim() && !draft.files.length) {
+    return toast({ title: "Nothing to send", message: "Write a message or attach a file.", tone: "error" });
+  }
+  const button = el("[data-msg-send]");
+  if (button) button.disabled = true;
+  try {
+    const res = await rpc("msg_send", {
+      p_token: state.token,
+      p_ref: draft.to,
+      p_subject: draft.subject,
+      p_body: draft.body,
+      p_attachments: draft.files.map(({ name, path, mime, bytes, url }) => ({ name, path, mime, bytes, url })),
+    });
+    if (!res || res.ok === false) {
+      return toast({ title: "Not sent", message: msgError(res?.error), tone: "error" });
+    }
+    state.messages.body = "";
+    state.messages.subject = "";
+    state.messages.files = [];
+    state.messages.selected = res.conversation?.id || null;
+    const bodyInput = el("[data-msg-body]");
+    if (bodyInput) bodyInput.value = "";
+    const subjectInput = el("[data-msg-subject]");
+    if (subjectInput) subjectInput.value = "";
+    const fileList = el("[data-msg-file-list]");
+    if (fileList) fileList.innerHTML = '<span class="pf-row__hint">No attachment.</span>';
+    toast({
+      title: res.created ? "Message sent" : "Message added",
+      message: res.created ? "It is in their inbox — suspended until they answer unless they accept you." : "The conversation continues.",
+      tone: "success",
+    });
+    await loadMessageList();
+    if (state.messages.selected) await openThread(state.messages.selected);
+  } catch (error) {
+    toast({ title: "Not sent", message: error?.message || "Network error.", tone: "error" });
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+async function replyMessage() {
+  const input = el("[data-msg-reply-input]");
+  const body = input?.value || "";
+  const files = state.messages.replyFiles || [];
+  if (!body.trim() && !files.length) return;
+  const id = state.messages.selected;
+  if (!id) return;
+  const button = el("[data-msg-reply]");
+  if (button) button.disabled = true;
+  try {
+    const res = await rpc("msg_reply", {
+      p_token: state.token,
+      p_conversation: id,
+      p_body: body,
+      p_attachments: files.map(({ name, path, mime, bytes, url }) => ({ name, path, mime, bytes, url })),
+    });
+    if (!res || res.ok === false) {
+      return toast({ title: "Not sent", message: msgError(res?.error), tone: "error" });
+    }
+    state.messages.replyFiles = [];
+    await openThread(id);
+    await loadMessageList();
+  } catch (error) {
+    toast({ title: "Not sent", message: error?.message || "Network error.", tone: "error" });
+  } finally {
+    if (button) button.disabled = false;
+  }
 }

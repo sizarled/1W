@@ -846,6 +846,16 @@ member with no points yet, and `LVMax` is the open level. Everything lives in
 the profile flag and the dashboard level page read from it. Thresholds, quotas and rights are
 written down in [`docs/levels.md`](docs/levels.md).
 
+### Messages
+
+`profile.html → Messages` sends a message by **username, member ID or uuid** and keeps the direct
+conversations: `msg_send`, `msg_reply`, `msg_list` (`All / Active / Suspended`, online-only),
+`msg_thread`, `msg_unread` and `msg_people` all live in the database. A first message lands
+suspended until the recipient answers or accepts — or immediately when they follow the sender or
+turned `auto_accept_message` on. Attachments go to `users/messages/…` with the `apikey` header only,
+and a block with the message flag stops both directions. The panel is described in
+[`docs/profile-tables-applied.md`](docs/profile-tables-applied.md).
+
 ## Sounds
 
 Played from the public `source` bucket of the Supabase project:
