@@ -4,10 +4,11 @@
  * Two states, one preference:
  *
  *   pinned    the panel stays out, the page keeps room for it;
- *   unpinned  the panel is gone and the page uses the whole width — moving the
- *             pointer to the left edge (or onto the edge tab) slides it back in
- *             *over* the content, and it leaves again as soon as the pointer
- *             moves away from it.
+ *   unpinned  the panel is gone and the page uses the whole width — the pointer
+ *             must touch the very last pixels of the left edge and rest there
+ *             for a moment (or press the edge tab) before the panel slides in
+ *             *over* the content; it leaves again as soon as the pointer moves
+ *             away from it.
  *
  * The preference lives in `1w.sidebar.pin`, so pinning the menu on one page
  * pins it on the next one. Below 1024px the sidebar stays a drawer driven by
@@ -82,7 +83,9 @@ const PIN_TEXT = { on: "Pinned", off: "On hover" };
  * @param {(open:boolean)=>void} [opts.onOpen]
  * @param {(open:boolean)=>void} [opts.onClose]
  * @param {(pinned:boolean)=>void} [opts.onPin]
- * @param {number} [opts.edgePx]         how close to the edge counts as "at the edge"
+ * @param {number} [opts.edgePx]         how close to the edge counts as "at the edge" (2px)
+ * @param {number} [opts.edgeDwell]      how long the pointer must stay there (180ms)
+ * @param {number} [opts.hideDelay]      how long it lingers after the pointer leaves (320ms)
  */
 export function createEdgeRail({
   panel,
@@ -97,11 +100,18 @@ export function createEdgeRail({
   onClose,
   onPin,
   defaultPinned = false,
-  edgePx = 34,
+  // only the last couple of pixels of the screen count as "the edge": a menu
+  // that jumps out 30px away covers the content the pointer was aiming at
+  edgePx = 2,
+  // and the pointer has to stay there for a moment, so crossing the edge on the
+  // way to something else never pops the menu open
+  edgeDwell = 180,
+  hideDelay = 320,
 } = {}) {
   let pinned = storedPin(defaultPinned);
   let open = false;
   let hideTimer = 0;
+  let edgeTimer = 0;
 
   const stateRoot = root || panel;
 
@@ -118,32 +128,62 @@ export function createEdgeRail({
 
   const setOpen = (next) => {
     clearTimeout(hideTimer);
+    clearTimeout(edgeTimer);
+    edgeTimer = 0;
     if (next === open) return;
     paint(next);
   };
 
-  /* The panel is anchored to the left edge, so its own width is a better
-     "am I on the menu?" test than the animated rect: mid-slide the rect is
-     still off-screen, and a pointer that has already moved to where the menu
-     is appearing must not close it. */
+  /* "Am I on the menu?" — only asked while the menu is actually out. Asking it
+     while the panel is closed turned the whole left band of the page into the
+     trigger (the panel still has a width while it hides off-screen), which is
+     exactly the annoyance the edge is meant to avoid.
+     Once it is open, its own width beats the animated rect: mid-slide the rect
+     is still off-screen, and a pointer that already moved to where the menu is
+     appearing must not close it. */
   const nearPanel = (event) => {
-    if (!panel) return false;
+    if (!panel || !open) return false;
     if (panel.contains(event.target)) return true;
+    const rect = panel.getBoundingClientRect();
     const width = panel.offsetWidth || 0;
     if (!width) return false;
-    return event.clientX <= width + 12 && event.clientY >= panel.getBoundingClientRect().top - 4;
+    return (
+      event.clientX <= width + 12 &&
+      event.clientY >= rect.top - 4 &&
+      event.clientY <= rect.bottom + 4
+    );
   };
 
   const onMove = (event) => {
     if (pinned || !isDesktop()) return;
-    if (event.clientX <= edgePx || nearPanel(event)) {
+
+    // over the open menu (or just beside it): keep it out
+    if (nearPanel(event)) {
       clearTimeout(hideTimer);
+      clearTimeout(edgeTimer);
+      edgeTimer = 0;
       if (!open) setOpen(true);
       return;
     }
+
+    // touching the very edge: wait for the pointer to settle before revealing
+    if (event.clientX <= edgePx) {
+      clearTimeout(hideTimer);
+      if (!open && !edgeTimer) {
+        edgeTimer = setTimeout(() => {
+          edgeTimer = 0;
+          setOpen(true);
+        }, edgeDwell);
+      }
+      return;
+    }
+
+    // anywhere else: the promise is cancelled, and an open menu goes away
+    clearTimeout(edgeTimer);
+    edgeTimer = 0;
     if (!open) return;
     clearTimeout(hideTimer);
-    hideTimer = setTimeout(() => setOpen(false), 320);
+    hideTimer = setTimeout(() => setOpen(false), hideDelay);
   };
 
   const onFocusIn = (event) => {

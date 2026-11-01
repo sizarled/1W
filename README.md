@@ -706,13 +706,21 @@ the edge reveal are shared through `assets/js/edge.js`.
 Every other page mounts the header without the button and leaves the sidebar container empty — no
 rail to open and no `sb-open` class to inherit from a stored preference.
 
+**The edge is the edge.** `edgePx = 2` and `edgeDwell = 180` in `createEdgeRail()`: a menu that
+appears 30px away covers the thing the pointer was heading for, and a menu that appears the
+instant a mouse crosses the border pops open on the way to the scrollbar or a link. So the trigger
+is the last couple of pixels *and* a short rest there — cross the edge quickly and it is
+cancelled — and "am I still on the menu?" (`nearPanel`) is only asked while the menu is actually
+out. Asking it while the panel was closed made the whole left band of the page a trigger, because
+a panel that hides off-screen still reports its width.
+
 The rail has two states, and the **pin** in the menu moves between them (bottom of the site panel,
 top corner of the profile card, next to the fold button on the dashboard):
 
 | State | What happens | Class |
 | --- | --- | --- |
 | **Pinned** | the panel stays out and the page keeps room for it | `sb-pinned` · `pf-side-pinned` · `data-pin="on"` |
-| **On the edge** | the panel is gone and the page uses the whole width; moving the pointer within 34px of the left screen edge (or onto the thin tab on the edge) slides it in **over** the content, and it slides away 320ms after the pointer leaves it | `sb-rail` · `pf-side-rail` · `data-pin="off"` |
+| **On the edge** | the panel is gone and the page uses the whole width; the pointer has to **touch the last two pixels** of the left screen edge and rest there for 180ms — or be placed on the thin tab on the edge — before the panel slides in **over** the content, and it slides away 320ms after the pointer leaves it | `sb-rail` · `pf-side-rail` · `data-pin="off"` |
 
 The preference is `1w.sidebar.pin` (`"1"` / `"0"`, stamped with `1w.sidebar.pin.v` — a value from an
 older build is ignored, and the legacy `1w.sidebar` flag is never read: it was the homepage's
@@ -729,8 +737,9 @@ The rail slides in *under* the header (`top: var(--header-h)`, `z-index: 120` ag
 translate — so the brand, the section rail and the wallet stay exactly where they are; pinned,
 `.site-main` and `.site-footer` step aside by `--sidebar-w`, and floating they do not move at all.
 `tools/shell-smoke.mjs` asserts which page carries which menu, `tools/sidebar-smoke.mjs` asserts the
-edge, the pin, the Escape key, the mobile drawer, the profile menu and the dashboard menu, and the
-stylesheets are checked to contain no `body.sb-open .site-header__bar` rule.
+edge (18px away does nothing, the very edge opens it, a quick touch does not), the pin, the Escape
+key, the mobile drawer, the profile menu and the dashboard menu, and the stylesheets are checked to
+contain no `body.sb-open .site-header__bar` rule.
 
 ### Sidebar
 
@@ -896,7 +905,7 @@ returns the caller's cases.
 
 ```bash
 node tools/dashboard-smoke.mjs   # the five gates, rail, popover, codes, sections, Unlock now
-node tools/sidebar-smoke.mjs     # 67 checks: the edge, the pin, Escape, the mobile drawer, the dashboard menu
+node tools/sidebar-smoke.mjs     # 91 checks: the edge, the pin, Escape, the mobile drawer, the dashboard menu
 node tools/court-smoke.mjs       # 115 checks: the four steps, uploads, both doors, the court room
 node tools/iptv-smoke.mjs        # 43 checks: the playlists, the groups, the page, the deep links
 node tools/activated-smoke.mjs   # 35 checks: hidden panels, image link, ad pause, code return

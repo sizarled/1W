@@ -159,11 +159,17 @@ async function boot(file, { desktop = true, stored = {}, dashboard = false } = {
   const click = (el) => el && el.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
   const move = (clientX, clientY = 400) =>
     window.document.dispatchEvent(new window.MouseEvent("mousemove", { bubbles: true, clientX, clientY }));
+  /* the rail only reveals once the pointer has settled on the edge, so the
+     tests rest there for longer than the 180ms dwell */
+  const touchEdge = async (clientX = 1) => {
+    move(clientX);
+    await new Promise((resolve) => setTimeout(resolve, 240));
+  };
   const key = (k) => window.document.dispatchEvent(new window.KeyboardEvent("keydown", { key: k, bubbles: true }));
   const wait = (ms = 120) => new Promise((resolve) => setTimeout(resolve, ms));
   const stored_ = (k) => window.localStorage.getItem(k);
 
-  return { window, document: window.document, body: window.document.body, qs, qsa, click, move, key, wait, stored: stored_, errors };
+  return { window, document: window.document, body: window.document.body, qs, qsa, click, move, touchEdge, key, wait, stored: stored_, errors };
 }
 
 /* ------------------------------------------------------------------ */
@@ -183,9 +189,13 @@ async function boot(file, { desktop = true, stored = {}, dashboard = false } = {
     p.window.getComputedStyle(p.qs(".sidebar")).visibility
   );
 
-  p.move(2);
-  await p.wait(40);
-  expect("watch: the pointer at the edge slides it in", p.body.classList.contains("sb-open"));
+  /* a pointer a few pixels in is NOT the edge any more */
+  p.move(18);
+  await p.wait(240);
+  expect("watch: 18px from the edge leaves the menu away", !p.body.classList.contains("sb-open"));
+
+  await p.touchEdge(1);
+  expect("watch: the pointer on the very edge slides it in", p.body.classList.contains("sb-open"));
   expect("watch: the panel is marked open", p.qs(".sidebar")?.classList.contains("is-open") === true);
   expect("watch: it is announced again", p.qs(".sidebar")?.getAttribute("aria-hidden") === "false");
   expect(
@@ -203,9 +213,12 @@ async function boot(file, { desktop = true, stored = {}, dashboard = false } = {
   await p.wait(500);
   expect("watch: leaving it slides it out", !p.body.classList.contains("sb-open"));
 
-  p.move(20);
-  await p.wait(40);
-  expect("watch: the edge zone is a band, not a line", p.body.classList.contains("sb-open"));
+  /* crossing the edge on the way to somewhere else must not open it */
+  p.move(1);
+  await p.wait(60);
+  p.move(300);
+  await p.wait(260);
+  expect("watch: a quick touch of the edge does not open it", !p.body.classList.contains("sb-open"));
 
   p.move(400);
   await p.wait(500);
@@ -278,8 +291,7 @@ async function boot(file, { desktop = true, stored = {}, dashboard = false } = {
   expect("profile: unpinned it closes", !profile.body.classList.contains("pf-side-open"));
   expect("profile: the choice is remembered", profile.stored("1w.sidebar.pin") === '"0"');
 
-  profile.move(3);
-  await profile.wait(40);
+  await profile.touchEdge(1);
   expect("profile: the edge brings the menu in", profile.body.classList.contains("pf-side-open"));
 
   profile.move(900);
@@ -320,8 +332,7 @@ async function boot(file, { desktop = true, stored = {}, dashboard = false } = {
   const unpinnedHome = await boot("index.html", { stored: { "1w.sidebar.pin": "0" } });
   expect("home: unpinned it waits on the edge", unpinnedHome.body.classList.contains("sb-rail"));
   expect("home: unpinned it starts closed", !unpinnedHome.body.classList.contains("sb-open"));
-  unpinnedHome.move(3);
-  await unpinnedHome.wait(40);
+  await unpinnedHome.touchEdge(1);
   expect("home: the edge still brings it in", unpinnedHome.body.classList.contains("sb-open"));
   expect("home: no page errors", unpinnedHome.errors.length === 0, unpinnedHome.errors.join(" | "));
 }
@@ -366,8 +377,7 @@ async function boot(file, { desktop = true, stored = {}, dashboard = false } = {
   expect("dashboard: unpinned it is away", dsh?.dataset.sideReveal === "off");
   expect("dashboard: the choice is shared", p.stored("1w.sidebar.pin") === '"0"');
 
-  p.move(2);
-  await p.wait(40);
+  await p.touchEdge(1);
   expect("dashboard: the edge reveals the menu", dsh?.dataset.sideReveal === "on");
 
   p.move(900);
