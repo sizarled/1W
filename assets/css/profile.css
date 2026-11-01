@@ -116,11 +116,21 @@
 }
 
 .pf-stats dt {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: center;
+  gap: 0.28rem;
   font-size: 0.63rem;
   font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--muted);
+}
+
+.pf-stats dt .ico {
+  width: 11px;
+  height: 11px;
 }
 
 .pf-stats dd {
@@ -417,6 +427,9 @@
 }
 
 .pf-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
   flex: none;
   height: 38px;
   padding: 0 1rem;
@@ -428,6 +441,12 @@
   font-weight: 600;
   cursor: pointer;
   transition: background 0.18s var(--ease), color 0.18s var(--ease);
+}
+
+.pf-tab .ico {
+  width: 14px;
+  height: 14px;
+  opacity: 0.85;
 }
 
 .pf-tab:hover {
@@ -465,10 +484,19 @@
 }
 
 .pf-block__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
   font-size: 0.98rem;
   font-weight: 650;
   letter-spacing: -0.01em;
   color: var(--text);
+}
+
+.pf-block__title .ico {
+  width: 15px;
+  height: 15px;
+  color: var(--muted);
 }
 
 .pf-block__note {
@@ -685,7 +713,17 @@
   border-bottom: 0;
 }
 
+.pf-link-row__name .brand-svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--text-2);
+}
+
 .pf-link-row__name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
   font-size: 0.82rem;
   font-weight: 600;
   color: var(--text);

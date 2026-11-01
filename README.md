@@ -777,6 +777,12 @@ Wired against the database in this round:
 Posts are still an empty state: the tabs, the counters and the member modal land
 with **M2 `posts_core`**.
 
+Every icon on the page is inline SVG, never an emoji or a font glyph: the interface
+glyphs come from `assets/js/icons.js` through `<i data-icon="…">`, and the nine
+platforms in *Related links* use the official brand paths of
+`assets/js/brands.js` (simple-icons, CC0). `hydrateIcons()` runs after every
+re-render, so switching tabs never leaves an empty `<i>` behind.
+
 ```
 node tools/profile-smoke.mjs      # 45 checks, owner + visitor + blocked
 ```

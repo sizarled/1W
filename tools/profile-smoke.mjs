@@ -264,6 +264,10 @@ function expect(name, condition, detail = "") {
   expect("owner: activity tab present", p.qsa(".pf-tab").some((tab) => tab.dataset.pfView === "activity"));
   expect("owner: menu rendered", p.qsa("[data-pf-menu] [data-pf-view]").length >= 8, String(p.qsa("[data-pf-menu] [data-pf-view]").length));
   expect("owner: updates tab is first", p.text(".pf-tab.is-active") === "Updates", p.text(".pf-tab.is-active"));
+  expect("owner: every icon hydrated to svg", p.qsa("[data-icon]").length === 0, `${p.qsa("[data-icon]").length} left`);
+  expect("owner: svg icons drawn", p.qsa("svg.ico").length >= 20, String(p.qsa("svg.ico").length));
+  expect("owner: stats carry icons", p.qsa(".pf-stats dt svg").length === 3, String(p.qsa(".pf-stats dt svg").length));
+  expect("owner: tabs carry icons", p.qsa(".pf-tab svg").length === 3, String(p.qsa(".pf-tab svg").length));
   expect("owner: empty feed explains M2", /No posts yet/.test(p.text("[data-pf-panel]")), p.text("[data-pf-panel]").slice(0, 80));
 
   // settings panel
@@ -273,6 +277,9 @@ function expect(name, condition, detail = "") {
   expect("owner: eleven switches", p.qsa(".pf-switch").length === 11, String(p.qsa(".pf-switch").length));
   expect("owner: country switch on", p.qs('[data-pf-toggle="show_country"]')?.getAttribute("aria-checked") === "true");
   expect("owner: links panel rendered", p.qsa("[data-pf-link-url]").length === 9, String(p.qsa("[data-pf-link-url]").length));
+  expect("owner: nine brand svgs", p.qsa(".pf-link-row__name svg.brand-svg").length === 9, String(p.qsa(".pf-link-row__name svg.brand-svg").length));
+  expect("owner: no icon left after a tab switch", p.qsa("[data-icon]").length === 0, `${p.qsa("[data-icon]").length} left`);
+  expect("owner: menu icons survive the switch", p.qsa("[data-pf-menu] svg.ico").length >= 8, String(p.qsa("[data-pf-menu] svg.ico").length));
 
   p.click(p.qs('[data-pf-toggle="show_country"]'));
   await p.wait(200);
@@ -326,6 +333,8 @@ function expect(name, condition, detail = "") {
   expect("visitor: connection hidden", p.qs("[data-pf-conn]")?.hidden === true);
   expect("visitor: follow button", /Follow/.test(p.text('[data-pf-act="follow"]')), p.text('[data-pf-act="follow"]'));
   expect("visitor: no owner menu", p.qsa("[data-pf-menu] [data-pf-view]").length === 0);
+  expect("visitor: icons hydrated", p.qsa("[data-icon]").length === 0, `${p.qsa("[data-icon]").length} left`);
+  expect("visitor: svg icons drawn", p.qsa("svg.ico").length >= 10, String(p.qsa("svg.ico").length));
 
   p.click(p.qs('[data-pf-act="follow"]'));
   await p.wait(260);

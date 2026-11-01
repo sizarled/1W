@@ -23,6 +23,7 @@
 import { rpc, rest } from "./data.js";
 import { qs, esc, num, formatDate, avatarPlaceholder, debounce } from "./utils.js";
 import { hydrateIcons } from "./icons.js";
+import { brand } from "./brands.js";
 import { toast } from "./ui.js";
 import { sessionToken, getMember } from "./session.js";
 
@@ -253,7 +254,7 @@ function renderHead() {
     actions.innerHTML = `
       <button class="btn btn--primary btn--sm" type="button" data-pf-act="publish"><i data-icon="plus"></i> Publish</button>
       <button class="btn btn--ghost btn--sm" type="button" data-pf-act="settings"><i data-icon="settings"></i> Edit profile</button>
-      <button class="btn btn--ghost btn--sm" type="button" data-pf-act="share"><i data-icon="share"></i> Copy link</button>`;
+      <button class="btn btn--ghost btn--sm" type="button" data-pf-act="share"><i data-icon="link"></i> Copy link</button>`;
   } else {
     actions.innerHTML = `
       <button class="btn btn--ghost btn--sm" type="button" data-pf-act="message" ${rel.can_message ? "" : "disabled"}>
@@ -322,23 +323,27 @@ function renderMenu() {
     ${item("messages", "send", "Messages")}
     ${item("publishers", "broadcast", "Publisher list")}
     ${item("participants", "users", "Participant list")}`;
+  hydrateIcons(host);
 }
 
 function renderTabs() {
   const host = el("[data-pf-tabs]");
   const owner = state.data.relationship?.is_owner;
   const tabs = [
-    ["updates", "Updates"],
-    ...(owner ? [["activity", "Activity"]] : []),
-    ["suggestions", "Suggestions"],
+    ["updates", "Updates", "article"],
+    ...(owner ? [["activity", "Activity", "chart"]] : []),
+    ["suggestions", "Suggestions", "sparkle"],
   ];
   host.innerHTML = tabs
     .map(
-      ([key, label]) => `
+      ([key, label, iconName]) => `
       <button class="pf-tab ${state.view === key ? "is-active" : ""}" type="button" role="tab"
-        aria-selected="${state.view === key}" data-pf-view="${key}">${esc(label)}</button>`
+        aria-selected="${state.view === key}" data-pf-view="${key}">
+        <i data-icon="${iconName}"></i>${esc(label)}
+      </button>`
     )
     .join("");
+  hydrateIcons(host);
 }
 
 async function renderPanel() {
@@ -409,7 +414,7 @@ function renderFeed(kind, owner) {
   const stats = `
     <div class="pf-block">
       <div class="pf-block__head">
-        <span class="pf-block__title">Counters</span>
+        <span class="pf-block__title"><i data-icon="chart"></i> Counters</span>
         <span class="pf-block__note">Posts are counted when they are published.</span>
       </div>
       <dl class="pf-stats" style="border: 0; margin: 0; padding: 0">
@@ -481,7 +486,7 @@ function renderFollowPanels() {
   return `
     <div class="pf-block">
       <div class="pf-block__head">
-        <span class="pf-block__title">Followers</span>
+        <span class="pf-block__title"><i data-icon="users"></i> Followers</span>
         <span class="pf-block__note">
           ${num(counts.followers_active)} actual · ${num(counts.followers_pending)} pending
         </span>
@@ -490,7 +495,7 @@ function renderFollowPanels() {
     </div>
     <div class="pf-block">
       <div class="pf-block__head">
-        <span class="pf-block__title">Following</span>
+        <span class="pf-block__title"><i data-icon="user"></i> Following</span>
         <span class="pf-block__note">
           ${num(counts.following_active)} actual · ${num(counts.following_pending)} pending
         </span>
@@ -528,14 +533,14 @@ function renderBlockPanel() {
   return `
     <div class="pf-block">
       <div class="pf-block__head">
-        <span class="pf-block__title">Blocked profiles</span>
+        <span class="pf-block__title"><i data-icon="shield"></i> Blocked profiles</span>
         <span class="pf-block__note">A block removes the follows of both directions.</span>
       </div>
       <div class="pf-people">${rows}</div>
     </div>
     <div class="pf-block">
       <div class="pf-block__head">
-        <span class="pf-block__title">Block a profile</span>
+        <span class="pf-block__title"><i data-icon="lock"></i> Block a profile</span>
         <span class="pf-block__note">Username, @username or member ID.</span>
       </div>
       <div class="pf-searchbar">
@@ -563,7 +568,7 @@ function renderSettingsPanel() {
     const link = byPlatform.get(key) || {};
     return `
       <div class="pf-link-row">
-        <span class="pf-link-row__name">${esc(label)}</span>
+        <span class="pf-link-row__name">${brand(key)}${esc(label)}</span>
         <input class="input" type="url" inputmode="url" placeholder="https://…" value="${esc(link.url || "")}"
           data-pf-link-url="${key}" aria-label="${esc(label)} profile URL" />
         <select class="select" data-pf-link-sync="${key}" aria-label="${esc(label)} sync direction">
@@ -581,14 +586,14 @@ function renderSettingsPanel() {
   return `
     <div class="pf-block">
       <div class="pf-block__head">
-        <span class="pf-block__title">What visitors see</span>
+        <span class="pf-block__title"><i data-icon="eye"></i> What visitors see</span>
         <span class="pf-block__note">Each switch hides one field from everyone but you.</span>
       </div>
       ${SHOW_SWITCHES.map(toggle).join("")}
     </div>
     <div class="pf-block">
       <div class="pf-block__head">
-        <span class="pf-block__title">Auto-accept</span>
+        <span class="pf-block__title"><i data-icon="check"></i> Auto-accept</span>
         <span class="pf-block__note">Off means every request waits for you.</span>
       </div>
       ${AUTO_SWITCHES.map(toggle).join("")}
@@ -596,7 +601,7 @@ function renderSettingsPanel() {
     </div>
     <div class="pf-block">
       <div class="pf-block__head">
-        <span class="pf-block__title">Related links</span>
+        <span class="pf-block__title"><i data-icon="link"></i> Related links</span>
         <span class="pf-block__note">Sync direction: out, in or both. Tokens are never stored here.</span>
       </div>
       ${linkRows}
@@ -627,7 +632,7 @@ function renderSearchPanel() {
   return `
     <div class="pf-block">
       <div class="pf-block__head">
-        <span class="pf-block__title">Search</span>
+        <span class="pf-block__title"><i data-icon="search"></i> Search</span>
         <span class="pf-block__note">Posts, filters and the ranking order arrive with M2.</span>
       </div>
       <div class="pf-searchbar">
