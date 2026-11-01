@@ -662,8 +662,15 @@
   color: var(--text-2);
 }
 
+.rc-device__probe {
+  display: grid;
+  gap: 0.55rem;
+  justify-items: start;
+}
+
 .rc-device__state {
   display: flex;
+  width: 100%;
   align-items: center;
   gap: 0.45rem;
   font-size: 0.78rem;
@@ -672,6 +679,13 @@
   border-radius: var(--radius-sm);
   border: 1px dashed var(--line-2);
   overflow-wrap: anywhere;
+}
+
+.rc-device__state[data-bound="true"] {
+  border-style: solid;
+  border-color: var(--line-3);
+  background: var(--surface-2);
+  color: var(--text);
 }
 
 /* ------------------------------------------------------------------ */

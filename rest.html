@@ -11,11 +11,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="assets/css/base.css?v=20261101g" />
-    <link rel="stylesheet" href="assets/css/layout.css?v=20261101g" />
-    <link rel="stylesheet" href="assets/css/components.css?v=20261101g" />
-    <link rel="stylesheet" href="assets/css/register.css?v=20261101g" />
-    <link rel="stylesheet" href="assets/css/rest.css?v=20261101g" />
+    <link rel="stylesheet" href="assets/css/base.css?v=20261101h" />
+    <link rel="stylesheet" href="assets/css/layout.css?v=20261101h" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261101h" />
+    <link rel="stylesheet" href="assets/css/register.css?v=20261101h" />
+    <link rel="stylesheet" href="assets/css/rest.css?v=20261101h" />
     <script>
       /* apply the saved theme (or the OS preference) before first paint */
       (function () {
@@ -34,7 +34,7 @@
       })();
     </script>
 
-    <script type="module" src="assets/js/app.js?v=20261101g"></script>
+    <script type="module" src="assets/js/app.js?v=20261101h"></script>
   </head>
   <body data-page="rest" data-title="Recover account">
     <a class="skip-link" href="#main">Skip to content</a>
@@ -344,7 +344,12 @@
               <div><p data-rc-alert-text></p></div>
             </div>
 
-            <p class="rc-device__state" data-rc-device-state hidden></p>
+            <div class="rc-device__probe">
+              <button class="btn btn--quiet" type="button" data-rc-device-check>
+                <i data-icon="monitor"></i> Check this device
+              </button>
+              <p class="rc-device__state" data-rc-device-state hidden></p>
+            </div>
 
             <form class="rc-form" data-rc-form="device" novalidate>
               <div class="rc-field" data-field="full_name">

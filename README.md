@@ -527,12 +527,34 @@ link dies the moment a new one is minted.
 
 ### The device path — no code at all
 
-The second way in, for a member who has lost the code: **full name + phone + email + one of
-the six-digit viewing codes** created at activation (`viewing_codes`). `recovery_device()`
-accepts it **only** when this browser's `1w.device` id — the same id the player writes on
-first use — is already bound to one of the account's codes in `watch_code_devices`. A
-stranger with the name and the phone gets `device_not_bound`; a wrong name gets `identity`.
-The path ends the same way: new password, new code, details to download.
+The second way in, for a member who has lost the code: **full name + phone + email + the
+device's original viewing code**.
+
+The rule the flow follows is the one the site already obeys: **the code created when a device
+was activated belongs to that device for good** — it cannot be unlinked, and it is called the
+device's *original* code. The other codes on the account may be linked to other devices, and
+unlinked again. So `recovery_device()` accepts the original code of **this** device and
+nothing else:
+
+- the device is the shared `1w.device` id (`assets/js/device.js` — one module for the wizard,
+  the player, the dashboard and this page, always MAC-shaped `9E:3D:EB:E8:B8:50`);
+- the comparison is normalised on both sides (`recovery_device_key`: upper case, letters and
+  digits only), so `9e:3d:eb:e8:b8:50`, `9E-3D-EB-E8-B8-50` and `9E3DEBE8B850` are one device;
+- the code has to be the one whose `viewing_codes.device_mac` — or its `watch_code_devices`
+  row — carries that id;
+- the full name is compared as a **set of words** (`recovery_name_key`), so
+  `EL MEHDI MOUAOUINE` and `Mouaouine,  El-Mehdi` are the same person;
+- the phone is still the last nine digits.
+
+Two refusals, told apart so the page can say which one happened: `other_device` (the code is
+real but it belongs to another device) and `unknown_device` (this browser holds none of the
+account's original codes). A wrong name, phone or email is `identity`.
+
+The panel carries a **Check this device** button: `recovery_device_status(name, phone, email,
+device)` answers with three booleans — `device`, `identity`, `bound` — and never with a code,
+a device of somebody else or a name. That is how a member finds out, before typing anything,
+whether the browser in front of them is the one the account was activated on. The path ends
+the same way as the others: new password, new code, details to download.
 
 ### Delivery: the Google Apps Script and the bot
 
@@ -592,7 +614,9 @@ come back `false`, so the page can say so instead of pretending.
 | `recovery_verify(email, phone, code, ip, agent)` | Compares the fingerprint, counts the attempts (5 → 30-minute lock) and returns a 20-minute ticket plus the member's public data |
 | `recovery_link(code, ip, agent)` | The same, keyed by the code alone — that is what `?recovry=` calls |
 | `recovery_reset(ticket, password, ip, agent)` | The final step: new bcrypt password, sessions revoked, **new recovery code**, data + link returned |
-| `recovery_device(name, phone, email, view_code, device, password, ip, agent)` | The no-code path, bound to a device that already opened one of the codes |
+| `recovery_device(name, phone, email, view_code, device, password, ip, agent)` | The no-code path: the device's **original** code only, refused with `other_device` / `unknown_device` |
+| `recovery_device_status(name, phone, email, device)` | Three booleans — `device`, `identity`, `bound` — for the "check this device" button; nothing else leaves the server |
+| `recovery_device_key(text)` / `recovery_name_key(text)` | The device and the name in one comparable shape |
 | `recovery_send(member, code)` | Builds the email and the Telegram message and posts them with `pg_net` (internal) |
 | `recovery_code_hash(text)` / `recovery_code_key(text)` | One canonical shape — `OW-XXXX-XXXX-XXXX`, upper case, dashes — so old registration hashes keep working |
 | `recovery_phone_key(text)` | Last nine digits, so the country code never matters |
@@ -608,7 +632,8 @@ phone, unknown account, wrong phone, then the pair that matches), the resend coo
 (malformed code never reaching the server, wrong code with the attempts left, expired code,
 the right code), step 3 (short password, mismatch, strength hint, the change itself with the
 new code, the link and the `.txt`), the recovery link (good and spent), the device path
-(without a device id, refused off the bound device, then the success) and the markup itself.
+(without a device id, a code of another device, a browser that never held one, the verdict of
+"check this device", then the success) and the markup itself.
 
 ---
 
@@ -1265,6 +1290,7 @@ assets/css/login.css        sign-in form + signed-in card
 assets/js/login.js          sign-in controller (member_login / member_session / member_logout)
 assets/css/rest.css         recovery page: stepper, card, panels, code + link blocks
 assets/js/rest.js           recovery controller (recovery_start/verify/reset/link/device)
+assets/js/device.js         the one device id (MAC), shared by wizard, player and recovery
 tools/apps-script/recovery-mailer.gs  the Google Apps Script that mails the code
 assets/css/dashboard.css    app shell: header rail, sidebar, gates, section views
 assets/js/dashboard.js      dashboard controller (member_dashboard + code/notify/court actions)

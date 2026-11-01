@@ -21,6 +21,7 @@
  */
 
 import { rpc } from "./data.js";
+import { deviceId, deviceName } from "./device.js";
 import { qs, qsa, esc, formatDate, sleep, clamp } from "./utils.js";
 import { hydrateIcons } from "./icons.js";
 import { toast } from "./ui.js";
@@ -728,26 +729,10 @@ function detectDevice(root) {
   set(root, "[data-device-name]", name);
 }
 
+/* The device id lives in one module: the wizard binds a code to it, and the
+   player, the dashboard and the recovery page read the same value. */
 function deviceMac() {
-  try {
-    const saved = localStorage.getItem("1w.device");
-    if (saved && /^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(saved)) return saved;
-  } catch (error) {}
-  const bytes = [];
-  for (let i = 0; i < 6; i += 1) bytes.push(Math.floor(Math.random() * 256));
-  const mac = bytes.map((b) => b.toString(16).toUpperCase().padStart(2, "0")).join(":");
-  try {
-    localStorage.setItem("1w.device", mac);
-  } catch (error) {}
-  return mac;
-}
-
-function deviceName() {
-  const nav = typeof navigator === "undefined" ? {} : navigator;
-  const platform = (nav.userAgentData && nav.userAgentData.platform) || nav.platform || "This browser";
-  const ua = String(nav.userAgent || "");
-  const kind = /Android/i.test(ua) ? "Android" : /iPhone|iPad|iPod/i.test(ua) ? "iOS" : /Windows/i.test(ua) ? "Windows" : /Mac/i.test(ua) ? "macOS" : /Linux/i.test(ua) ? "Linux" : "";
-  return kind ? `${platform} · ${kind}` : String(platform);
+  return deviceId();
 }
 
 async function saveViewingCode(root) {

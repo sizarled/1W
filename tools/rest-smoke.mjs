@@ -13,8 +13,9 @@
  *          the three closed step dots.
  * Pass 4 — the recovery link: `?recovry=` goes straight to the password step,
  *          and a spent link falls back to step 1 with an explanation.
- * Pass 5 — the device path: refuses without a device id, sends `p_device`, maps
- *          `device_not_bound` onto the viewing-code field and finishes.
+ * Pass 5 — the device path: refuses without a device id, sends `p_device`, tells
+ *          "another device's code" from "this browser is not the device", answers
+ *          "check this device" with a verdict, and finishes.
  * Pass 6 — the resend cooldown after step 1.
  */
 import { JSDOM } from "jsdom";
@@ -47,7 +48,8 @@ const server = {
   code: "ok", // ok | wrong | expired
   reset: "ok", // ok | password
   link: "ok", // ok | bad
-  device: "ok", // ok | device_not_bound
+  device: "ok", // ok | other_device | unknown_device
+  check: "bound", // bound | unbound | no_identity
   attemptsLeft: 4,
 };
 
@@ -110,8 +112,15 @@ function stubFetch(url, opts = {}) {
     });
   }
 
+  if (href.includes("/rpc/recovery_device_status")) {
+    if (server.check === "unbound") return reply({ ok: true, device: true, identity: true, bound: false, codes: 1 });
+    if (server.check === "no_identity") return reply({ ok: true, device: true, identity: false, bound: false, codes: 0 });
+    return reply({ ok: true, device: true, identity: true, bound: true, codes: 1 });
+  }
+
   if (href.includes("/rpc/recovery_device")) {
-    if (server.device === "device_not_bound") return reply({ ok: false, error: "device_not_bound" });
+    if (server.device === "other_device") return reply({ ok: false, error: "device_not_bound", reason: "other_device" });
+    if (server.device === "unknown_device") return reply({ ok: false, error: "device_not_bound", reason: "unknown_device" });
     return reply({
       ok: true,
       via: "device",
@@ -437,13 +446,15 @@ function check(name, ok, detail) {
   await bare.wait(60);
   report.devicePanel = bare.shownPanel();
   report.deviceStateNoId = bare.text("[data-rc-device-state]");
+  check("the device panel opens without an id", /no device id/i.test(report.deviceStateNoId), report.deviceStateNoId);
 
-  server.device = "device_not_bound";
+  server.device = "other_device";
   calls.length = 0;
-  const p = await boot("5b", { device: "dev_abc12345" });
+  const p = await boot("5b", { device: "9E:3D:EB:E8:B8:50" });
   p.click(p.qs('[data-rc-go="device"]'));
   await p.wait(60);
   report.deviceStateWithId = p.text("[data-rc-device-state]");
+  report.devicePrefillEmpty = p.qs("#rc-device-email").value;
 
   p.setInput("#rc-name", "Youssef El Amrani");
   p.setInput("#rc-device-phone", "+212 6 12 34 56 78");
@@ -454,7 +465,29 @@ function check(name, ok, detail) {
   await p.wait(160);
   report.deviceRefusedField = p.errorFor("view_code");
   report.devicePayload = bodies.find((c) => c.href.includes("recovery_device"))?.body || {};
-  report.deviceSendsId = report.devicePayload.p_device === "dev_abc12345";
+  report.deviceSendsId = report.devicePayload.p_device === "9E:3D:EB:E8:B8:50";
+
+  // the other refusal: this browser holds none of the account's original codes
+  server.device = "unknown_device";
+  p.submit("device");
+  await p.wait(160);
+  report.deviceUnknownField = p.errorFor("view_code");
+
+  // "check this device" — a verdict before the code is typed
+  server.check = "bound";
+  calls.length = 0;
+  p.click(p.qs("[data-rc-device-check]"));
+  await p.wait(140);
+  report.checkBoundText = p.text("[data-rc-device-state]");
+  report.checkBoundFlag = p.qs("[data-rc-device-state]").dataset.bound;
+  report.checkPayload = bodies.find((c) => c.href.includes("recovery_device_status"))?.body || {};
+
+  server.check = "unbound";
+  p.click(p.qs("[data-rc-device-check]"));
+  await p.wait(140);
+  report.checkUnboundText = p.text("[data-rc-device-state]");
+  report.checkUnboundFlag = p.qs("[data-rc-device-state]").dataset.bound;
+
 
   server.device = "ok";
   calls.length = 0;
@@ -463,7 +496,10 @@ function check(name, ok, detail) {
   report.deviceDone = p.shownPanel();
   report.deviceNewCode = p.text("[data-rc-code]");
   report.deviceVia = bodies.filter((c) => c.href.includes("recovery_device")).pop()?.body.p_view_code === "424242";
-  check("the device path is refused off the bound device", /not linked/i.test(report.deviceRefusedField), report.deviceRefusedField);
+  check("a code of another device is refused", /belongs to another device/i.test(report.deviceRefusedField), report.deviceRefusedField);
+  check("an unbound browser is refused with its own words", /was created on this browser|not the linked device/i.test(report.deviceUnknownField), report.deviceUnknownField);
+  check("the check reports a bound device", report.checkBoundFlag === "true", report.checkBoundText);
+  check("the check reports an unbound device", report.checkUnboundFlag === "false", report.checkUnboundText);
   check("the device path finishes", report.deviceDone === "done", report.deviceDone);
   check("the device id travels with the request", report.deviceSendsId, JSON.stringify(report.devicePayload));
   check("the viewing code travels with the request", report.deviceVia);

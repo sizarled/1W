@@ -26,6 +26,7 @@ import { esc, qs, qsa, formatDate } from "./utils.js";
 import { hydrateIcons } from "./icons.js";
 import { toast } from "./ui.js";
 import { playSound } from "./sound.js";
+import { deviceId } from "./device.js";
 
 /* ------------------------------------------------------------------ */
 /* state + copy                                                       */
@@ -73,7 +74,12 @@ const MESSAGES = {
   full_name: "Enter the full name written on the account.",
   view_code: "Enter the six-digit viewing code.",
   identity: "The name, phone, email and code do not describe one account.",
-  device_not_bound: "This device is not linked to any code on that account.",
+  device_not_bound:
+    "That code is bound to another device. Enter the code that was created on this device — its original code.",
+  device_other:
+    "That code belongs to another device. Only the device's own original code opens this path.",
+  device_unknown:
+    "No code on this account was created on this browser, so it cannot be the linked device. Use the recovery code or the recovery link.",
   device: "This browser has no device id, so it cannot be the linked device.",
   server: "The request did not go through. Try again in a moment.",
 };
@@ -94,8 +100,6 @@ const SERVER_FIELD = {
   },
 };
 
-const DEVICE_KEY = "1w.device";
-
 /* ------------------------------------------------------------------ */
 /* boot                                                               */
 /* ------------------------------------------------------------------ */
@@ -108,6 +112,7 @@ export async function initRest() {
   wireSteps();
   wireResend();
   wireDone();
+  wireDevice();
   hydrateIcons();
 
   const link = linkCodeFromUrl();
@@ -464,22 +469,64 @@ async function submitPassword() {
 /* ------------------------------------------------------------------ */
 /* the device path                                                    */
 /* ------------------------------------------------------------------ */
-function deviceId() {
-  try {
-    return localStorage.getItem(DEVICE_KEY) || "";
-  } catch {
-    return "";
-  }
+/** The id the player and the activation wizard share — read, never invented. */
+function thisDevice() {
+  return deviceId({ create: false });
 }
 
-function paintDeviceState() {
+function paintDeviceState(verdict = "") {
   const node = qs("[data-rc-device-state]");
   if (!node) return;
-  const id = deviceId();
+  const id = thisDevice();
   node.hidden = false;
-  node.textContent = id
-    ? `This device is ${id}. It is accepted only if one of the account's viewing codes was opened here.`
-    : "This browser has no device id yet — open the player once with a viewing code, then come back.";
+  node.textContent = verdict || (id
+    ? `This device is ${id}. The path accepts the original code of this device — the one created here at activation.`
+    : "This browser has no device id yet — it is written the first time the player or the activation wizard runs here.");
+}
+
+/**
+ * Ask the server, without changing anything, whether this browser is recognised
+ * as the device of the account: name + phone + email + the id. Three true/false
+ * answers come back — never a code, never a device of somebody else.
+ */
+async function checkDevice() {
+  const node = qs("[data-rc-device-state]");
+  const id = thisDevice();
+  const name = (qs("#rc-name")?.value || "").trim();
+  const phone = (qs("#rc-device-phone")?.value || "").trim();
+  const email = (qs("#rc-device-email")?.value || "").trim().toLowerCase();
+
+  if (!id) {
+    paintDeviceState("This browser has no device id yet — it is written the first time the player or the activation wizard runs here.");
+    return;
+  }
+  if (!name || !phone || !email) {
+    paintDeviceState(`This device is ${id}. Fill in the name, phone and email to see whether it is recognised.`);
+    return;
+  }
+
+  const button = qs("[data-rc-device-check]");
+  if (button) button.disabled = true;
+  const result = await rpc("recovery_device_status", {
+    p_name: name,
+    p_phone: phone,
+    p_email: email,
+    p_device: id,
+  }).catch(() => null);
+  if (button) button.disabled = false;
+
+  if (!result || result.ok !== true) {
+    paintDeviceState(`This device is ${id}. The check did not go through — try again.`);
+    return;
+  }
+  if (!result.identity) {
+    paintDeviceState(`${id}: this name, phone and email do not describe one account.`);
+  } else if (!result.bound) {
+    paintDeviceState(`${id}: no code on this account was created on this browser, so it cannot be the linked device.`);
+  } else {
+    paintDeviceState(`${id}: this device holds an original code of the account. Enter that code below.`);
+  }
+  if (node) node.dataset.bound = result.bound ? "true" : "false";
 }
 
 async function submitDevice() {
@@ -523,7 +570,7 @@ async function submitDevice() {
     p_phone: phone,
     p_email: email,
     p_view_code: viewCode,
-    p_device: deviceId(),
+    p_device: thisDevice(),
     p_password: password,
   });
   if (!result || !result.ok) {
@@ -748,12 +795,30 @@ function strengthOf(value) {
   return { width: 100, label: "Strong." };
 }
 
+/** The device panel: a prefill from step 1, and the "check this device" answer. */
+function wireDevice() {
+  qs("[data-rc-device-check]")?.addEventListener("click", checkDevice);
+}
+
+/** Step 1 typed the email and the phone already — the device path reuses them. */
+function prefillDevice() {
+  const email = qs("#rc-device-email");
+  const phone = qs("#rc-device-phone");
+  if (email && !email.value) email.value = state.email || qs("#rc-email")?.value || "";
+  if (phone && !phone.value) phone.value = state.phone || qs("#rc-phone")?.value || "";
+  const name = qs("#rc-name");
+  if (name && !name.value) name.value = state.member?.full_name || "";
+}
+
 /** Every step button in the page that only switches panels. */
 function wireGo() {
   qsa("[data-rc-go]").forEach((button) => {
     button.addEventListener("click", () => {
       const target = button.dataset.rcGo;
-      if (target === "device") paintDeviceState();
+      if (target === "device") {
+        prefillDevice();
+        paintDeviceState();
+      }
       showStep(target);
       if (target === "identity") qs("#rc-email")?.focus();
     });
@@ -811,6 +876,9 @@ function fail(step, result) {
 }
 
 function messageFor(code, result) {
+  if (code === "device_not_bound") {
+    return result?.reason === "other_device" ? MESSAGES.device_other : MESSAGES.device_unknown;
+  }
   if (code === "wait") {
     const wait = Number(result?.retry_after) || 60;
     return `Wait ${wait} seconds before asking for another code.`;

@@ -18,6 +18,7 @@ import { playSound } from "./sound.js";
 import { getMember, visitorId } from "./session.js";
 import { awardPoints } from "./wallet.js";
 import { rest, rpc } from "./data.js";
+import { deviceId } from "./device.js";
 import { refreshBlockMap, isMediaBlocked, noBlocks, filterBlocked } from "./blocks.js";
 
 /* ================================================================== */
@@ -31,7 +32,6 @@ const WATCH_KEY = "1w.watched"; // per-title counted seconds (best effort, survi
 // used only when TMDB has no runtime for the title (never the normal case)
 const FALLBACK_RUNTIME = { movie: 150, tv: 45 };
 const ADULT_CERTS = ["R", "NC-17", "18", "18+", "TV-MA", "MA 15+", "X"];
-const DEVICE_KEY = "1w.device";
 const REMEMBER_KEY = "1w.code";
 
 const sb = {
@@ -77,14 +77,6 @@ function setHTML(el, html) {
   if (el) el.innerHTML = html;
 }
 
-function deviceId() {
-  let id = localStorage.getItem(DEVICE_KEY);
-  if (!id) {
-    id = `dev_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36).slice(-4)}`;
-    localStorage.setItem(DEVICE_KEY, id);
-  }
-  return id;
-}
 
 function rememberedCode() {
   try {

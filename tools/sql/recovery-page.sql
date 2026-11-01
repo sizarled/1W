@@ -139,6 +139,31 @@ as $$
   select encode(digest(public.recovery_code_key(p), 'sha256'), 'hex');
 $$;
 
+-- a device id is compared the way the browser stores it, not the way it is
+-- typed: upper case, letters and digits only. `9E:3D:EB:E8:B8:50`,
+-- `9e-3d-eb-e8-b8-50` and `9E3DEBE8B850` are one device.
+create or replace function public.recovery_device_key(p text)
+returns text
+language sql
+immutable
+as $$
+  select upper(regexp_replace(coalesce(p, ''), '[^0-9a-zA-Z]', '', 'g'));
+$$;
+
+-- the full name is compared as a **set** of words: "MOUAOUINE EL MEHDI",
+-- "el mehdi mouaouine" and "Mouaouine,  El-Mehdi" are the same account holder.
+create or replace function public.recovery_name_key(p text)
+returns text
+language sql
+immutable
+as $$
+  select coalesce(string_agg(tok, ' ' order by tok), '')
+    from regexp_split_to_table(
+           regexp_replace(lower(coalesce(p, '')), '[^a-z0-9]+', ' ', 'g'), ' '
+         ) as tok
+   where tok <> '';
+$$;
+
 create or replace function public.mask_email(p text)
 returns text
 language plpgsql
@@ -584,9 +609,60 @@ $$;
 
 -- ------------------------------------------------------------------
 -- 10. the device path — no recovery code at all
---     full name + phone + email + a viewing code, from a device that is
---     already bound to one of the member's codes
+--     full name + phone + email + the device's **original** viewing code
+--
+--     The rule: the code created when a device was activated is bound to that
+--     device for good and cannot be unlinked — it is the device's original code.
+--     The other codes may be linked to other devices, and unlinked again. So the
+--     path accepts the original code of *this* device and nothing else.
 -- ------------------------------------------------------------------
+create or replace function public.recovery_device_status(
+  p_name   text,
+  p_phone  text,
+  p_email  text,
+  p_device text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path to 'public', 'extensions', 'pg_temp'
+as $$
+declare
+  v_name   text := public.recovery_name_key(p_name);
+  v_email  text := lower(btrim(coalesce(p_email, '')));
+  v_phone  text := public.recovery_phone_key(p_phone);
+  v_device text := public.recovery_device_key(p_device);
+  v_row    public.members%rowtype;
+  v_codes  integer := 0;
+begin
+  select * into v_row from public.members m where lower(btrim(m.email)) = v_email limit 1;
+
+  -- every flag is a boolean: this call never returns a code, a name or a device
+  return jsonb_build_object(
+    'ok', true,
+    'device', v_device <> '',
+    'identity', v_row.id is not null
+      and public.recovery_phone_key(v_row.phone_number) = v_phone
+      and public.recovery_name_key(v_row.full_name) = v_name,
+    'bound', v_row.id is not null and exists (
+      select 1
+        from public.viewing_codes c
+       where c.member_id = v_row.id
+         and (
+           public.recovery_device_key(c.device_mac) = v_device
+           or exists (
+             select 1 from public.watch_code_devices d
+              where d.code_id = c.id and d.idmember = v_row.id
+                and public.recovery_device_key(d.device_id) = v_device
+           )
+         )
+    ),
+    'codes', case when v_row.id is null then 0 else (
+      select count(*) from public.viewing_codes c where c.member_id = v_row.id
+    ) end
+  );
+end;
+$$;
 create or replace function public.recovery_device(
   p_name      text,
   p_phone     text,
@@ -603,11 +679,11 @@ security definer
 set search_path to 'public', 'extensions', 'pg_temp'
 as $$
 declare
-  v_name   text := lower(regexp_replace(btrim(coalesce(p_name, '')), '\s+', ' ', 'g'));
+  v_name   text := public.recovery_name_key(p_name);
   v_email  text := lower(btrim(coalesce(p_email, '')));
   v_phone  text := public.recovery_phone_key(p_phone);
   v_view   text := regexp_replace(coalesce(p_view_code, ''), '[^0-9]', '', 'g');
-  v_device text := btrim(coalesce(p_device, ''));
+  v_device text := public.recovery_device_key(p_device);
   v_row    public.members%rowtype;
   v_code   public.viewing_codes%rowtype;
   v_bound  boolean := false;
@@ -630,7 +706,7 @@ begin
 
   if v_row.id is null
      or public.recovery_phone_key(v_row.phone_number) <> v_phone
-     or lower(regexp_replace(btrim(coalesce(v_row.full_name, '')), '\s+', ' ', 'g')) <> v_name then
+     or public.recovery_name_key(v_row.full_name) <> v_name then
     perform public.member_log_write(v_row.id, null, 'recovery_failed',
       jsonb_build_object('reason', 'device_identity'), p_ip, p_agent);
     return jsonb_build_object('ok', false, 'error', 'identity');
@@ -651,18 +727,30 @@ begin
     return jsonb_build_object('ok', false, 'error', 'view_code');
   end if;
 
+  -- is this code the original code of this device?
   select exists (
     select 1
-      from public.watch_code_devices d
-     where d.idmember = v_row.id
-       and d.device_id = v_device
-       and (d.code_id = v_code.id or d.code_id in (select id from public.viewing_codes where member_id = v_row.id))
+      from public.viewing_codes c
+     where c.id = v_code.id
+       and (
+         public.recovery_device_key(c.device_mac) = v_device
+         or exists (
+           select 1 from public.watch_code_devices d
+            where d.code_id = c.id and d.idmember = v_row.id
+              and public.recovery_device_key(d.device_id) = v_device
+         )
+       )
   ) into v_bound;
 
   if not v_bound then
+    -- two different refusals, so the page can say which one happened:
+    -- `other_device`  the code exists but it is bound to another device
+    -- `unknown_device` this device holds none of the account's original codes
     perform public.member_log_write(v_row.id, null, 'recovery_failed',
-      jsonb_build_object('reason', 'device_not_bound'), p_ip, p_agent);
-    return jsonb_build_object('ok', false, 'error', 'device_not_bound');
+      jsonb_build_object('reason', 'device_not_bound', 'code', v_view), p_ip, p_agent);
+    return jsonb_build_object('ok', false, 'error', 'device_not_bound',
+      'reason', case when public.recovery_device_key(v_code.device_mac) <> ''
+                     then 'other_device' else 'unknown_device' end);
   end if;
 
   v_new := public.member_recovery_code();
@@ -704,6 +792,8 @@ grant execute on function public.recovery_verify(text, text, text, text, text) t
 grant execute on function public.recovery_link(text, text, text)         to anon, authenticated, service_role;
 grant execute on function public.recovery_reset(text, text, text, text)  to anon, authenticated, service_role;
 grant execute on function public.recovery_device(text, text, text, text, text, text, text, text)
+  to anon, authenticated, service_role;
+grant execute on function public.recovery_device_status(text, text, text, text)
   to anon, authenticated, service_role;
 
 notify pgrst, 'reload schema';
