@@ -431,7 +431,8 @@ async function renderFeed(kind, owner) {
   try {
     payload = await rpc("profile_feed", {
       p_token: state.token,
-      p_ref: state.ref || "",
+      // own profile has no ?u=, so the feed resolves by the profile's username
+      p_ref: state.ref || state.data?.profile?.username || "",
       p_kind: kind,
       p_limit: 20,
       p_offset: 0,

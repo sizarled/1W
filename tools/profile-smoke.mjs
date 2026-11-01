@@ -478,6 +478,8 @@ function expect(name, condition, detail = "") {
   calls.length = 0;
   const p = await boot(4, "");
 
+  const feedCall = calls.find((c) => c.href.includes("/rpc/profile_feed"));
+  expect("feed: own profile reference resolved", ["ID100003", "@ledsizar", ""].includes(feedCall?.body?.p_ref), JSON.stringify(feedCall?.body?.p_ref));
   expect("feed: card drawn", p.qsa("[data-post]").length === 1, String(p.qsa("[data-post]").length));
   expect("feed: title rendered", p.text(".pc__title") === "The monochrome century", p.text(".pc__title"));
   expect("feed: publisher rendered", p.text(".pc__name") === "Sara Bennani", p.text(".pc__name"));
