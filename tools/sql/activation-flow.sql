@@ -843,3 +843,19 @@ grant execute on function public.activation_pay_points(text, text, text, integer
 grant execute on function public.activation_redeem(text, text, text, text, integer) to anon, authenticated, service_role;
 grant execute on function public.activation_price(text, integer) to anon, authenticated, service_role;
 grant execute on function public.membership_rank(text) to anon, authenticated, service_role;
+
+-- ------------------------------------------------------------------
+-- 10. storage — the profile folder is the only place the browser writes
+-- ------------------------------------------------------------------
+-- Paths are fixed: source/users/profile/avatar_ID123456.jpg and
+-- source/users/profile/cover_ID123456.jpg. Insert only — a member can
+-- neither overwrite nor delete an object.
+drop policy if exists source_profile_insert on storage.objects;
+create policy source_profile_insert on storage.objects
+  for insert to anon, authenticated
+  with check (
+    bucket_id = 'source'
+    and (storage.foldername(name))[1] = 'users'
+    and (storage.foldername(name))[2] = 'profile'
+    and name ~ '^users/profile/(avatar|cover)_ID[0-9]{6}(\.[a-z]{2,5})?$'
+  );

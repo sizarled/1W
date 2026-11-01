@@ -252,6 +252,8 @@ const expect = (name, condition, detail = "") => checks.push({ name, ok: Boolean
   const p = await boot(1, { file: "activated.html", token: "" });
   expect("activated: guest asks to sign in", /Sign in to activate/i.test(p.text(".dsh-gate__title")));
   expect("activated: guest link", (p.qs("[data-act] a[href*=\"login.html\"]")?.getAttribute("href") || "").includes("login.html"));
+  expect("activated: guest link is visible", p.qs("[data-act-guest]").hidden === false && p.qsa("[data-act-guest] a").length === 1);
+  expect("activated: guest link is not inside a hidden step", p.qs("[data-step='1'] a[href*=\"login.html\"]") === null);
   expect("activated: guest no wizard", p.qs("[data-wizard]").hidden === true);
   expect("activated: guest no doors", p.qs("[data-act-choice]").hidden === true);
   expect("activated: guest no error", p.errors.length === 0, p.errors.join(" | "));

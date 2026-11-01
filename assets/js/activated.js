@@ -189,11 +189,17 @@ function paintGuest(root) {
   qsa("[data-wizard], [data-act-choice], [data-done], [data-react], [data-upgrade], [data-paid-note]", root).forEach((el) => {
     el.hidden = true;
   });
+  const slot = qs("[data-act-guest]", root);
   const link = document.createElement("a");
   link.className = "dsh-btn dsh-btn--primary";
   link.href = "login.html?next=activated.html";
-  link.innerHTML = `<i data-icon="login"></i>Sign in`;
-  qs(".dsh-help", root)?.before(link);
+  link.innerHTML = `<i data-icon="login"></i>Sign in to activate`;
+  if (slot) {
+    slot.hidden = false;
+    slot.append(link);
+  } else {
+    qs("[data-act-notice]", root)?.before(link);
+  }
   hydrateIcons(root);
 }
 
@@ -425,7 +431,8 @@ async function saveProfile(root) {
 /** Uploads to `source/users/profile/<kind>_<IDMEMBER>.<ext>` and returns the public URL. */
 async function uploadImage(file, kind, memberId) {
   const ext = (String(file.name || "").split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
-  const name = `${kind}_${String(memberId || "").replace(/[^A-Za-z0-9]/g, "")}.${ext}`;
+  const cleanId = String(memberId || "").replace(/[^A-Za-z0-9]/g, "");
+  const name = `${kind}_${cleanId}.${ext}`;
   const path = `users/profile/${name}`;
   const res = await fetch(`${SUPABASE.url}/storage/v1/object/${SUPABASE.storageBucket}/${path}`, {
     method: "POST",
