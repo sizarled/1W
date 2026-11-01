@@ -713,6 +713,15 @@ after the (stubbed) 30 s, step 4 activates — and then a premium re-activation 
 re-activation through the ad, a Gold → Diamond upgrade, and the Diamond case where the upgrade
 door is closed.
 
+## Profile, posts and reach — the schema plan
+
+[`docs/profile-schema-plan.md`](docs/profile-schema-plan.md) maps the new profile specification onto
+the live database before any DDL is written: what already exists (`profiles`, `profile_follows`,
+`content_reaction`, `comment`, `messages`…), the 28 tables of the final model with columns,
+relations and constraints, the tables that are deliberately **not** created, and the two scoring
+systems (reach per profile, rank per post) with their weights, tie-breakers and budget rules.
+Migrations M1–M9 and the pages each one unblocks are listed at the end of that document.
+
 ## Sounds
 
 Played from the public `source` bucket of the Supabase project:
