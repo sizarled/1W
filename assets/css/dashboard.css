@@ -1743,6 +1743,10 @@
 /* ------------------------------------------------------------------
    activated.html — the four-step wizard, reactivation, upgrade
    ------------------------------------------------------------------ */
+.dsh-gate[data-mode="activate"] {
+  max-width: 740px;
+}
+
 .dsh-wizard {
   display: grid;
   gap: 0.7rem;
