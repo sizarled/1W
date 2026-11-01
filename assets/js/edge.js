@@ -110,17 +110,16 @@ export function createEdgeRail({
     paint(next);
   };
 
+  /* The panel is anchored to the left edge, so its own width is a better
+     "am I on the menu?" test than the animated rect: mid-slide the rect is
+     still off-screen, and a pointer that has already moved to where the menu
+     is appearing must not close it. */
   const nearPanel = (event) => {
     if (!panel) return false;
     if (panel.contains(event.target)) return true;
-    const rect = panel.getBoundingClientRect();
-    if (!rect.width) return false;
-    return (
-      event.clientX >= rect.left - 6 &&
-      event.clientX <= rect.right + 10 &&
-      event.clientY >= rect.top &&
-      event.clientY <= rect.bottom
-    );
+    const width = panel.offsetWidth || 0;
+    if (!width) return false;
+    return event.clientX <= width + 12 && event.clientY >= panel.getBoundingClientRect().top - 4;
   };
 
   const onMove = (event) => {
