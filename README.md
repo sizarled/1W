@@ -738,6 +738,49 @@ The SQL mirror is [`tools/sql/profile-core.sql`](tools/sql/profile-core.sql). Se
 round, in one line: a profile shows what its settings allow, a follow is a request until accepted,
 and a block hides the profile and drops both follows.
 
+## Profile page — owner and visitor views
+
+`profile.html` is the first page built on M1. It renders one profile in two
+modes and reads nothing from the tables directly: every field comes from one of
+the `profile_*` RPCs.
+
+| URL | What opens |
+| --- | --- |
+| `profile.html` | the signed-in member's own profile (owner view) |
+| `profile.html?u=@ledsara` | a profile found by username |
+| `profile.html?id=ID100003` | a profile found by member ID or profile uuid |
+
+**Owner view** — sidebar with avatar, profile name, member ID, followers, following
+and reach points, plus the menu (Updates, Activity, Suggestions, Followers,
+Following, Blocks, Search, Settings, and the four sections still to come). The
+header carries the cover, the avatar, the display name with the level and wealth
+badges, the username with the connection-status cylinder, the description, the
+language, the country and the join date.
+
+**Visitor view** — the same header without the member ID, without the Activity tab,
+with the connection cylinder only while the owner keeps it on, and with
+Follow / Message / Publish / Block plus a separate share button.
+
+Wired against the database in this round:
+
+| Panel / action | RPC |
+| --- | --- |
+| header, stats, relationship, owner settings | `profile_public` |
+| Follow / unfollow, a request that stays pending | `profile_follow_toggle` |
+| Accept / decline a pending follower | `profile_follow_respond` |
+| Followers and Following, actual + pending | `profile_follow_lists` |
+| Blocks list, block by username or member ID, unblock | `profile_blocks_list`, `profile_block_set`, `profile_block_remove` |
+| Six show/hide switches, four auto-accepts, keyword follows | `profile_settings_get`, `profile_settings_save` |
+| Related links (nine platforms, sync direction) | `profile_links_list`, `profile_links_save` |
+| People search, ordered by reach points | REST read of `profiles` (public columns only) |
+
+Posts are still an empty state: the tabs, the counters and the member modal land
+with **M2 `posts_core`**.
+
+```
+node tools/profile-smoke.mjs      # 45 checks, owner + visitor + blocked
+```
+
 ## Sounds
 
 Played from the public `source` bucket of the Supabase project:

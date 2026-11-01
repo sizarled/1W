@@ -17,7 +17,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const BUILD = "20261031u"; // cache-bust for css/js
 
 /* Hand-written pages are NOT in this list: index.html, login.html, register.html,
-   watch.html, cast.html, dashboard.html, activated.html, court.html. */
+   watch.html, cast.html, dashboard.html, activated.html, court.html, profile.html. */
 const PAGES = [
   ["search.html", "Search", "search", "Search across films, series, channels, articles, documents, answers and reviews.", "Reads ?q= from the URL."],
   ["movies.html", "Movies", "film", "The full film catalogue, with filters for genre, year, rating and quality.", ""],
@@ -47,7 +47,6 @@ const PAGES = [
   ["terms.html", "Terms", "scale", "The rules of the platform, in plain language.", ""],
   ["contact.html", "Contact", "mail", "Reach admins, moderators and the editorial team.", ""],
   ["help.html", "Help", "lifebuoy", "Guides for accounts, playback, publishing and points.", ""],
-  ["profile.html", "Profile", "user", "Public member profile: avatar, cover, followers and reach.", ""],
   ["notifications.html", "Notifications", "bell", "Every notification, filtered by month, year, exact date or all time.", ""],
   ["actevite.html", "Activate membership", "crown", "Upgrade to Silver, Gold or Diamond and activate viewing codes.", ""],
   ["panel.html", "Control panel", "settings", "Admin and moderator console for features, apps, channels and members.", ""],
