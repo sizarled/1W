@@ -6,6 +6,16 @@
    the only colour on the page is the artwork the member uploaded.
    ================================================================== */
 
+/* ------------------------------------------------------------------ */
+/* the `hidden` attribute must beat the layout rules below            */
+/* ------------------------------------------------------------------ */
+/* .pf__state, .pf__grid and .pf-conn all set `display`, which would
+   otherwise override the browser's `[hidden] { display: none }` and leave
+   the loading skeleton (and the connection cylinder) on screen. */
+.pf [hidden] {
+  display: none !important;
+}
+
 .pf {
   --pf-gap: clamp(1.1rem, 2.2vw, 2rem);
   padding-block: clamp(1.2rem, 3vw, 2.2rem) 4rem;
@@ -787,7 +797,7 @@
 
 /* skeleton --------------------------------------------------------- */
 .pf-skeleton {
-  min-height: 320px;
+  min-height: 220px;
   border-radius: var(--radius-lg);
   border: 1px solid var(--line);
   background: linear-gradient(100deg, var(--surface) 30%, var(--surface-2) 50%, var(--surface) 70%);
@@ -808,6 +818,11 @@
 }
 
 /* light theme ------------------------------------------------------ */
+html[data-theme="light"] .pf-skeleton {
+  background: linear-gradient(100deg, #ececf0 30%, #f7f7f9 50%, #ececf0 70%);
+  background-size: 220% 100%;
+}
+
 html[data-theme="light"] .pf-cover {
   background: radial-gradient(90% 130% at 18% 0%, #dcdce2 0%, #ececf0 55%, #f6f6f8 100%);
 }

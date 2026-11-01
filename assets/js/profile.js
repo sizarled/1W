@@ -82,6 +82,18 @@ const state = {
 /* helpers                                                             */
 /* ================================================================== */
 const el = (sel) => qs(sel);
+
+/**
+ * The `hidden` attribute alone is not enough on this page: .pf__state,
+ * .pf__grid and .pf-conn all declare `display`, and an author `display` rule
+ * beats the browser's `[hidden] { display: none }`. Setting the inline
+ * display as well keeps the loading skeleton out of the page for good.
+ */
+function setHidden(node, flag) {
+  if (!node) return;
+  node.hidden = Boolean(flag);
+  node.style.display = flag ? "none" : "";
+}
 const avatarOf = (url, name) => url || avatarPlaceholder(name || "1W", 96);
 const initial = (name = "") => (name.trim()[0] || "1").toUpperCase();
 
@@ -123,9 +135,16 @@ function emptyBlock(icon, title, text, action = "") {
 /* ================================================================== */
 /* load + render                                                       */
 /* ================================================================== */
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), ms)),
+  ]);
+}
+
 async function load() {
   try {
-    const data = await rpc("profile_public", { p_token: state.token, p_ref: state.ref || "" });
+    const data = await withTimeout(rpc("profile_public", { p_token: state.token, p_ref: state.ref || "" }), 15000);
     if (!data || data.ok === false) {
       return showState("user", "Profile not found", "The link may be wrong, or the member changed their username.");
     }
@@ -141,14 +160,20 @@ async function load() {
     renderAll();
     document.body.dataset.view = data.relationship?.is_owner ? "owner" : "visitor";
   } catch (error) {
-    showState("info", "The profile could not be loaded", error?.message || "Check the connection and try again.");
+    showState(
+      "info",
+      "The profile could not be loaded",
+      error?.message === "timeout"
+        ? "The server did not answer in time. Check the connection and try again."
+        : error?.message || "Check the connection and try again."
+    );
   }
 }
 
 function showState(icon, title, text, action = "") {
-  el("[data-pf-root]").hidden = true;
+  setHidden(el("[data-pf-root]"), true);
   const host = el("[data-pf-state]");
-  host.hidden = false;
+  setHidden(host, false);
   host.innerHTML = `
     <div class="pf__state-inner">
       <i data-icon="${icon}"></i>
@@ -160,8 +185,8 @@ function showState(icon, title, text, action = "") {
 }
 
 function renderAll() {
-  el("[data-pf-state]").hidden = true;
-  el("[data-pf-root]").hidden = false;
+  setHidden(el("[data-pf-state]"), true);
+  setHidden(el("[data-pf-root]"), false);
   renderSide();
   renderHead();
   renderSideActions();
@@ -177,16 +202,16 @@ function renderSide() {
   const img = el("[data-pf-side-img]");
   const src = avatarOf(p.avatar, p.name);
   img.src = src;
-  img.hidden = false;
-  el("[data-pf-side-initial]").hidden = Boolean(p.avatar);
+  setHidden(img, false);
+  setHidden(el("[data-pf-side-initial]"), Boolean(p.avatar));
   img.addEventListener("error", () => {
-    img.hidden = true;
-    el("[data-pf-side-initial]").hidden = false;
+    setHidden(img, true);
+    setHidden(el("[data-pf-side-initial]"), false);
   });
   el("[data-pf-side-name]").textContent = p.name || p.username || "Member";
   el("[data-pf-side-username]").textContent = p.username || "";
   const idEl = el("[data-pf-side-id]");
-  idEl.hidden = !p.member_id;
+  setHidden(idEl, !p.member_id);
   idEl.textContent = p.member_id ? `Member ID ${p.member_id}` : "";
   el("[data-pf-stat-followers]").textContent = num(s.followers);
   el("[data-pf-stat-following]").textContent = num(s.following);
@@ -203,16 +228,16 @@ function renderHead() {
   const name = p.name || p.username || "Member";
   if (p.avatar) {
     img.src = p.avatar;
-    img.hidden = false;
-    el("[data-pf-avatar-initial]").hidden = true;
+    setHidden(img, false);
+    setHidden(el("[data-pf-avatar-initial]"), true);
   } else {
     el("[data-pf-avatar-initial]").textContent = initial(name);
-    img.hidden = true;
-    el("[data-pf-avatar-initial]").hidden = false;
+    setHidden(img, true);
+    setHidden(el("[data-pf-avatar-initial]"), false);
   }
   img.addEventListener("error", () => {
-    img.hidden = true;
-    el("[data-pf-avatar-initial]").hidden = false;
+    setHidden(img, true);
+    setHidden(el("[data-pf-avatar-initial]"), false);
   });
   void avatar;
 
@@ -228,16 +253,16 @@ function renderHead() {
   const conn = el("[data-pf-conn]");
   const owner = state.data.relationship?.is_owner;
   if (p.online === null || p.online === undefined) {
-    conn.hidden = true;
+    setHidden(conn, true);
   } else {
-    conn.hidden = false;
+    setHidden(conn, false);
     conn.classList.toggle("is-on", p.online === true);
     el("[data-pf-conn-label]").textContent = p.online ? "Online" : "Offline";
     conn.title = owner && p.online !== null ? "Visitors see this only while “Connection status” is on." : "";
   }
 
   const desc = el("[data-pf-desc]");
-  desc.hidden = !p.description;
+  setHidden(desc, !p.description);
   desc.textContent = p.description || "";
 
   const meta = [];

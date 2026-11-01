@@ -18,6 +18,9 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const html = readFileSync(join(root, "profile.html"), "utf8").replace(/<script[^>]*src="[^"]*"[^>]*><\/script>/g, "");
+/* the page stylesheet, injected so getComputedStyle() can answer questions
+   about [hidden] — jsdom does not fetch external CSS on its own */
+const css = readFileSync(join(root, "assets/css/profile.css"), "utf8");
 
 const TOKEN = "c".repeat(64);
 const OWNER = {
@@ -178,6 +181,9 @@ async function boot(pass, search = "") {
   scenario = { ...scenario, owner: pass === 1 };
   const dom = new JSDOM(html, { url: `http://localhost/profile.html${search}`, pretendToBeVisual: true });
   const { window } = dom;
+  const style = window.document.createElement("style");
+  style.textContent = css;
+  window.document.head.appendChild(style);
   const errors = [];
   window.addEventListener("error", (e) => errors.push(String(e.error || e.message)));
   window.addEventListener("unhandledrejection", (e) => errors.push(String(e.reason)));
@@ -265,6 +271,16 @@ function expect(name, condition, detail = "") {
   expect("owner: menu rendered", p.qsa("[data-pf-menu] [data-pf-view]").length >= 8, String(p.qsa("[data-pf-menu] [data-pf-view]").length));
   expect("owner: updates tab is first", p.text(".pf-tab.is-active") === "Updates", p.text(".pf-tab.is-active"));
   expect("owner: every icon hydrated to svg", p.qsa("[data-icon]").length === 0, `${p.qsa("[data-icon]").length} left`);
+  expect(
+    "owner: loading skeleton is gone",
+    p.window.getComputedStyle(p.qs("[data-pf-state]")).display === "none",
+    p.window.getComputedStyle(p.qs("[data-pf-state]")).display
+  );
+  expect(
+    "owner: profile grid is visible",
+    p.window.getComputedStyle(p.qs("[data-pf-root]")).display !== "none",
+    p.window.getComputedStyle(p.qs("[data-pf-root]")).display
+  );
   expect("owner: svg icons drawn", p.qsa("svg.ico").length >= 20, String(p.qsa("svg.ico").length));
   expect("owner: stats carry icons", p.qsa(".pf-stats dt svg").length === 3, String(p.qsa(".pf-stats dt svg").length));
   expect("owner: tabs carry icons", p.qsa(".pf-tab svg").length === 3, String(p.qsa(".pf-tab svg").length));
@@ -331,6 +347,11 @@ function expect(name, condition, detail = "") {
   expect("visitor: two tabs", p.qsa(".pf-tab").length === 2, String(p.qsa(".pf-tab").length));
   expect("visitor: no activity tab", !p.qsa(".pf-tab").some((tab) => tab.dataset.pfView === "activity"));
   expect("visitor: connection hidden", p.qs("[data-pf-conn]")?.hidden === true);
+  expect(
+    "visitor: cylinder takes no space",
+    p.window.getComputedStyle(p.qs("[data-pf-conn]")).display === "none",
+    p.window.getComputedStyle(p.qs("[data-pf-conn]")).display
+  );
   expect("visitor: follow button", /Follow/.test(p.text('[data-pf-act="follow"]')), p.text('[data-pf-act="follow"]'));
   expect("visitor: no owner menu", p.qsa("[data-pf-menu] [data-pf-view]").length === 0);
   expect("visitor: icons hydrated", p.qsa("[data-icon]").length === 0, `${p.qsa("[data-icon]").length} left`);
@@ -354,6 +375,16 @@ function expect(name, condition, detail = "") {
   const p = await boot(3, "?u=%40sara");
 
   expect("blocked: profile not drawn", p.qs("[data-pf-root]")?.hidden === true);
+  expect(
+    "blocked: grid takes no space",
+    p.window.getComputedStyle(p.qs("[data-pf-root]")).display === "none",
+    p.window.getComputedStyle(p.qs("[data-pf-root]")).display
+  );
+  expect(
+    "blocked: state card visible",
+    p.window.getComputedStyle(p.qs("[data-pf-state]")).display !== "none",
+    p.window.getComputedStyle(p.qs("[data-pf-state]")).display
+  );
   expect("blocked: reason shown", /not available/i.test(p.text("[data-pf-state]")), p.text("[data-pf-state]").slice(0, 120));
   expect("blocked: no page errors", p.errors.length === 0, p.errors.join(" | "));
 }
