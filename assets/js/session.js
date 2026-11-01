@@ -9,6 +9,7 @@
  * This module only reads the session — it never invents one.
  */
 import { store, randomId, avatarPlaceholder } from "./utils.js";
+import { levelInfo } from "./levels.js";
 import { loadMember } from "./data.js";
 
 const VISITOR_KEY = "1w.visitor";
@@ -182,8 +183,10 @@ export function avatarFor(member = getMember(), name = "Visitor") {
 
 export function levelLabel(member = getMember()) {
   if (!member) return "Guest";
-  const lvl = Number(member.level) || 1;
-  return `LV ${lvl}`;
+  return levelInfo({
+    points: Number(member.points) || 0,
+    membership: member.membership || "free",
+  }).badge;
 }
 
 export function pointsValue(member = getMember()) {

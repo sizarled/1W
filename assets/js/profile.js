@@ -29,16 +29,7 @@ import { brand } from "./brands.js";
 import { toast } from "./ui.js";
 import { sessionToken, getMember } from "./session.js";
 
-const LEVELS = {
-  1: "Newcomer",
-  2: "Viewer",
-  3: "Regular",
-  4: "Contributor",
-  5: "Creator",
-  6: "Publisher",
-  7: "Merchant",
-  8: "Partner",
-};
+import { levelInfo } from "./levels.js";
 
 const PLATFORMS = [
   ["facebook", "Facebook"],
@@ -252,7 +243,10 @@ function renderHead() {
   el("[data-pf-username]").textContent = p.username || "";
 
   const flags = [];
-  if (p.level) flags.push(`<span class="badge badge--solid">L${p.level} · ${esc(LEVELS[p.level] || "Member")}</span>`);
+  {
+    const info = levelInfo({ points: p.wealth || 0, membership: p.membership || "free" });
+    flags.push(`<span class="badge badge--solid" title="${esc(info.row.summary)}">${esc(info.badge)} · ${esc(info.row.name)}</span>`);
+  }
   if (p.wealth !== null && p.wealth !== undefined) flags.push(`<span class="badge"><i data-icon="gem"></i> ${num(p.wealth)} pts</span>`);
   if (p.membership && p.membership !== "free") flags.push(`<span class="badge badge--outline"><i data-icon="crown"></i> ${esc(p.membership)}</span>`);
   el("[data-pf-flags]").innerHTML = flags.join("");

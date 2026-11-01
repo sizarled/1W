@@ -6,12 +6,12 @@
 import { getMember, setMember, consumeChanges, noteSeen, refreshMember, levelLabel, pointsValue } from "./session.js";
 import { pointsToast, levelToast } from "./ui.js";
 import { num } from "./utils.js";
+import { capFor, levelInfo } from "./levels.js";
 
-const LEVEL_CAPS = { free: 3, silver: 5, gold: 7, diamond: 10 };
 let pollHandle = null;
 
 export function levelCap(member = getMember()) {
-  return LEVEL_CAPS[String(member?.membership || "free").toLowerCase()] || 3;
+  return capFor(member?.membership || "free");
 }
 
 export function renderWallet() {
@@ -20,18 +20,26 @@ export function renderWallet() {
   document.querySelectorAll("[data-wallet]").forEach((el) => {
     const valueEl = el.querySelector("[data-wallet-value]");
     const levelEl = el.querySelector("[data-wallet-level]");
+    const info = member ? levelInfo({ points, membership: member.membership || "free" }) : null;
     if (valueEl) valueEl.textContent = member ? num(points) : "—";
-    if (levelEl) levelEl.textContent = member ? levelLabel(member) : "Guest";
-    el.setAttribute("aria-label", member ? `Your points: ${num(points)}, level ${member.level || 1}` : "Sign in to collect points");
+    if (levelEl) levelEl.textContent = member ? info.badge : "Guest";
+    el.setAttribute(
+      "aria-label",
+      member ? `Your points: ${num(points)}, ${info.badge}, ${info.row.name}` : "Sign in to collect points"
+    );
   });
 
   document.querySelectorAll("[data-level-fill]").forEach((el) => {
-    const cap = levelCap(member);
-    const lvl = Number(member?.level || 0);
-    el.style.width = `${Math.min(100, Math.round((lvl / cap) * 100))}%`;
+    const info = member ? levelInfo({ points: pointsValue(member), membership: member.membership || "free" }) : null;
+    el.style.width = `${info ? info.progressPct : 0}%`;
   });
   document.querySelectorAll("[data-level-cap]").forEach((el) => {
-    el.textContent = member ? `LV ${Number(member.level) || 1} / ${levelCap(member)}` : "Guest";
+    const info = member ? levelInfo({ points: pointsValue(member), membership: member.membership || "free" }) : null;
+    if (!info) {
+      el.textContent = "Guest";
+      return;
+    }
+    el.textContent = `${info.badge} / ${info.capBadge}${info.capped ? " · cap" : ""}`;
   });
   document.querySelectorAll("[data-member-points]").forEach((el) => {
     el.textContent = member ? num(points) : "0";

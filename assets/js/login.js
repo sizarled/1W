@@ -12,6 +12,7 @@
  */
 
 import { esc, qs, formatDate, avatarPlaceholder } from "./utils.js";
+import { levelInfo } from "./levels.js";
 import { hydrateIcons } from "./icons.js";
 import { toast } from "./ui.js";
 import { playSound } from "./sound.js";
@@ -321,7 +322,7 @@ function showSignedIn(member, session, message, restricted = false) {
       ["Member ID", member?.member_id],
       ["Username", member?.username],
       ["Email", member?.email],
-      ["Level", member?.level ? `LV ${member.level}` : "—"],
+      ["Level", member ? levelInfo({ points: Number(member.points) || 0, membership: member.membership || "free" }).badge : "—"],
       ["Membership", titleCase(member?.membership || "free")],
       ["Signed in", formatDate(new Date())],
       ["Session ends", session?.expires_at ? formatDate(session.expires_at) : "—"],

@@ -346,7 +346,7 @@ function expect(name, condition, detail = "") {
   expect("owner: member ID in the sidebar", p.text("[data-pf-side-id]").includes("ID100003"), p.text("[data-pf-side-id]"));
   expect("owner: followers stat", p.text("[data-pf-stat-followers]") === "12", p.text("[data-pf-stat-followers]"));
   expect("owner: reach stat", p.text("[data-pf-stat-reach]") === "240", p.text("[data-pf-stat-reach]"));
-  expect("owner: level badge", /L3/.test(p.text("[data-pf-flags]")), p.text("[data-pf-flags]"));
+  expect("owner: level badge", /LV30 · Publisher/.test(p.text("[data-pf-flags]")), p.text("[data-pf-flags]"));
   expect("owner: country in the meta", p.text("[data-pf-meta]").includes("Morocco"), p.text("[data-pf-meta]"));
   expect("owner: connection cylinder on", p.qs("[data-pf-conn]")?.classList.contains("is-on") === true);
   expect("owner: three tabs", p.qsa(".pf-tab").length === 3, String(p.qsa(".pf-tab").length));

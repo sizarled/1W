@@ -16,6 +16,7 @@
  */
 
 import { rpc } from "./data.js";
+import { LEVELS, levelInfo, rowFor as levelRow } from "./levels.js";
 import {
   qs,
   qsa,
@@ -36,17 +37,6 @@ import { setMember, signOut, sessionToken, clearSessionToken } from "./session.j
 /* vocabulary                                                          */
 /* ================================================================== */
 const POINTS_PER_USD = 100;
-
-const LEVELS = [
-  { level: 1, points: 0, name: "Newcomer", perks: "Dashboard, codes, favorites" },
-  { level: 2, points: 250, name: "Viewer", perks: "Notebook + 8 code devices" },
-  { level: 3, points: 800, name: "Regular", perks: "Comments and reviews" },
-  { level: 4, points: 2000, name: "Contributor", perks: "Publish articles and answers" },
-  { level: 5, points: 5000, name: "Creator", perks: "eStudio, eBlog, eGallery" },
-  { level: 6, points: 12000, name: "Publisher", perks: "eServer, eCinema, eLibrary" },
-  { level: 7, points: 28000, name: "Merchant", perks: "eStore, auctions, payouts" },
-  { level: 8, points: 60000, name: "Partner", perks: "Advertising campaigns, moderation tools" },
-];
 
 const NOTIFY_SOURCES = [
   { key: "messages", label: "Messages", text: "Direct messages and support replies. Always on.", locked: true },
@@ -568,7 +558,7 @@ function overviewView() {
         <div><dt>Member ID</dt><dd>${esc(member.member_id || "—")}</dd></div>
         <div><dt>Email</dt><dd>${esc(member.email || "—")}</dd></div>
         <div><dt>Phone</dt><dd>${esc(member.phone_number || "—")}</dd></div>
-        <div><dt>Level</dt><dd>${esc(o.level || 1)}</dd></div>
+        <div><dt>Level</dt><dd>${esc(levelInfo({ points: o.points_total || 0, membership: o.membership || "free" }).badge)}</dd></div>
         <div><dt>Last sign-in</dt><dd>${esc(member.last_login_at ? formatDate(member.last_login_at, { hour: "2-digit", minute: "2-digit" }) : "—")}</dd></div>
       </dl>
     </section>
@@ -1068,46 +1058,80 @@ function pointsView() {
 /* level                                                             */
 /* ---------------------------------------------------------------- */
 function levelView() {
-  const level = Number((state.data.overview || {}).level || 1);
-  const earned = Number((state.data.overview || {}).points_total || 0);
-  const current = LEVELS.find((l) => l.level === level) || LEVELS[0];
-  const next = LEVELS.find((l) => l.level === level + 1);
-  const floor = current.points;
-  const ceil = next ? next.points : current.points;
-  const progress = next ? Math.min(100, Math.round(((earned - floor) / Math.max(1, ceil - floor)) * 100)) : 100;
+  const o = state.data.overview || {};
+  const info = levelInfo({ points: o.points_total || 0, membership: o.membership || "free" });
+  const current = info.row;
+  const next = info.next;
 
   const checks = [
     ["Account activated", String((state.data.member || {}).status) === "active"],
+    ["Level 1 points collected", info.points >= 10],
+    ["Membership active", Boolean(o.membership) && String(o.membership) !== "free"],
     ["Email confirmed", Boolean((state.data.member || {}).email)],
     ["Phone added", Boolean((state.data.member || {}).phone_number)],
     ["Profile picture", Boolean((state.data.member || {}).avatar_url)],
     ["First viewing code", (state.data.codes || []).length > 0],
-    ["First review", false],
   ];
+
+  const rows = LEVELS.map((row) => {
+    const mine = info.level === row.level || (info.level === "max" && row.level === "max");
+    const reached = row.level === "max" ? info.level === "max" : info.level !== "max" && info.level >= row.level;
+    const state_ = mine ? "Current" : reached ? "Unlocked" : "Locked";
+    return `<tr>
+      <td><strong>${row.level === "max" ? "LVMax" : `LV${row.level}0`}</strong></td>
+      <td>${esc(row.name)}</td>
+      <td>${row.level === "max" ? `${num(row.points)}+` : num(row.points)}</td>
+      <td>${esc(row.membership.join(" / "))}${row.months ? ` · ${row.months} mo` : ""}</td>
+      <td>${row.quotas.tasks === Infinity ? "—" : num(row.quotas.tasks)}</td>
+      <td>${row.quotas.content === Infinity ? "unlimited" : `${num(row.quotas.content)} / day`}</td>
+      <td>${row.quotas.server === Infinity ? "unlimited" : `${num(row.quotas.server)} / day`}</td>
+      <td><span class="dsh-chip" data-tone="${mine || reached ? "on" : "off"}">${state_}</span></td>
+    </tr>`;
+  }).join("");
 
   return `
     <div class="dsh-grid">
-      ${stat("crown", "Current level", `${level} · ${current.name}`, `${num(earned)} points earned`)}
-      ${stat("sparkle", "Next level", next ? `${next.level} · ${next.name}` : "Top level", next ? `${num(Math.max(0, ceil - earned))} points to go` : "Maximum reached")}
+      ${stat("crown", "Current level", `${info.badge} · ${current.name}`, `${num(info.points)} points lifetime`)}
+      ${
+        info.capped
+          ? stat("lock", "Membership cap", info.capBadge, `${esc(o.membership || "free")} membership is the ceiling`)
+          : next
+            ? stat("sparkle", "Next level", `LV${next.level}0 · ${next.name}`, `${num(info.toNext)} points to go`)
+            : stat("sparkle", "Next level", "LVMax", "No ceiling left")
+      }
     </div>
 
     <section class="dsh-card">
-      <div class="dsh-card__head"><h2 class="dsh-card__title">Progress</h2><span class="dsh-chip">${progress}%</span></div>
-      <div class="dsh-progress" role="progressbar" aria-valuenow="${progress}" aria-valuemin="0" aria-valuemax="100"><span style="width:${progress}%"></span></div>
-      <p class="dsh-card__hint">${next ? `${num(Math.max(0, ceil - earned))} more points unlock ${esc(next.name)}: ${esc(next.perks)}.` : "You reached the highest level."}</p>
+      <div class="dsh-card__head">
+        <h2 class="dsh-card__title">Progress inside ${info.level === "max" ? "LVMax" : `level ${info.level}`}</h2>
+        <span class="dsh-chip">${info.progressPct}%</span>
+      </div>
+      <div class="dsh-progress" role="progressbar" aria-valuenow="${info.progressPct}" aria-valuemin="0" aria-valuemax="100"><span style="width:${info.progressPct}%"></span></div>
+      <p class="dsh-card__hint">
+        ${
+          info.capped
+            ? `You are held at <strong>${info.capBadge}</strong> by your ${esc(o.membership || "free")} membership. The points stay in your account — a higher membership lifts the ceiling and the level is granted straight away.`
+            : next
+              ? `${num(info.toNext)} more points reach <strong>LV${next.level}0</strong> (${esc(next.name)}). The badge digit — the 5 in LV85 — is the tens of percent already earned towards it.`
+              : "You are at the top of the ladder."
+        }
+      </p>
+      <p class="dsh-card__hint">${esc(current.summary)}</p>
+      <ul class="dsh-list">
+        ${current.rights.map((right) => `<li><i data-icon="check"></i> ${esc(right)}</li>`).join("")}
+      </ul>
     </section>
 
     <section class="dsh-card">
-      <div class="dsh-card__head"><h2 class="dsh-card__title">Levels and what they unlock</h2></div>
+      <div class="dsh-card__head">
+        <h2 class="dsh-card__title">The ladder</h2>
+        <span class="dsh-chip">points decide the level · membership decides the ceiling</span>
+      </div>
       <div class="dsh-table-wrap"><table class="dsh-table">
-        <thead><tr><th>Level</th><th>Name</th><th>Points</th><th>Unlocks</th><th></th></tr></thead>
-        <tbody>${LEVELS.map(
-          (l) => `<tr>
-            <td><strong>${l.level}</strong></td><td>${esc(l.name)}</td><td>${num(l.points)}</td><td>${esc(l.perks)}</td>
-            <td><span class="dsh-chip" data-tone="${level >= l.level ? "on" : "off"}">${level >= l.level ? "Unlocked" : "Locked"}</span></td>
-          </tr>`
-        ).join("")}</tbody>
+        <thead><tr><th>Badge</th><th>Name</th><th>Points</th><th>Membership</th><th>Tasks</th><th>Publish</th><th>Servers</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
       </table></div>
+      <p class="dsh-card__hint">Every level needs the points below it and one more task than the level before. Card: Free LV30 · Silver LV50 · Gold LV80 · Diamond open above LV80.</p>
     </section>
 
     <section class="dsh-card">

@@ -359,7 +359,7 @@ const checks = {
   details:
     details.length === 8 &&
     details.some((r) => r.includes("Member ID")) && details.some((r) => r.includes("ID100042")) &&
-    details.some((r) => r.includes("LV 3")) && details.some((r) => r.includes("Gold")) &&
+    details.some((r) => r.includes("LevelLV23")) && details.some((r) => r.includes("Gold")) &&
     details.some((r) => r.includes("Stay signed in")),
   actions:
     report.profileHref === "profile.html" && report.dashboardHref === "dashboard.html" &&

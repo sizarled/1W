@@ -31,7 +31,7 @@ function page(file) {
   return readFileSync(join(root, file), "utf8").replace(/<script[^>]*src="[^"]*"[^>]*><\/script>/g, "");
 }
 
-async function boot(file, { stored = null } = {}) {
+async function boot(file, { stored = null, member = null } = {}) {
   const dom = new JSDOM(page(file), { url: `http://localhost/${file}`, pretendToBeVisual: true });
   const { window } = dom;
   const errors = [];
@@ -81,6 +81,7 @@ async function boot(file, { stored = null } = {}) {
 
   window.localStorage.clear();
   if (stored !== null) window.localStorage.setItem("1w.sidebar", String(stored));
+  if (member) window.localStorage.setItem("1w.member", JSON.stringify(member));
 
   const { mountShell } = await import(`file://${join(root, "assets/js/shell.js")}?page=${file}`);
   mountShell();
@@ -149,7 +150,34 @@ async function boot(file, { stored = null } = {}) {
   expect("css: content still clears the rail", /body\.sb-open\s+\.site-main\s*\{[^}]*padding-left:\s*var\(--sidebar-w\)/.test(css));
 }
 
+/* ------------------------------------------------------------------ */
+/* pass 4 — the level badge in the header                             */
+/* ------------------------------------------------------------------ */
+{
+  const p = await boot("index.html", {
+    stored: false,
+    member: { id: "m1", username: "@sara", name: "Sara", points: 550000000, membership: "diamond", level: 8 },
+  });
+  expect("badge: the wallet prints LV85", p.qs("[data-wallet-level]")?.textContent === "LV85", p.qs("[data-wallet-level]")?.textContent);
+  expect("badge: the meter names the ceiling", /LV85 \/ LVMax/.test(p.qs("[data-level-cap]")?.textContent || ""), p.qs("[data-level-cap]")?.textContent);
+  expect("badge: the bar reads 50 %", p.qs("[data-level-fill]")?.style.width === "50%", p.qs("[data-level-fill]")?.style.width);
+  expect("badge: no page errors", p.errors.length === 0, p.errors.join(" | "));
+}
+
+{
+  const p = await boot("index.html", {
+    stored: false,
+    member: { id: "m2", username: "@amine", name: "Amine", points: 1000000000, membership: "free", level: 9 },
+  });
+  expect("cap: a free member at a billion points shows LV39", p.qs("[data-wallet-level]")?.textContent === "LV39", p.qs("[data-wallet-level]")?.textContent);
+  expect("cap: the meter says so", /LV39 \/ LV30 · cap/.test(p.qs("[data-level-cap]")?.textContent || ""), p.qs("[data-level-cap]")?.textContent);
+  expect("cap: the bar is full", p.qs("[data-level-fill]")?.style.width === "100%", p.qs("[data-level-fill]")?.style.width);
+  expect("cap: no page errors", p.errors.length === 0, p.errors.join(" | "));
+}
+
 const failed = checks.filter((c) => !c.ok);
 console.log(`shell smoke: ${checks.length - failed.length}/${checks.length}`);
 failed.forEach((c) => console.log(`  ✗ ${c.name}${c.detail ? ` — ${c.detail}` : ""}`));
 if (failed.length) process.exit(1);
+/* the wallet keeps a poll timer alive while a member is signed in */
+process.exit(0);

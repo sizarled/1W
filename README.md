@@ -836,6 +836,16 @@ reaction — with `post_react`, `post_comment`, `post_comments`, `post_reshare`,
 `post_reactors` and `post_delete` behind it. Thumbnails upload to `users/posts/…` in the `source`
 bucket with the `apikey` header only.
 
+### Levels
+
+The level is the points: `10`, `100`, `1 000` … `100 000 000 000`, and the membership only sets the
+ceiling — Free `LV30`, Silver `LV50`, Gold `LV80`, Diamond open. The badge is `LV` + the level + the
+tens digit of the progress, so **`LV85` is level 8 with half of level 9 already earned**, `LV00` is a
+member with no points yet, and `LVMax` is the open level. Everything lives in
+[`assets/js/levels.js`](assets/js/levels.js) — the header wallet, the sidebar meter, the login card,
+the profile flag and the dashboard level page read from it. Thresholds, quotas and rights are
+written down in [`docs/levels.md`](docs/levels.md).
+
 ## Sounds
 
 Played from the public `source` bucket of the Supabase project:
