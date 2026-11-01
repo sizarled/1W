@@ -2209,6 +2209,7 @@ function initSideRail() {
     tab: qs("[data-pf-edge]"),
     root: qs("[data-pf-root]"),
     pinSelector: "[data-pf-pin]",
+    defaultPinned: true,
     openClass: "pf-side-open",
     pinnedClass: "pf-side-pinned",
     railClass: "pf-side-rail",

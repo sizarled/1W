@@ -1600,6 +1600,7 @@ function paintSideState() {
       tab: qs("[data-side-edge]"),
       root: qs("[data-dsh]"),
       pinSelector: "[data-side-pin]",
+      defaultPinned: true,
       // the floating panel is always the full menu, never the folded rail
       onPin: () => setSideCollapsed(false),
     });

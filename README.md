@@ -555,8 +555,9 @@ top corner of the profile card, next to the fold button on the dashboard):
 | **On the edge** | the panel is gone and the page uses the whole width; moving the pointer within 34px of the left screen edge (or onto the thin tab on the edge) slides it in **over** the content, and it slides away 320ms after the pointer leaves it | `sb-rail` · `pf-side-rail` · `data-pin="off"` |
 
 The preference is `1w.sidebar.pin` (`"1"` / `"0"`), so pinning the menu on the profile pins it on
-the player too. Without a saved choice the homepage starts pinned (as it always has) and the player,
-the profile and the dashboard start on the edge. The header menu button is the keyboard/pointer
+the player too. Without a saved choice the homepage, the profile and the dashboard start **pinned**
+(they look exactly as they did before) and the player starts **on the edge** — the video needs the
+width, and its menu is the site panel you can also reach from the header button. The header menu button is the keyboard/pointer
 shortcut for the same thing: it pins and unpins on a desktop, and opens the drawer with its scrim
 below 1024px — where the pin and the edge tab are hidden, because there is no edge to reach with a
 finger. `Escape` closes a floating panel and leaves a pinned one alone.

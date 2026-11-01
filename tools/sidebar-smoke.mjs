@@ -10,8 +10,9 @@
  *      Escape closes a floating panel.
  *   2. the pin — it persists in `1w.sidebar.pin`, keeps the panel out, and
  *      survives a pointer far from the edge and an Escape press.
- *   3. the same pin, read back on another page (profile.html) and on the
- *      homepage, which starts pinned instead.
+ *   3. profile.html keeps its own menu, pinned by default, and unpinning it puts
+ *      that menu on the edge; the same preference is read back on the player
+ *      and on the homepage.
  *   4. dashboard.html — its own menu follows the same preference: unpinned it
  *      leaves the grid and floats back over the content.
  *   5. the stylesheets — the floating panel never takes room from the page.
@@ -253,7 +254,7 @@ async function boot(file, { desktop = true, stored = {}, dashboard = false } = {
 }
 
 /* ------------------------------------------------------------------ */
-/* 3 — the profile keeps its own menu, with the same rail              */
+/* 3 — the profile keeps its own menu, pinned like the others          */
 /* ------------------------------------------------------------------ */
 {
   const profile = await boot("profile.html?u=%40youssef.amrani");
@@ -261,15 +262,21 @@ async function boot(file, { desktop = true, stored = {}, dashboard = false } = {
 
   expect("profile: no site panel is mounted", !profile.qs(".sidebar"));
   expect("profile: the profile menu is there", Boolean(profile.qs(".pf-side")));
-  expect("profile: the menu starts on the edge", profile.body.classList.contains("pf-side-rail"));
-  expect("profile: it starts closed", !profile.body.classList.contains("pf-side-open"));
+  expect("profile: the menu starts pinned", profile.body.classList.contains("pf-side-pinned"));
+  expect("profile: so it is out", profile.body.classList.contains("pf-side-open"));
+  expect("profile: it is announced", profile.qs(".pf-side")?.getAttribute("aria-hidden") === "false");
   expect("profile: the site rail classes are untouched", !profile.body.classList.contains("sb-open"));
   expect("profile: the menu carries a pin", Boolean(pin()));
+
+  profile.click(pin());
+  await profile.wait(40);
+  expect("profile: unpinning leaves it on the edge", profile.body.classList.contains("pf-side-rail"));
+  expect("profile: unpinned it closes", !profile.body.classList.contains("pf-side-open"));
+  expect("profile: the choice is remembered", profile.stored("1w.sidebar.pin") === '"0"');
 
   profile.move(3);
   await profile.wait(40);
   expect("profile: the edge brings the menu in", profile.body.classList.contains("pf-side-open"));
-  expect("profile: it is announced again", profile.qs(".pf-side")?.getAttribute("aria-hidden") === "false");
 
   profile.move(900);
   await profile.wait(500);
@@ -279,7 +286,6 @@ async function boot(file, { desktop = true, stored = {}, dashboard = false } = {
   await profile.wait(40);
   expect("profile: the pin keeps the menu out", profile.body.classList.contains("pf-side-open"));
   expect("profile: it is marked pinned", profile.body.classList.contains("pf-side-pinned"));
-  expect("profile: the choice is remembered", profile.stored("1w.sidebar.pin") === '"1"');
   expect("profile: the pin reads pressed", profile.qs("[data-pf-pin]")?.getAttribute("aria-pressed") === "true");
 
   profile.move(900);
@@ -289,6 +295,7 @@ async function boot(file, { desktop = true, stored = {}, dashboard = false } = {
   profile.key("Escape");
   await profile.wait(40);
   expect("profile: Escape leaves a pinned menu alone", profile.body.classList.contains("pf-side-open"));
+  expect("profile: no page errors", profile.errors.length === 0, profile.errors.join(" | "));
 }
 
 {
@@ -341,11 +348,16 @@ async function boot(file, { desktop = true, stored = {}, dashboard = false } = {
   const dsh = p.qs("[data-dsh]");
 
   expect("dashboard: the menu is there", p.qs("[data-side]")?.hidden === false);
-  expect("dashboard: it starts unpinned", dsh?.dataset.pin === "off", dsh?.dataset.pin);
-  expect("dashboard: the panel is away", dsh?.dataset.sideReveal === "off");
-  expect("dashboard: the edge tab is offered", p.qs("[data-side-edge]")?.hidden === false);
+  expect("dashboard: it starts pinned", dsh?.dataset.pin === "on", dsh?.dataset.pin);
+  expect("dashboard: so it is out", dsh?.dataset.sideReveal === "on");
   expect("dashboard: the panel carries a pin", Boolean(p.qs("[data-side-pin]")));
   expect("dashboard: the page itself is never hidden from assistive tech", dsh?.getAttribute("aria-hidden") === null, dsh?.getAttribute("aria-hidden"));
+
+  p.click(p.qs("[data-side-pin]"));
+  await p.wait(40);
+  expect("dashboard: unpinning takes it off the grid", dsh?.dataset.pin === "off");
+  expect("dashboard: unpinned it is away", dsh?.dataset.sideReveal === "off");
+  expect("dashboard: the choice is shared", p.stored("1w.sidebar.pin") === '"0"');
 
   p.move(2);
   await p.wait(40);
@@ -362,17 +374,12 @@ async function boot(file, { desktop = true, stored = {}, dashboard = false } = {
   p.click(p.qs("[data-side-pin]"));
   await p.wait(40);
   expect("dashboard: the pin keeps it out", dsh?.dataset.pin === "on");
-  expect("dashboard: the floating state is over", dsh?.dataset.sideReveal === "on");
-  expect("dashboard: the choice is shared", p.stored("1w.sidebar.pin") === '"1"');
   expect("dashboard: the pin reads pressed", p.qs("[data-side-pin]")?.getAttribute("aria-pressed") === "true");
+  expect("dashboard: the choice is shared again", p.stored("1w.sidebar.pin") === '"1"');
 
   p.move(900);
   await p.wait(500);
   expect("dashboard: pinned, the pointer does not matter", dsh?.dataset.sideReveal === "on");
-
-  p.click(p.qs("[data-side-pin]"));
-  await p.wait(40);
-  expect("dashboard: unpinning hides it", dsh?.dataset.pin === "off" && dsh?.dataset.sideReveal === "off");
   expect("dashboard: no page errors", p.errors.length === 0, p.errors.join(" | "));
 }
 
