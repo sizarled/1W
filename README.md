@@ -813,6 +813,16 @@ Every table and rule is written down in
 [`docs/profile-tables-applied.md`](docs/profile-tables-applied.md); the M2 SQL mirror is
 [`tools/sql/posts-core.sql`](tools/sql/posts-core.sql).
 
+### Publishing is live
+
+`profile.html` no longer stops at a placeholder: the **Publish** button opens the composer
+(content → visibility → schedule), the composer calls `post_create`, and the Updates, Activity and
+Suggestions tabs are filled by `profile_feed`. A post card carries the Like / Dislike / Comment /
+Repost / Share / Report bar — a comment is refused until the post is reacted to, and takes that
+reaction — with `post_react`, `post_comment`, `post_comments`, `post_reshare`, `post_report`,
+`post_reactors` and `post_delete` behind it. Thumbnails upload to `users/posts/…` in the `source`
+bucket with the `apikey` header only.
+
 ## Sounds
 
 Played from the public `source` bucket of the Supabase project:

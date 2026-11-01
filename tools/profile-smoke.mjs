@@ -75,6 +75,39 @@ const SETTINGS = {
   allow_keyword_follows: true,
 };
 
+const FEED = [
+  {
+    id: "post-1",
+    code: "PST-000101",
+    type: "video",
+    title: "The monochrome century",
+    description: "A short look at black-and-white film.",
+    thumbnail: null,
+    embed: "https://example.com/watch",
+    language: "ar",
+    translation_status: "manual",
+    visibility: "general",
+    status: "published",
+    published_at: new Date(Date.now() - 3600000).toISOString(),
+    scheduled_at: null,
+    read_minutes: 3,
+    word_count: 540,
+    rank_points: 45,
+    reach_points: 12,
+    publisher: { id: "9b2e5c1d-7a44-4c3b-8f01-2d3e4c5b6a70", username: "@sara", name: "Sara Bennani", avatar: null, online: true },
+    author: { id: "9b2e5c1d-7a44-4c3b-8f01-2d3e4c5b6a70", username: "@sara", name: "Sara Bennani", avatar: null },
+    counters: { likes: 30, dislikes: 4, comments: 2, reshares: 7, shares: 1, reports: 0, impressions: 120, clicks: 9, watch_minutes: 44 },
+    keywords: [
+      { id: "k1", keyword: "Cinema", role: "main", parent_id: null },
+      { id: "k2", keyword: "Noir", role: "sub", parent_id: "k1" },
+    ],
+    related: [{ label: "Source", url: "https://example.com" }],
+    translations: [{ language: "en", title: "The monochrome century", status: "ready", kind: "manual", description: null }],
+    audience: [],
+    mine: { reaction: null, reshared: false, reported: false, can_interact: true, can_manage: false },
+  },
+];
+
 const calls = [];
 let scenario = {};
 
@@ -173,12 +206,60 @@ function stubFetch(url, opts = {}) {
   if (href.includes("/rpc/profile_block_remove")) return reply({ ok: true, blocked: false });
   if (href.includes("/rpc/profile_links_list")) return reply({ ok: true, owner: true, links: [] });
   if (href.includes("/rpc/profile_links_save")) return reply({ ok: true, platform: body.p_platform });
+  if (href.includes("/rpc/profile_feed")) {
+    return reply({
+      ok: true,
+      kind: body.p_kind,
+      count: scenario.feed?.length || 0,
+      total: scenario.feed?.length || 0,
+      posts: scenario.feed || [],
+    });
+  }
+  if (href.includes("/rpc/post_create")) {
+    scenario.created = body.p_payload;
+    return reply({ ok: true, post: { id: "new-post", code: "PST-000123" }, status: "published", scheduled_at: null });
+  }
+  if (href.includes("/rpc/post_reactors")) {
+    return reply({
+      ok: true,
+      kind: body.p_kind,
+      count: 2,
+      members: [
+        { id: "f1", username: "@sara", name: "Sara Bennani", avatar: null, online: true, relation: "follow_you" },
+        { id: "f2", username: "@amine", name: "Amine", avatar: null, online: false, relation: "others" },
+      ],
+    });
+  }
+  if (href.includes("/rpc/post_react")) {
+    scenario.reaction = body.p_value;
+    return reply({
+      ok: true,
+      reaction: body.p_value || null,
+      likes: body.p_value === 1 ? 31 : 30,
+      dislikes: body.p_value === -1 ? 5 : 4,
+    });
+  }
+  if (href.includes("/rpc/post_comments")) {
+    return reply({
+      ok: true,
+      comments: [
+        { id: "c1", body: "Great piece", parent_id: null, polarity: 1, likes: 2, dislikes: 0, mine: false, edited: false, created_at: new Date(Date.now() - 60000).toISOString(), author: { id: "f1", username: "@sara", name: "Sara Bennani", avatar: null } },
+      ],
+    });
+  }
+  if (href.includes("/rpc/post_comment")) {
+    if (!scenario.reaction) return reply({ ok: false, error: "reaction" });
+    return reply({ ok: true, comment: { id: "c2" }, comments: 3 });
+  }
+  if (href.includes("/rpc/post_reshare")) return reply({ ok: true, reshared: true, reshares: 8 });
+  if (href.includes("/rpc/post_report")) return reply({ ok: true, reported: true });
+  if (href.includes("/rpc/post_delete")) return reply({ ok: true, deleted: true, archived: true });
   if (href.includes("/profiles?")) return reply([]);
   return reply({ ok: true });
 }
 
 async function boot(pass, search = "") {
-  scenario = { ...scenario, owner: pass === 1 };
+  scenario = { ...scenario, owner: pass === 1 || pass === 4 };
   const dom = new JSDOM(html, { url: `http://localhost/profile.html${search}`, pretendToBeVisual: true });
   const { window } = dom;
   const style = window.document.createElement("style");
@@ -387,6 +468,129 @@ function expect(name, condition, detail = "") {
   );
   expect("blocked: reason shown", /not available/i.test(p.text("[data-pf-state]")), p.text("[data-pf-state]").slice(0, 120));
   expect("blocked: no page errors", p.errors.length === 0, p.errors.join(" | "));
+}
+
+/* ------------------------------------------------------------------ */
+/* pass 4 — posts and the composer                                    */
+/* ------------------------------------------------------------------ */
+{
+  scenario = { owner: true, following: "none", blocks: [], feed: FEED.map((post) => ({ ...post })), reaction: null };
+  calls.length = 0;
+  const p = await boot(4, "");
+
+  expect("feed: card drawn", p.qsa("[data-post]").length === 1, String(p.qsa("[data-post]").length));
+  expect("feed: title rendered", p.text(".pc__title") === "The monochrome century", p.text(".pc__title"));
+  expect("feed: publisher rendered", p.text(".pc__name") === "Sara Bennani", p.text(".pc__name"));
+  expect("feed: empty state gone", !/No posts yet/.test(p.text("[data-pf-panel]")), p.text("[data-pf-panel]").slice(0, 60));
+  expect("feed: embed opens a new window", p.qs(".pc__embed")?.getAttribute("target") === "_blank");
+  expect("feed: keywords as chips", p.qsa('[data-pc-pane="content"] .pc__kws .chip').length === 2, String(p.qsa('[data-pc-pane="content"] .pc__kws .chip').length));
+  expect("feed: action bar has every action", p.qsa(".pc__act").length === 6, String(p.qsa(".pc__act").length));
+  expect("feed: content info pane hidden", p.qs('[data-pc-pane="info"]').hidden === true);
+
+  p.click(p.qs('[data-pc-tab="info"]'));
+  await p.wait(60);
+  expect("feed: content info pane opens", p.qs('[data-pc-pane="info"]').hidden === false);
+  expect("feed: content pane closes", p.qs('[data-pc-pane="content"]').hidden === true);
+  expect("feed: info shows the language", /AR/.test(p.text('[data-pc-pane="info"]')), p.text('[data-pc-pane="info"]').slice(0, 60));
+  expect("feed: icons hydrated", p.qsa("[data-icon]").length === 0, `${p.qsa("[data-icon]").length} left`);
+
+  // comment is refused until the post is reacted to
+  p.click(p.qs('[data-pc-act="comments"]'));
+  await p.wait(120);
+  expect("comments: pane opens", p.qs("[data-pc-comments]").hidden === false);
+  expect("comments: input locked before a reaction", p.qs("[data-pc-input]")?.disabled === true);
+  expect("comments: rule explained", /Like or dislike/i.test(p.text("[data-pc-hint]")), p.text("[data-pc-hint]"));
+  expect("comments: list loaded", /Great piece/.test(p.text("[data-pc-comment-list]")), p.text("[data-pc-comment-list]").slice(0, 60));
+
+  // like → counters and unlocked comment box
+  p.click(p.qs('[data-pc-act="like"]'));
+  await p.wait(160);
+  expect("like: rpc called with 1", calls.some((c) => c.href.includes("post_react") && c.body.p_value === 1));
+  expect("like: counter updated", p.text('[data-pc-count="likes"]') === "31", p.text('[data-pc-count="likes"]'));
+  expect("like: button pressed", p.qs('[data-pc-act="like"]')?.classList.contains("is-on") === true);
+
+  p.click(p.qs('[data-pc-act="comments"]'));
+  await p.wait(160);
+  expect("comments: input unlocked after the like", p.qs("[data-pc-input]")?.disabled === false, String(p.qs("[data-pc-input]")?.disabled));
+
+  const input = p.qs("[data-pc-input]");
+  input.value = "Well written";
+  p.click(p.qs('[data-pc-act="send-comment"]'));
+  await p.wait(200);
+  const commentCall = calls.find((c) => c.href.endsWith("/rpc/post_comment"));
+  expect("comments: rpc called", Boolean(commentCall));
+  expect("comments: body sent", commentCall?.body?.p_body === "Well written", JSON.stringify(commentCall?.body));
+
+  // members behind a counter
+  p.click(p.qs('[data-pc-count="likes"]'));
+  await p.wait(160);
+  expect("members: modal opens", Boolean(p.qs("[data-pf-modal]")));
+  expect("members: split in groups", p.qsa(".pf-people__group").length === 2, String(p.qsa(".pf-people__group").length));
+  expect("members: names listed", /Sara Bennani/.test(p.text("[data-pf-modal]")), p.text("[data-pf-modal]").slice(0, 80));
+  p.click(p.qs("[data-pf-modal] [data-modal-close]"));
+  await p.wait(60);
+  expect("members: modal closes", !p.qs("[data-pf-modal]"));
+
+  // repost
+  p.click(p.qs('[data-pc-act="repost"]'));
+  await p.wait(160);
+  expect("repost: rpc called", calls.some((c) => c.href.includes("post_reshare")));
+  expect("repost: counter updated", p.text('[data-pc-count="reshares"]') === "8", p.text('[data-pc-count="reshares"]'));
+
+  // ---- composer
+  calls.length = 0;
+  p.click(p.qs('[data-pf-act="publish"]'));
+  await p.wait(120);
+  expect("composer: modal opens", Boolean(p.qs("[data-pf-modal]")));
+  expect("composer: three steps", p.qsa(".pf-step").length === 3, String(p.qsa(".pf-step").length));
+  expect("composer: title field", Boolean(p.qs("[data-draft-title]")));
+  expect("composer: keyword block", p.qsa("[data-draft-main]").length === 1, String(p.qsa("[data-draft-main]").length));
+  expect("composer: upload control", Boolean(p.qs("[data-draft-thumbfile]")));
+
+  // next without a title is refused
+  p.click(p.qs("[data-step-next]"));
+  await p.wait(80);
+  expect("composer: refuses an empty title", Boolean(p.qs("[data-draft-title]")));
+
+  p.qs("[data-draft-title]").value = "A new essay";
+  p.qs("[data-draft-body]").value = "word ".repeat(420);
+  p.qs("[data-main-keyword]").value = "Cinema";
+  p.qs("[data-sub-keyword]").value = "Noir";
+  p.click(p.qs("[data-main-add]"));
+  await p.wait(60);
+  expect("composer: second keyword row", p.qsa("[data-draft-main]").length === 2, String(p.qsa("[data-draft-main]").length));
+  p.click(p.qs("[data-main-add]"));
+  await p.wait(60);
+  p.click(p.qs("[data-main-add]"));
+  await p.wait(60);
+  expect("composer: three mains at most", p.qsa("[data-draft-main]").length === 3, String(p.qsa("[data-draft-main]").length));
+
+  p.click(p.qs("[data-step-next]"));
+  await p.wait(80);
+  expect("composer: visibility step", p.qsa("[data-visibility]").length === 7, String(p.qsa("[data-visibility]").length));
+  p.click(p.qs('[data-visibility="excluded"]'));
+  await p.wait(60);
+  expect("composer: exclusion rules appear", Boolean(p.qs("[data-draft-audience]")));
+  p.qs("[data-draft-audience]").value = "country:MA";
+
+  p.click(p.qs("[data-step-next]"));
+  await p.wait(80);
+  expect("composer: schedule step", p.qsa("[data-schedule]").length === 5, String(p.qsa("[data-schedule]").length));
+  p.click(p.qs('[data-schedule="1d"]'));
+  await p.wait(60);
+  p.click(p.qs("[data-publish]"));
+  await p.wait(260);
+
+  const createCall = calls.find((c) => c.href.includes("/rpc/post_create"));
+  expect("composer: published through post_create", Boolean(createCall));
+  const payload = createCall?.body?.p_payload || {};
+  expect("composer: payload title", payload.title === "A new essay", JSON.stringify(payload.title));
+  expect("composer: payload keywords", payload.keywords?.length === 2 && payload.keywords[1].role === "sub", JSON.stringify(payload.keywords));
+  expect("composer: payload visibility", payload.visibility === "excluded", payload.visibility);
+  expect("composer: payload audience rule", payload.audience?.[0]?.kind === "country" && payload.audience[0].value === "MA", JSON.stringify(payload.audience));
+  expect("composer: payload schedule in the future", Boolean(payload.scheduled_at) && new Date(payload.scheduled_at) > new Date(), payload.scheduled_at);
+  expect("composer: modal closed after publishing", !p.qs("[data-pf-modal]"));
+  expect("composer: no page errors", p.errors.length === 0, p.errors.join(" | "));
 }
 
 /* ------------------------------------------------------------------ */

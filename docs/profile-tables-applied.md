@@ -65,3 +65,74 @@ rows. Everything was then removed, and `posts`, `keywords` and `comment` are bac
 The RPC surface (`profile_feed`, `post_create`, `post_react`, `post_comment`, `reach_allocate`,
 `keyword_page`, `conversation_send`…) plus the composer, the post card and the keyword page. The
 tables are in place; the pages call them next.
+
+## The publishing round — RPCs wired to the page
+
+Three migrations went in after the tables, plus one storage policy. Every function is
+`security definer`, takes the raw session token as `p_token`, takes a post as a uuid or a
+`PST-######` code, and is granted to `anon`, `authenticated` and `service_role` (the anon grant
+matters: a visitor reads public posts with an empty token).
+
+| Migration | Functions |
+| --- | --- |
+| `feed_core` | `viewer_attr(uuid,text)`, `post_visible_to(uuid,uuid)`, `post_card(uuid,uuid)`, `profile_feed(text,text,text,int,int)`, `keyword_search(text,text,int)` |
+| `composer_core_v2` | `profile_posts_count_sync()` + the `posts_profile_count` trigger, `post_create(text,jsonb)`, `post_delete(text,text)` |
+| `post_interactions` | `post_resolve`, `post_react`, `post_comment`, `post_comments`, `post_reshare`, `post_report`, `post_reactors` |
+| `storage_post_images` | policies `source_posts_insert / _update / _read` for `users/posts/<name>.(jpg\|jpeg\|png\|webp\|gif)` |
+
+`post_create` takes one jsonb payload:
+
+```json
+{ "title": "…", "description": "…", "body": "…", "content_type": "article",
+  "thumbnail_url": "…", "embed_url": "…", "language": "ar", "visibility": "general",
+  "scheduled_at": null, "host": "@someone",
+  "keywords": [{ "keyword": "Cinema", "role": "main" },
+               { "keyword": "Noir", "role": "sub", "parent": "Cinema" }],
+  "audience": [{ "kind": "country", "value": "MA", "mode": "exclude" }],
+  "profiles": ["@sara"], "related_links": [{ "label": "Source", "url": "…" }],
+  "translations": [{ "language": "en", "title": "…", "body": "…" }] }
+```
+
+and answers `{ ok, post: <post_card>, status: "published" | "scheduled", scheduled_at }`.
+A `scheduled_at` more than a minute ahead stores the row as a draft with that time.
+
+### Two fixes this round
+
+1. **`posts.content_type` is `not null`** and the composer sends nothing when the parameter is
+   absent; `post_create` built it with `case when coalesce(…, 'article') in (…) then lower(…)` — the
+   `then` branch was `null`. Rather than reload the whole function, a `before insert` trigger
+   `posts_fill_defaults` now fills `content_type`, `language`, `visibility` and `status` when the
+   insert leaves them empty. The function still validates the enum when the value is present.
+2. **Storage** only policed `users/profile/avatar|cover_IDXXXXXX`, so a post thumbnail would have
+   been refused. `users/posts/…` now has its own insert / update / read policies, still with a
+   filename whitelist, and the page still sends `apikey` — never `Bearer`.
+
+### Probe (supabase, 2026-11-01)
+
+A throw-away member `@probe.post`/`ID100010` walked the whole path and every row was deleted
+afterwards (posts 0, keywords 0, comments 0, members 0):
+
+| Step | Result |
+| --- | --- |
+| register + a session row | `member_register` → `ID100010`, session token `probetoken` |
+| `post_create` with a main + sub keyword, a related link, one manual translation, 300 words | `PST-001002`, `read_minutes: 2`, `word_count: 323`, keywords parented, translation `ready` |
+| `profile_feed` updates / activity / guest | 1 / 1 / 1 |
+| `post_react(1)` | `likes: 1` |
+| `post_comment` | `ok` |
+| `post_reshare` | `reshares: 1` |
+| `post_report` | `reported: true` |
+| `post_reactors('likes')` | 1 member |
+| `post_delete` | activity 0, one row in `site_archive` |
+
+`tools/profile-smoke.mjs` grew a fourth pass that repeats the same walk in jsdom with the
+network stubbed — the card, its two tabs, the reaction-first comment rule, the members modal, the
+repost, and a full composer run whose payload is asserted (keywords, audience rule, schedule) —
+**106/106 checks**.
+
+### Still open
+
+- `tools/sql/` has no mirror yet for `feed_core`, `composer_core_v2` and `post_interactions`; the
+  definitions live only in the Supabase migration history. `pg_get_functiondef` can dump them.
+- The composer does not yet show live keyword reach/rank or the “Explore keywords” button, and
+  guest publishing (`host`) has no profile picker — `publish-here` passes the profile it is on.
+- Reach allocation, messaging, the keyword page and post statistics are still to build.

@@ -15,13 +15,15 @@
  * `ref` is accepted as `?u=@username`, `?id=ID100003` or a profile uuid;
  * without a parameter the page shows the signed-in member's own profile.
  *
- * Posts (updates / activity / suggestions) are drawn as an empty state
- * until M2 `posts_core` lands — the tabs, counters and panels around them
- * are already in their final place.
+ * Posts: `profile_feed` fills the three tabs, `post_create` publishes from
+ * the composer (content → visibility → schedule), and `post_react`,
+ * `post_comment`, `post_comments`, `post_reshare`, `post_report`,
+ * `post_reactors` and `post_delete` drive the card's action bar.
  */
 
 import { rpc, rest } from "./data.js";
-import { qs, esc, num, formatDate, avatarPlaceholder, debounce } from "./utils.js";
+import { qs, qsa, esc, num, formatDate, timeAgo, avatarPlaceholder, debounce } from "./utils.js";
+import { SUPABASE, storageUrl } from "./config.js";
 import { hydrateIcons } from "./icons.js";
 import { brand } from "./brands.js";
 import { toast } from "./ui.js";
@@ -76,6 +78,11 @@ const state = {
   links: null,
   search: "",
   results: null,
+  posts: [],
+  feedKind: "updates",
+  comments: new Map(),
+  openComments: new Set(),
+  draft: null,
 };
 
 /* ================================================================== */
@@ -410,51 +417,467 @@ async function renderPanel() {
     return;
   }
 
-  host.innerHTML = renderFeed(state.view, owner);
-  hydrateIcons(host);
+  await renderFeed(state.view, owner);
 }
 
 /* ================================================================== */
 /* panels                                                              */
 /* ================================================================== */
-function renderFeed(kind, owner) {
-  const s = state.data.stats;
-  const copy = {
-    updates:
-      "Everything this profile follows lands here: profiles, keywords, blogs, community spaces, servers, studios and banks — translated posts included.",
-    activity: "What this profile published, reshared, reacted to and commented on.",
-    suggestions:
-      "Posts suggested from the keywords this profile follows and from the interactions it had, ordered by ranking points.",
-  }[kind];
+async function renderFeed(kind, owner) {
+  const host = el("[data-pf-panel]");
+  host.innerHTML = `<div class="pf-block"><div class="pf-block__note">Loading posts…</div></div>`;
 
-  const feed = emptyBlock(
-    kind === "suggestions" ? "sparkle" : "article",
-    "No posts yet",
-    copy,
-    owner
-      ? `<button class="btn btn--ghost btn--sm" type="button" data-pf-act="publish"><i data-icon="plus"></i> Publish the first post</button>`
-      : ""
-  );
+  let payload = null;
+  try {
+    payload = await rpc("profile_feed", {
+      p_token: state.token,
+      p_ref: state.ref || "",
+      p_kind: kind,
+      p_limit: 20,
+      p_offset: 0,
+    });
+  } catch {
+    payload = null;
+  }
+  const posts = payload && payload.ok !== false ? payload.posts || [] : [];
+  state.posts = posts;
+  state.feedKind = kind;
 
-  const stats = `
+  const label = { updates: "Updates", activity: "Activity", suggestions: "Suggestions" }[kind] || "Updates";
+  const copy =
+    {
+      updates:
+        "Everything this profile follows lands here: profiles, keywords, blogs, community spaces, servers, studios and banks — translated posts included.",
+      activity: "What this profile published, reshared, reacted to and commented on.",
+      suggestions:
+        "Posts suggested from the keywords this profile follows and from the interactions it had, ordered by ranking points.",
+    }[kind] || "";
+
+  const body = posts.length
+    ? posts.map((post) => postCard(post)).join("")
+    : emptyBlock(
+        kind === "suggestions" ? "sparkle" : "article",
+        payload && payload.ok === false ? "The posts could not be loaded" : "No posts yet",
+        payload && payload.ok === false ? "Check the connection and open the tab again." : copy,
+        owner
+          ? `<button class="btn btn--primary btn--sm" type="button" data-pf-act="publish"><i data-icon="plus"></i> Publish the first post</button>`
+          : ""
+      );
+
+  host.innerHTML = `
     <div class="pf-block">
       <div class="pf-block__head">
-        <span class="pf-block__title"><i data-icon="chart"></i> Counters</span>
-        <span class="pf-block__note">Posts are counted when they are published.</span>
+        <span class="pf-block__title"><i data-icon="${kind === "suggestions" ? "sparkle" : "article"}"></i> ${esc(label)}</span>
+        <span class="pf-block__note">${posts.length} ${posts.length === 1 ? "post" : "posts"}</span>
       </div>
-      <dl class="pf-stats" style="border: 0; margin: 0; padding: 0">
-        <div><dt>Published</dt><dd>${num(s.posts)}</dd></div>
-        <div><dt>Rank avg</dt><dd>${num(s.rank_avg)}</dd></div>
-        <div><dt>Reach</dt><dd>${num(s.reach)}</dd></div>
-      </dl>
+      ${body}
     </div>`;
-
-  return `<div class="pf-block">${feed}</div>${stats}`;
+  hydrateIcons(host);
 }
+
+/* ------------------------------------------------------------------ */
+/* one post                                                            */
+/* ------------------------------------------------------------------ */
+function postCard(post) {
+  const pub = post.publisher || {};
+  const counters = post.counters || {};
+  const mine = post.mine || {};
+  const keywords = post.keywords || [];
+  const translations = post.translations || [];
+  const related = post.related || [];
+  const badges = [];
+  if (post.type && post.type !== "article") badges.push(`<span class="badge">${esc(post.type)}</span>`);
+  if (translations.length) badges.push(`<span class="badge badge--outline"><i data-icon="globe"></i> Translated</span>`);
+  if (mine.can_manage) badges.push(`<span class="badge">${esc(post.status === "scheduled" ? "Scheduled" : "Published")}</span>`);
+  if (post.visibility && post.visibility !== "general") badges.push(`<span class="badge">${esc(post.visibility)}</span>`);
+
+  const kwChips = keywords.length
+    ? `<div class="pc__kws">${keywords
+        .map(
+          (k) =>
+            `<span class="chip" title="${k.role === "main" ? "Main keyword" : "Sub-keyword"}">${k.role === "sub" ? "— " : ""}${esc(k.keyword)}</span>`
+        )
+        .join("")}</div>`
+    : "";
+
+  const contentPane = `
+    ${post.thumbnail ? `<div class="pc__thumb"><img src="${esc(post.thumbnail)}" alt="" loading="lazy" /></div>` : ""}
+    <h3 class="pc__title">${esc(post.title)}</h3>
+    ${post.description ? `<p class="pc__desc">${esc(post.description)}</p>` : ""}
+    ${post.embed ? `<a class="pc__embed" href="${esc(post.embed)}" target="_blank" rel="noopener noreferrer"><i data-icon="external"></i> ${esc(post.embed.replace(/^https?:\/\//, ""))}</a>` : ""}
+    ${kwChips}`;
+
+  const translationRows = translations.length
+    ? `<div><dt>Translations</dt><dd>${translations.map((t) => esc(t.language.toUpperCase())).join(" · ")}</dd></div>`
+    : "";
+
+  const infoPane = `
+    <dl class="pc__info">
+      <div><dt>Language</dt><dd>${esc(String(post.language || "en").toUpperCase())}</dd></div>
+      <div><dt>Reading time</dt><dd>${num(post.read_minutes)} min${post.word_count ? ` · ${num(post.word_count)} words` : ""}</dd></div>
+      <div><dt>Visibility</dt><dd>${esc(post.visibility)}</dd></div>
+      <div><dt>Ranking points</dt><dd>${num(post.rank_points)}</dd></div>
+      <div><dt>Reach points</dt><dd>${num(post.reach_points)}</dd></div>
+      <div><dt>Post code</dt><dd>${esc(post.code)}</dd></div>
+      ${translationRows}
+    </dl>
+    ${related.length ? `<div class="pc__kws">${related.map((r) => `<a class="chip" href="${esc(r.url || "#")}" target="_blank" rel="noopener noreferrer"><i data-icon="link"></i> ${esc(r.label)}</a>`).join("")}</div>` : ""}
+    ${keywords.length ? `<div class="pf-row"><span class="pf-row__label">Keywords</span>${kwChips}</div>` : ""}`;
+
+  const likeOn = mine.reaction === 1 ? "is-on" : "";
+  const dislikeOn = mine.reaction === -1 ? "is-on" : "";
+  const repostOn = mine.reshared ? "is-on" : "";
+  const disabled = mine.can_interact ? "" : "disabled";
+
+  return `
+  <article class="pc" data-post="${esc(post.id)}" data-code="${esc(post.code)}">
+    <header class="pc__head">
+      <a class="pc__avatar" href="${esc(profileUrl(pub.username))}" aria-hidden="true" tabindex="-1">
+        <img src="${esc(pub.avatar || avatarPlaceholder(pub.name))}" alt="" width="42" height="42" loading="lazy" />
+      </a>
+      <div class="pc__who">
+        <a class="pc__name" href="${esc(profileUrl(pub.username))}">${esc(pub.name || pub.username || "Member")}</a>
+        <span class="pc__sub">
+          <span class="pf-dot ${pub.online ? "is-on" : ""}" aria-hidden="true"></span>
+          ${esc(pub.username || "")} · ${esc(timeAgo(post.published_at) || "just now")}
+        </span>
+      </div>
+      <div class="pc__badges">${badges.join("")}</div>
+    </header>
+
+    <div class="pc__tabs">
+      <button class="pc__tab is-active" type="button" data-pc-tab="content">Content</button>
+      <button class="pc__tab" type="button" data-pc-tab="info">Content info</button>
+    </div>
+
+    <div class="pc__pane" data-pc-pane="content">${contentPane}</div>
+    <div class="pc__pane" data-pc-pane="info" hidden>${infoPane}</div>
+
+    <div class="pc__actions">
+      <button class="pc__act ${likeOn}" type="button" data-pc-act="like" ${disabled} aria-pressed="${mine.reaction === 1}">
+        <i data-icon="thumbUp"></i><span>Like</span><b data-pc-count="likes">${num(counters.likes)}</b>
+      </button>
+      <button class="pc__act ${dislikeOn}" type="button" data-pc-act="dislike" ${disabled} aria-pressed="${mine.reaction === -1}">
+        <i data-icon="thumbDown"></i><span>Dislike</span><b data-pc-count="dislikes">${num(counters.dislikes)}</b>
+      </button>
+      <button class="pc__act" type="button" data-pc-act="comments">
+        <i data-icon="comment"></i><span>Comment</span><b data-pc-count="comments">${num(counters.comments)}</b>
+      </button>
+      <button class="pc__act ${repostOn}" type="button" data-pc-act="repost" ${disabled} aria-pressed="${Boolean(mine.reshared)}">
+        <i data-icon="refresh"></i><span>Repost</span><b data-pc-count="reshares">${num(counters.reshares)}</b>
+      </button>
+      <button class="pc__act" type="button" data-pc-act="share">
+        <i data-icon="share"></i><span>Share</span><b data-pc-count="shares">${num(counters.shares)}</b>
+      </button>
+      <button class="pc__act ${mine.reported ? "is-on" : ""} pc__act--danger" type="button" data-pc-act="report" ${disabled}>
+        <i data-icon="flag"></i><span>Report</span>
+      </button>
+      ${mine.can_manage ? `<button class="pc__act pc__act--danger" type="button" data-pc-act="delete"><i data-icon="trash"></i><span>Delete</span></button>` : ""}
+    </div>
+
+    <div class="pc__comments" data-pc-comments hidden>
+      <p class="pc__hint" data-pc-hint>Like or dislike the post before commenting — the comment takes that reaction.</p>
+      <div data-pc-comment-form>
+        <div class="pf-searchbar">
+          <input class="input" type="text" maxlength="4000" placeholder="Write a comment…" data-pc-input aria-label="Write a comment" />
+          <button class="btn btn--primary" type="button" data-pc-act="send-comment"><i data-icon="send"></i> Send</button>
+        </div>
+      </div>
+      <div data-pc-comment-list><div class="pf-block__note">Loading comments…</div></div>
+    </div>
+  </article>`;
+}
+
+/* ------------------------------------------------------------------ */
+/* posts: interactions                                                 */
+/* ------------------------------------------------------------------ */
+function findPost(id) {
+  return state.posts.find((post) => post.id === id) || null;
+}
+
+function updatePostCounters(id, patch) {
+  const post = findPost(id);
+  if (!post) return;
+  post.counters = Object.assign({}, post.counters, patch);
+}
+
+function refreshCard(id) {
+  const node = qs(`[data-post="${id}"]`);
+  const post = findPost(id);
+  if (!node || !post) return;
+  const fresh = document.createElement("div");
+  fresh.innerHTML = postCard(post);
+  const replacement = fresh.firstElementChild;
+  node.replaceWith(replacement);
+  hydrateIcons(replacement);
+  if (state.openComments.has(id)) {
+    const pane = replacement.querySelector("[data-pc-comments]");
+    if (pane) {
+      pane.hidden = false;
+      renderCommentList(id, pane);
+    }
+  }
+}
+
+async function reactToPost(id, value) {
+  const post = findPost(id);
+  if (!post) return;
+  const current = post.mine?.reaction ?? null;
+  const next = current === value ? 0 : value;
+  try {
+    const res = await rpc("post_react", { p_token: state.token, p_ref: id, p_value: next });
+    if (!res || res.ok === false) {
+      return toast({ title: "Not saved", message: hintFor(res?.error), tone: "error" });
+    }
+    post.mine = Object.assign({}, post.mine, { reaction: res.reaction ?? null });
+    updatePostCounters(id, { likes: res.likes, dislikes: res.dislikes });
+    refreshCard(id);
+  } catch (error) {
+    toast({ title: "Not saved", message: error?.message || "Network error.", tone: "error" });
+  }
+}
+
+async function toggleRepost(id) {
+  try {
+    const res = await rpc("post_reshare", { p_token: state.token, p_ref: id });
+    if (!res || res.ok === false) {
+      return toast({ title: "Not saved", message: hintFor(res?.error), tone: "error" });
+    }
+    const post = findPost(id);
+    post.mine = Object.assign({}, post.mine, { reshared: res.reshared });
+    updatePostCounters(id, { reshares: res.reshares });
+    refreshCard(id);
+    toast({ title: res.reshared ? "Reposted" : "Repost removed", message: res.reshared ? "It now appears on your profile." : "", tone: "success" });
+  } catch (error) {
+    toast({ title: "Not saved", message: error?.message || "Network error.", tone: "error" });
+  }
+}
+
+async function toggleComments(id) {
+  const node = qs(`[data-post="${id}"]`);
+  const pane = node?.querySelector("[data-pc-comments]");
+  if (!pane) return;
+  const open = pane.hidden;
+  pane.hidden = !open;
+  if (open) {
+    state.openComments.add(id);
+    await renderCommentList(id, pane);
+  } else {
+    state.openComments.delete(id);
+  }
+}
+
+async function renderCommentList(id, pane) {
+  const list = pane.querySelector("[data-pc-comment-list]");
+  const input = pane.querySelector("[data-pc-input]");
+  const send = pane.querySelector('[data-pc-act="send-comment"]');
+  const hint = pane.querySelector("[data-pc-hint]");
+  const post = findPost(id);
+  const reaction = post?.mine?.reaction ?? null;
+  const signedIn = Boolean(state.token);
+
+  const locked = !signedIn || !reaction;
+  if (input) {
+    input.disabled = locked;
+    input.placeholder = !signedIn ? "Sign in to comment" : !reaction ? "Like or dislike the post first" : "Write a comment…";
+  }
+  if (send) send.disabled = locked;
+  if (hint) {
+    hint.textContent = !signedIn
+      ? "Sign in to comment."
+      : reaction
+        ? `Comments you write carry your ${reaction === 1 ? "like" : "dislike"}.`
+        : "Like or dislike the post before commenting — the comment takes that reaction.";
+  }
+
+  let res = null;
+  try {
+    res = await rpc("post_comments", { p_token: state.token, p_ref: id, p_limit: 50 });
+  } catch {
+    res = null;
+  }
+  const comments = res?.comments || [];
+  state.comments.set(id, comments);
+  if (!list) return;
+  list.innerHTML = comments.length
+    ? comments
+        .map((comment) => {
+          const author = comment.author || {};
+          return `
+        <div class="pc__comment ${comment.parent_id ? "pc__comment--reply" : ""}">
+          <span class="pf-person__avatar"><img src="${esc(author.avatar || avatarPlaceholder(author.name))}" alt="" width="32" height="32" loading="lazy" /></span>
+          <div class="pc__comment-body">
+            <span class="pc__comment-head">
+              <b>${esc(author.name || author.username || "Member")}</b>
+              ${esc(author.username || "")}
+              <span aria-hidden="true">·</span>${esc(timeAgo(comment.created_at))}
+              ${comment.polarity === 1 ? '<span class="badge badge--outline">liked</span>' : comment.polarity === -1 ? '<span class="badge badge--outline">disliked</span>' : ""}
+              ${comment.edited ? '<span class="badge badge--outline">edited</span>' : ""}
+            </span>
+            <span class="pc__comment-text">${esc(comment.body)}</span>
+            <span class="pc__comment-foot">
+              <span><i data-icon="thumbUp"></i> ${num(comment.likes)}</span>
+              <span><i data-icon="thumbDown"></i> ${num(comment.dislikes)}</span>
+              ${comment.mine ? '<span class="badge badge--outline">you</span>' : ""}
+            </span>
+          </div>
+        </div>`;
+        })
+        .join("")
+    : `<div class="pf-block__note">No comments yet.</div>`;
+  hydrateIcons(list);
+}
+
+async function sendComment(id) {
+  const node = qs(`[data-post="${id}"]`);
+  const input = node?.querySelector("[data-pc-input]");
+  const value = (input?.value || "").trim();
+  if (!value) return;
+  try {
+    const res = await rpc("post_comment", { p_token: state.token, p_ref: id, p_body: value, p_parent_id: null });
+    if (!res || res.ok === false) {
+      const messages = {
+        reaction: "Like or dislike the post before commenting.",
+        blocked: "This profile blocked you from commenting.",
+        session: "Sign in to comment.",
+      };
+      return toast({ title: "Comment refused", message: messages[res?.error] || "Please try again.", tone: "error" });
+    }
+    input.value = "";
+    updatePostCounters(id, { comments: res.comments });
+    const post = findPost(id);
+    const pane = node?.querySelector("[data-pc-comments]");
+    if (post) {
+      post.mine = Object.assign({}, post.mine, { commented: true });
+      refreshCard(id);
+    }
+    if (state.openComments.has(id) && pane) {
+      await renderCommentList(id, qs(`[data-post="${id}"]`)?.querySelector("[data-pc-comments]"));
+    }
+    toast({ title: "Comment added", message: "", tone: "success" });
+  } catch (error) {
+    toast({ title: "Comment refused", message: error?.message || "Network error.", tone: "error" });
+  }
+}
+
+async function reportPost(id) {
+  const reasons = ["spam", "abuse", "copyright", "misleading", "other"];
+  openModal({
+    title: "Report this post",
+    body: `
+      <p class="pf-row__hint">Reports are reviewed by moderators and cost the post 60 ranking points.</p>
+      <div class="pf-choices" data-report-reasons>
+        ${reasons.map((r, i) => `<button class="pf-choice ${i === 0 ? "is-active" : ""}" type="button" data-reason="${r}">${r}</button>`).join("")}
+      </div>
+      <div class="pf-row"><span class="pf-row__label">Note (optional)</span><textarea class="textarea" rows="3" data-report-note></textarea></div>`,
+    foot: `
+      <span class="pf-block__note" data-modal-note></span>
+      <span class="pf-modal__right">
+        <button class="btn btn--ghost btn--sm" type="button" data-modal-close>Cancel</button>
+        <button class="btn btn--primary btn--sm" type="button" data-report-send><i data-icon="flag"></i> Send report</button>
+      </span>`,
+  });
+
+  let reason = "spam";
+  qsa("[data-report-reasons] .pf-choice").forEach((button) => {
+    button.addEventListener("click", () => {
+      qsa("[data-report-reasons] .pf-choice").forEach((b) => b.classList.remove("is-active"));
+      button.classList.add("is-active");
+      reason = button.dataset.reason;
+    });
+  });
+
+  qs("[data-report-send]")?.addEventListener("click", async () => {
+    const note = qs("[data-report-note]")?.value?.trim() || "";
+    try {
+      const res = await rpc("post_report", { p_token: state.token, p_ref: id, p_reason: reason, p_note: note });
+      if (!res || res.ok === false) {
+        return toast({ title: "Report failed", message: "Please try again.", tone: "error" });
+      }
+      const post = findPost(id);
+      if (post) post.mine = Object.assign({}, post.mine, { reported: true });
+      closeModal();
+      refreshCard(id);
+      toast({ title: "Report sent", message: "Moderators will review the post.", tone: "success" });
+    } catch (error) {
+      toast({ title: "Report failed", message: error?.message || "Network error.", tone: "error" });
+    }
+  });
+}
+
+async function deletePost(id) {
+  const post = findPost(id);
+  if (!post) return;
+  if (!window.confirm(`Delete “${post.title}”? It is archived for 30 days.`)) return;
+  try {
+    const res = await rpc("post_delete", { p_token: state.token, p_ref: id });
+    if (!res || res.ok === false) {
+      return toast({ title: "Not deleted", message: res?.error === "forbidden" ? "Only the author or the host may delete it." : "Please try again.", tone: "error" });
+    }
+    state.posts = state.posts.filter((item) => item.id !== id);
+    toast({ title: "Post deleted", message: "Archived for 30 days.", tone: "success" });
+    await load();
+  } catch (error) {
+    toast({ title: "Not deleted", message: error?.message || "Network error.", tone: "error" });
+  }
+}
+
+function hintFor(error) {
+  return (
+    {
+      session: "Sign in first.",
+      hidden: "This post is not visible to you.",
+      blocked: "A block is in place.",
+      reaction: "Like or dislike the post first.",
+      value: "Unsupported reaction.",
+    }[error] || "Please try again."
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* members behind a counter                                            */
+/* ------------------------------------------------------------------ */
+async function openMembers(postId, kind) {
+  openModal({ title: "Members", body: `<div class="pf-block__note">Loading…</div>`, foot: `<span></span><button class="btn btn--ghost btn--sm" type="button" data-modal-close>Close</button>` });
+  let res = null;
+  try {
+    res = await rpc("post_reactors", { p_token: state.token, p_ref: postId, p_kind: kind });
+  } catch {
+    res = null;
+  }
+  const members = res?.members || [];
+  const groups = [
+    ["follow_you", "Follow you"],
+    ["you_follow", "You follow"],
+    ["others", "Others"],
+  ];
+  const body = members.length
+    ? groups
+        .map(([key, label]) => {
+          const rows = members.filter((member) => member.relation === key);
+          if (!rows.length) return "";
+          return `<p class="pf-people__group">${esc(label)}</p><div class="pf-people pf-people--modal">${rows
+            .map((member) =>
+              personRow(
+                { username: member.username, name: member.name, avatar: member.avatar, online: member.online },
+                `<span class="badge">${member.online ? "online" : "offline"}</span>`
+              )
+            )
+            .join("")}</div>`;
+        })
+        .join("")
+    : `<div class="pf-block__note">Nobody yet.</div>`;
+  const panel = qs(".pf-modal__body");
+  if (panel) {
+    panel.innerHTML = body;
+    hydrateIcons(panel);
+  }
+}
+
 
 function renderSoon(view) {
   const meta = {
-    manage: ["Manage posts", "Creator, Participant and Publisher tabs with open, edit, statistics, copy link and delete.", "M2 posts_core"],
+    manage: ["Manage posts", "Creator, Participant and Publisher tabs with open, edit, statistics, copy link and delete.", "next round"],
     messages: ["Messages", "Send a message by username or member ID, and direct conversations with attachments.", "M7 messaging"],
     publishers: ["Publisher list", "The profiles you allow to publish on your profile, with approval.", "M6 publish_links"],
     participants: ["Participant list", "The profiles where you may publish, and the state of each request.", "M6 publish_links"],
@@ -658,7 +1081,7 @@ function renderSearchPanel() {
     <div class="pf-block">
       <div class="pf-block__head">
         <span class="pf-block__title"><i data-icon="search"></i> Search</span>
-        <span class="pf-block__note">Posts, filters and the ranking order arrive with M2.</span>
+        <span class="pf-block__note">Profiles only for now — post search and the filters follow with the keyword page.</span>
       </div>
       <div class="pf-searchbar">
         <input class="input" type="search" placeholder="Search profiles…" value="${esc(state.search)}"
@@ -897,12 +1320,482 @@ function shareLink() {
     .catch(() => toast({ title: "Copy failed", message: url, tone: "error" }));
 }
 
-function publishSoon() {
-  toast({
-    title: "Publishing lands with M2",
-    message: "The composer, visibility rules and scheduling are the next migration (posts_core).",
-    tone: "info",
+/* ================================================================== */
+/* modal                                                               */
+/* ================================================================== */
+function openModal({ title, body, foot, width }) {
+  closeModal();
+  const node = document.createElement("div");
+  node.className = "pf-modal";
+  node.setAttribute("data-pf-modal", "");
+  node.innerHTML = `
+    <div class="pf-modal__panel" role="dialog" aria-modal="true" aria-label="${esc(title)}" ${width ? `style="width:min(${width},100%)"` : ""}>
+      <div class="pf-modal__head">
+        <span class="pf-modal__title">${esc(title)}</span>
+        <button class="icon-btn" type="button" data-modal-close aria-label="Close"><i data-icon="close"></i></button>
+      </div>
+      <div class="pf-modal__body">${body}</div>
+      <div class="pf-modal__foot">${foot || '<span></span><button class="btn btn--ghost btn--sm" type="button" data-modal-close>Close</button>'}</div>
+    </div>`;
+  document.body.appendChild(node);
+  hydrateIcons(node);
+  node.addEventListener("click", (event) => {
+    if (event.target === node) closeModal();
   });
+  document.addEventListener("keydown", escapeModal);
+  return node;
+}
+
+function closeModal() {
+  qsa("[data-pf-modal]").forEach((node) => node.remove());
+  document.removeEventListener("keydown", escapeModal);
+}
+
+function escapeModal(event) {
+  if (event.key === "Escape") closeModal();
+}
+
+/* ================================================================== */
+/* composer — content → visibility → schedule                          */
+/* ================================================================== */
+const STEP_LABELS = [
+  ["content", "Content"],
+  ["visibility", "Visibility"],
+  ["schedule", "Schedule"],
+];
+
+function emptyDraft() {
+  return {
+    step: "content",
+    title: "",
+    description: "",
+    body: "",
+    embed: "",
+    thumb: "",
+    type: "article",
+    language: "en",
+    visibility: "general",
+    related: [{ label: "", url: "" }],
+    mains: [{ keyword: "", subs: [""] }],
+    translations: [],
+    audience: "",
+    profiles: "",
+    schedule: "now",
+    custom: "",
+    host: "",
+  };
+}
+
+function openComposer(hostRef = "") {
+  if (!state.token) {
+    return toast({ title: "Sign in to publish", message: "The composer needs a member session.", tone: "error" });
+  }
+  state.draft = emptyDraft();
+  state.draft.host = hostRef || "";
+  openModal({ title: "Publish", body: "", foot: "" });
+  renderComposer();
+}
+
+function draftFromDom() {
+  const draft = state.draft;
+  if (!draft) return draft;
+  const read = (sel) => qs(sel)?.value ?? "";
+  if (draft.step === "content") {
+    draft.title = read("[data-draft-title]");
+    draft.description = read("[data-draft-description]");
+    draft.body = read("[data-draft-body]");
+    draft.embed = read("[data-draft-embed]");
+    draft.thumb = read("[data-draft-thumb]");
+    draft.type = read("[data-draft-type]") || "article";
+    draft.language = read("[data-draft-language]") || "en";
+    draft.related = qsa("[data-draft-related]").map((row) => ({
+      label: row.querySelector("[data-related-label]")?.value?.trim() || "",
+      url: row.querySelector("[data-related-url]")?.value?.trim() || "",
+    }));
+    draft.mains = qsa("[data-draft-main]").map((row) => ({
+      keyword: row.querySelector("[data-main-keyword]")?.value?.trim() || "",
+      subs: Array.from(row.querySelectorAll("[data-sub-keyword]")).map((input) => input.value.trim()).filter(Boolean),
+    }));
+    draft.translations = qsa("[data-draft-translation]").map((row) => ({
+      language: row.querySelector("[data-tr-language]")?.value?.trim() || "",
+      title: row.querySelector("[data-tr-title]")?.value?.trim() || "",
+      body: row.querySelector("[data-tr-body]")?.value?.trim() || "",
+    }));
+  }
+  if (draft.step === "visibility") {
+    draft.audience = read("[data-draft-audience]");
+    draft.profiles = read("[data-draft-profiles]");
+  }
+  if (draft.step === "schedule") {
+    draft.schedule = qs("[data-schedule].is-active")?.dataset.schedule || "now";
+    draft.custom = read("[data-draft-custom]");
+  }
+  return draft;
+}
+
+function renderComposer() {
+  const draft = state.draft;
+  const panel = qs("[data-pf-modal] .pf-modal__body");
+  const foot = qs("[data-pf-modal] .pf-modal__foot");
+  const titleNode = qs("[data-pf-modal] .pf-modal__title");
+  if (!panel || !foot) return;
+  if (titleNode) titleNode.textContent = draft.host ? `Publish on ${draft.host}` : "Publish";
+
+  const steps = STEP_LABELS.map(
+    ([key, label], index) =>
+      `<button class="pf-step ${draft.step === key ? "is-active" : ""}" type="button" data-step="${key}">${index + 1}. ${label}</button>`
+  ).join("");
+
+  panel.innerHTML = (draft.step === "content" ? contentStep(draft) : draft.step === "visibility" ? visibilityStep(draft) : scheduleStep(draft));
+
+  const isLast = draft.step === "schedule";
+  foot.innerHTML = `
+    <div class="pf-steps">${steps}</div>
+    <div class="pf-modal__right">
+      <button class="btn btn--ghost btn--sm" type="button" data-modal-close>Cancel</button>
+      ${draft.step !== "content" ? '<button class="btn btn--ghost btn--sm" type="button" data-step-back><i data-icon="chevronLeft"></i> Back</button>' : ""}
+      ${isLast
+        ? '<button class="btn btn--primary btn--sm" type="button" data-publish><i data-icon="upload"></i> Publish</button>'
+        : '<button class="btn btn--primary btn--sm" type="button" data-step-next>Next <i data-icon="chevronRight"></i></button>'}
+    </div>`;
+  hydrateIcons(qs("[data-pf-modal]"));
+}
+
+function contentStep(draft) {
+  const languages = [
+    ["ar", "Arabic"], ["en", "English"], ["fr", "French"], ["es", "Spanish"],
+    ["de", "German"], ["it", "Italian"], ["pt", "Portuguese"], ["tr", "Turkish"],
+  ];
+  const relatedRows = draft.related
+    .map(
+      (row, index) => `
+      <div class="pf-kw" data-draft-related data-index="${index}">
+        <input class="input" type="text" value="${esc(row.label)}" placeholder="Label" data-related-label />
+        <input class="input" type="url" value="${esc(row.url)}" placeholder="https://…" data-related-url />
+        <button class="icon-btn" type="button" data-related-remove aria-label="Remove link"><i data-icon="trash"></i></button>
+      </div>`
+    )
+    .join("");
+
+  const mainRows = draft.mains
+    .map(
+      (main, index) => `
+      <div class="pf-mini" data-draft-main data-index="${index}">
+        <div class="pf-kw">
+          <input class="input" type="text" value="${esc(main.keyword)}" placeholder="Main keyword" data-main-keyword maxlength="80" />
+          <span class="pf-row__hint">main ${index + 1} of 3</span>
+          <button class="icon-btn" type="button" data-main-remove aria-label="Remove keyword"><i data-icon="trash"></i></button>
+        </div>
+        ${main.subs
+          .map(
+            (sub, subIndex) => `
+          <div class="pf-kw">
+            <input class="input" type="text" value="${esc(sub)}" placeholder="Sub-keyword (max 5)" data-sub-keyword maxlength="80" />
+            <span class="pf-row__hint">sub ${subIndex + 1} of 5</span>
+            <button class="icon-btn" type="button" data-sub-remove data-main-index="${index}" data-sub-index="${subIndex}" aria-label="Remove sub-keyword"><i data-icon="minus"></i></button>
+          </div>`
+          )
+          .join("")}
+        <button class="btn btn--quiet btn--sm" type="button" data-sub-add data-main-index="${index}"><i data-icon="plus"></i> Sub-keyword</button>
+      </div>`
+    )
+    .join("");
+
+  const translationRows = draft.translations
+    .map(
+      (row, index) => `
+      <div class="pf-mini" data-draft-translation data-index="${index}">
+        <div class="pf-kw">
+          <input class="input" type="text" value="${esc(row.language)}" placeholder="Language (en)" data-tr-language maxlength="8" />
+          <input class="input" type="text" value="${esc(row.title)}" placeholder="Translated title" data-tr-title maxlength="200" />
+          <button class="icon-btn" type="button" data-tr-remove aria-label="Remove translation"><i data-icon="trash"></i></button>
+        </div>
+        <textarea class="textarea" rows="2" placeholder="Translated text (optional)" data-tr-body>${esc(row.body)}</textarea>
+      </div>`
+    )
+    .join("");
+
+  return `
+    <div class="pf-row">
+      <span class="pf-row__label">Title <span class="pf-row__hint">required, 200 characters</span></span>
+      <input class="input" type="text" maxlength="200" value="${esc(draft.title)}" placeholder="What are you publishing?" data-draft-title />
+    </div>
+    <div class="pf-row">
+      <span class="pf-row__label">Description</span>
+      <textarea class="textarea" rows="2" maxlength="600" placeholder="One or two lines" data-draft-description>${esc(draft.description)}</textarea>
+    </div>
+    <div class="pf-row">
+      <span class="pf-row__label">Text <span class="pf-row__hint">the reading time is computed from it</span></span>
+      <textarea class="textarea" rows="4" placeholder="The body of the post" data-draft-body>${esc(draft.body)}</textarea>
+    </div>
+
+    <div class="pf-grid-2">
+      <div class="pf-row">
+        <span class="pf-row__label">Embedded link</span>
+        <input class="input" type="url" value="${esc(draft.embed)}" placeholder="https://…" data-draft-embed />
+      </div>
+      <div class="pf-row">
+        <span class="pf-row__label">Type</span>
+        <select class="select" data-draft-type>
+          ${["article", "video", "recommendation", "link"].map((type) => `<option value="${type}" ${draft.type === type ? "selected" : ""}>${type}</option>`).join("")}
+        </select>
+      </div>
+    </div>
+
+    <div class="pf-row">
+      <span class="pf-row__label">Thumbnail <span class="pf-row__hint">a URL, or upload an image</span></span>
+      <div class="pf-thumbs">
+        <div class="pf-thumb-preview">${draft.thumb ? `<img src="${esc(draft.thumb)}" alt="" />` : ""}</div>
+        <input class="input" type="url" value="${esc(draft.thumb)}" placeholder="https://…" data-draft-thumb />
+        <label class="btn btn--ghost btn--sm" style="cursor: pointer">
+          <i data-icon="upload"></i> Upload
+          <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden data-draft-thumbfile />
+        </label>
+      </div>
+    </div>
+
+    <div class="pf-grid-2">
+      <div class="pf-row">
+        <span class="pf-row__label">Language</span>
+        <select class="select" data-draft-language>
+          ${languages.map(([code, name]) => `<option value="${code}" ${draft.language === code ? "selected" : ""}>${name}</option>`).join("")}
+        </select>
+      </div>
+      <div class="pf-row">
+        <span class="pf-row__label">Related links</span>
+        <div class="pf-mini">
+          ${relatedRows}
+          <button class="btn btn--quiet btn--sm" type="button" data-related-add><i data-icon="plus"></i> Add a link</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="pf-row">
+      <span class="pf-row__label">Keywords <span class="pf-row__hint">3 mains, 5 subs each</span></span>
+      <div class="pf-mini">
+        ${mainRows}
+        <button class="btn btn--quiet btn--sm" type="button" data-main-add><i data-icon="plus"></i> Main keyword</button>
+      </div>
+    </div>
+
+    <div class="pf-row">
+      <span class="pf-row__label">Translations <span class="pf-row__hint">manual, shown in Updates and Suggestions</span></span>
+      <div class="pf-mini">
+        ${translationRows || '<span class="pf-row__hint">No translation yet.</span>'}
+        <button class="btn btn--quiet btn--sm" type="button" data-tr-add><i data-icon="plus"></i> Add a translation</button>
+      </div>
+    </div>`;
+}
+
+function visibilityStep(draft) {
+  const choices = [
+    ["general", "Public"],
+    ["excluded", "Public, excluded by rules"],
+    ["limited", "Only the listed audience"],
+    ["private", "Private list"],
+    ["followers", "My followers"],
+    ["following", "Profiles I follow"],
+    ["others", "Chosen profiles"],
+  ];
+  const needsAudience = draft.visibility === "excluded" || draft.visibility === "limited";
+  const needsProfiles = draft.visibility === "private" || draft.visibility === "others";
+
+  return `
+    <div class="pf-row">
+      <span class="pf-row__label">Who can see it</span>
+      <div class="pf-choices" data-visibility-choices>
+        ${choices
+          .map(
+            ([value, label]) =>
+              `<button class="pf-choice ${draft.visibility === value ? "is-active" : ""}" type="button" data-visibility="${value}">${label}</button>`
+          )
+          .join("")}
+      </div>
+    </div>
+    ${
+      needsAudience
+        ? `<div class="pf-row">
+             <span class="pf-row__label">Rules <span class="pf-row__hint">one per line, kind:value</span></span>
+             <textarea class="textarea" rows="4" placeholder="country:MA&#10;language:ar&#10;level:3" data-draft-audience>${esc(draft.audience)}</textarea>
+             <span class="pf-row__hint">kinds: country, language, level, wealth, entity</span>
+           </div>`
+        : ""
+    }
+    ${
+      needsProfiles
+        ? `<div class="pf-row">
+             <span class="pf-row__label">Profiles <span class="pf-row__hint">usernames or member IDs, comma separated</span></span>
+             <input class="input" type="text" value="${esc(draft.profiles)}" placeholder="@sara, ID100003" data-draft-profiles />
+           </div>`
+        : ""
+    }
+    <p class="pf-row__hint">A post published on another profile is always public and uses the host's reach.</p>`;
+}
+
+function scheduleStep(draft) {
+  const options = [
+    ["now", "Now"],
+    ["1h", "In one hour"],
+    ["1d", "Tomorrow"],
+    ["1w", "In one week"],
+    ["custom", "Pick a date"],
+  ];
+  return `
+    <div class="pf-row">
+      <span class="pf-row__label">When</span>
+      <div class="pf-choices">
+        ${options
+          .map(
+            ([value, label]) =>
+              `<button class="pf-choice ${draft.schedule === value ? "is-active" : ""}" type="button" data-schedule="${value}">${label}</button>`
+          )
+          .join("")}
+      </div>
+    </div>
+    ${
+      draft.schedule === "custom"
+        ? `<div class="pf-row">
+             <span class="pf-row__label">Date and time</span>
+             <input class="input" type="datetime-local" value="${esc(draft.custom)}" data-draft-custom />
+           </div>`
+        : ""
+    }
+    <p class="pf-row__hint">A scheduled post stays a draft until its time; the profile's posts count only counts published posts.</p>`;
+}
+
+function scheduledIso(draft) {
+  const now = Date.now();
+  const map = { "1h": 3600e3, "1d": 864e5, "1w": 6048e5 };
+  if (draft.schedule === "now" || !draft.schedule) return null;
+  if (draft.schedule === "custom") {
+    if (!draft.custom) return null;
+    const date = new Date(draft.custom);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  }
+  return new Date(now + (map[draft.schedule] || 0)).toISOString();
+}
+
+async function publishDraft() {
+  const draft = draftFromDom() || state.draft;
+  if (!draft.title.trim()) {
+    return toast({ title: "A title is required", message: "Write a title before publishing.", tone: "error" });
+  }
+
+  const keywords = [];
+  draft.mains.forEach((main) => {
+    if (!main.keyword) return;
+    keywords.push({ keyword: main.keyword, role: "main" });
+    main.subs.slice(0, 5).forEach((sub) => {
+      if (sub) keywords.push({ keyword: sub, role: "sub", parent: main.keyword });
+    });
+  });
+
+  const audience = (draft.audience || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [kind, ...rest] = line.split(":");
+      return { kind: (kind || "").trim(), value: rest.join(":").trim(), mode: draft.visibility === "limited" ? "include" : "exclude" };
+    })
+    .filter((rule) => ["country", "language", "level", "wealth", "entity"].includes(rule.kind) && rule.value);
+
+  const payload = {
+    title: draft.title.trim(),
+    description: draft.description.trim(),
+    body: draft.body.trim(),
+    embed_url: draft.embed.trim(),
+    thumbnail_url: draft.thumb.trim(),
+    content_type: draft.type,
+    language: draft.language,
+    visibility: draft.visibility,
+    keywords,
+    audience,
+    profiles: (draft.profiles || "").split(",").map((ref) => ref.trim()).filter(Boolean),
+    related_links: draft.related.filter((row) => row.label),
+    translations: draft.translations.filter((row) => row.language && row.title),
+    scheduled_at: scheduledIso(draft),
+  };
+  if (draft.host) payload.host = draft.host;
+
+  const button = qs("[data-publish]");
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Publishing…";
+  }
+
+  try {
+    const res = await rpc("post_create", { p_token: state.token, p_payload: payload });
+    if (!res || res.ok === false) {
+      const messages = {
+        session: "Sign in to publish.",
+        title: "A title is required.",
+        title_long: "The title is too long.",
+        visibility: "That visibility is not supported.",
+        host: "The chosen profile was not found.",
+        host_link: "You need an approved publisher link on that profile.",
+        schedule: "The date is not valid.",
+      };
+      if (button) {
+        button.disabled = false;
+        button.textContent = "Publish";
+      }
+      return toast({ title: "Not published", message: messages[res?.error] || "Please try again.", tone: "error" });
+    }
+    closeModal();
+    state.comments.clear();
+    state.openComments.clear();
+    toast({
+      title: res.status === "scheduled" ? "Post scheduled" : "Post published",
+      message:
+        res.status === "scheduled"
+          ? `It goes live ${new Date(res.scheduled_at).toLocaleString()}.`
+          : "It is now on your profile.",
+      tone: "success",
+    });
+    state.view = "updates";
+    await load();
+  } catch (error) {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Publish";
+    }
+    toast({ title: "Not published", message: error?.message || "Network error.", tone: "error" });
+  }
+}
+
+async function uploadThumb(file) {
+  if (!file) return;
+  if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type)) {
+    return toast({ title: "Unsupported image", message: "PNG, JPEG, WEBP or GIF.", tone: "error" });
+  }
+  if (file.size > 4 * 1024 * 1024) {
+    return toast({ title: "Image too large", message: "4 MB at most.", tone: "error" });
+  }
+  const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z]/g, "");
+  const name = `post_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  try {
+    const res = await fetch(`${SUPABASE.url}/storage/v1/object/source/users/posts/${name}`, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE.publishableKey,
+        "Content-Type": file.type,
+        "x-upsert": "true",
+      },
+      body: file,
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(body.slice(0, 120) || `HTTP ${res.status}`);
+    }
+    state.draft.thumb = storageUrl(`users/posts/${name}`);
+    draftFromDom();
+    state.draft.thumb = storageUrl(`users/posts/${name}`);
+    renderComposer();
+    toast({ title: "Image uploaded", message: "", tone: "success" });
+  } catch (error) {
+    toast({ title: "Upload failed", message: error?.message || "Please try again.", tone: "error" });
+  }
 }
 
 /* ================================================================== */
@@ -955,8 +1848,9 @@ document.addEventListener("click", (event) => {
     case "share":
       return shareLink();
     case "publish":
+      return openComposer();
     case "publish-here":
-      return publishSoon();
+      return openComposer(state.ref || "");
     case "message":
       return toast({ title: "Messages land with M7", message: "The direct-message tables are the next step after publishing.", tone: "info" });
     case "link-save":
@@ -969,6 +1863,204 @@ document.addEventListener("click", (event) => {
       return undefined;
   }
 });
+
+/* ------------------------------------------------------------------ */
+/* post cards                                                          */
+/* ------------------------------------------------------------------ */
+document.addEventListener("click", (event) => {
+  const modalClose = event.target.closest("[data-modal-close]");
+  if (modalClose) {
+    closeModal();
+    return;
+  }
+
+  const tab = event.target.closest("[data-pc-tab]");
+  if (tab) {
+    const card = tab.closest("[data-post]");
+    if (!card) return;
+    card.querySelectorAll("[data-pc-tab]").forEach((node) => node.classList.toggle("is-active", node === tab));
+    card.querySelectorAll("[data-pc-pane]").forEach((pane) => {
+      pane.hidden = pane.dataset.pcPane !== tab.dataset.pcTab;
+    });
+    return;
+  }
+
+  const stepTab = event.target.closest("[data-step]");
+  if (stepTab) {
+    draftFromDom();
+    state.draft.step = stepTab.dataset.step;
+    return renderComposer();
+  }
+
+  if (event.target.closest("[data-step-next]")) {
+    draftFromDom();
+    if (state.draft.step === "content" && !state.draft.title.trim()) {
+      return toast({ title: "A title is required", message: "Write a title before going on.", tone: "error" });
+    }
+    const index = STEP_LABELS.findIndex(([key]) => key === state.draft.step);
+    state.draft.step = STEP_LABELS[Math.min(index + 1, STEP_LABELS.length - 1)][0];
+    return renderComposer();
+  }
+
+  if (event.target.closest("[data-step-back]")) {
+    draftFromDom();
+    const index = STEP_LABELS.findIndex(([key]) => key === state.draft.step);
+    state.draft.step = STEP_LABELS[Math.max(index - 1, 0)][0];
+    return renderComposer();
+  }
+
+  if (event.target.closest("[data-publish]")) return publishDraft();
+
+  const choice = event.target.closest("[data-visibility]");
+  if (choice) {
+    draftFromDom();
+    state.draft.visibility = choice.dataset.visibility;
+    return renderComposer();
+  }
+
+  const schedule = event.target.closest("[data-schedule]");
+  if (schedule) {
+    draftFromDom();
+    state.draft.schedule = schedule.dataset.schedule;
+    return renderComposer();
+  }
+
+  const relatedAdd = event.target.closest("[data-related-add]");
+  if (relatedAdd) {
+    draftFromDom();
+    if (state.draft.related.length < 6) state.draft.related.push({ label: "", url: "" });
+    return renderComposer();
+  }
+
+  const relatedRemove = event.target.closest("[data-related-remove]");
+  if (relatedRemove) {
+    draftFromDom();
+    const row = relatedRemove.closest("[data-draft-related]");
+    state.draft.related.splice(Number(row?.dataset.index || 0), 1);
+    if (!state.draft.related.length) state.draft.related.push({ label: "", url: "" });
+    return renderComposer();
+  }
+
+  const mainAdd = event.target.closest("[data-main-add]");
+  if (mainAdd) {
+    draftFromDom();
+    if (state.draft.mains.length >= 3) {
+      return toast({ title: "Three main keywords at most", message: "Remove one before adding another.", tone: "error" });
+    }
+    state.draft.mains.push({ keyword: "", subs: [""] });
+    return renderComposer();
+  }
+
+  const mainRemove = event.target.closest("[data-main-remove]");
+  if (mainRemove) {
+    draftFromDom();
+    const row = mainRemove.closest("[data-draft-main]");
+    state.draft.mains.splice(Number(row?.dataset.index || 0), 1);
+    if (!state.draft.mains.length) state.draft.mains.push({ keyword: "", subs: [""] });
+    return renderComposer();
+  }
+
+  const subAdd = event.target.closest("[data-sub-add]");
+  if (subAdd) {
+    draftFromDom();
+    const main = state.draft.mains[Number(subAdd.dataset.mainIndex || 0)];
+    if (main && main.subs.length >= 5) {
+      return toast({ title: "Five sub-keywords at most", message: "Remove one before adding another.", tone: "error" });
+    }
+    if (main) main.subs.push("");
+    return renderComposer();
+  }
+
+  const subRemove = event.target.closest("[data-sub-remove]");
+  if (subRemove) {
+    draftFromDom();
+    const main = state.draft.mains[Number(subRemove.dataset.mainIndex || 0)];
+    if (main) {
+      main.subs.splice(Number(subRemove.dataset.subIndex || 0), 1);
+      if (!main.subs.length) main.subs.push("");
+    }
+    return renderComposer();
+  }
+
+  const trAdd = event.target.closest("[data-tr-add]");
+  if (trAdd) {
+    draftFromDom();
+    if (state.draft.translations.length >= 3) {
+      return toast({ title: "Three translations at most", message: "", tone: "error" });
+    }
+    state.draft.translations.push({ language: "", title: "", body: "" });
+    return renderComposer();
+  }
+
+  const trRemove = event.target.closest("[data-tr-remove]");
+  if (trRemove) {
+    draftFromDom();
+    const row = trRemove.closest("[data-draft-translation]");
+    state.draft.translations.splice(Number(row?.dataset.index || 0), 1);
+    return renderComposer();
+  }
+
+  const act = event.target.closest("[data-pc-act]");
+  if (!act) return;
+  const card = act.closest("[data-post]");
+  if (!card) return;
+  const id = card.dataset.post;
+
+  switch (act.dataset.pcAct) {
+    case "like":
+      return reactToPost(id, 1);
+    case "dislike":
+      return reactToPost(id, -1);
+    case "comments":
+      return toggleComments(id);
+    case "send-comment":
+      return sendComment(id);
+    case "repost":
+      return toggleRepost(id);
+    case "share":
+      return sharePost(id);
+    case "report":
+      return reportPost(id);
+    case "delete":
+      return deletePost(id);
+    default:
+      return undefined;
+  }
+});
+
+document.addEventListener("click", (event) => {
+  const count = event.target.closest("[data-pc-count]");
+  if (!count) return;
+  const group = count.closest("[data-pc-act]");
+  const card = count.closest("[data-post]");
+  if (!group || !card) return;
+  const map = { like: "likes", dislike: "dislikes", comments: "comments", repost: "reshares" };
+  const kind = map[group.dataset.pcAct];
+  if (!kind) return;
+  event.stopPropagation();
+  openMembers(card.dataset.post, kind);
+}, true);
+
+document.addEventListener("change", (event) => {
+  const file = event.target.closest("[data-draft-thumbfile]");
+  if (file) uploadThumb(file.files?.[0]);
+});
+
+async function sharePost(id) {
+  const post = findPost(id);
+  if (!post) return;
+  const url = `${location.origin}${location.pathname}?post=${encodeURIComponent(post.code)}`;
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: post.title, url });
+    } else {
+      await navigator.clipboard.writeText(url);
+    }
+    toast({ title: "Link copied", message: "Sharing outside the site counts one reach point, once per profile.", tone: "success" });
+  } catch {
+    toast({ title: "Share cancelled", message: "", tone: "info" });
+  }
+}
 
 document.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && event.target.matches("[data-pf-search-input]")) {
