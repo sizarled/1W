@@ -293,4 +293,6 @@ Fees: `10 · 100 · 1 000 · 10 000 · 100 000 · 1 000 000 · 10 000 000 · 100
 | Suite | Result |
 | --- | --- |
 | `tools/iptv-smoke.mjs` | 43/43 — parser, groups, semicolons, the page, the lock, the deep links |
+| `tools/levels-smoke.mjs` | 76/76 — the ladder, the badges, the caps, the fees and the offer |
+| `tools/dashboard-smoke.mjs` | 100/100 — the gates, the sections, Unlock now (dialog, payment, refusal) |
 | `tools/activated-smoke.mjs` | 35/35 — hidden panels, image link, blocked ad, pause on hidden/closed tab, code return |

@@ -707,7 +707,7 @@ returns the caller's cases.
 ### Tests
 
 ```bash
-node tools/dashboard-smoke.mjs   # 80 checks: the five gates, rail, popover, codes, sections
+node tools/dashboard-smoke.mjs   # 100 checks: the five gates, rail, popover, codes, sections, Unlock now
 node tools/court-smoke.mjs       # 115 checks: the four steps, uploads, both doors, the court room
 node tools/iptv-smoke.mjs        # 43 checks: the playlists, the groups, the page, the deep links
 node tools/activated-smoke.mjs   # 35 checks: hidden panels, image link, ad pause, code return
