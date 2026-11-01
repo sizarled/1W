@@ -58,7 +58,7 @@ stated otherwise.
 
 | # | Table | Kind | Columns |
 | --- | --- | --- | --- |
-| 5 | `posts` | C | `id`, `author_profile_id → profiles`, `host_profile_id → profiles` (whoever's profile it lives on; = author when self-published), `post_code text unique` (`PST-000123`), `content_type` (`article/video/recommendation/link`), `title`, `description`, `body`, `thumbnail_url`, `embed_url`, `related_links jsonb` (`[{label,url}]`), `tmdb_id bigint`, `media_type`, `language`, `translation_status` (`none/auto/manual`), `visibility` (`general/excluded/limited/private/followers/following/others`), `status` (`draft/scheduled/published/hidden/deleted/pending`), `scheduled_at`, `published_at`, `deleted_at`, `source_table` (`blogarticle/channelsvideo/postrecommendation/manual`), `source_id uuid`, `reach_daily_points int default 0`, `rank_points int default 0`, `reach_points int default 0`, counters `likes, dislikes, comments_pos, comments_neg, reshares, external_shares, reports, impressions, clicks, watch_minutes int default 0` |
+| 5 | `posts` | C | `id`, `author_profile_id → profiles`, `host_profile_id → profiles` (whoever's profile it lives on; = author when self-published), `post_code text unique` (`PST-000123`), `content_type` (`article/video/recommendation/link`), `title`, `description`, `body`, `thumbnail_url`, `embed_url`, `related_links jsonb` (`[{label,url}]`), `tmdb_id bigint`, `media_type`, `language`, `translation_status` (`none/auto/manual`), `visibility` (`general/excluded/limited/private/followers/following/others`), `status` (`draft/scheduled/published/hidden/deleted/pending`), `scheduled_at`, `published_at`, `deleted_at`, `source_table` (`blogarticle/channelsvideo/postrecommendation/manual`), `source_id uuid`, `reach_daily_points int default 0`, `rank_points int default 0`, `reach_points int default 0`, counters `likes, dislikes, comments_pos, comments_neg, reshares, external_shares, reports, impressions, clicks, watch_minutes int default 0`, `word_count int default 0`, `read_minutes_cap int default 0` (estimated reading time — watch minutes stop at the cap) |
 | 6 | `post_audience_rules` | C | `post_id`, `rule_kind` (`country/language/level/wealth/follows/keyword/entity/account_level`), `values jsonb`, `negate bool` |
 | 7 | `post_authorized_profiles` | C | `post_id`, `profile_id`, `key_code text` (the "password" cylinder), unique `(post_id, profile_id)` |
 | 8 | `post_translations` | C | `post_id`, `language`, `title`, `description`, `body`, `status` (`draft/ready`), unique `(post_id, language)` |
@@ -270,8 +270,8 @@ by the comment RPC, not by the page:
 
 | # | Migration | Content | Pages unblocked |
 | --- | --- | --- | --- |
-| M1 | `profile_core` | `profiles` columns, `profile_settings`, `profile_links`, `profile_blocks`, `profile_follows.status` + backfill | profile page shell, settings, follow/block lists |
-| M2 | `posts_core` | `posts`, `post_audience_rules`, `post_authorized_profiles`, `post_translations`, `post_keywords`, `keywords`, `keyword_follows`, `post_related_content`, backfill from `blogarticle` / `channelsvideo` / `postrecommendation` | composer, tabs (updates/activity/suggestions), keyword page |
+| M1 | `profile_core` **applied 2026-11-01** | `profiles` columns, `profile_settings` (+auto row), `profile_links`, `profile_blocks`, `profile_follows.status/requested_at/accepted_at/source` + backfill, follow counters trigger, `profile_public` / `profile_settings_*` / `profile_follow_*` / `profile_block_*` / `profile_links_*` RPCs | profile page shell, settings, follow/block lists |
+| M2 | `posts_core` | `posts`, `post_audience_rules`, `post_authorized_profiles`, `post_translations`, `post_keywords`, `keywords`, `keyword_follows`, `post_related_content`, backfill from `blogarticle` / `channelsvideo` / `postrecommendation`, `site_archive` + the 30-day archive/purge job | composer, tabs (updates/activity/suggestions), keyword page |
 | M3 | `interactions` | `content_reaction`/`comment` extensions, `post_reshare`, `post_reports`, counters + triggers, comment-requires-reaction rule | post card interactions, lists of reactors |
 | M4 | `reach_rank` | `profile_reach_transactions`, `post_reach_allocation`, `post_reach_delivery`, `post_rank_key`, scoring triggers, release/expiry jobs | suggestions, manage-posts counters |
 | M5 | `search` | `search_history`, `search_analytics`, `keyword_analytics`, search + keyword RPCs | `search.html`, `keyword.html` |
@@ -285,26 +285,30 @@ Each migration gets: a `tools/sql/<name>.sql` file mirroring what was applied, a
 
 ---
 
-## 11. Open questions (blocking M2 and M4)
+## 11. Decisions taken with the owner (2026-11-01)
 
-1. **Reach seed**: does a new profile start at 0 reach points, or with a starting grant (e.g. 100)?
-2. **Reach for hosts**: when a guest's post is published on my profile, the brief says its reach
-   comes from my profile — is the *spend* also mine when the guest's post earns reach points from
-   *my* followers' interactions, or do earnings go to the guest profile?
-3. **Translations**: manual translations only, or is an automatic draft allowed (`translation_status
-   = 'auto'`) that the author may edit?
-4. **Private posts** (`private` / `others`): do they show in the author's *activity* tab for the
-   authorized profiles, or only in their notifications?
-5. **Comment sign change**: if a member likes, comments, then switches to dislike — may they edit/
-   delete that comment, or is it locked until the post is removed?
-6. **Watch minutes**: minutes counted from `watch_sessions` for the *embedded* link, or from the ad
-   view? (We already log `watch_sessions.seconds_watched`.)
-7. **Keyword limits**: 3 main keywords per post and 5 sub-keywords per main keyword — per post or
-   per profile as a whole?
-8. **Deleted profiles**: when a profile is banned (court) or purged, do its posts stay (attributed
-   to "deleted member") or are they removed with it? Financial rows must survive in both cases.
+The first draft listed eight open questions; six are now answered and M2/M4 can be built on them.
+
+| # | Question | Decision | Consequence in the schema |
+| --- | --- | --- | --- |
+| 1 | Reach seed | **No starting balance.** A new profile starts at `reach_count = 0` and is still searchable. Reach arrives from off-site shares, from the ads page (to be built), or because a publisher profile needs content for its followers. | `profiles.reach_count` defaults to 0, no seed in M1; `post_reach_allocation` never allocates above the balance, and a 0 balance means *followers only*. |
+| 2 | Host's reach on a guest post | **The host's reach is spent and the host earns/loses.** A post published on someone else's profile never moves points to the guest author. | `posts.host_profile_id` owns `post_reach_allocation`, `post_reach_delivery` and the reach score; the guest keeps only the post ranking. Negative weights (dislike, report) hit the host. |
+| 3 | Translations | **Manual translations only** in this round. | `post_translations.kind = 'manual'`; `posts.translation_status` keeps `auto` for a later automatic draft. |
+| 4 | Translated content in the tabs | **Translated posts appear in the Updates and Suggestions tabs**, in the reader's language when a translation exists. | the feed queries join `post_translations` on `language = reader.language`; the post card shows the *translated* chip and the original language. |
+| 5 | Comments | **Comments are editable, accept replies and take Like/Dislike.** A comment still requires a prior post reaction and carries that polarity (+15 / −15). Editing never re-writes the polarity stored at insert time. | `comment.edited_at`, `comment.parent_id` (replies), `comment_reaction` with the same ±1 checks as `content_reaction`. |
+| 6 | Watch minutes | **Estimated reading time, not a session.** `read_minutes_cap = ceil(word_count / 200)`, computed when the post is saved; counting stops at the cap. | `posts.word_count`, `posts.read_minutes_cap`; `post_analytics_events(kind = 'watch_minute')` refuses events past the cap. |
+| 7 | Keyword limits | **3 main keywords per post and 5 sub-keywords per main keyword** — a limit per post, not per profile. | unique `(post_id, keyword_id)` plus a trigger on `post_keywords` that counts mains and subs. |
+| 8 | Deleted or banned profiles | **Their posts are deleted within 30 days and moved to a `site_archive` table**; financial and legal rows are untouched. | `site_archive(entity, payload jsonb, member_id, archived_at, purge_after)` written by the purge job that already handles the 30-day account window. |
+
+Two items stay open but do not block M2:
+
+* whether the composer also offers an **automatic** translation draft (row 3) — the column accepts
+  `auto`, only the UI is undecided;
+* whether a post with `visibility = 'private'` / `others` shows up in the Updates tab of the
+  authorized profiles (current assumption: yes, plus a notification).
 
 ---
 
-*Prepared from the live schema on 2026-11-01. No DDL has been applied for this document: the next
-step is M1, then the profile page shell (owner + visitor) against it.*
+*Prepared from the live schema on 2026-11-01. M1 is applied (`profile_core_tables`,
+`profile_core_counters`, `profile_core_rpcs`, `profile_core_blocks_links`); mirror in
+`tools/sql/profile-core.sql`. Next: M2 `posts_core`.*

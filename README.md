@@ -722,6 +722,22 @@ relations and constraints, the tables that are deliberately **not** created, and
 systems (reach per profile, rank per post) with their weights, tie-breakers and budget rules.
 Migrations M1–M9 and the pages each one unblocks are listed at the end of that document.
 
+**M1 `profile_core` is live** (2026-11-01, four migrations: `profile_core_tables`,
+`profile_core_counters`, `profile_core_rpcs`, `profile_core_blocks_links`). What it adds:
+
+| Piece | What it does |
+| --- | --- |
+| `profiles` columns | `language`, `birth_date`, `reach_daily_cap`, `posts_count`, `rank_avg`; `reach_count` starts at **0** — there is no seed balance |
+| `profile_settings` | six show/hide switches, four auto-accept switches, `allow_keyword_follows`; a row is created with the profile |
+| `profile_links` | Facebook, Instagram, TikTok, YouTube, X, Pinterest, Reddit, Threads, Telegram — handle, URL, sync direction; **never a token** |
+| `profile_blocks` | seven independent flags (view profile, view posts, message, publish, participate, react, comment); a block removes the follows of both directions |
+| `profile_follows` | `status` (`pending`/`active`/`declined`), `requested_at`, `accepted_at`, `source`; a follow stays pending until the target accepts, and the follow counters are recalculated by trigger |
+| RPCs | `profile_public`, `profile_settings_get/save`, `profile_follow_toggle/respond/lists`, `profile_block_set/remove/list`, `profile_links_list/save`, `profile_resolve`, `profile_online` — all take `p_token` and return JSON |
+
+The SQL mirror is [`tools/sql/profile-core.sql`](tools/sql/profile-core.sql). Sentiment of the
+round, in one line: a profile shows what its settings allow, a follow is a request until accepted,
+and a block hides the profile and drops both follows.
+
 ## Sounds
 
 Played from the public `source` bucket of the Supabase project:
