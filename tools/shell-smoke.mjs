@@ -7,9 +7,10 @@
  * Pass 1 — index.html: the sidebar is mounted, the header carries the menu
  *          button, a stored preference opens it, the toggle flips it, and
  *          Escape leaves a *pinned* panel alone (it closes a floating one).
- * Pass 2 — the pages that carry the panel (profile.html, watch.html): the
- *          <aside> is mounted, the header button and the edge tab are there,
- *          and the panel starts on the edge instead of taking page width.
+ * Pass 2 — the page that carries the site panel (watch.html): the <aside> is
+ *          mounted, the header button and the edge tab are there.
+ * Pass 2b — profile.html has its own menu: no site <aside>, its own pin and
+ *          its own edge tab.
  * Pass 3 — a page outside the set (movies.html): no <aside>, no menu button,
  *          the container stays empty.
  * Pass 4 — the stylesheet: no rule widens the header bar when the sidebar is
@@ -35,7 +36,7 @@ function page(file) {
 }
 
 async function boot(file, { stored = null, member = null, desktop = true } = {}) {
-  const dom = new JSDOM(page(file), { url: `http://localhost/${file}`, pretendToBeVisual: true });
+  const dom = new JSDOM(page(file.split("?")[0]), { url: `http://localhost/${file}`, pretendToBeVisual: true });
   const { window } = dom;
   const errors = [];
   window.addEventListener("error", (e) => errors.push(String(e.error || e.message)));
@@ -136,9 +137,10 @@ async function boot(file, { stored = null, member = null, desktop = true } = {})
 }
 
 /* ------------------------------------------------------------------ */
-/* pass 2 — the pages that carry the panel                            */
+/* pass 2 — the page that carries the site panel                      */
 /* ------------------------------------------------------------------ */
-for (const file of ["profile.html", "watch.html"]) {
+{
+  const file = "watch.html";
   const p = await boot(file, { stored: true });
 
   expect(`${file}: header mounted`, Boolean(p.qs(".site-header")));
@@ -148,12 +150,29 @@ for (const file of ["profile.html", "watch.html"]) {
   expect(`${file}: an edge tab waits on the left edge`, Boolean(p.qs("[data-sidebar-edge]")));
   expect(`${file}: the panel carries a pin`, Boolean(p.qs("[data-sidebar-pin]")));
   expect(`${file}: the page leaves room for the panel`, p.document.body.classList.contains("sb-open"));
+  expect(`${file}: no icons left unhydrated`, p.qsa("[data-icon]").length === 0, `${p.qsa("[data-icon]").length} left`);
   expect(`${file}: header still fixed`, p.window.getComputedStyle(p.qs(".site-header")).position === "fixed");
   expect(`${file}: no page errors`, p.errors.length === 0, p.errors.join(" | "));
 }
 
 /* ------------------------------------------------------------------ */
-/* pass 2b — a page outside the set                                    */
+/* pass 2b — the profile has its own menu, not the site one            */
+/* ------------------------------------------------------------------ */
+{
+  const p = await boot("profile.html?u=%40youssef.amrani", { stored: true });
+
+  expect("profile: no site panel", !p.qs(".sidebar") && !p.qs("#siteSidebar"));
+  expect("profile: no site menu button", !p.qs('[data-action="toggle-sidebar"]'));
+  expect("profile: the site container stays empty", p.qs("[data-site-sidebar]")?.children.length === 0);
+  expect("profile: the profile menu is there", Boolean(p.qs(".pf-side")));
+  expect("profile: it carries its own pin", Boolean(p.qs("[data-pf-pin]")));
+  expect("profile: it has its own edge tab", Boolean(p.qs("[data-pf-edge]")));
+  expect("profile: the body never inherits the site rail", !p.document.body.classList.contains("sb-open"));
+  expect("profile: header still fixed", p.window.getComputedStyle(p.qs(".site-header")).position === "fixed");
+}
+
+/* ------------------------------------------------------------------ */
+/* pass 3 — a page outside the set                                    */
 /* ------------------------------------------------------------------ */
 {
   const p = await boot("movies.html", { stored: true });

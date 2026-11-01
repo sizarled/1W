@@ -79,7 +79,8 @@ function dashboardPayload() {
 }
 
 async function boot(file, { desktop = true, stored = {}, dashboard = false } = {}) {
-  const dom = new JSDOM(page(file), { url: `http://localhost/${file}`, pretendToBeVisual: true });
+  const [name, query] = [file.split("?")[0], file.includes("?") ? `?${file.split("?")[1]}` : ""];
+  const dom = new JSDOM(page(name), { url: `http://localhost/${name}${query}`, pretendToBeVisual: true });
   const { window } = dom;
   const errors = [];
   window.addEventListener("error", (e) => errors.push(String(e.error || e.message)));
@@ -137,9 +138,15 @@ async function boot(file, { desktop = true, stored = {}, dashboard = false } = {
   if (dashboard) window.localStorage.setItem("1w.session", "b".repeat(64));
 
   const entry = dashboard ? "assets/js/dashboard.js" : "assets/js/shell.js";
-  const mod = await import(`file://${join(root, entry)}?page=${file}&v=${Math.random()}`);
+  const mod = await import(`file://${join(root, entry)}?page=${name}&v=${Math.random()}`);
   if (dashboard) await new Promise((resolve) => setTimeout(resolve, 220));
   else mod.mountShell();
+
+  // the profile owns its menu: profile.js wires that rail, not the shell
+  if (name === "profile.html") {
+    await import(`file://${join(root, "assets/js/profile.js")}?page=${name}&v=${Math.random()}`);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
   await new Promise((resolve) => setTimeout(resolve, 120));
 
   const qs = (sel) => window.document.querySelector(sel);
@@ -246,13 +253,48 @@ async function boot(file, { desktop = true, stored = {}, dashboard = false } = {
 }
 
 /* ------------------------------------------------------------------ */
-/* 3 — the preference travels between pages                            */
+/* 3 — the profile keeps its own menu, with the same rail              */
 /* ------------------------------------------------------------------ */
 {
-  const profile = await boot("profile.html", { stored: { "1w.sidebar.pin": "1" } });
-  expect("profile: a pinned preference opens the panel", profile.body.classList.contains("sb-open"));
-  expect("profile: the profile carries the panel", Boolean(profile.qs(".sidebar#siteSidebar")));
-  expect("profile: no page errors", profile.errors.length === 0, profile.errors.join(" | "));
+  const profile = await boot("profile.html?u=%40youssef.amrani");
+  const pin = () => profile.qs("[data-pf-pin]");
+
+  expect("profile: no site panel is mounted", !profile.qs(".sidebar"));
+  expect("profile: the profile menu is there", Boolean(profile.qs(".pf-side")));
+  expect("profile: the menu starts on the edge", profile.body.classList.contains("pf-side-rail"));
+  expect("profile: it starts closed", !profile.body.classList.contains("pf-side-open"));
+  expect("profile: the site rail classes are untouched", !profile.body.classList.contains("sb-open"));
+  expect("profile: the menu carries a pin", Boolean(pin()));
+
+  profile.move(3);
+  await profile.wait(40);
+  expect("profile: the edge brings the menu in", profile.body.classList.contains("pf-side-open"));
+  expect("profile: it is announced again", profile.qs(".pf-side")?.getAttribute("aria-hidden") === "false");
+
+  profile.move(900);
+  await profile.wait(500);
+  expect("profile: leaving hides it again", !profile.body.classList.contains("pf-side-open"));
+
+  profile.click(pin());
+  await profile.wait(40);
+  expect("profile: the pin keeps the menu out", profile.body.classList.contains("pf-side-open"));
+  expect("profile: it is marked pinned", profile.body.classList.contains("pf-side-pinned"));
+  expect("profile: the choice is remembered", profile.stored("1w.sidebar.pin") === '"1"');
+  expect("profile: the pin reads pressed", profile.qs("[data-pf-pin]")?.getAttribute("aria-pressed") === "true");
+
+  profile.move(900);
+  await profile.wait(500);
+  expect("profile: pinned, the pointer does not matter", profile.body.classList.contains("pf-side-open"));
+
+  profile.key("Escape");
+  await profile.wait(40);
+  expect("profile: Escape leaves a pinned menu alone", profile.body.classList.contains("pf-side-open"));
+}
+
+{
+  // the same preference read on the player and on the homepage
+  const watch = await boot("watch.html", { stored: { "1w.sidebar.pin": "1" } });
+  expect("watch: a pinned preference opens the site panel", watch.body.classList.contains("sb-open"));
 
   const home = await boot("index.html");
   expect("home: the homepage starts pinned", home.body.classList.contains("sb-pinned"));
@@ -284,10 +326,10 @@ async function boot(file, { desktop = true, stored = {}, dashboard = false } = {
   await p.wait(40);
   expect("mobile: the scrim closes it", !p.body.classList.contains("sb-open"));
 
-  const profile = await boot("profile.html", { desktop: false });
-  profile.click(profile.qs('[data-action="toggle-sidebar"]'));
-  await profile.wait(40);
-  expect("mobile: the profile drawer opens from the header", profile.body.classList.contains("sb-open"));
+  const profile = await boot("profile.html?u=%40youssef.amrani", { desktop: false });
+  expect("mobile: the profile has no site drawer", !profile.qs('[data-action="toggle-sidebar"]'));
+  expect("mobile: its own menu stays in the flow", !profile.body.classList.contains("pf-side-open"));
+  expect("mobile: the pin is there for CSS to hide", Boolean(profile.qs("[data-pf-pin]")));
   expect("mobile: no page errors", profile.errors.length === 0, profile.errors.join(" | "));
 }
 

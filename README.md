@@ -533,16 +533,26 @@ sidebar.
 
 ### The navigation rail: pinned, or waiting on the edge
 
-The menu button and the `<aside id="siteSidebar">` exist on **`index.html`, `watch.html` and
-`profile.html`**. Every other page mounts the header without the button and leaves the sidebar
-container empty — no rail to open and no `sb-open` class to inherit from a stored preference.
+There is one **rail behaviour**, not one menu: every page keeps the menu it needs, and the pin and
+the edge reveal are shared through `assets/js/edge.js`.
 
-The rail has two states, and the **pin** at the bottom of the panel moves between them:
+| Page | The menu | Classes |
+| --- | --- | --- |
+| `index.html` | the site panel `<aside id="siteSidebar">` (mounted by `shell.js`) | `sb-open` · `sb-pinned` · `sb-rail` |
+| `watch.html` | the same site panel — the player has no menu of its own | `sb-open` · `sb-pinned` · `sb-rail` |
+| `profile.html` | its **own** menu in `.pf-side` (Reach, Dashboard, Profile, Network, Account, In build) | `pf-side-open` · `pf-side-pinned` · `pf-side-rail` |
+| `dashboard.html` | its **own** menu in `.dsh-side` (the dashboard sections) | `data-pin` · `data-side-reveal` |
+
+Every other page mounts the header without the button and leaves the sidebar container empty — no
+rail to open and no `sb-open` class to inherit from a stored preference.
+
+The rail has two states, and the **pin** in the menu moves between them (bottom of the site panel,
+top corner of the profile card, next to the fold button on the dashboard):
 
 | State | What happens | Class |
 | --- | --- | --- |
-| **Pinned** | the panel stays out and the page keeps room for it | `body.sb-pinned` |
-| **On the edge** | the panel is gone and the page uses the whole width; moving the pointer within 34px of the left screen edge (or onto the thin tab on the edge) slides it in **over** the content, and it slides away 320ms after the pointer leaves it | `body.sb-rail` |
+| **Pinned** | the panel stays out and the page keeps room for it | `sb-pinned` · `pf-side-pinned` · `data-pin="on"` |
+| **On the edge** | the panel is gone and the page uses the whole width; moving the pointer within 34px of the left screen edge (or onto the thin tab on the edge) slides it in **over** the content, and it slides away 320ms after the pointer leaves it | `sb-rail` · `pf-side-rail` · `data-pin="off"` |
 
 The preference is `1w.sidebar.pin` (`"1"` / `"0"`), so pinning the menu on the profile pins it on
 the player too. Without a saved choice the homepage starts pinned (as it always has) and the player,
@@ -555,9 +565,9 @@ The rail slides in *under* the header (`top: var(--header-h)`, `z-index: 120` ag
 `130`). Opening it never touches `.site-header` or `.site-header__bar` — no padding, no width, no
 translate — so the brand, the section rail and the wallet stay exactly where they are; pinned,
 `.site-main` and `.site-footer` step aside by `--sidebar-w`, and floating they do not move at all.
-`tools/shell-smoke.mjs` asserts where the panel lives, `tools/sidebar-smoke.mjs` asserts the edge,
-the pin, the Escape key, the mobile drawer and the dashboard menu, and the stylesheets are checked
-to contain no `body.sb-open .site-header__bar` rule.
+`tools/shell-smoke.mjs` asserts which page carries which menu, `tools/sidebar-smoke.mjs` asserts the
+edge, the pin, the Escape key, the mobile drawer, the profile menu and the dashboard menu, and the
+stylesheets are checked to contain no `body.sb-open .site-header__bar` rule.
 
 ### Sidebar
 
@@ -789,7 +799,10 @@ the `profile_*` RPCs.
 
 **Owner view** — sidebar with avatar, profile name, member ID, followers, following
 and reach points, plus the menu (Updates, Activity, Suggestions, Followers,
-Following, Blocks, Search, Settings, and the four sections still to come). The
+Following, Blocks, Search, Settings, and the four sections still to come). That
+sidebar is its **own** menu, not the site one: it is pinned with its own pin and,
+unpinned, it slides back in from the screen edge exactly like the site rail (see
+*The navigation rail* below). The
 header carries the cover, the avatar, the display name with the level and wealth
 badges, the username with the connection-status cylinder, the description, the
 language, the country and the join date.

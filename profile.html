@@ -11,10 +11,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="assets/css/base.css?v=20261101c" />
-    <link rel="stylesheet" href="assets/css/layout.css?v=20261101c" />
-    <link rel="stylesheet" href="assets/css/components.css?v=20261101c" />
-    <link rel="stylesheet" href="assets/css/profile.css?v=20261101c" />
+    <link rel="stylesheet" href="assets/css/base.css?v=20261101d" />
+    <link rel="stylesheet" href="assets/css/layout.css?v=20261101d" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261101d" />
+    <link rel="stylesheet" href="assets/css/profile.css?v=20261101d" />
     <script>
       /* apply the saved theme (or the OS preference) before first paint */
       (function () {
@@ -32,8 +32,8 @@
         } catch (e) {}
       })();
     </script>
-    <script type="module" src="assets/js/app.js?v=20261101c"></script>
-    <script type="module" src="assets/js/profile.js?v=20261101c"></script>
+    <script type="module" src="assets/js/app.js?v=20261101d"></script>
+    <script type="module" src="assets/js/profile.js?v=20261101d"></script>
   </head>
   <body data-page="profile" data-title="Profile">
     <a class="skip-link" href="#main">Skip to content</a>
@@ -48,9 +48,16 @@
       </div>
 
       <div class="pf__grid" data-pf-root hidden>
+        <button class="pf-edge" type="button" data-pf-edge aria-controls="pfSide" aria-expanded="false" aria-label="Show the profile menu" title="Show the profile menu">
+          <i data-icon="chevronRight"></i>
+        </button>
+
         <!-- sidebar ------------------------------------------------- -->
-        <aside class="pf-side" aria-label="Profile summary">
+        <aside class="pf-side" id="pfSide" aria-label="Profile summary">
           <div class="pf-card">
+            <button class="pf-side__pin is-on" type="button" data-pf-pin aria-pressed="true" aria-label="Pin the menu" title="Pin the menu">
+              <span class="pin-glyph" data-pin-glyph></span>
+            </button>
             <div class="pf-side__avatar" data-pf-side-avatar>
               <img data-pf-side-img alt="" width="86" height="86" hidden />
               <span data-pf-side-initial aria-hidden="true">1W</span>

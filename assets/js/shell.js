@@ -2,9 +2,10 @@
  * Site shell — header, footer and the sidebar.
  *
  * The sidebar is mounted on the pages that live around the site navigation:
- * the homepage, the player (`watch.html`) and the profile. It slides in *under*
- * the header, so the header keeps its exact position and the content is what
- * moves. Everywhere else the header simply renders without its menu button.
+ * the homepage and the player (`watch.html`) — the profile carries its own menu
+ * in `.pf-side`. The panel slides in *under* the header, so the header keeps its
+ * exact position and the content is what moves. Everywhere else the header
+ * simply renders without its menu button.
  *
  * The panel is pinned by default: it stays out and the page keeps room for it.
  * Unpin it (the pin in the sidebar tools) and it leaves the screen — the page
@@ -31,18 +32,22 @@ import { hydrateIcons } from "./icons.js";
 import { initTheme, toggleTheme, currentTheme, flashTransition } from "./theme.js";
 import { createEdgeRail, isDesktop } from "./edge.js";
 
-/** Pages that mount the site navigation panel. */
-const SIDEBAR_PAGES = new Set(["index.html", "watch.html", "profile.html"]);
+/**
+ * Pages that mount the site navigation panel. The profile is not one of them:
+ * it carries its own menu (Reach · Dashboard · Profile · Network · Account ·
+ * In build) in `.pf-side`, with the same pin and edge behaviour.
+ */
+const SIDEBAR_PAGES = new Set(["index.html", "watch.html"]);
 
 function pageFile() {
   return window.location.pathname.split("/").pop() || "index.html";
 }
 
-/** Homepage, player and profile carry the panel; the rest of the site does not. */
+/** Homepage and player carry the panel; the rest of the site does not. */
 function hasSidebar() {
   if (SIDEBAR_PAGES.has(pageFile())) return true;
   const page = document.body?.dataset.page;
-  return page === "home" || page === "watch" || page === "profile";
+  return page === "home" || page === "watch";
 }
 
 /* the rail instance, shared with the header button */

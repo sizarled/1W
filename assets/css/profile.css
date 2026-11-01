@@ -811,6 +811,131 @@
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* pinned, or waiting on the screen edge (assets/js/edge.js)          */
+/* ------------------------------------------------------------------ */
+/* The card owns the pin. Pinned it is the sticky column as before;
+   unpinned the grid drops to one column, the card leaves the flow and floats
+   back over the content when the pointer reaches the left screen edge — the
+   same rail as the site menu, with its own menu inside. */
+.pf-card {
+  position: relative;
+}
+
+.pf-side__pin {
+  position: absolute;
+  top: 0.8rem;
+  right: 0.8rem;
+  z-index: 1;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.2s var(--ease), border-color 0.2s var(--ease), background 0.2s var(--ease);
+}
+
+.pf-side__pin:hover {
+  color: var(--text);
+  border-color: var(--line-3);
+}
+
+.pf-side__pin.is-on {
+  color: var(--text);
+  border-color: var(--line-3);
+  background: color-mix(in srgb, var(--text) 12%, var(--surface-2));
+}
+
+.pf-side__pin .pin-glyph .ico,
+.pf-side__pin .ico {
+  width: 14px;
+  height: 14px;
+}
+
+/* the sliver on the edge, only while the card is away */
+.pf-edge {
+  position: fixed;
+  left: 0;
+  top: 50%;
+  z-index: 121;
+  display: none;
+  place-items: center;
+  width: 15px;
+  height: 72px;
+  padding: 0;
+  transform: translateY(-50%);
+  border: 1px solid var(--line-2);
+  border-left: 0;
+  border-radius: 0 10px 10px 0;
+  background: var(--surface-2);
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.2s var(--ease), width 0.2s var(--ease), color 0.2s var(--ease);
+}
+
+.pf-edge .ico {
+  width: 13px;
+  height: 13px;
+}
+
+.pf-edge:hover,
+.pf-edge:focus-visible {
+  opacity: 1;
+  color: var(--text);
+  width: 19px;
+}
+
+@media (max-width: 1023px) {
+  .pf-side__pin,
+  .pf-edge {
+    display: none !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  body.pf-side-rail .pf__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.pf-side-rail .pf-side {
+    position: fixed;
+    top: var(--header-h);
+    left: 0;
+    bottom: 0;
+    width: min(320px, 84vw);
+    padding: 1rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    z-index: 120;
+    background: color-mix(in srgb, var(--bg-soft) 96%, transparent);
+    backdrop-filter: blur(20px);
+    border-right: 1px solid var(--line);
+    box-shadow: 34px 0 80px rgba(0, 0, 0, 0.45);
+    transform: translateX(-101%);
+    visibility: hidden;
+    transition: transform 0.4s var(--ease-out), visibility 0.4s;
+  }
+
+  body.pf-side-rail.pf-side-open .pf-side {
+    transform: none;
+    visibility: visible;
+  }
+
+  body.pf-side-rail:not(.pf-side-open) .pf-edge {
+    display: grid;
+  }
+
+  body.pf-side-rail.pf-side-open .pf-edge {
+    display: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pf-skeleton {
     animation: none;

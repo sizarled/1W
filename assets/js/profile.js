@@ -30,6 +30,7 @@ import { toast } from "./ui.js";
 import { sessionToken, getMember } from "./session.js";
 
 import { levelInfo } from "./levels.js";
+import { createEdgeRail } from "./edge.js";
 
 const PLATFORMS = [
   ["facebook", "Facebook"],
@@ -2195,6 +2196,25 @@ document.addEventListener("input", (event) => {
 /* ================================================================== */
 /* boot                                                                */
 /* ================================================================== */
+/* ================================================================== */
+/* the profile menu: pinned, or waiting on the screen edge             */
+/* ================================================================== */
+let pfRail = null;
+
+function initSideRail() {
+  const panel = qs(".pf-side");
+  if (!panel || pfRail) return;
+  pfRail = createEdgeRail({
+    panel,
+    tab: qs("[data-pf-edge]"),
+    root: qs("[data-pf-root]"),
+    pinSelector: "[data-pf-pin]",
+    openClass: "pf-side-open",
+    pinnedClass: "pf-side-pinned",
+    railClass: "pf-side-rail",
+  });
+}
+
 function boot() {
   state.token = sessionToken() || "";
   const params = new URLSearchParams(location.search);
@@ -2212,6 +2232,7 @@ function boot() {
     );
   }
   hydrateIcons();
+  initSideRail();
   load();
 }
 

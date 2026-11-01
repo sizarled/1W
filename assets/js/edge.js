@@ -70,6 +70,9 @@ const PIN_TEXT = { on: "Pinned", off: "On hover" };
  * @param {HTMLElement|null} opts.root   element carrying the state attributes
  * @param {string} [opts.pinSelector]    selector for the pin toggles
  * @param {string} [opts.revealAttr]     dataset key flipped while revealed
+ * @param {string} [opts.openClass]      body class while the panel is out
+ * @param {string} [opts.pinnedClass]    body class while it is pinned
+ * @param {string} [opts.railClass]      body class while it waits on the edge
  * @param {(open:boolean)=>void} [opts.onOpen]
  * @param {(open:boolean)=>void} [opts.onClose]
  * @param {(pinned:boolean)=>void} [opts.onPin]
@@ -81,6 +84,9 @@ export function createEdgeRail({
   root = null,
   pinSelector = "[data-sidebar-pin]",
   revealAttr = "sideReveal",
+  openClass = "sb-open",
+  pinnedClass = "sb-pinned",
+  railClass = "sb-rail",
   onOpen,
   onClose,
   onPin,
@@ -95,7 +101,7 @@ export function createEdgeRail({
 
   const paint = (next) => {
     open = next;
-    document.body.classList.toggle("sb-open", next);
+    document.body.classList.toggle(openClass, next);
     panel?.classList.toggle("is-open", next);
     panel?.setAttribute("aria-hidden", String(!next));
     // a page root only carries the reveal flag — it is never hidden itself
@@ -154,8 +160,8 @@ export function createEdgeRail({
         el.textContent = PIN_TEXT[state];
       });
     });
-    document.body.classList.toggle("sb-pinned", pinned);
-    document.body.classList.toggle("sb-rail", !pinned);
+    document.body.classList.toggle(pinnedClass, pinned);
+    document.body.classList.toggle(railClass, !pinned);
     // `data-pin` on the page root, never `data-side-pin` — that is the button itself
     if (stateRoot && stateRoot !== panel) stateRoot.dataset.pin = pinned ? "on" : "off";
   };
