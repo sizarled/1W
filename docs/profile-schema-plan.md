@@ -271,13 +271,13 @@ by the comment RPC, not by the page:
 | # | Migration | Content | Pages unblocked |
 | --- | --- | --- | --- |
 | M1 | `profile_core` **applied 2026-11-01** | `profiles` columns, `profile_settings` (+auto row), `profile_links`, `profile_blocks`, `profile_follows.status/requested_at/accepted_at/source` + backfill, follow counters trigger, `profile_public` / `profile_settings_*` / `profile_follow_*` / `profile_block_*` / `profile_links_*` RPCs | profile page shell, settings, follow/block lists |
-| M2 | `posts_core` | `posts`, `post_audience_rules`, `post_authorized_profiles`, `post_translations`, `post_keywords`, `keywords`, `keyword_follows`, `post_related_content`, backfill from `blogarticle` / `channelsvideo` / `postrecommendation`, `site_archive` + the 30-day archive/purge job | composer, tabs (updates/activity/suggestions), keyword page |
-| M3 | `interactions` | `content_reaction`/`comment` extensions, `post_reshare`, `post_reports`, counters + triggers, comment-requires-reaction rule | post card interactions, lists of reactors |
-| M4 | `reach_rank` | `profile_reach_transactions`, `post_reach_allocation`, `post_reach_delivery`, `post_rank_key`, scoring triggers, release/expiry jobs | suggestions, manage-posts counters |
-| M5 | `search` | `search_history`, `search_analytics`, `keyword_analytics`, search + keyword RPCs | `search.html`, `keyword.html` |
-| M6 | `publish_links` | `profile_publish_links` + request/approve RPCs | publish / share lists |
-| M7 | `messaging` | `conversations*` + DM RPCs | messages page |
-| M8 | `analytics` | `post_analytics_events`, `post_analytics_daily`, rollups | statistics tab |
+| M2 | `posts_core` + `keywords_core` **applied 2026-11-01** | `posts`, `post_audience_rules`, `post_authorized_profiles`, `post_translations`, `keywords`, `post_keywords`, `keyword_follows`, `post_related_content`, `site_archive` (+ the ≤3 mains / ≤5 subs guard, the counters, the 30-day window) | composer, tabs (updates/activity/suggestions), keyword page |
+| M3 | `interactions_core` **applied 2026-11-01** | `comment.edited_at/polarity/like_count/dislike_count`, `post_reshare`, `post_reports`, the counters trigger, the comment-requires-reaction rule | post card interactions, lists of reactors |
+| M4 | `reach_rank` **applied 2026-11-01** | `profile_reach_transactions`, `post_reach_allocation`, `post_reach_delivery`, `post_rank_recompute()`, `reach_release_stale()` | suggestions, manage-posts counters |
+| M5 | `search` **applied 2026-11-01** (as `search_publish_links`) | `search_history`, `search_analytics`, `keyword_analytics`, `profile_publish_links` | `search.html`, `keyword.html`, publish / share lists |
+| M6 | `publish_links` **applied 2026-11-01** (same migration) | the request/approve rows of publishing at another profile | publish / share lists |
+| M7 | `messaging_core` **applied 2026-11-01** | `conversations`, `conversation_participants`, `conversation_messages` (+ `last_message_at` trigger) | messages page |
+| M8 | `analytics` **applied 2026-11-01** (with M4) | `post_analytics_events`, `post_analytics_daily` | statistics tab |
 | M9 | `rpc_surface` | the ~40 RPCs the pages need, each with `p_token` and a JSON payload | all pages |
 
 Each migration gets: a `tools/sql/<name>.sql` file mirroring what was applied, a smoke test in
@@ -309,6 +309,7 @@ Two items stay open but do not block M2:
 
 ---
 
-*Prepared from the live schema on 2026-11-01. M1 is applied (`profile_core_tables`,
-`profile_core_counters`, `profile_core_rpcs`, `profile_core_blocks_links`); mirror in
-`tools/sql/profile-core.sql`. Next: M2 `posts_core`.*
+*Prepared from the live schema on 2026-11-01. M1–M8 are applied; the tables and the rules they
+enforce are listed in [`profile-tables-applied.md`](profile-tables-applied.md), the M1 mirror is
+`tools/sql/profile-core.sql` and the M2 mirror is `tools/sql/posts-core.sql`. Next: M9, the RPC
+surface the pages call.*

@@ -787,6 +787,32 @@ re-render, so switching tabs never leaves an empty `<i>` behind.
 node tools/profile-smoke.mjs      # 45 checks, owner + visitor + blocked
 ```
 
+## The tables behind the profile page
+
+M1 gave the page its identity (`profiles`, settings, follows, blocks, links). The functions that
+come next — publishing, interactions, reach, statistics, search, messages — now have their tables
+too. Twenty-three of them, all with RLS on and **no policy**: the browser still cannot read a table
+directly, only the RPCs can.
+
+| Migration | Tables |
+| --- | --- |
+| `posts_core` | `posts`, `post_audience_rules`, `post_authorized_profiles`, `post_translations` |
+| `keywords_core` | `keywords`, `post_keywords`, `keyword_follows`, `post_related_content`, `site_archive` |
+| `interactions_core` | `post_reshare`, `post_reports`, plus `comment.edited_at / polarity / like_count / dislike_count` |
+| `reach_rank` | `profile_reach_transactions`, `post_reach_allocation`, `post_reach_delivery`, `post_analytics_events`, `post_analytics_daily` |
+| `search_publish_links` | `search_history`, `search_analytics`, `keyword_analytics`, `profile_publish_links` |
+| `messaging_core` | `conversations`, `conversation_participants`, `conversation_messages` |
+
+The database now enforces the rules the brief states, so a page cannot break them by accident:
+3 main keywords per post and 5 sub-keywords per main, a comment refused until the member reacted
+(the comment inherits that ±1 polarity), counters recounted from the source rows, `read_minutes_cap`
+derived from the word count, one reach point per target per day released after ten minutes, and a
+30-day `site_archive` window for anything deleted.
+
+Every table and rule is written down in
+[`docs/profile-tables-applied.md`](docs/profile-tables-applied.md); the M2 SQL mirror is
+[`tools/sql/posts-core.sql`](tools/sql/posts-core.sql).
+
 ## Sounds
 
 Played from the public `source` bucket of the Supabase project:
