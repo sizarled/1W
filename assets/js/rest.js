@@ -275,7 +275,7 @@ async function submitIdentity() {
   }
 
   state.member = null;
-  state.channels = result.channels || { email: false, telegram: false };
+  state.channels = result.channels || { email: false, whatsapp: false, telegram: false };
   state.masked = {
     email: result.masked_email,
     phone: result.masked_phone,
@@ -307,10 +307,16 @@ function paintSent(result) {
     }.`;
   }
   if (text) {
-    const parts = [`Sent to ${state.masked.email || "your email"}`];
-    if (state.channels?.telegram) parts.push("and to your Telegram");
-    parts.push("— valid for 30 minutes, and it works once.");
-    text.textContent = parts.join(" ");
+    // one sentence, and only the channels that actually carried it
+    const where = [];
+    if (state.channels?.email) where.push(`${state.masked.email || "your email"} by email`);
+    if (state.channels?.whatsapp) {
+      where.push(`your WhatsApp${state.masked.phone ? ` (${state.masked.phone})` : ""}`);
+    }
+    if (state.channels?.telegram) where.push("your Telegram");
+    text.textContent = where.length
+      ? `Sent to ${joinList(where)} — valid for 30 minutes, and it works once.`
+      : "The code was issued, but no channel is configured yet — open the recovery link, or recover from this device.";
   }
   if (result?.restricted) {
     alertBox(
@@ -323,9 +329,17 @@ function paintSent(result) {
 function deliveryLine(channels) {
   const list = [];
   if (channels?.email) list.push("email");
+  if (channels?.whatsapp) list.push("WhatsApp");
   if (channels?.telegram) list.push("Telegram");
   if (!list.length) return "The code was issued, but no channel is configured yet — use the recovery link.";
-  return `Sent by ${list.join(" and ")}. It works once.`;
+  return `Sent by ${joinList(list)}. It works once.`;
+}
+
+/** "email", "email and WhatsApp", "email, WhatsApp and Telegram" */
+function joinList(items = []) {
+  const list = items.filter(Boolean);
+  if (list.length <= 1) return list[0] || "";
+  return `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`;
 }
 
 /* ------------------------------------------------------------------ */

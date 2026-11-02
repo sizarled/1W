@@ -17,9 +17,10 @@
 -- recovery code and returns the member's data, so the page can offer the .txt
 -- again. The old code stops working the moment it is spent.
 --
--- Delivery: the code leaves through a Google Apps Script web app (email) and
--- through the Telegram bot (message). Both endpoints and tokens live in
--- `site_secrets`, never in the browser and never in this file.
+-- Delivery: the code leaves through a Google Apps Script web app (email and
+-- **WhatsApp**, Meta Cloud API) and through the Telegram bot (message). Every
+-- endpoint and every token lives in `site_secrets`, never in the browser and
+-- never in this file.
 -- ==================================================================
 
 -- the old, unused recovery experiment (six-digit codes in `recovery_codes`,
@@ -215,8 +216,128 @@ as $$
   );
 $$;
 
+-- WhatsApp/SMS numbers are compared in E.164: digits only, country code first,
+-- no plus. A member types `0668313718`, `+212 668-313718` or `00212668313718`
+-- and WhatsApp reads `212668313718` — the same number three ways.
+--
+-- The country code comes from the member's country when the database knows a
+-- name it recognises, and from `site_secrets.whatsapp_cc` otherwise (Morocco,
+-- the site's home). A number that already carries its country code is left
+-- alone: it is longer than a local number.
+create or replace function public.whatsapp_number(p_phone text, p_country text default null, p_default_cc text default null)
+returns text
+language plpgsql
+immutable
+as $$
+declare
+  v_raw_phone text := btrim(coalesce(p_phone, ''));
+  -- a number that arrives with `+` or `00` already carries its country code,
+  -- whatever it is: Andorra is +376 six digits, and it must not become a
+  -- Moroccan number just because the site defaults to 212
+  v_intl boolean := left(v_raw_phone, 1) = '+'
+                     or left(regexp_replace(v_raw_phone, '[^0-9]', '', 'g'), 2) = '00';
+  v      text := regexp_replace(coalesce(p_phone, ''), '[^0-9]', '', 'g');
+  -- the country arrives as a name in English ("Morocco") or in Arabic
+  -- ("المغرب"), or as an ISO code ("MA"): keep both shapes
+  v_lat  text := lower(regexp_replace(btrim(coalesce(p_country, '')), '[^a-zA-Z]', '', 'g'));
+  v_raw  text := btrim(coalesce(p_country, ''));
+  v_cc   text;
+  v_dial text;
+begin
+  if v = '' then
+    return null;
+  end if;
+  -- 00212… is 212…
+  if left(v, 2) = '00' then
+    v := substr(v, 3);
+  end if;
+
+  v_dial := case v_lat
+    when 'morocco' then '212'      when 'ma' then '212'
+    when 'algeria' then '213'      when 'dz' then '213'
+    when 'tunisia' then '216'      when 'tn' then '216'
+    when 'egypt' then '20'         when 'eg' then '20'
+    when 'libya' then '218'        when 'ly' then '218'
+    when 'sudan' then '249'        when 'sd' then '249'
+    when 'saudiarabia' then '966'  when 'sa' then '966'
+    when 'emirates' then '971'     when 'unitedarabemirates' then '971' when 'ae' then '971'
+    when 'qatar' then '974'        when 'qa' then '974'
+    when 'kuwait' then '965'       when 'kw' then '965'
+    when 'bahrain' then '973'      when 'bh' then '973'
+    when 'oman' then '968'         when 'om' then '968'
+    when 'jordan' then '962'       when 'jo' then '962'
+    when 'iraq' then '964'         when 'iq' then '964'
+    when 'lebanon' then '961'      when 'lb' then '961'
+    when 'palestine' then '970'    when 'ps' then '970'
+    when 'syria' then '963'        when 'sy' then '963'
+    when 'yemen' then '967'        when 'ye' then '967'
+    when 'turkey' then '90'        when 'tr' then '90'
+    when 'france' then '33'        when 'fr' then '33'
+    when 'belgium' then '32'       when 'be' then '32'
+    when 'spain' then '34'         when 'es' then '34'
+    when 'italy' then '39'         when 'it' then '39'
+    when 'germany' then '49'       when 'de' then '49'
+    when 'netherlands' then '31'   when 'nl' then '31'
+    when 'portugal' then '351'     when 'pt' then '351'
+    when 'switzerland' then '41'   when 'ch' then '41'
+    when 'sweden' then '46'        when 'se' then '46'
+    when 'norway' then '47'        when 'no' then '47'
+    when 'denmark' then '45'       when 'dk' then '45'
+    when 'unitedkingdom' then '44' when 'uk' then '44' when 'gb' then '44'
+    when 'unitedstates' then '1'   when 'usa' then '1' when 'us' then '1'
+    when 'canada' then '1'         when 'ca' then '1'
+    else null
+  end;
+
+  if v_dial is null then
+    v_dial := case v_raw
+      when 'المغرب' then '212'              when 'الجزائر' then '213'
+      when 'تونس' then '216'                when 'مصر' then '20'
+      when 'ليبيا' then '218'               when 'السودان' then '249'
+      when 'السعودية' then '966'            when 'الإمارات' then '971'
+      when 'الامارات' then '971'            when 'قطر' then '974'
+      when 'الكويت' then '965'              when 'البحرين' then '973'
+      when 'عُمان' then '968'               when 'عمان' then '968'
+      when 'الأردن' then '962'              when 'الاردن' then '962'
+      when 'العراق' then '964'              when 'لبنان' then '961'
+      when 'فلسطين' then '970'              when 'سوريا' then '963'
+      when 'اليمن' then '967'               when 'تركيا' then '90'
+      when 'فرنسا' then '33'                when 'بلجيكا' then '32'
+      when 'إسبانيا' then '34'              when 'اسبانيا' then '34'
+      when 'إيطاليا' then '39'              when 'ألمانيا' then '49'
+      when 'هولندا' then '31'               when 'البرتغال' then '351'
+      when 'سويسرا' then '41'               when 'السويد' then '46'
+      when 'النرويج' then '47'              when 'الدنمارك' then '45'
+      when 'المملكة المتحدة' then '44'      when 'الولايات المتحدة' then '1'
+      when 'كندا' then '1'
+      else null
+    end;
+  end if;
+
+  -- the member's own country first: it is their number being dialled
+  v_cc := coalesce(
+    nullif(v_dial, ''),
+    nullif(regexp_replace(coalesce(p_default_cc, ''), '[^0-9]', '', 'g'), ''),
+    '212'   -- the site's home; `whatsapp_cc` covers a country not listed above
+  );
+
+  if not v_intl then
+    if left(v, 1) = '0' then
+      v := v_cc || ltrim(v, '0');                     -- 0668… → 212668…
+    elsif length(v) between 8 and 10 and left(v, length(v_cc)) <> v_cc then
+      v := v_cc || v;                                  -- 668…  → 212668…
+    end if;
+  end if;
+
+  if length(v) < 8 or length(v) > 15 then
+    return null;                                       -- not a number WhatsApp will take
+  end if;
+  return v;
+end;
+$$;
+
 -- ------------------------------------------------------------------
--- 4. delivery — Google Apps Script (email) + Telegram (bot)
+-- 4. delivery — Apps Script (email + WhatsApp) and the Telegram bot
 -- ------------------------------------------------------------------
 create or replace function public.recovery_send(p_member public.members, p_code text)
 returns jsonb
@@ -228,14 +349,23 @@ declare
   v_mail_url   text := public.site_secret('gs_mail_url');
   v_mail_token text := public.site_secret('gs_mail_token');
   v_mail_cc    text := public.site_secret('gs_mail_cc');
+  -- WhatsApp rides the same web app; `whatsapp_url` points it at another one
+  v_wa_url     text := coalesce(public.site_secret('whatsapp_url'), public.site_secret('gs_mail_url'));
+  v_wa_token   text := coalesce(public.site_secret('whatsapp_token'), public.site_secret('gs_mail_token'));
+  v_wa_to      text := public.whatsapp_number(
+                         p_member.phone_number,
+                         p_member.country,
+                         public.site_secret('whatsapp_cc'));
   v_bot        text := public.site_secret('telegram_bot_token');
   v_chat       text := coalesce(nullif(p_member.telegram_chat_id, ''), public.site_secret('telegram_chat_id'));
   v_name       text := coalesce(nullif(btrim(p_member.full_name), ''), p_member.username, 'member');
   v_text       text;
+  v_wa_text    text;
   v_body       jsonb;
   v_id         bigint;
   v_email      boolean := false;
   v_telegram   boolean := false;
+  v_whatsapp   boolean := false;
   v_has_net    boolean := exists (
     select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
      where n.nspname = 'net' and p.proname = 'http_post'
@@ -246,11 +376,18 @@ begin
     v_name, p_code
   );
 
+  -- WhatsApp is a chat, not a letter: the code, and nothing that has to be read
+  v_wa_text := format(
+    E'1World — recovery code\n\n%s\n\nValid for 30 minutes, and it works once. If you did not ask for this, ignore this message.',
+    p_code
+  );
+
   -- email ------------------------------------------------------------
   if v_mail_url is not null and coalesce(btrim(p_member.email), '') <> '' then
     begin
       v_body := jsonb_build_object(
         'token',   coalesce(v_mail_token, ''),
+        'channel', 'email',
         'to',      p_member.email,
         'name',    v_name,
         'subject', '1World — your recovery code',
@@ -280,7 +417,42 @@ begin
     values (p_member.id, 'email', public.mask_email(p_member.email), 'skipped', 'gs_mail_url missing');
   end if;
 
-  -- telegram ---------------------------------------------------------
+  -- WhatsApp --------------------------------------------------------
+  if v_wa_url is not null and v_wa_to is not null then
+    begin
+      v_body := jsonb_build_object(
+        'token',   coalesce(v_wa_token, ''),
+        'channel', 'whatsapp',
+        'to',      v_wa_to,          -- E.164 digits, no plus: 212668313718
+        'name',    v_name,
+        'code',    p_code,
+        'text',    v_wa_text,
+        'member',  p_member.member_id
+      );
+      if v_has_net then
+        select net.http_post(
+          url  => v_wa_url,
+          body => v_body,
+          headers => jsonb_build_object('Content-Type', 'application/json'),
+          timeout_milliseconds => 10000
+        ) into v_id;
+      end if;
+      insert into public.recovery_delivery (member_id, channel, target, status, request_id)
+      values (p_member.id, 'whatsapp', public.mask_phone('+' || v_wa_to),
+              case when v_has_net then 'queued' else 'skipped' end, v_id);
+      v_whatsapp := v_has_net;
+    exception when others then
+      insert into public.recovery_delivery (member_id, channel, target, status, detail)
+      values (p_member.id, 'whatsapp', public.mask_phone('+' || v_wa_to), 'failed', left(sqlerrm, 200));
+    end;
+  else
+    insert into public.recovery_delivery (member_id, channel, target, status, detail)
+    values (p_member.id, 'whatsapp', public.mask_phone(p_member.phone_number), 'skipped',
+            case when v_wa_url is null then 'no delivery endpoint: gs_mail_url missing'
+                 else 'the phone does not read as an international number' end);
+  end if;
+
+  -- Telegram --------------------------------------------------------
   if v_bot is not null and v_chat is not null then
     begin
       if v_has_net then
@@ -307,10 +479,11 @@ begin
   update public.members
      set recovery_last_channel = concat_ws('+',
            case when v_email then 'email' end,
+           case when v_whatsapp then 'whatsapp' end,
            case when v_telegram then 'telegram' end)
    where id = p_member.id;
 
-  return jsonb_build_object('email', v_email, 'telegram', v_telegram);
+  return jsonb_build_object('email', v_email, 'whatsapp', v_whatsapp, 'telegram', v_telegram);
 end;
 $$;
 

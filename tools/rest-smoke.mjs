@@ -84,7 +84,7 @@ function stubFetch(url, opts = {}) {
       full_name: MEMBER.full_name,
       masked_email: "y*********@example.com",
       masked_phone: "+212 6 1***678",
-      channels: { email: true, telegram: true },
+      channels: { email: true, whatsapp: true, telegram: true },
       expires_at: "2026-11-01T23:10:00Z",
       restricted: false,
     });
@@ -317,12 +317,16 @@ function check(name, ok, detail) {
   report.sentTo = p.shownPanel();
   report.sentTitle = p.text("[data-rc-sent-title]");
   report.sentText = p.text("[data-rc-sent-text]");
-  report.sentChecksChannels = /email/i.test(report.sentText) && /telegram/i.test(report.sentText);
+  report.sentChecksChannels =
+    /email/i.test(report.sentText) && /whatsapp/i.test(report.sentText) && /telegram/i.test(report.sentText);
+  report.sentNamesPhone = /\+212 6 1\*\*\*678/.test(report.sentText);
   report.stepTwoCurrent = p.dots()[1].current;
   report.stepOneDone = p.dots()[0].done;
   report.startPayload = bodies.find((c) => c.href.includes("recovery_start"))?.body || {};
   check("the code step is reached", report.sentTo === "code", report.sentTo);
   check("the code step is marked", report.stepTwoCurrent);
+  check("the sent line names every channel that carried it", report.sentChecksChannels, report.sentText);
+  check("the sent line says which WhatsApp number", report.sentNamesPhone, report.sentText);
 }
 
 /* ------------------------------------------------------------------ */

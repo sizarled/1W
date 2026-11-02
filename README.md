@@ -572,15 +572,25 @@ sentence instead of a shrug — *"this device holds the original code of @ledsiz
 address is the only field that does not match it"*. The path ends the same way as the others:
 new password, new code, details to download.
 
-### Delivery: the Google Apps Script and the bot
+### Delivery: the Google Apps Script, WhatsApp and the bot
 
 The code leaves the database through `recovery_send()` and `pg_net`, never through the
-browser:
+browser — and **every configured channel carries the same code**, so a dead mailbox does not
+close the account:
 
 | Channel | Where it goes | What it needs in `site_secrets` |
 | --- | --- | --- |
 | Email | the member's email, sent by a Google Apps Script web app | `gs_mail_url`, `gs_mail_token`, optional `gs_mail_cc` |
+| WhatsApp | the member's phone, through Meta **WhatsApp Cloud API** — the same web app posts it | `gs_mail_url`, `gs_mail_token`, optional `whatsapp_cc` |
 | Telegram | `sendMessage` to the member's chat, or to the site's chat | `telegram_bot_token`, `telegram_chat_id` |
+
+WhatsApp is dialled, not mailed: `whatsapp_number(phone, country, default_cc)` turns whatever
+was typed — `0668313718`, `+212 668-313718`, `00212668313718` — into E.164 digits
+(`212668313718`). A number that arrives with a `+` or `00` already carries its country code
+and is left alone (an Andorran `+376` number must not become Moroccan); a local number takes
+the member's own country — English **or** Arabic name, or ISO code — and falls back to
+`site_secrets.whatsapp_cc` (then `212`) when the country is not recognised. A number that
+cannot be read is logged `skipped` with the reason, and the other channels still go.
 
 `site_secrets` has RLS on and **no policies** — only the `security definer` functions read
 it, so neither the endpoint nor the bot token can be fetched with the publishable key. Each
@@ -588,15 +598,50 @@ send writes a row in `recovery_delivery` (channel, masked target, status, `pg_ne
 id, error) and the whole flow writes to `log` (`recovery_request`, `recovery_verified`,
 `recovery_link_used`, `recovery_reset`, `recovery_failed` with its reason).
 
-The mailer lives in the repo: `tools/apps-script/recovery-mailer.gs`. Deploy it once
-(script.google.com → Web app → *Execute as: me*, *Access: anyone*), then store the URL:
+The script lives in the repo: `tools/apps-script/recovery-delivery.gs`. It is one web app
+with three channels — `channel: "email" | "whatsapp" | "telegram" | "all"` — and the database
+calls it once per channel. Deploy it once (script.google.com → Web app → *Execute as: me*,
+*Access: anyone*), fill **Project Settings → Script properties**, then store the URL:
 
 ```sql
 insert into public.site_secrets (key, value)
 values ('gs_mail_url',  'https://script.google.com/macros/s/XXXX/exec'),
-       ('gs_mail_token', '<the same TOKEN as in the script>')
+       ('gs_mail_token', '<the same SHARED_TOKEN as in the script>')
 on conflict (key) do update set value = excluded.value, updated_at = now();
 ```
+
+| Script property | Meaning |
+| --- | --- |
+| `SHARED_TOKEN` | the same string as `gs_mail_token`; without it the script refuses everything |
+| `FROM_NAME` | the sender name on the email (`1World`) |
+| `CC` | optional copy of every mail, the operator's address while the flow is new |
+| `WHATSAPP_TOKEN` | Meta **permanent** access token |
+| `WHATSAPP_PHONE_ID` | the *Phone number ID* of the sender (not the phone number) |
+| `WHATSAPP_TEMPLATE` | the approved template name; empty → plain text |
+| `WHATSAPP_LANG` | the template's language (`en`) |
+| `TELEGRAM_BOT_TOKEN` | only if you also want Telegram to leave through the script |
+
+WhatsApp only delivers a **business-initiated** message through an approved template. Submit
+one (category *Utility*) with the body
+
+```
+1World recovery code: {{1}}. It is valid for 30 minutes and works once.
+```
+
+put its name in `WHATSAPP_TEMPLATE`, and the script fills `{{1}}` with the code. While the
+template is unapproved (or if the name is wrong) the script retries as plain text — that only
+lands inside a 24-hour conversation window — and the answer says `mode: "text (template
+failed: …)"` instead of pretending.
+
+Open the `/exec` URL in a browser for a heartbeat: it lists which channels that deployment is
+configured for and prints no secret. `testSend()` and `checkSetup()` in the editor do the same
+without the web app. When the script changes, **Manage deployments → Edit → Version: New** —
+the `/exec` URL then keeps working and serves the new code; a bare *Save* changes nothing for
+the database.
+
+A separate WhatsApp gateway (Ultramsg, Green API, CallMeBot…) can be used instead: set
+`whatsapp_url` to its endpoint and `whatsapp_token` to its token, and the database will post
+the same JSON (`channel`, `to`, `code`, `text`, `name`, `member`) there.
 
 The Telegram bot is **Cineaura** (`@cineaura2bot`). Its token is in `site_secrets`; the chat
 id is captured the first time somebody writes to the bot:
@@ -619,8 +664,9 @@ delete from public.site_secrets where key = 'gs_mail_cc';
 ```
 
 A member can carry their own Telegram chat in `members.telegram_chat_id`, which wins over the
-site default. If neither channel is configured the code is still issued and both `channels` flags
-come back `false`, so the page can say so instead of pretending.
+site default. If no channel is configured the code is still issued and every `channels` flag
+(`email`, `whatsapp`, `telegram`) comes back `false`, so the page says so instead of
+pretending.
 
 ### Functions
 
@@ -633,7 +679,8 @@ come back `false`, so the page can say so instead of pretending.
 | `recovery_device(name, phone, email, view_code, device, password, ip, agent)` | The no-code path: the device's **original** code only, refused with `other_device` / `unknown_device` |
 | `recovery_device_status(name, phone, email, device)` | The accounts this browser holds original codes for, with a verdict per field, for the "check this device" button; nothing else leaves the server |
 | `recovery_device_key(text)` / `recovery_name_key(text)` | The device and the name in one comparable shape |
-| `recovery_send(member, code)` | Builds the email and the Telegram message and posts them with `pg_net` (internal) |
+| `recovery_send(member, code)` | Builds the email, the WhatsApp message and the Telegram message and posts them with `pg_net`; answers `{email, whatsapp, telegram}` (internal) |
+| `whatsapp_number(phone, country, default_cc)` | The phone as E.164 digits, or `null` when it cannot be read |
 | `recovery_code_hash(text)` / `recovery_code_key(text)` | One canonical shape — `OW-XXXX-XXXX-XXXX`, upper case, dashes — so old registration hashes keep working |
 | `recovery_phone_key(text)` | Last nine digits, so the country code never matters |
 | `site_secret(key)` | Reads one secret; executable by nobody |
@@ -642,6 +689,12 @@ DDL + functions: `tools/sql/recovery-page.sql`. The old, unused recovery experim
 codes in a `recovery_codes` table that never existed, plus a `recovery_delivery(delivery_id)`
 short-cut that handed the plain code back to whoever held the id) is dropped at the top of
 that file.
+
+`tools/delivery-smoke.mjs` runs `recovery-delivery.gs` itself under Node with `PropertiesService`,
+`MailApp`, `UrlFetchApp` and `ContentService` stubbed, so the script is tested before it is
+deployed: a wrong token and a malformed address send nothing, the WhatsApp template carries the
+code in `{{1}}`, a rejected template falls back to text and says so, `channel: "all"` lets a
+broken channel fail alone, and `doGet` is a heartbeat that prints no secret.
 
 `tools/rest-smoke.mjs` runs the page six times in jsdom: step 1 (empty, bad email, short
 phone, unknown account, wrong phone, then the pair that matches), the resend cooldown, step 2
@@ -909,6 +962,8 @@ node tools/sidebar-smoke.mjs     # 91 checks: the edge, the pin, Escape, the mob
 node tools/court-smoke.mjs       # 115 checks: the four steps, uploads, both doors, the court room
 node tools/iptv-smoke.mjs        # 43 checks: the playlists, the groups, the page, the deep links
 node tools/activated-smoke.mjs   # 35 checks: hidden panels, image link, ad pause, code return
+node tools/rest-smoke.mjs        # 32 checks: the three steps, the link, the device path, the .txt
+node tools/delivery-smoke.mjs    # 35 checks: the Apps Script itself — email, WhatsApp, Telegram
 ```
 
 `dashboard-smoke.mjs` boots the page in jsdom with a stubbed `member_dashboard` and walks the
@@ -1317,7 +1372,7 @@ assets/js/login.js          sign-in controller (member_login / member_session / 
 assets/css/rest.css         recovery page: stepper, card, panels, code + link blocks
 assets/js/rest.js           recovery controller (recovery_start/verify/reset/link/device)
 assets/js/device.js         the one device id (MAC), shared by wizard, player and recovery
-tools/apps-script/recovery-mailer.gs  the Google Apps Script that mails the code
+tools/apps-script/recovery-delivery.gs  the Google Apps Script: email, WhatsApp, Telegram
 assets/css/dashboard.css    app shell: header rail, sidebar, gates, section views
 assets/js/dashboard.js      dashboard controller (member_dashboard + code/notify/court actions)
 assets/js/activated.js      activation wizard (profile → viewing code → ad gate → activate), reactivation, upgrade
@@ -1329,6 +1384,7 @@ tools/cast-smoke.mjs        jsdom cast page test (guest + member dials)
 tools/register-smoke.mjs    registration test (form, duplicates, member ID, success, .txt)
 tools/login-smoke.mjs       sign-in test (states, success card, restore, log out)
 tools/rest-smoke.mjs        recovery test (three steps, link, device path, .txt)
+tools/delivery-smoke.mjs    the Apps Script under Node: token, email, WhatsApp template, Telegram
 tools/dashboard-smoke.mjs   dashboard test (five gates, rail, popover, codes, sections)
 tools/sidebar-smoke.mjs     sidebar rail test (edge reveal, pin, Escape, mobile drawer, dashboard menu)
 tools/court-smoke.mjs       activation wizard + court room test
