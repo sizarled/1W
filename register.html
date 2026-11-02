@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Create account — 1World Web</title>
+    <meta name="description" content="Create your 1World account: full name, username, email, phone, password, birth date and country. Every new account is inactive until it is activated." />
+    <meta name="theme-color" content="#060607" />
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="assets/css/base.css?v=20261101k" />
+    <link rel="stylesheet" href="assets/css/layout.css?v=20261101k" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261101k" />
+    <link rel="stylesheet" href="assets/css/register.css?v=20261101k" />
+    <script>
+      /* apply the saved theme (or the OS preference) before first paint */
+      (function () {
+        try {
+          var saved = JSON.parse(localStorage.getItem("1w.theme") || "null");
+          var theme =
+            saved === "light" || saved === "dark"
+              ? saved
+              : window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
+                ? "light"
+                : "dark";
+          document.documentElement.dataset.theme = theme;
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute("content", theme === "light" ? "#f4f4f5" : "#060607");
+        } catch (e) {}
+      })();
+    </script>
+
+    <script type="module" src="assets/js/app.js?v=20261101k"></script>
+  </head>
+  <body data-page="register" data-title="Create account">
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <div data-site-header></div>
+    <div data-site-sidebar></div>
+    <div data-scrim hidden></div>
+
+    <main class="site-main reg" id="main">
+      <nav class="reg__crumbs" aria-label="Breadcrumb">
+        <a href="index.html">Home</a><span aria-hidden="true">/</span>
+        <span>Create account</span>
+      </nav>
+
+      <div class="reg__grid">
+        <!-- intro -------------------------------------------------- -->
+        <aside class="reg__aside">
+          <p class="eyebrow"><span class="eyebrow__dot"></span>Join 1World</p>
+          <h1 class="reg__title">Create your <span class="serif">account</span></h1>
+          <p class="reg__lead">
+            One account for the whole catalogue: films, series, channels, reviews and points.
+            Registration takes a minute and costs nothing.
+          </p>
+
+          <ul class="reg__benefits">
+            <li>
+              <span class="reg__benefit-icon"><i data-icon="film"></i></span>
+              <div><b>Everything in one place</b><span>Films, series, live channels and member publishing.</span></div>
+            </li>
+            <li>
+              <span class="reg__benefit-icon"><i data-icon="shield"></i></span>
+              <div><b>Your username is yours</b><span>Unique, case-insensitive, and locked after registration.</span></div>
+            </li>
+            <li>
+              <span class="reg__benefit-icon"><i data-icon="unlock"></i></span>
+              <div><b>A recovery code</b><span>Shown once, stored only as a fingerprint. Keep it safe.</span></div>
+            </li>
+            <li>
+              <span class="reg__benefit-icon"><i data-icon="lock"></i></span>
+              <div><b>Activation first</b><span>New accounts start inactive and cannot sign in until they are reviewed.</span></div>
+            </li>
+          </ul>
+
+          <div class="reg__plan" data-reg-plan hidden>
+            <span class="reg__plan-label">Selected plan</span>
+            <b data-reg-plan-name>Free</b>
+            <span data-reg-plan-meta></span>
+          </div>
+
+          <p class="reg__aside-note">
+            Already registered? <a href="login.html">Go to sign in</a>.
+          </p>
+        </aside>
+
+        <!-- form --------------------------------------------------- -->
+        <section class="reg-card" data-reg-form aria-labelledby="reg-form-title">
+          <header class="reg-card__head">
+            <h2 class="reg-card__title" id="reg-form-title">Account details</h2>
+            <span class="badge">Step 1 of 1</span>
+          </header>
+
+          <div class="reg-alert" data-reg-error hidden>
+            <i data-icon="info"></i>
+            <p data-reg-error-text></p>
+          </div>
+
+          <form class="reg-form" data-regform novalidate autocomplete="on">
+            <div class="reg-field" data-field="full_name">
+              <label for="reg-full-name">Full name</label>
+              <input id="reg-full-name" name="full_name" type="text" autocomplete="name" placeholder="Youssef El Amrani" aria-required="true" />
+              <p class="reg-field__hint" data-hint="full_name">As it should appear on your account.</p>
+              <p class="reg-field__error" data-err="full_name" role="alert" hidden></p>
+            </div>
+
+            <div class="reg-field" data-field="username">
+              <label for="reg-username">Username</label>
+              <input id="reg-username" name="username" type="text" autocomplete="username" placeholder="youssef.amrani" aria-required="true" spellcheck="false" autocapitalize="none" maxlength="26" />
+              <div class="reg-field__meta">
+                <p class="reg-field__hint" data-hint="username">
+                  Your handle: <b data-handle-preview>@yourname</b> — letters, numbers, dot, dash, underscore.
+                </p>
+                <span class="reg-chip" data-username-state hidden></span>
+              </div>
+              <p class="reg-field__error" data-err="username" role="alert" hidden></p>
+            </div>
+
+            <div class="reg-field" data-field="email">
+              <label for="reg-email">Email address</label>
+              <input id="reg-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" aria-required="true" spellcheck="false" />
+              <div class="reg-field__meta">
+                <p class="reg-field__hint" data-hint="email">One account per email address.</p>
+                <span class="reg-chip" data-email-state hidden></span>
+              </div>
+              <p class="reg-field__error" data-err="email" role="alert" hidden></p>
+            </div>
+
+            <div class="reg-field" data-field="phone">
+              <label for="reg-phone">Phone number</label>
+              <input id="reg-phone" name="phone" type="tel" autocomplete="tel" placeholder="+212 612 345 678" aria-required="true" />
+              <p class="reg-field__hint" data-hint="phone">Include the country code.</p>
+              <p class="reg-field__error" data-err="phone" role="alert" hidden></p>
+            </div>
+
+            <div class="reg-field" data-field="password">
+              <label for="reg-password">Password</label>
+              <div class="reg-input">
+                <input id="reg-password" name="password" type="password" autocomplete="new-password" placeholder="At least 8 characters" aria-required="true" />
+                <button class="reg-input__toggle" type="button" data-reveal="password" aria-label="Show password" aria-pressed="false">
+                  <i data-icon="eye"></i>
+                </button>
+              </div>
+              <div class="reg-strength" data-strength hidden>
+                <span class="reg-strength__bar"><i data-strength-bar></i></span>
+                <span class="reg-strength__label" data-strength-label>Weak</span>
+              </div>
+              <p class="reg-field__error" data-err="password" role="alert" hidden></p>
+            </div>
+
+            <div class="reg-field" data-field="password_confirm">
+              <label for="reg-password-2">Confirm password</label>
+              <div class="reg-input">
+                <input id="reg-password-2" name="password_confirm" type="password" autocomplete="new-password" placeholder="Repeat the password" aria-required="true" />
+                <button class="reg-input__toggle" type="button" data-reveal="password_confirm" aria-label="Show password" aria-pressed="false">
+                  <i data-icon="eye"></i>
+                </button>
+              </div>
+              <p class="reg-field__error" data-err="password_confirm" role="alert" hidden></p>
+            </div>
+
+            <div class="reg-field" data-field="birth_date">
+              <label for="reg-birth">Date of birth</label>
+              <input id="reg-birth" name="birth_date" type="date" autocomplete="bday" aria-required="true" />
+              <p class="reg-field__error" data-err="birth_date" role="alert" hidden></p>
+            </div>
+
+            <div class="reg-field" data-field="country">
+              <label for="reg-country-btn">Country</label>
+              <div class="reg-select" data-country-picker>
+                <button id="reg-country-btn" class="reg-select__btn" type="button" data-country-toggle
+                        aria-haspopup="listbox" aria-expanded="false" aria-controls="reg-country-pop">
+                  <span class="reg-select__flag" data-country-flag aria-hidden="true"></span>
+                  <span class="reg-select__name" data-country-name>Detecting your country…</span>
+                  <i data-icon="chevronDown" class="reg-select__chev" aria-hidden="true"></i>
+                </button>
+                <input id="reg-country" name="country" type="hidden" value="" />
+                <div class="reg-select__pop" id="reg-country-pop" data-country-pop hidden>
+                  <div class="reg-select__search">
+                    <i data-icon="search" aria-hidden="true"></i>
+                    <input type="search" data-country-search placeholder="Search a country" autocomplete="off"
+                           aria-label="Search a country" data-lpignore="true" />
+                  </div>
+                  <ul class="reg-select__list" data-country-list role="listbox" aria-label="Countries"></ul>
+                  <p class="reg-select__empty" data-country-empty hidden>No country matches that name.</p>
+                </div>
+              </div>
+              <p class="reg-field__hint" data-country-hint>Guessed from your connection — change it whenever you like.</p>
+              <p class="reg-field__error" data-err="country" role="alert" hidden></p>
+            </div>
+
+            <div class="reg-terms reg-field" data-field="terms">
+              <label class="reg-check">
+                <input type="checkbox" name="terms" data-terms />
+                <span class="reg-check__box" aria-hidden="true"><i data-icon="check"></i></span>
+                <span class="reg-check__text">
+                  I accept the <a href="terms.html" target="_blank" rel="noopener">terms of use</a> and the
+                  <a href="privacy.html" target="_blank" rel="noopener">privacy policy</a>.
+                </span>
+              </label>
+              <p class="reg-field__error" data-err="terms" role="alert" hidden></p>
+            </div>
+
+            <button class="btn btn--primary reg-submit" type="submit" data-reg-submit>
+              <i data-icon="user"></i><span data-submit-label>Create account</span>
+            </button>
+            <p class="reg-form__note">
+              Your account is created <b>inactive</b>. You can sign in once it has been activated.
+            </p>
+          </form>
+        </section>
+
+        <!-- success ------------------------------------------------ -->
+        <section class="reg-card reg-card--success" data-reg-success hidden aria-live="polite">
+          <span class="reg-success__icon"><i data-icon="check"></i></span>
+          <h2 class="reg-success__title">Registration complete</h2>
+          <p class="reg-success__lead">
+            Your account has been created. Save the recovery code below — it is shown
+            <b>once</b> and never again.
+          </p>
+          <p class="reg-success__status"><i data-icon="clock"></i> Account status: <b>Inactive</b> — waiting for activation</p>
+
+          <div class="reg-identity">
+            <div>
+              <p class="reg-identity__label">Member ID</p>
+              <p class="reg-identity__value" data-reg-member-id>ID000000</p>
+            </div>
+            <button class="reg-copy reg-copy--sm" type="button" data-reg-copy-id>
+              <i data-icon="file"></i><span>Copy ID</span>
+            </button>
+          </div>
+
+          <dl class="reg-details" data-reg-details></dl>
+
+          <div class="reg-recovery">
+            <p class="reg-recovery__label">Recovery code</p>
+            <p class="reg-recovery__code" data-reg-code>OW-XXXX-XXXX-XXXX</p>
+            <p class="reg-recovery__note">
+              Keep it somewhere safe. It can restore your account or reset your password later.
+              It is stored only as a fingerprint on our side.
+            </p>
+            <div class="reg-recovery__link">
+              <p class="reg-recovery__label">Recovery link</p>
+              <p class="reg-recovery__linkvalue" data-reg-link>rest.html?recovry=…</p>
+              <p class="reg-recovery__note">
+                Opening the link goes straight to the password step — no code to type.
+              </p>
+            </div>
+            <div class="reg-copyrow">
+              <button class="reg-copy" type="button" data-reg-copy>
+                <i data-icon="file"></i><span>Copy code</span>
+              </button>
+              <button class="reg-copy" type="button" data-reg-copy-link>
+                <i data-icon="link"></i><span>Copy link</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="reg-success__actions">
+            <button class="btn btn--primary" type="button" data-reg-download>
+              <i data-icon="download"></i> Download details (.txt)
+            </button>
+            <a class="btn btn--ghost" href="dashboard.html" data-reg-login>
+              <i data-icon="login"></i> Log in
+            </a>
+          </div>
+
+          <p class="reg-alert reg-alert--inline reg-success__note" data-reg-login-note hidden></p>
+          <p class="reg-success__foot">
+            Need a hand? <a href="help.html">Read the help pages</a> or <a href="contact.html">contact us</a>.
+          </p>
+        </section>
+      </div>
+    </main>
+
+    <div data-site-footer></div>
+  </body>
+</html>

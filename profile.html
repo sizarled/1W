@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Profile — 1World Web</title>
+    <meta name="description" content="A member profile: cover, avatar, levels, followers, following, reach points, updates, activity and suggestions." />
+    <meta name="theme-color" content="#060607" />
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="assets/css/base.css?v=20261101k" />
+    <link rel="stylesheet" href="assets/css/layout.css?v=20261101k" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261101k" />
+    <link rel="stylesheet" href="assets/css/profile.css?v=20261101k" />
+    <script>
+      /* apply the saved theme (or the OS preference) before first paint */
+      (function () {
+        try {
+          var saved = JSON.parse(localStorage.getItem("1w.theme") || "null");
+          var theme =
+            saved === "light" || saved === "dark"
+              ? saved
+              : window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
+                ? "light"
+                : "dark";
+          document.documentElement.dataset.theme = theme;
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute("content", theme === "light" ? "#f4f4f5" : "#060607");
+        } catch (e) {}
+      })();
+    </script>
+    <script type="module" src="assets/js/app.js?v=20261101k"></script>
+    <script type="module" src="assets/js/profile.js?v=20261101k"></script>
+  </head>
+  <body data-page="profile" data-title="Profile">
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <div data-site-header></div>
+    <div data-site-sidebar></div>
+
+    <main class="site-main pf" id="main">
+      <!-- loading / error / hidden ---------------------------------- -->
+      <div class="pf__state" data-pf-state>
+        <div class="pf-skeleton" aria-hidden="true" style="width: 100%; max-width: 1100px"></div>
+      </div>
+
+      <div class="pf__grid" data-pf-root hidden>
+        <button class="pf-edge" type="button" data-pf-edge aria-controls="pfSide" aria-expanded="false" aria-label="Show the profile menu" title="Show the profile menu">
+          <i data-icon="chevronRight"></i>
+        </button>
+
+        <!-- sidebar ------------------------------------------------- -->
+        <aside class="pf-side" id="pfSide" aria-label="Profile summary">
+          <div class="pf-card">
+            <button class="pf-side__pin is-on" type="button" data-pf-pin aria-pressed="true" aria-label="Pin the menu" title="Pin the menu">
+              <span class="pin-glyph" data-pin-glyph></span>
+            </button>
+            <div class="pf-side__avatar" data-pf-side-avatar>
+              <img data-pf-side-img alt="" width="86" height="86" hidden />
+              <span data-pf-side-initial aria-hidden="true">1W</span>
+            </div>
+            <h2 class="pf-side__name" data-pf-side-name>—</h2>
+            <p class="pf-side__handle" data-pf-side-username>@—</p>
+            <p class="pf-side__id" data-pf-side-id hidden></p>
+
+            <dl class="pf-stats">
+              <div>
+                <dt><i data-icon="users"></i> Followers</dt>
+                <dd data-pf-stat-followers>0</dd>
+              </div>
+              <div>
+                <dt><i data-icon="user"></i> Following</dt>
+                <dd data-pf-stat-following>0</dd>
+              </div>
+              <div>
+                <dt><i data-icon="zap"></i> Reach</dt>
+                <dd data-pf-stat-reach>0</dd>
+              </div>
+            </dl>
+
+            <div class="pf-side__actions" data-pf-side-actions></div>
+            <nav class="pf-menu" data-pf-menu aria-label="Profile menu"></nav>
+          </div>
+        </aside>
+
+        <!-- main ---------------------------------------------------- -->
+        <section class="pf-main">
+          <header class="pf-head">
+            <div class="pf-cover" data-pf-cover></div>
+            <div class="pf-head__body">
+              <div class="pf-head__avatar" data-pf-avatar>
+                <img data-pf-avatar-img alt="" width="108" height="108" hidden />
+                <span data-pf-avatar-initial aria-hidden="true">1W</span>
+              </div>
+
+              <div class="pf-head__id">
+                <h1 class="pf-head__name" data-pf-name>—</h1>
+                <div class="pf-flags" data-pf-flags></div>
+                <p class="pf-handle">
+                  <span data-pf-username>@—</span>
+                  <span class="pf-conn" data-pf-conn hidden>
+                    <i aria-hidden="true"></i>
+                    <span data-pf-conn-label>Offline</span>
+                  </span>
+                </p>
+                <p class="pf-desc" data-pf-desc hidden></p>
+                <ul class="pf-meta" data-pf-meta></ul>
+              </div>
+
+              <div class="pf-head__actions" data-pf-actions></div>
+            </div>
+          </header>
+
+          <div class="pf-tabs" role="tablist" aria-label="Profile sections" data-pf-tabs></div>
+          <section class="pf-panel" data-pf-panel aria-live="polite"></section>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>

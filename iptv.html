@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>IPTV — 1World Web</title>
+    <meta name="description" content="Free and premium channels with EPG, groups and viewer counts." />
+    <meta name="theme-color" content="#060607" />
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="assets/css/base.css?v=20261101k" />
+    <link rel="stylesheet" href="assets/css/layout.css?v=20261101k" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261101k" />
+    <script>
+      /* apply the saved theme (or the OS preference) before first paint */
+      (function () {
+        try {
+          var saved = JSON.parse(localStorage.getItem("1w.theme") || "null");
+          var theme =
+            saved === "light" || saved === "dark"
+              ? saved
+              : window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
+                ? "light"
+                : "dark";
+          document.documentElement.dataset.theme = theme;
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute("content", theme === "light" ? "#f4f4f5" : "#060607");
+        } catch (e) {}
+      })();
+    </script>
+    <script type="module" src="assets/js/app.js?v=20261101k"></script>
+  </head>
+  <body data-page="iptv" data-title="IPTV">
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div data-site-header></div>
+    <div data-site-sidebar></div>
+
+    <main class="site-main iptv-page" id="main">
+      <header class="iptv-hero">
+        <p class="eyebrow"><span class="eyebrow__dot"></span>Live television</p>
+        <h1 class="iptv-hero__title">IPTV channels</h1>
+        <p class="iptv-hero__text">
+          Free channels come from the free playlist, premium channels from the premium playlist.
+          A channel that belongs to several groups — <code>General;News</code> — is listed in every one of them.
+        </p>
+
+        <div class="iptv-bar">
+          <div class="iptv-tabs" role="tablist" aria-label="Channel lists">
+            <button class="iptv-tab is-active" type="button" data-list="free" role="tab" aria-selected="true">
+              <i data-icon="broadcast"></i><span>Free channels</span>
+            </button>
+            <button class="iptv-tab" type="button" data-list="premium" role="tab" aria-selected="false">
+              <i data-icon="crown"></i><span>Premium channels</span>
+            </button>
+          </div>
+
+          <div class="iptv-search">
+            <i data-icon="search" aria-hidden="true"></i>
+            <input type="search" data-iptv-search placeholder="Search a channel, a group or a country"
+                   aria-label="Search channels" autocomplete="off" data-lpignore="true" />
+            <button class="iptv-search__clear" type="button" data-iptv-clear aria-label="Clear the search">
+              <i data-icon="close"></i>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <p class="iptv-status" data-iptv-status hidden><i data-icon="clock"></i> Reading the playlists…</p>
+
+      <div class="iptv-groups" data-iptv-groups role="tablist" aria-label="Channel groups"></div>
+
+      <section class="iptv-section">
+        <div class="iptv-section__head">
+          <h2 class="iptv-section__title" data-iptv-title>Every free channel</h2>
+          <p class="iptv-section__meta" data-iptv-meta></p>
+        </div>
+        <div class="iptv-grid" data-iptv-grid></div>
+        <p class="iptv-empty" data-iptv-empty hidden>No channel matches that search — try a group name or a country.</p>
+        <div class="iptv-more"><button class="btn btn--ghost" type="button" data-iptv-more hidden>Show more</button></div>
+      </section>
+    </main>
+
+    <div data-site-footer></div>
+  </body>
+</html>

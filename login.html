@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Log in — 1World Web</title>
+    <meta name="description" content="Sign in to 1World with your member ID, username or email. Sessions, account status and activity are kept server-side." />
+    <meta name="theme-color" content="#060607" />
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="assets/css/base.css?v=20261101k" />
+    <link rel="stylesheet" href="assets/css/layout.css?v=20261101k" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261101k" />
+    <link rel="stylesheet" href="assets/css/login.css?v=20261101k" />
+    <script>
+      /* apply the saved theme (or the OS preference) before first paint */
+      (function () {
+        try {
+          var saved = JSON.parse(localStorage.getItem("1w.theme") || "null");
+          var theme =
+            saved === "light" || saved === "dark"
+              ? saved
+              : window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
+                ? "light"
+                : "dark";
+          document.documentElement.dataset.theme = theme;
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute("content", theme === "light" ? "#f4f4f5" : "#060607");
+        } catch (e) {}
+      })();
+    </script>
+
+    <script type="module" src="assets/js/app.js?v=20261101k"></script>
+  </head>
+  <body data-page="login" data-title="Log in">
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <div data-site-header></div>
+    <div data-site-sidebar></div>
+    <div data-scrim hidden></div>
+
+    <main class="site-main lg" id="main">
+      <nav class="lg__crumbs" aria-label="Breadcrumb">
+        <a href="index.html">Home</a><span aria-hidden="true">/</span>
+        <span>Log in</span>
+      </nav>
+
+      <div class="lg__grid">
+        <!-- intro -------------------------------------------------- -->
+        <aside class="lg__aside">
+          <p class="eyebrow"><span class="eyebrow__dot"></span>Members</p>
+          <h1 class="lg__title">Welcome <span class="serif">back</span></h1>
+          <p class="lg__lead">
+            One sign-in for the whole catalogue. Your member ID, your username or your email
+            address — any of the three opens the same account.
+          </p>
+
+          <ul class="lg__points">
+            <li>
+              <span class="lg__point-icon"><i data-icon="user"></i></span>
+              <div><b>Three ways in</b><span><code>ID100000</code>, <code>@handle</code> or your email.</span></div>
+            </li>
+            <li>
+              <span class="lg__point-icon"><i data-icon="shield"></i></span>
+              <div><b>Your status is visible</b><span>Inactive, expired and banned accounts can sign in — the page says which state the account is in.</span></div>
+            </li>
+            <li>
+              <span class="lg__point-icon"><i data-icon="unlock"></i></span>
+              <div><b>One session per sign-in</b><span>Every session is recorded, and so is every action on the account.</span></div>
+            </li>
+          </ul>
+
+          <p class="lg__aside-note">
+            New here? <a href="register.html">Create an account</a>.
+          </p>
+        </aside>
+
+        <!-- sign in ------------------------------------------------ -->
+        <section class="lg-card" data-lg-form aria-labelledby="lg-form-title">
+          <header class="lg-card__head">
+            <h2 class="lg-card__title" id="lg-form-title">Sign in</h2>
+            <span class="badge">Members only</span>
+          </header>
+
+          <div class="lg-alert" data-lg-error hidden>
+            <i data-icon="info"></i>
+            <div>
+              <p data-lg-error-text></p>
+              <p class="lg-alert__extra" data-lg-error-extra hidden></p>
+            </div>
+          </div>
+
+          <form class="lg-form" data-lgform novalidate autocomplete="on">
+            <div class="lg-field" data-field="login">
+              <label for="lg-login">Member ID, username or email</label>
+              <input id="lg-login" name="login" type="text" autocomplete="username" placeholder="ID100000 · @yourname · you@example.com" aria-required="true" spellcheck="false" autocapitalize="none" />
+              <p class="lg-field__error" data-err="login" role="alert" hidden></p>
+            </div>
+
+            <div class="lg-field" data-field="password">
+              <label for="lg-password">Password</label>
+              <div class="lg-input">
+                <input id="lg-password" name="password" type="password" autocomplete="current-password" placeholder="Your password" aria-required="true" />
+                <button class="lg-input__toggle" type="button" data-reveal aria-label="Show password" aria-pressed="false">
+                  <i data-icon="eye"></i>
+                </button>
+              </div>
+              <p class="lg-field__error" data-err="password" role="alert" hidden></p>
+            </div>
+
+            <div class="lg-row">
+              <label class="lg-check">
+                <input type="checkbox" name="remember" data-remember />
+                <span class="lg-check__box" aria-hidden="true"><i data-icon="check"></i></span>
+                <span class="lg-check__text">Stay signed in</span>
+              </label>
+
+              <div class="lg-links">
+                <a class="lg-link" href="rest.html">Forgot password?</a>
+                <span aria-hidden="true">·</span>
+                <a class="lg-link" href="register.html">Create account</a>
+              </div>
+            </div>
+
+            <button class="btn btn--primary lg-submit" type="submit" data-lg-submit>
+              <i data-icon="login"></i><span data-submit-label>Log in</span>
+            </button>
+
+            <p class="lg-form__note">
+              “Stay signed in” keeps the session for <b>30 days</b>; without it the session ends after
+              <b>12 hours</b>. Signing out ends it immediately.
+            </p>
+          </form>
+        </section>
+
+        <!-- signed in ---------------------------------------------- -->
+        <section class="lg-card lg-card--done" data-lg-success hidden aria-live="polite">
+          <div class="lg-profile">
+            <img class="lg-profile__avatar" data-lg-avatar alt="" width="72" height="72" />
+            <div class="lg-profile__meta">
+              <p class="lg-profile__eyebrow"><i data-icon="check"></i> Signed in</p>
+              <h2 class="lg-profile__name" data-lg-name>@member</h2>
+              <p class="lg-profile__id"><span>Member ID</span> <b data-lg-member-id>ID000000</b></p>
+            </div>
+            <span class="lg-chip" data-lg-status>Active</span>
+          </div>
+
+          <p class="lg-profile__lead" data-lg-message>You are signed in. Welcome back.</p>
+
+          <div class="lg-notice" data-lg-notice hidden>
+            <i data-icon="info"></i>
+            <div>
+              <p class="lg-notice__title" data-lg-notice-title></p>
+              <p class="lg-notice__text" data-lg-notice-text></p>
+            </div>
+          </div>
+
+          <dl class="lg-details" data-lg-details></dl>
+
+          <div class="lg-actions">
+            <a class="btn btn--primary" href="profile.html" data-lg-profile>
+              <i data-icon="user"></i> Profile
+            </a>
+            <a class="btn btn--ghost" href="dashboard.html" data-lg-dashboard>
+              <i data-icon="dashboard"></i> Dashboard
+            </a>
+            <a class="btn btn--ghost" data-lg-next hidden>
+              <i data-icon="external"></i> Continue
+            </a>
+            <button class="btn btn--ghost" type="button" data-lg-logout>
+              <i data-icon="logout"></i> <span data-logout-label>Log out</span>
+            </button>
+          </div>
+
+          <p class="lg-card__foot">
+            Every sign-in is stored in <code>sessions</code> and every action in <code>log</code>.
+            Need help? <a href="help.html">Visit the help pages</a>.
+          </p>
+        </section>
+      </div>
+    </main>
+
+    <div data-site-footer></div>
+  </body>
+</html>

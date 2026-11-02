@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dashboard — 1World Web</title>
+    <meta name="description" content="Your membership, viewing codes, devices, notifications, points, reports and trials." />
+    <meta name="theme-color" content="#060607" />
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="assets/css/base.css?v=20261101k" />
+    <link rel="stylesheet" href="assets/css/layout.css?v=20261101k" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261101k" />
+    <link rel="stylesheet" href="assets/css/dashboard.css?v=20261101k" />
+    <script>
+      /* apply the saved theme (or the OS preference) before first paint */
+      (function () {
+        try {
+          var saved = JSON.parse(localStorage.getItem("1w.theme") || "null");
+          var theme =
+            saved === "light" || saved === "dark"
+              ? saved
+              : window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
+                ? "light"
+                : "dark";
+          document.documentElement.dataset.theme = theme;
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute("content", theme === "light" ? "#f4f4f5" : "#060607");
+        } catch (e) {}
+      })();
+    </script>
+    <script type="module" src="assets/js/app.js?v=20261101k"></script>
+    <script type="module" src="assets/js/dashboard.js?v=20261101k"></script>
+  </head>
+
+  <body data-page="dashboard" data-title="Dashboard" class="dsh-body">
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <div class="dsh" data-dsh data-state="loading" data-pin="on" data-side="open" data-side-reveal="on">
+      <!-- ============================================================ -->
+      <!-- header                                                      -->
+      <!-- ============================================================ -->
+      <header class="dsh-top">
+        <div class="dsh-top__bar">
+          <a class="dsh-brand" href="index.html" aria-label="1World Web home">
+            <span class="dsh-brand__mark" aria-hidden="true">1W</span>
+            <span class="dsh-brand__name">Dashboard</span>
+          </a>
+
+          <div class="dsh-rail-wrap" data-rail-wrap hidden>
+            <button class="dsh-rail__arrow" type="button" data-rail-dir="-1" aria-label="Scroll sections left">
+              <i data-icon="chevronLeft"></i>
+            </button>
+            <nav class="dsh-rail" data-drag-scroll data-rail aria-label="Sections">
+              <a class="dsh-rail__item" href="movies.html"><i data-icon="film"></i><span>Movies</span></a>
+              <a class="dsh-rail__item" href="series.html"><i data-icon="tv"></i><span>Series</span></a>
+              <a class="dsh-rail__item" href="iptv.html"><i data-icon="broadcast"></i><span>Channels</span></a>
+              <a class="dsh-rail__item" href="videos.html"><i data-icon="video"></i><span>Videos</span></a>
+              <a class="dsh-rail__item" href="podcast.html"><i data-icon="mic"></i><span>Podcasts</span></a>
+              <a class="dsh-rail__item" href="pictures.html"><i data-icon="image"></i><span>Images</span></a>
+              <a class="dsh-rail__item" href="articles.html"><i data-icon="article"></i><span>Articles</span></a>
+              <a class="dsh-rail__item" href="reviews.html"><i data-icon="star"></i><span>Reviews</span></a>
+              <a class="dsh-rail__item" href="answers.html"><i data-icon="help"></i><span>Q&amp;A</span></a>
+              <a class="dsh-rail__item" href="documents.html"><i data-icon="file"></i><span>Documents</span></a>
+              <a class="dsh-rail__item" href="market.html"><i data-icon="cart"></i><span>Store</span></a>
+              <a class="dsh-rail__item" href="auction.html"><i data-icon="gavel"></i><span>Auction</span></a>
+            </nav>
+            <button class="dsh-rail__arrow" type="button" data-rail-dir="1" aria-label="Scroll sections right">
+              <i data-icon="chevronRight"></i>
+            </button>
+          </div>
+
+          <div class="dsh-top__tools">
+            <div class="dsh-bell-wrap">
+              <button class="dsh-icon-btn" type="button" data-bell aria-expanded="false" aria-haspopup="dialog" aria-label="Notifications">
+                <i data-icon="bell"></i>
+                <span class="dsh-bell__dot" data-bell-dot hidden></span>
+              </button>
+
+              <div class="dsh-pop" data-pop hidden role="dialog" aria-label="Recent notifications" aria-live="polite">
+                <div class="dsh-pop__head">
+                  <span class="dsh-pop__title">Notifications</span>
+                  <button class="dsh-pop__gear" type="button" data-goto="notifications" data-pop-settings>
+                    <i data-icon="settings"></i><span>Settings</span>
+                  </button>
+                </div>
+                <div class="dsh-pop__filters" role="group" aria-label="Filter by time">
+                  <button type="button" class="is-on" data-pop-filter="hour">Hour</button>
+                  <button type="button" data-pop-filter="today">Today</button>
+                  <button type="button" data-pop-filter="yesterday">Yesterday</button>
+                  <button type="button" data-pop-filter="week">Week</button>
+                </div>
+                <div class="dsh-pop__list" data-pop-list>
+                  <p class="dsh-pop__empty">Nothing new in this window.</p>
+                </div>
+                <a class="dsh-pop__all" href="notifications.html">
+                  View all notifications <i data-icon="arrowRight"></i>
+                </a>
+              </div>
+            </div>
+
+            <a class="dsh-me-chip" href="profile.html" data-me-link aria-label="Open your profile">
+              <span class="dsh-me-chip__avatar" data-me-avatar>
+                <i data-icon="user"></i>
+              </span>
+              <span class="dsh-me-chip__text">
+                <strong data-me-username>—</strong>
+                <span data-me-id>—</span>
+              </span>
+            </a>
+
+            <button class="dsh-icon-btn" type="button" data-logout aria-label="Log out" title="Log out">
+              <i data-icon="logout"></i>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <!-- ============================================================ -->
+      <!-- body                                                        -->
+      <!-- ============================================================ -->
+      <div class="dsh-shell">
+        <button class="dsh-edge" type="button" data-side-edge aria-controls="dsh-side" aria-expanded="false" aria-label="Show the menu" title="Show the menu">
+          <i data-icon="chevronRight"></i>
+        </button>
+
+        <aside class="dsh-side" data-dsh-side id="dsh-side" hidden aria-label="Dashboard menu">
+          <div class="dsh-side__me">
+            <a class="dsh-side__profile" data-side-profile href="profile.html" title="Open your profile">
+              <span class="dsh-side__avatar" data-side-avatar><i data-icon="user"></i></span>
+              <span class="dsh-side__ident">
+                <strong data-side-username>—</strong>
+                <span data-side-id>—</span>
+                <span class="dsh-status" data-side-status hidden></span>
+              </span>
+              <i class="dsh-side__go" data-icon="arrowUpRight" aria-hidden="true"></i>
+            </a>
+            <button class="dsh-side__collapse" type="button" data-side-toggle aria-label="Fold the menu" title="Fold the menu">
+              <i data-icon="chevronLeft"></i>
+            </button>
+            <button class="dsh-side__pin is-on" type="button" data-side-pin aria-pressed="true" aria-label="Pin the menu" title="Pin the menu">
+              <span class="pin-glyph" data-pin-glyph></span>
+            </button>
+          </div>
+
+          <nav class="dsh-nav" data-nav aria-label="Dashboard sections">
+            <div class="dsh-nav__group">
+              <p class="dsh-nav__label">Account</p>
+              <button type="button" class="dsh-nav__item is-on" data-goto="overview"><i data-icon="dashboard"></i><span>Overview</span></button>
+              <button type="button" class="dsh-nav__item" data-goto="notifications"><i data-icon="bell"></i><span>Notifications</span><em class="dsh-nav__count" data-nav-unread hidden></em></button>
+              <button type="button" class="dsh-nav__item" data-goto="codes"><i data-icon="lock"></i><span>Codes</span></button>
+              <button type="button" class="dsh-nav__item" data-goto="iptv"><i data-icon="broadcast"></i><span>IPTV</span></button>
+              <button type="button" class="dsh-nav__item" data-goto="favorites"><i data-icon="star"></i><span>Favorites</span></button>
+              <button type="button" class="dsh-nav__item" data-goto="later"><i data-icon="bookmark"></i><span>Watch later</span></button>
+              <button type="button" class="dsh-nav__item" data-goto="complete"><i data-icon="check"></i><span>Completed</span></button>
+              <button type="button" class="dsh-nav__item" data-goto="reports"><i data-icon="flag"></i><span>Reports</span></button>
+              <button type="button" class="dsh-nav__item" data-goto="court"><i data-icon="scale"></i><span>Court</span></button>
+              <button type="button" class="dsh-nav__item" data-goto="points"><i data-icon="zap"></i><span>Points</span></button>
+              <button type="button" class="dsh-nav__item" data-goto="level"><i data-icon="crown"></i><span>Level</span></button>
+              <button type="button" class="dsh-nav__item" data-goto="payments"><i data-icon="bank"></i><span>Payments</span></button>
+              <button type="button" class="dsh-nav__item" data-goto="prizes"><i data-icon="gift"></i><span>Prizes</span></button>
+            </div>
+
+            <div class="dsh-nav__group">
+              <p class="dsh-nav__label">History &amp; analytics</p>
+              <button type="button" class="dsh-nav__item" data-goto="history"><i data-icon="clock"></i><span>Viewing history</span></button>
+              <button type="button" class="dsh-nav__item" data-goto="analytics"><i data-icon="chart"></i><span>Analytics</span></button>
+            </div>
+
+            <div class="dsh-nav__group">
+              <p class="dsh-nav__label">Creator</p>
+              <button type="button" class="dsh-nav__item" data-goto="creator"><i data-icon="sparkle"></i><span>Creator management</span></button>
+            </div>
+
+            <div class="dsh-nav__group">
+              <p class="dsh-nav__label">Publisher</p>
+              <button type="button" class="dsh-nav__item" data-goto="publisher"><i data-icon="upload"></i><span>Publisher management</span></button>
+            </div>
+
+            <div class="dsh-nav__group">
+              <p class="dsh-nav__label">Advertiser</p>
+              <button type="button" class="dsh-nav__item" data-goto="advertiser"><i data-icon="target"></i><span>Advertising campaigns</span></button>
+            </div>
+
+            <div class="dsh-nav__group">
+              <p class="dsh-nav__label">Settings</p>
+              <button type="button" class="dsh-nav__item" data-goto="settings-site"><i data-icon="globe"></i><span>Website</span></button>
+              <button type="button" class="dsh-nav__item" data-goto="settings-profile"><i data-icon="user"></i><span>Profile</span></button>
+              <button type="button" class="dsh-nav__item" data-goto="settings-account"><i data-icon="shield"></i><span>Account</span></button>
+              <button type="button" class="dsh-nav__item" data-goto="settings-platforms"><i data-icon="link"></i><span>Platforms</span></button>
+            </div>
+
+            <div class="dsh-nav__group" data-admin-group hidden>
+              <p class="dsh-nav__label">Administration</p>
+              <a class="dsh-nav__item" href="panel.html"><i data-icon="shield"></i><span>Panel</span></a>
+            </div>
+          </nav>
+
+          <button class="dsh-side__back" type="button" data-side-open aria-label="Show the menu">
+            <i data-icon="chevronRight"></i><span>Show the menu</span>
+          </button>
+          <a class="dsh-side__back" href="index.html"><i data-icon="arrowLeft"></i><span>Back to the site</span></a>
+        </aside>
+
+        <main class="dsh-main" id="main" data-main>
+          <div class="dsh-loading" data-view="loading">
+            <span class="dsh-spinner" aria-hidden="true"></span>
+            <p>Checking your session…</p>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <template id="dsh-gate-inactive">
+      <section class="dsh-gate">
+        <span class="dsh-gate__icon"><i data-icon="lock"></i></span>
+        <p class="dsh-eyebrow">Account activation</p>
+        <h1 class="dsh-gate__title">Your account is not activated yet</h1>
+        <p class="dsh-gate__text">
+          You can sign in, open your profile and keep your data, but the dashboard, viewing codes and every
+          tool stay locked until the account is activated. Activation normally happens within 24 hours of
+          your request.
+        </p>
+        <p class="dsh-gate__note" data-gate-deadline hidden></p>
+        <div class="dsh-gate__actions">
+          <a class="dsh-btn dsh-btn--primary" data-gate-activate href="activated.html">
+            <i data-icon="check"></i><span>Activate account</span>
+          </a>
+          <button class="dsh-btn" type="button" data-logout><i data-icon="logout"></i><span>Log out</span></button>
+        </div>
+      </section>
+    </template>
+
+    <template id="dsh-gate-expired">
+      <section class="dsh-gate">
+        <span class="dsh-gate__icon"><i data-icon="clock"></i></span>
+        <p class="dsh-eyebrow">Membership</p>
+        <h1 class="dsh-gate__title">Your membership has expired</h1>
+        <p class="dsh-gate__text">
+          Viewing codes, points and dashboard tools are paused until the membership is renewed. Your data
+          and history are kept.
+        </p>
+        <div class="dsh-gate__actions">
+          <a class="dsh-btn dsh-btn--primary" href="index.html#membership"><i data-icon="crown"></i><span>Renew membership</span></a>
+          <button class="dsh-btn" type="button" data-logout><i data-icon="logout"></i><span>Log out</span></button>
+        </div>
+      </section>
+    </template>
+
+    <template id="dsh-gate-banned">
+      <section class="dsh-gate dsh-gate--ban">
+        <span class="dsh-gate__icon"><i data-icon="shield"></i></span>
+        <p class="dsh-eyebrow">Account banned</p>
+        <h1 class="dsh-gate__title">This account has been banned</h1>
+        <div class="dsh-gate__reason">
+          <span class="dsh-gate__reason-label">Reason given by <b data-gate-ban-by>the moderation team</b></span>
+          <p data-gate-ban-reason>—</p>
+          <span class="dsh-gate__reason-meta" data-gate-ban-meta hidden></span>
+        </div>
+        <p class="dsh-gate__text">
+          You may ask for a trial. You will keep your data, but every dashboard tool stays closed until the
+          court decides.
+        </p>
+        <div class="dsh-gate__actions">
+          <button class="dsh-btn dsh-btn--primary" type="button" data-court-request>
+            <i data-icon="scale"></i><span>Request trial</span>
+          </button>
+          <button class="dsh-btn" type="button" data-logout><i data-icon="logout"></i><span>Log out</span></button>
+        </div>
+      </section>
+    </template>
+
+    <template id="dsh-gate-requested">
+      <section class="dsh-gate dsh-gate--ban">
+        <span class="dsh-gate__icon"><i data-icon="scale"></i></span>
+        <p class="dsh-eyebrow">Trial requested</p>
+        <h1 class="dsh-gate__title">Your request is with the court</h1>
+        <p class="dsh-gate__text">
+          Case <b data-gate-case>—</b> was received. The trial date will be set soon — you will get a
+          notification with the exact time.
+        </p>
+        <div class="dsh-gate__actions">
+          <a class="dsh-btn" href="notifications.html"><i data-icon="bell"></i><span>Check notifications</span></a>
+          <button class="dsh-btn" type="button" data-logout><i data-icon="logout"></i><span>Log out</span></button>
+        </div>
+      </section>
+    </template>
+
+    <template id="dsh-gate-scheduled">
+      <section class="dsh-gate dsh-gate--ban">
+        <span class="dsh-gate__icon"><i data-icon="scale"></i></span>
+        <p class="dsh-eyebrow">Trial scheduled</p>
+        <h1 class="dsh-gate__title">Your trial is on <span data-gate-when>—</span></h1>
+        <dl class="dsh-kv dsh-kv--gate">
+          <div><dt>Case</dt><dd data-gate-case>—</dd></div>
+          <div><dt>Reason</dt><dd data-gate-reason>—</dd></div>
+          <div><dt>Status</dt><dd data-gate-status>Scheduled</dd></div>
+        </dl>
+        <p class="dsh-gate__warn">
+          <i data-icon="info"></i>
+          <span>If you do not attend the hearing, the ban becomes permanent.</span>
+        </p>
+        <div class="dsh-gate__actions">
+          <a class="dsh-btn dsh-btn--primary" data-gate-court href="court.html">
+            <i data-icon="gavel"></i><span>Go to trial</span>
+          </a>
+          <button class="dsh-btn" type="button" data-logout><i data-icon="logout"></i><span>Log out</span></button>
+        </div>
+      </section>
+    </template>
+
+    <template id="dsh-gate-closed">
+      <section class="dsh-gate dsh-gate--closed">
+        <span class="dsh-gate__icon"><i data-icon="lock"></i></span>
+        <p class="dsh-eyebrow">Final decision</p>
+        <h1 class="dsh-gate__title">This account is permanently closed</h1>
+        <p class="dsh-gate__text">
+          The court reviewed case <b data-gate-case>—</b> and kept the ban. The decision is final and the
+          account can no longer be used.
+        </p>
+        <div class="dsh-gate__reason">
+          <span class="dsh-gate__reason-label">Reason given by <b data-gate-ban-by>the moderation team</b></span>
+          <p data-gate-ban-reason>—</p>
+          <span class="dsh-gate__reason-meta" data-gate-ban-meta hidden></span>
+        </div>
+        <p class="dsh-gate__note" data-gate-decision hidden></p>
+        <div class="dsh-gate__actions">
+          <button class="dsh-btn dsh-btn--primary" type="button" data-logout>
+            <i data-icon="logout"></i><span>Log out</span>
+          </button>
+        </div>
+      </section>
+    </template>
+  </body>
+</html>

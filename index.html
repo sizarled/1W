@@ -1,0 +1,497 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>1World Web — Films, series &amp; live IPTV</title>
+    <meta
+      name="description"
+      content="1World Web is an independent streaming catalogue for films, series and IPTV channels — built by its members, for its members."
+    />
+    <meta name="theme-color" content="#060607" />
+    <meta name="color-scheme" content="dark light" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="1World Web — Films, series &amp; live IPTV" />
+    <meta property="og:description" content="Films, series and live channels, curated in monochrome. Publish, earn points and unlock premium IPTV." />
+    <meta property="og:image" content="assets/img/og.svg" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="assets/img/favicon.svg" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://api.themoviedb.org" />
+    <link rel="preconnect" href="https://image.tmdb.org" />
+    <link rel="preconnect" href="https://vtbqbhuywdhnvitbcsfy.supabase.co" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="assets/css/base.css?v=20261101k" />
+    <link rel="stylesheet" href="assets/css/layout.css?v=20261101k" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261101k" />
+
+    <script>
+      /* apply the saved theme (or the OS preference) before first paint */
+      (function () {
+        try {
+          var saved = JSON.parse(localStorage.getItem("1w.theme") || "null");
+          var theme =
+            saved === "light" || saved === "dark"
+              ? saved
+              : window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
+                ? "light"
+                : "dark";
+          document.documentElement.dataset.theme = theme;
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute("content", theme === "light" ? "#f4f4f5" : "#060607");
+        } catch (e) {}
+      })();
+    </script>
+    <script type="module" src="assets/js/app.js?v=20261101k"></script>
+  </head>
+
+  <body data-page="home">
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <div data-site-header></div>
+    <div data-site-sidebar></div>
+
+    <main class="site-main" id="main">
+      <!-- ============================================================ -->
+      <!-- HERO                                                         -->
+      <!-- ============================================================ -->
+      <section class="hero" data-hero aria-roledescription="carousel" aria-label="Trending films and series">
+        <div class="hero__bg" aria-hidden="true">
+          <div class="hero__layer is-on" data-hero-layer></div>
+          <div class="hero__layer" data-hero-layer></div>
+        </div>
+        <div class="hero__scrim" aria-hidden="true"></div>
+
+        <div class="hero__inner">
+          <div class="hero__top">
+            <span class="hero__kicker">
+              <i data-icon="fire"></i> Trending <b data-hero-subtitle>this week</b>
+            </span>
+            <div class="segmented" role="tablist" aria-label="Media type">
+              <button class="segmented__btn is-active" type="button" data-hero-mode="movies" role="tab" aria-selected="true">
+                Movies
+              </button>
+              <button class="segmented__btn" type="button" data-hero-mode="series" role="tab" aria-selected="false">
+                Series
+              </button>
+            </div>
+          </div>
+
+          <div class="hero__content" data-hero-content>
+            <div class="hero__meta">
+              <span class="badge badge--solid">Now showing</span>
+              <span>The 1World marquee</span>
+            </div>
+            <h1 class="hero__title">Films, series and live television.</h1>
+            <p class="hero__overview">
+              Five films and five series, refreshed as the week changes. Every title opens with synopsis, ratings and
+              available qualities.
+            </p>
+            <div class="hero__actions">
+              <a class="btn btn--primary btn--lg" href="#movies"><i data-icon="play"></i> Start watching</a>
+              <a class="btn btn--ghost btn--lg" href="#membership"><i data-icon="crown"></i> Membership</a>
+            </div>
+          </div>
+
+          <div class="hero__foot">
+            <div class="hero__thumbs" data-hero-thumbs></div>
+            <div class="hero__controls">
+              <span class="hero__count" data-hero-count>01 / 05</span>
+              <button class="rail__btn" type="button" data-hero-prev aria-label="Previous title">
+                <i data-icon="chevronLeft"></i>
+              </button>
+              <button class="rail__btn" type="button" data-hero-next aria-label="Next title">
+                <i data-icon="chevronRight"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+
+      <div class="ticker" aria-hidden="true">
+        <div class="ticker__track">
+          <span class="ticker__item">Films</span><span class="ticker__dot"></span>
+          <span class="ticker__item">Series</span><span class="ticker__dot"></span>
+          <span class="ticker__item">Live IPTV</span><span class="ticker__dot"></span>
+          <span class="ticker__item">14 platforms</span><span class="ticker__dot"></span>
+          <span class="ticker__item">Member publishing</span><span class="ticker__dot"></span>
+          <span class="ticker__item">Points economy</span><span class="ticker__dot"></span>
+          <span class="ticker__item">Auctions</span><span class="ticker__dot"></span>
+          <span class="ticker__item">Documents</span><span class="ticker__dot"></span>
+          <span class="ticker__item">Reviews</span><span class="ticker__dot"></span>
+          <span class="ticker__item">Podcasts</span><span class="ticker__dot"></span>
+          <span class="ticker__item">Films</span><span class="ticker__dot"></span>
+          <span class="ticker__item">Series</span><span class="ticker__dot"></span>
+          <span class="ticker__item">Live IPTV</span><span class="ticker__dot"></span>
+          <span class="ticker__item">14 platforms</span><span class="ticker__dot"></span>
+          <span class="ticker__item">Member publishing</span><span class="ticker__dot"></span>
+          <span class="ticker__item">Points economy</span><span class="ticker__dot"></span>
+          <span class="ticker__item">Auctions</span><span class="ticker__dot"></span>
+          <span class="ticker__item">Documents</span><span class="ticker__dot"></span>
+          <span class="ticker__item">Reviews</span><span class="ticker__dot"></span>
+          <span class="ticker__item">Podcasts</span><span class="ticker__dot"></span>
+        </div>
+      </div>
+
+      <!-- ============================================================ -->
+      <!-- FEATURES                                                     -->
+      <!-- ============================================================ -->
+      <section class="section" id="features">
+        <div class="wrap">
+          <header class="sec-head">
+            <div>
+              <p class="eyebrow"><span class="eyebrow__dot"></span>01 — Why 1World</p>
+              <h2 class="sec-head__title">A cinema, a newsroom and<br />an economy in one place.</h2>
+              <p class="sec-head__sub">
+                Watching is only the beginning. Members publish, answer, review and trade — and everything they do
+                feeds back into the platform.
+              </p>
+            </div>
+            <div class="sec-head__aside">
+              <a class="sec-link" href="about.html">About 1World <i data-icon="arrowUpRight"></i></a>
+            </div>
+          </header>
+
+          <div class="feature-grid" data-features aria-live="polite"></div>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SEARCH                                                       -->
+      <!-- ============================================================ -->
+      <section class="section section--tight" id="search">
+        <div class="wrap">
+          <div class="search-panel">
+            <div>
+              <p class="eyebrow"><span class="eyebrow__dot"></span>02 — Search</p>
+              <h2 class="search-panel__title">Find anything<br />in the archive.</h2>
+              <p class="search-panel__copy">
+                Films, series, IPTV channels, articles, documents, answers and reviews — one query covers the whole
+                platform.
+              </p>
+            </div>
+
+            <div>
+              <form class="search-form" data-search-form role="search">
+                <div class="search-form__field">
+                  <i data-icon="search"></i>
+                  <label class="sr-only" for="site-search">Search 1World</label>
+                  <input
+                    id="site-search"
+                    name="q"
+                    type="search"
+                    placeholder="Try “Dune”, “Breaking Bad”, “live sport”…"
+                    autocomplete="off"
+                  />
+                </div>
+                <button class="btn btn--primary" type="submit">Search <i data-icon="arrowRight"></i></button>
+              </form>
+
+              <div class="search-tags">
+                <span class="search-tags__label">Popular</span>
+                <button class="tag" type="button" data-search-tag="Dune">Dune</button>
+                <button class="tag" type="button" data-search-tag="Breaking Bad">Breaking Bad</button>
+                <button class="tag" type="button" data-search-tag="IPTV">IPTV</button>
+                <button class="tag" type="button" data-search-tag="Reviews">Reviews</button>
+                <button class="tag" type="button" data-search-tag="Documents">Documents</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- TRENDING FILMS                                               -->
+      <!-- ============================================================ -->
+      <section class="section" id="movies">
+        <div class="wrap">
+          <header class="sec-head">
+            <div>
+              <p class="eyebrow"><span class="eyebrow__dot"></span>03 — Trending films</p>
+              <h2 class="sec-head__title">Films in the spotlight</h2>
+              <p class="sec-head__sub">The fifty most-watched features this week. Scroll sideways, or open the full catalogue.</p>
+            </div>
+            <div class="sec-head__aside">
+              <span class="badge" data-movies-count>Trending</span>
+              <div class="rail__nav">
+                <button class="rail__btn" type="button" data-rail-prev aria-label="Scroll films left">
+                  <i data-icon="chevronLeft"></i>
+                </button>
+                <button class="rail__btn" type="button" data-rail-next aria-label="Scroll films right">
+                  <i data-icon="chevronRight"></i>
+                </button>
+              </div>
+              <a class="sec-link" href="movies.html">All films <i data-icon="arrowUpRight"></i></a>
+            </div>
+          </header>
+
+          <div class="rail">
+            <div class="rail__track" data-rail-track aria-label="Trending films"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- TRENDING SERIES                                              -->
+      <!-- ============================================================ -->
+      <section class="section section--tight" id="series">
+        <div class="wrap">
+          <header class="sec-head">
+            <div>
+              <p class="eyebrow"><span class="eyebrow__dot"></span>04 — Trending series</p>
+              <h2 class="sec-head__title">Series worth the binge</h2>
+              <p class="sec-head__sub">Fifty shows ranked by what members are actually finishing — not by marketing budget.</p>
+            </div>
+            <div class="sec-head__aside">
+              <span class="badge" data-series-count>Trending</span>
+              <div class="rail__nav">
+                <button class="rail__btn" type="button" data-rail-prev aria-label="Scroll series left">
+                  <i data-icon="chevronLeft"></i>
+                </button>
+                <button class="rail__btn" type="button" data-rail-next aria-label="Scroll series right">
+                  <i data-icon="chevronRight"></i>
+                </button>
+              </div>
+              <a class="sec-link" href="series.html">All series <i data-icon="arrowUpRight"></i></a>
+            </div>
+          </header>
+
+          <div class="rail">
+            <div class="rail__track" data-rail-track aria-label="Trending series"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- IPTV                                                         -->
+      <!-- ============================================================ -->
+      <section class="section section--alt section--line" id="iptv">
+        <div class="wrap">
+          <header class="sec-head">
+            <div>
+              <p class="eyebrow"><span class="eyebrow__dot"></span>05 — Live television</p>
+              <h2 class="sec-head__title">Channels, sorted.<br />Free and premium.</h2>
+              <p class="sec-head__sub">
+                The most-watched IPTV channels on the platform — free channels for every member, premium channels for
+                Silver, Gold and Diamond members.
+              </p>
+            </div>
+            <div class="sec-head__aside">
+              <div class="iptv-toolbar">
+                <div class="segmented" role="tablist" aria-label="Channel tier">
+                  <button class="segmented__btn is-active" type="button" data-iptv-tab="free" role="tab" aria-selected="true">
+                    Free
+                  </button>
+                  <button class="segmented__btn" type="button" data-iptv-tab="premium" role="tab" aria-selected="false">
+                    Premium
+                  </button>
+                </div>
+                <div class="rail__nav">
+                  <button class="rail__btn" type="button" data-rail-prev aria-label="Scroll channels left">
+                    <i data-icon="chevronLeft"></i>
+                  </button>
+                  <button class="rail__btn" type="button" data-rail-next aria-label="Scroll channels right">
+                    <i data-icon="chevronRight"></i>
+                  </button>
+                </div>
+                <a class="sec-link" href="iptv.html">All channels <i data-icon="arrowUpRight"></i></a>
+              </div>
+            </div>
+          </header>
+
+          <div class="rail">
+            <div class="rail__track" data-rail-track data-channel-track aria-label="IPTV channels"></div>
+          </div>
+          <p class="iptv-note" data-iptv-note></p>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- MEMBERSHIP                                                   -->
+      <!-- ============================================================ -->
+      <section class="section" id="membership">
+        <div class="wrap">
+          <header class="sec-head">
+            <div>
+              <p class="eyebrow"><span class="eyebrow__dot"></span>06 — Membership</p>
+              <h2 class="sec-head__title">One account.<br />Four levels of access.</h2>
+              <p class="sec-head__sub">
+                Start free and upgrade whenever you need more. Durations run from 3 to 24 months, and every plan can
+                also be paid in points at 100 points = $1.
+              </p>
+            </div>
+            <div class="sec-head__aside">
+              <a class="sec-link" href="actevite.html">Activate a plan <i data-icon="arrowUpRight"></i></a>
+            </div>
+          </header>
+
+          <div class="plans" data-plans></div>
+
+          <p class="plans-note">
+            <i data-icon="info"></i>
+            Membership is granted free at registration — upgrade to Silver, Gold or Diamond afterwards from the
+            activation page. The points decide the level; the membership decides the ceiling — Free LV30,
+            Silver LV50, Gold LV80, Diamond open above LV80.
+          </p>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- APPS                                                         -->
+      <!-- ============================================================ -->
+      <section class="section section--alt section--line" id="apps">
+        <div class="wrap">
+          <header class="sec-head">
+            <div>
+              <p class="eyebrow"><span class="eyebrow__dot"></span>07 — Applications</p>
+              <h2 class="sec-head__title">1World on every screen</h2>
+              <p class="sec-head__sub">
+                Desktop, mobile and television clients are in development. Installers appear here the moment the
+                admins publish them from the control panel.
+              </p>
+            </div>
+            <div class="sec-head__aside">
+              <span class="badge">Coming soon</span>
+              <a class="sec-link" href="help.html">Install help <i data-icon="arrowUpRight"></i></a>
+            </div>
+          </header>
+
+          <div class="rail">
+            <div class="rail__track" data-rail-track data-apps aria-label="Applications"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SUPPORT                                                      -->
+      <!-- ============================================================ -->
+      <section class="section" id="support">
+        <div class="wrap">
+          <header class="sec-head">
+            <div>
+              <p class="eyebrow"><span class="eyebrow__dot"></span>08 — Support</p>
+              <h2 class="sec-head__title">Talk to the people<br />behind 1World.</h2>
+              <p class="sec-head__sub">
+                Admins and moderators read every message. Account, streaming, publishing or payments — send it here.
+              </p>
+            </div>
+            <div class="sec-head__aside">
+              <span class="badge"><i data-icon="clock"></i> Replies in 48h</span>
+            </div>
+          </header>
+
+          <div class="support-grid">
+            <div class="support-card">
+              <div class="support-card__head">
+                <div>
+                  <h3 class="support-card__title">Send a message</h3>
+                  <p class="support-card__sub">Your message goes straight to the moderation queue.</p>
+                </div>
+              </div>
+
+              <form class="field-row" data-support-form novalidate>
+                <div class="form-row">
+                  <div class="field">
+                    <label for="support-name">Full name</label>
+                    <input class="input" id="support-name" name="name" type="text" placeholder="Jane Doe" autocomplete="name" />
+                  </div>
+                  <div class="field">
+                    <label for="support-email">Email</label>
+                    <input class="input" id="support-email" name="email" type="email" placeholder="you@domain.com" autocomplete="email" />
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label for="support-subject">Topic</label>
+                  <select class="select" id="support-subject" name="subject">
+                    <option>Account &amp; membership</option>
+                    <option>IPTV &amp; streaming</option>
+                    <option>Publishing &amp; content</option>
+                    <option>Points, market &amp; prizes</option>
+                    <option>Something else</option>
+                  </select>
+                </div>
+
+                <div class="field">
+                  <label for="support-message">Message</label>
+                  <textarea class="textarea" id="support-message" name="message" placeholder="Tell us what you need…"></textarea>
+                </div>
+
+                <div class="form-success" data-support-success></div>
+
+                <button class="btn btn--primary" type="submit"><i data-icon="send"></i> Send message</button>
+              </form>
+            </div>
+
+            <aside class="support-links">
+              <div>
+                <h3 class="support-card__title">Site pages</h3>
+                <p class="support-card__sub">Rules, answers and everything about the platform.</p>
+              </div>
+
+              <a class="support-link" href="about.html">About the site <i data-icon="chevronRight"></i></a>
+              <a class="support-link" href="help.html">Help centre <i data-icon="chevronRight"></i></a>
+              <a class="support-link" href="privacy.html">Privacy policy <i data-icon="chevronRight"></i></a>
+              <a class="support-link" href="terms.html">Terms of use <i data-icon="chevronRight"></i></a>
+              <a class="support-link" href="contact.html">Contact directory <i data-icon="chevronRight"></i></a>
+
+              <div class="support-meta">
+                <div class="support-meta__row">
+                  <i data-icon="mail"></i><span>Messages arrive in the admin inbox</span>
+                </div>
+                <div class="support-meta__row">
+                  <i data-icon="clock"></i><span>Average first reply — 48 hours</span>
+                </div>
+                <div class="support-meta__row">
+                  <i data-icon="send"></i>
+                  <a class="muted" href="https://t.me/CineauraV2" target="_blank" rel="noopener noreferrer">Telegram — @CineauraV2</a>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- PLATFORMS                                                    -->
+      <!-- ============================================================ -->
+      <section class="section section--tight" id="platform">
+        <div class="wrap">
+          <header class="sec-head">
+            <div>
+              <p class="eyebrow"><span class="eyebrow__dot"></span>09 — Platform</p>
+              <h2 class="sec-head__title">Fourteen places to follow the project</h2>
+              <p class="sec-head__sub">Trailers, clips, releases and community — wherever you already are.</p>
+            </div>
+            <div class="sec-head__aside">
+              <div class="rail__nav">
+                <button class="rail__btn" type="button" data-rail-prev aria-label="Scroll platforms left">
+                  <i data-icon="chevronLeft"></i>
+                </button>
+                <button class="rail__btn" type="button" data-rail-next aria-label="Scroll platforms right">
+                  <i data-icon="chevronRight"></i>
+                </button>
+              </div>
+            </div>
+          </header>
+
+          <div class="rail">
+            <div class="rail__track" data-rail-track data-platforms aria-label="Social platforms"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div data-site-footer></div>
+  </body>
+</html>

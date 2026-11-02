@@ -1,0 +1,1075 @@
+/* ==================================================================
+   register.html — account registration + success card
+   Only loaded by the register page. Monochrome, hairline, high
+   contrast in both themes (no color-mix, no washed-out greys).
+   ================================================================== */
+
+.reg [hidden] {
+  display: none !important;
+}
+
+.reg {
+  width: 100%;
+  max-width: 1180px;
+  margin-inline: auto;
+  padding: clamp(1rem, 2vw, 1.6rem) var(--gutter) 4.5rem;
+}
+
+.reg__crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.74rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 1.1rem;
+}
+
+.reg__crumbs a {
+  color: var(--text-2);
+  text-decoration: none;
+}
+
+.reg__crumbs a:hover {
+  color: var(--text);
+}
+
+.reg__crumbs span[aria-hidden] {
+  opacity: 0.5;
+}
+
+.reg__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+  gap: clamp(1.4rem, 3vw, 3rem);
+  align-items: start;
+}
+
+/* ------------------------------------------------------------------ */
+/* intro                                                              */
+/* ------------------------------------------------------------------ */
+.reg__aside {
+  position: sticky;
+  top: calc(var(--header-h) + 1.4rem);
+  display: grid;
+  gap: 0.85rem;
+  padding-top: 0.4rem;
+}
+
+.reg__title {
+  margin: 0;
+  font-size: clamp(2rem, 3.7vw, 3rem);
+  font-weight: 600;
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+
+.reg__title .serif {
+  font-size: 1.06em;
+  line-height: 0.9;
+}
+
+.reg__lead {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.65;
+  color: var(--text-2);
+  max-width: 42ch;
+}
+
+.reg__benefits {
+  display: grid;
+  gap: 0.85rem;
+  margin: 0.45rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reg__benefits li {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 0.7rem;
+  align-items: start;
+}
+
+.reg__benefit-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--line-2);
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.reg__benefit-icon .ico {
+  width: 16px;
+  height: 16px;
+}
+
+.reg__benefits b {
+  display: block;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 0.08rem;
+}
+
+.reg__benefits span {
+  font-size: 0.79rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.reg__plan {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem 0.55rem;
+  margin-top: 0.5rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--line-2);
+  border-radius: 14px;
+  background: var(--surface-2);
+}
+
+.reg__plan-label {
+  flex: 0 0 100%;
+  font-size: 0.62rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.reg__plan b {
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.reg__plan span:last-child {
+  font-size: 0.77rem;
+  color: var(--text-2);
+}
+
+.reg__aside-note {
+  margin: 0.35rem 0 0;
+  font-size: 0.79rem;
+  color: var(--text-2);
+}
+
+.reg__aside-note a {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ------------------------------------------------------------------ */
+/* card                                                               */
+/* ------------------------------------------------------------------ */
+.reg-card {
+  position: relative;
+  padding: clamp(1.1rem, 2.4vw, 2rem);
+  border: 1px solid var(--line-2);
+  border-radius: 26px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.reg-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.9rem;
+  margin-bottom: 1.15rem;
+  border-bottom: 1px solid var(--line-2);
+}
+
+.reg-card__title {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.reg-card .badge {
+  border-color: var(--line-3);
+  color: var(--text-2);
+}
+
+/* alert ----------------------------------------------------------- */
+.reg-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  padding: 0.75rem 0.9rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--line-3);
+  border-left: 3px solid var(--text);
+  border-radius: 12px;
+  background: var(--surface-3);
+  font-size: 0.81rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.reg-alert .ico {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  margin-top: 0.12rem;
+  color: var(--text);
+}
+
+.reg-alert p {
+  margin: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* form                                                               */
+/* ------------------------------------------------------------------ */
+.reg-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem 1.05rem;
+}
+
+.reg-field {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+  align-content: start;
+}
+
+.reg-field[data-field="terms"],
+.reg-submit,
+.reg-form__note {
+  grid-column: 1 / -1;
+}
+
+.reg-field > label {
+  font-size: 0.73rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+/* one rule for every text-ish input — padding overrides live below */
+.reg-field input:not([type="checkbox"]) {
+  width: 100%;
+  height: 48px;
+  padding: 0 0.85rem;
+  border: 1px solid var(--line-3);
+  border-radius: 12px;
+  background: var(--input-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.92rem;
+  line-height: 48px;
+  transition: border-color 0.2s var(--ease), background 0.2s var(--ease), box-shadow 0.2s var(--ease);
+}
+
+.reg-field input:not([type="checkbox"])::placeholder {
+  color: var(--muted);
+  opacity: 0.85;
+}
+
+.reg-field input:not([type="checkbox"]):hover {
+  border-color: var(--text-2);
+}
+
+.reg-field input:not([type="checkbox"]):focus {
+  outline: none;
+  border-color: var(--text);
+  background: var(--input-bg-focus);
+  box-shadow: 0 0 0 3px rgba(128, 128, 140, 0.35);
+}
+
+.reg-field.is-invalid input:not([type="checkbox"]) {
+  border-color: var(--text);
+  border-style: dashed;
+}
+
+.reg-field input[type="date"] {
+  line-height: normal;
+}
+
+.reg-field input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 0.7;
+  cursor: pointer;
+}
+
+html[data-theme="dark"] .reg-field input[type="date"] {
+  line-height: normal;
+}
+
+.reg-field input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+
+/* hint + availability chip share one line under the field */
+.reg-field__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem 0.6rem;
+  min-height: 1.1rem;
+}
+
+.reg-field__hint {
+  margin: 0;
+  font-size: 0.73rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.reg-field__hint b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.reg-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--line-3);
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 0.68rem;
+  letter-spacing: 0.03em;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.reg-chip::before {
+  font-size: 0.6rem;
+}
+
+.reg-chip[data-state="ok"] {
+  border-color: var(--text);
+}
+
+.reg-chip[data-state="ok"]::before {
+  content: "✓";
+}
+
+.reg-chip[data-state="taken"] {
+  border-style: dashed;
+  color: var(--text-2);
+}
+
+.reg-chip[data-state="taken"]::before {
+  content: "✕";
+}
+
+.reg-field__error {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.reg-field__error::before {
+  content: "!";
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  margin-top: 0.08rem;
+  border-radius: 4px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* password field with its reveal button --------------------------- */
+.reg-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.reg-field .reg-input input {
+  padding-right: 3rem;
+}
+
+.reg-input__toggle {
+  position: absolute;
+  right: 0.4rem;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: color 0.2s var(--ease), background 0.2s var(--ease);
+}
+
+.reg-input__toggle .ico {
+  width: 17px;
+  height: 17px;
+}
+
+.reg-input__toggle:hover,
+.reg-input__toggle.is-on {
+  color: var(--text);
+  background: var(--surface-3);
+}
+
+/* strength -------------------------------------------------------- */
+.reg-strength {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-top: 0.1rem;
+}
+
+.reg-strength__bar {
+  position: relative;
+  flex: 1;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  overflow: hidden;
+}
+
+.reg-strength__bar i {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: var(--text);
+  transition: width 0.25s var(--ease);
+}
+
+.reg-strength__label {
+  font-size: 0.69rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  min-width: 4.6rem;
+  text-align: right;
+}
+
+/* terms ----------------------------------------------------------- */
+.reg-terms {
+  margin-top: 0.15rem;
+}
+
+.reg-check {
+  position: relative;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 0.6rem;
+  align-items: start;
+  cursor: pointer;
+  font-size: 0.83rem;
+  line-height: 1.55;
+  color: var(--text-2);
+}
+
+.reg-check input {
+  position: absolute;
+  opacity: 0;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.reg-check__box {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid var(--line-3);
+  background: var(--input-bg);
+  transition: all 0.18s var(--ease);
+}
+
+.reg-check__box .ico {
+  width: 14px;
+  height: 14px;
+  opacity: 0;
+  color: var(--bg);
+}
+
+.reg-check input:checked + .reg-check__box {
+  background: var(--text);
+  border-color: var(--text);
+}
+
+.reg-check input:checked + .reg-check__box .ico {
+  opacity: 1;
+}
+
+.reg-check input:focus-visible + .reg-check__box {
+  box-shadow: 0 0 0 3px rgba(128, 128, 140, 0.35);
+}
+
+.reg-check__text a {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.reg-field.is-invalid .reg-check__box {
+  border-color: var(--text);
+  border-style: dashed;
+}
+
+/* submit ---------------------------------------------------------- */
+.reg-submit {
+  width: 100%;
+  height: 52px;
+  justify-content: center;
+  margin-top: 0.4rem;
+  font-size: 0.94rem;
+}
+
+.reg-submit:disabled {
+  opacity: 0.65;
+  cursor: progress;
+}
+
+.reg-form__note {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.55;
+  color: var(--muted);
+  text-align: center;
+}
+
+.reg-form__note b {
+  color: var(--text);
+}
+
+/* ------------------------------------------------------------------ */
+/* buttons — pinned to text/bg so they always contrast                */
+/* ------------------------------------------------------------------ */
+.reg .btn {
+  color: var(--text);
+  border-color: var(--line-3);
+  background: var(--surface-2);
+}
+
+.reg .btn--primary {
+  color: var(--bg);
+  background: var(--text);
+  border-color: var(--text);
+  box-shadow: 0 14px 34px -18px rgba(0, 0, 0, 0.55);
+}
+
+.reg .btn--primary:hover {
+  background: var(--text);
+  border-color: var(--text);
+  opacity: 0.88;
+}
+
+.reg .btn--ghost {
+  color: var(--text);
+  background: var(--surface-2);
+  border-color: var(--line-3);
+}
+
+.reg .btn--ghost:hover {
+  background: var(--surface-3);
+  border-color: var(--text-2);
+}
+
+.reg .btn .ico {
+  color: currentColor;
+}
+
+/* ------------------------------------------------------------------ */
+/* success                                                            */
+/* ------------------------------------------------------------------ */
+.reg-card--success {
+  display: grid;
+  gap: 0.9rem;
+  justify-items: start;
+}
+
+.reg-success__icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: var(--text);
+  color: var(--bg);
+}
+
+.reg-success__icon .ico {
+  width: 23px;
+  height: 23px;
+}
+
+.reg-success__title {
+  margin: 0;
+  font-size: clamp(1.45rem, 2.4vw, 1.9rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.reg-success__lead {
+  margin: 0;
+  font-size: 0.89rem;
+  line-height: 1.6;
+  color: var(--text-2);
+  max-width: 58ch;
+}
+
+.reg-success__lead b {
+  color: var(--text);
+}
+
+.reg-success__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  margin: 0;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--line-3);
+  border-radius: 999px;
+  font-size: 0.77rem;
+  color: var(--text-2);
+}
+
+.reg-success__status .ico {
+  width: 14px;
+  height: 14px;
+  color: var(--text);
+}
+
+.reg-success__status b {
+  color: var(--text);
+}
+
+/* member ID ------------------------------------------------------- */
+.reg-identity {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--line-2);
+  border-radius: 16px;
+  background: var(--surface-2);
+}
+
+.reg-identity__label {
+  margin: 0 0 0.1rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.reg-identity__value {
+  margin: 0;
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  font-size: clamp(1.15rem, 2.4vw, 1.45rem);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--text);
+  user-select: all;
+}
+
+/* details --------------------------------------------------------- */
+.reg-details {
+  width: 100%;
+  display: grid;
+  gap: 0;
+  margin: 0.1rem 0 0;
+  padding: 0.35rem 0.95rem;
+  border: 1px solid var(--line-2);
+  border-radius: 16px;
+  background: var(--surface-2);
+}
+
+.reg-details div {
+  display: grid;
+  grid-template-columns: minmax(0, 0.62fr) minmax(0, 1fr);
+  gap: 0.6rem;
+  padding: 0.46rem 0;
+  border-bottom: 1px solid var(--line-2);
+  font-size: 0.83rem;
+}
+
+.reg-details div:last-child {
+  border-bottom: 0;
+}
+
+.reg-details dt {
+  color: var(--muted);
+  font-size: 0.73rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  align-self: center;
+}
+
+.reg-details dd {
+  margin: 0;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+/* recovery -------------------------------------------------------- */
+.reg-recovery {
+  width: 100%;
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.95rem 1rem;
+  border: 1px dashed var(--line-3);
+  border-radius: 18px;
+  background: var(--surface-2);
+}
+
+.reg-recovery__label {
+  margin: 0;
+  font-size: 0.63rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.reg-recovery__code {
+  margin: 0;
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  font-size: clamp(1.3rem, 3vw, 1.65rem);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--text);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+/* the recovery link sits under the code: same secret, a different shape */
+.reg-recovery__link {
+  display: grid;
+  gap: 0.3rem;
+  padding-top: 0.75rem;
+  margin-top: 0.35rem;
+  border-top: 1px solid var(--line);
+}
+
+.reg-recovery__linkvalue {
+  margin: 0;
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.reg-copyrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+.reg-recovery__note {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.55;
+  color: var(--text-2);
+  max-width: 52ch;
+}
+
+.reg-copy {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.3rem;
+  padding: 0.36rem 0.75rem;
+  border: 1px solid var(--line-3);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background 0.2s var(--ease), color 0.2s var(--ease), border-color 0.2s var(--ease);
+}
+
+.reg-copy .ico {
+  width: 14px;
+  height: 14px;
+}
+
+.reg-copy:hover {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
+}
+
+.reg-copy--sm {
+  margin-top: 0;
+  flex: none;
+}
+
+/* actions --------------------------------------------------------- */
+.reg-success__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  width: 100%;
+  margin-top: 0.15rem;
+}
+
+.reg-alert--inline {
+  margin: 0;
+  width: 100%;
+}
+
+.reg-success__note {
+  display: flex;
+}
+
+.reg-success__foot {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.reg-success__foot a {
+  color: var(--text-2);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.reg-success__foot a:hover {
+  color: var(--text);
+}
+
+/* ------------------------------------------------------------------ */
+/* responsive                                                         */
+/* ------------------------------------------------------------------ */
+@media (max-width: 980px) {
+  .reg__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .reg__aside {
+    position: static;
+    gap: 0.7rem;
+  }
+
+  .reg__benefits {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .reg-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .reg-details div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.1rem;
+  }
+
+  .reg-identity {
+    align-items: flex-start;
+  }
+
+  .reg-success__actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* country picker                                                     */
+/* ------------------------------------------------------------------ */
+.reg-select {
+  position: relative;
+}
+
+.reg-select__btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.72rem 0.85rem;
+  border: 1px solid var(--line-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.reg-select__btn:hover {
+  border-color: var(--line-4, var(--line-3));
+}
+
+.reg-select__btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.reg-field.is-invalid .reg-select__btn {
+  border-color: var(--text);
+  border-style: dashed;
+}
+
+.reg-select__flag {
+  display: inline-flex;
+  flex: none;
+  width: 24px;
+  height: 18px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+
+.reg-select__flag img,
+.reg-select__list img,
+.reg-select__flag .flag {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.reg-select__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reg-select__chev {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: var(--muted);
+}
+
+.reg-select[data-open="true"] .reg-select__chev {
+  transform: rotate(180deg);
+}
+
+.reg-select__pop {
+  position: absolute;
+  z-index: 60;
+  inset-inline: 0;
+  top: calc(100% + 0.35rem);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  max-height: 300px;
+  border: 1px solid var(--line-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: 0 18px 40px rgba(8, 12, 26, 0.28);
+  overflow: hidden;
+}
+
+.reg-select__search {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid var(--line-2);
+}
+
+.reg-select__search i,
+.reg-select__search .ico {
+  width: 15px;
+  height: 15px;
+  color: var(--muted);
+  flex: none;
+}
+
+.reg-select__search input {
+  flex: 1;
+  min-width: 0;
+  height: auto;
+  padding: 0.1rem 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.86rem;
+}
+
+.reg-select__search input:focus {
+  outline: none;
+}
+
+.reg-select__list {
+  list-style: none;
+  margin: 0;
+  padding: 0.3rem;
+  overflow-y: auto;
+  max-height: 244px;
+}
+
+.reg-select__list button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.45rem 0.5rem;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.reg-select__list button img {
+  width: 22px;
+  height: 16px;
+  flex: none;
+  border-radius: 2px;
+  object-fit: cover;
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+
+.reg-select__list button:hover,
+.reg-select__list button[aria-selected="true"] {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.reg-select__empty {
+  margin: 0;
+  padding: 0.7rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-align: center;
+}
