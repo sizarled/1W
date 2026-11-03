@@ -592,11 +592,26 @@ the member's own country — English **or** Arabic name, or ISO code — and fal
 `site_secrets.whatsapp_cc` (then `212`) when the country is not recognised. A number that
 cannot be read is logged `skipped` with the reason, and the other channels still go.
 
+**"Queued" is not "delivered".** `pg_net` is asynchronous: by the time the web app answers, the
+transaction that issued the code has committed. Two small functions close that gap. Every send
+fires a `doGet` heartbeat (`delivery_probe()`) and reads the **previous** answer
+(`delivery_probe_read()`) into `delivery_channels`, so the next recovery knows what this
+deployment can actually carry — a channel the script has no credentials for is reported `false`
+and logged `skipped`, instead of promising a WhatsApp message nobody sent. And
+`recovery_delivery_reconcile()` joins the queued rows to `net._http_response` and turns them into
+`sent` or `failed` **with the script's own words** (`token`, `whatsapp not configured`,
+`chat not found`…); `recovery_send()` runs it before every new code, so the log stays honest
+without a cron job.
+
 `site_secrets` has RLS on and **no policies** — only the `security definer` functions read
 it, so neither the endpoint nor the bot token can be fetched with the publishable key. Each
 send writes a row in `recovery_delivery` (channel, masked target, status, `pg_net` request
 id, error) and the whole flow writes to `log` (`recovery_request`, `recovery_verified`,
 `recovery_link_used`, `recovery_reset`, `recovery_failed` with its reason).
+
+The script's `SHARED_TOKEN` property and the `gs_mail_token` secret are one pair: change one and
+the other stops matching, and the log says so (`failed` with `{"ok":false,"error":"token"}`). Script
+properties are read at run time, so changing them needs **no new deployment** — only the code does.
 
 The script lives in the repo: `tools/apps-script/recovery-delivery.gs`. It is one web app
 with three channels — `channel: "email" | "whatsapp" | "telegram" | "all"` — and the database
@@ -612,7 +627,7 @@ on conflict (key) do update set value = excluded.value, updated_at = now();
 
 | Script property | Meaning |
 | --- | --- |
-| `SHARED_TOKEN` | the same string as `gs_mail_token`; without it the script refuses everything |
+| `SHARED_TOKEN` | **must equal** `gs_mail_token`, or every call answers `{"ok":false,"error":"token"}` |
 | `FROM_NAME` | the sender name on the email (`1World`) |
 | `CC` | optional copy of every mail, the operator's address while the flow is new |
 | `WHATSAPP_TOKEN` | Meta **permanent** access token |
@@ -681,6 +696,9 @@ pretending.
 | `recovery_device_key(text)` / `recovery_name_key(text)` | The device and the name in one comparable shape |
 | `recovery_send(member, code)` | Builds the email, the WhatsApp message and the Telegram message and posts them with `pg_net`; answers `{email, whatsapp, telegram}` (internal) |
 | `whatsapp_number(phone, country, default_cc)` | The phone as E.164 digits, or `null` when it cannot be read |
+| `delivery_probe()` / `delivery_probe_read()` | Ask the web app which channels it holds; store the answer in `delivery_channels` (internal) |
+| `delivery_ready(channel)` | Is the web app configured for this channel? Optimistic until the first heartbeat (internal) |
+| `recovery_delivery_reconcile()` | Read the `pg_net` answers back into `recovery_delivery`: `queued` → `sent` / `failed` + the reason (internal) |
 | `recovery_code_hash(text)` / `recovery_code_key(text)` | One canonical shape — `OW-XXXX-XXXX-XXXX`, upper case, dashes — so old registration hashes keep working |
 | `recovery_phone_key(text)` | Last nine digits, so the country code never matters |
 | `site_secret(key)` | Reads one secret; executable by nobody |

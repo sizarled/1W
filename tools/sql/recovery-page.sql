@@ -339,6 +339,155 @@ $$;
 -- ------------------------------------------------------------------
 -- 4. delivery — Apps Script (email + WhatsApp) and the Telegram bot
 -- ------------------------------------------------------------------
+-- Which channels can this deployment actually carry?
+--
+-- The web app is the only one that knows whether it holds a WhatsApp token, and
+-- the database talks to it through `pg_net`, which is asynchronous: the answer
+-- to a request arrives after the transaction has committed. So the database
+-- **asks on every send and reads the previous answer** — `delivery_probe()`
+-- fires a `doGet` heartbeat, `delivery_probe_read()` stores it in
+-- `delivery_channels`, and the next `recovery_start()` is truthful instead of
+-- promising a WhatsApp message nobody sent.
+--
+-- Until the first answer arrives the flags stay optimistic: a channel is
+-- reported when it is queued, never before.
+create table if not exists public.delivery_channels (
+  key        text primary key,
+  request_id bigint,
+  state      jsonb not null default '{}'::jsonb,
+  checked_at timestamptz
+);
+
+alter table public.delivery_channels enable row level security;
+-- no policies: the security definer functions below are the only readers
+
+create or replace function public.delivery_probe()
+returns bigint
+language plpgsql
+security definer
+set search_path to 'public', 'extensions', 'pg_temp'
+as $$
+declare
+  v_url   text := public.site_secret('gs_mail_url');
+  v_net   boolean := exists (
+    select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'net' and p.proname = 'http_get'
+  );
+  v_id    bigint;
+begin
+  if v_url is null or not v_net then
+    return null;
+  end if;
+  select net.http_get(url => v_url, timeout_milliseconds => 8000) into v_id;
+  insert into public.delivery_channels (key, request_id)
+  values ('gs', v_id)
+  on conflict (key) do update set request_id = excluded.request_id;
+  return v_id;
+end;
+$$;
+
+create or replace function public.delivery_probe_read()
+returns jsonb
+language plpgsql
+security definer
+set search_path to 'public', 'extensions', 'pg_temp'
+as $$
+declare
+  v_id    bigint;
+  v_body  text;
+  v_state jsonb;
+begin
+  select request_id into v_id from public.delivery_channels where key = 'gs';
+  if v_id is null then
+    return '{}'::jsonb;
+  end if;
+
+  begin
+    select content into v_body from net._http_response where id = v_id;
+  exception when others then
+    return '{}'::jsonb;
+  end;
+
+  begin
+    v_state := coalesce(v_body, '')::jsonb;
+  exception when others then
+    return '{}'::jsonb;   -- still in flight, or not JSON
+  end;
+
+  if coalesce(v_state->>'ok', 'false') <> 'true' then
+    return '{}'::jsonb;
+  end if;
+
+  update public.delivery_channels
+     set state      = coalesce(v_state->'channels', '{}'::jsonb),
+         checked_at = now()
+   where key = 'gs';
+
+  return v_state;
+end;
+$$;
+
+-- "has the web app got this channel?" — true when nobody has asked yet, so a
+-- fresh deployment is never silently muted by a missing heartbeat
+create or replace function public.delivery_ready(p_channel text)
+returns boolean
+language plpgsql
+security definer
+set search_path to 'public', 'extensions', 'pg_temp'
+as $$
+declare
+  v_state jsonb;
+begin
+  select state into v_state from public.delivery_channels where key = 'gs';
+  if v_state is null or v_state = '{}'::jsonb then
+    return true;
+  end if;
+  return coalesce((v_state->>p_channel)::boolean, false);
+end;
+$$;
+
+-- "queued" is what the database knows; this reads the answer back, so the log
+-- tells the truth: `sent`, or `failed` with the script's own words ("token",
+-- "whatsapp not configured", "chat not found"…). Run it after a test recovery —
+-- `recovery_start()` cannot, because `pg_net` answers after the transaction.
+create or replace function public.recovery_delivery_reconcile()
+returns jsonb
+language plpgsql
+security definer
+set search_path to 'public', 'extensions', 'pg_temp'
+as $$
+declare
+  v_sent int := 0;
+  v_fail int := 0;
+begin
+  with answered as (
+    update public.recovery_delivery d
+       set status = case
+             when r.status_code between 200 and 299
+              and left(btrim(coalesce(r.content, '')), 1) = '{'
+              and (r.content::jsonb->>'ok') = 'true' then 'sent'
+             else 'failed'
+           end,
+           detail = left(coalesce(r.content::text, 'HTTP ' || coalesce(r.status_code::text, '?')), 300)
+      from net._http_response r
+     where d.request_id = r.id
+       and d.status = 'queued'
+    returning d.status
+  )
+  select count(*) filter (where status = 'sent'),
+         count(*) filter (where status = 'failed')
+    into v_sent, v_fail
+    from answered;
+
+  return jsonb_build_object('sent', v_sent, 'failed', v_fail);
+end;
+$$;
+
+revoke all on function public.recovery_delivery_reconcile() from public;
+revoke all on function public.delivery_probe() from public;
+revoke all on function public.delivery_probe_read() from public;
+revoke all on function public.delivery_ready(text) from public;
+
 create or replace function public.recovery_send(p_member public.members, p_code text)
 returns jsonb
 language plpgsql
@@ -371,6 +520,11 @@ declare
      where n.nspname = 'net' and p.proname = 'http_post'
   );
 begin
+  -- the answer to the heartbeat the last send fired, and the outcome of the
+  -- codes before this one: "queued" becomes "sent" or "failed" here
+  perform public.delivery_probe_read();
+  perform public.recovery_delivery_reconcile();
+
   v_text := format(
     E'1World — account recovery\n\nHello %s,\n\nYour recovery code is:\n\n   %s\n\nIt is valid for 30 minutes and it works once: after you change the password a new code replaces it.\nIf you did not ask for this, ignore the message — your password stays as it is.\n',
     v_name, p_code
@@ -418,7 +572,7 @@ begin
   end if;
 
   -- WhatsApp --------------------------------------------------------
-  if v_wa_url is not null and v_wa_to is not null then
+  if v_wa_url is not null and v_wa_to is not null and public.delivery_ready('whatsapp') then
     begin
       v_body := jsonb_build_object(
         'token',   coalesce(v_wa_token, ''),
@@ -449,7 +603,8 @@ begin
     insert into public.recovery_delivery (member_id, channel, target, status, detail)
     values (p_member.id, 'whatsapp', public.mask_phone(p_member.phone_number), 'skipped',
             case when v_wa_url is null then 'no delivery endpoint: gs_mail_url missing'
-                 else 'the phone does not read as an international number' end);
+                 when v_wa_to is null then 'the phone does not read as an international number'
+                 else 'the web app is not configured for WhatsApp' end);
   end if;
 
   -- Telegram --------------------------------------------------------
@@ -475,6 +630,9 @@ begin
     insert into public.recovery_delivery (member_id, channel, target, status, detail)
     values (p_member.id, 'telegram', 'chat', 'skipped', 'bot token or chat id missing');
   end if;
+
+  -- and ask again, so the next code knows what this one could not
+  perform public.delivery_probe();
 
   update public.members
      set recovery_last_channel = concat_ws('+',
