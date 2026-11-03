@@ -1191,6 +1191,34 @@ authorize URL. The secret is **only** in `site_secrets.google_client_secret`; if
 pasted anywhere else, rotate it in **Clients → your client → Reset secret** and update that row
 with one `insert … on conflict (key) do update`.
 
+#### Going live — the test-user cap, and the message it prints
+
+While an app sits in **Testing** (Google) or **Development** (Meta), only the accounts named in
+its console can finish a sign-in. Meta's wording for the others is not helpful:
+
+> **App not active** — This app is not accessible right now and the app developer is aware of the
+> issue. You will be able to log in when the app is reactivated.
+
+Nothing is broken: that is the app still being unpublished, or the browser being signed into a
+Facebook account that is not on the app's role list. Check it without trusting your memory —
+
+```bash
+curl -s "https://graph.facebook.com/v21.0/<app-id>/roles?access_token=<app-id>|<app-secret>"
+```
+
+answers every admin, developer and tester. For this deployment that list held one administrator
+and no testers, which is exactly the state that prints the sentence above. Two ways out:
+
+| | What to do | Covers |
+| --- | --- | --- |
+| Now | **App roles → Roles → Add people → Tester**, one row per Facebook account that must sign in today | testers only |
+| For the members | **App settings → Basic**: App Domains, a **Privacy Policy URL** (`privacy.html` is a real page now), a category and an icon, then the **App Mode → Live** switch | anybody |
+
+Google is the same story with different words: *Testing* caps at 100 hand-added addresses, and
+**Publish app** lifts it — the consent screen then needs a privacy policy link, which `privacy.html`
+supplies. Facebook asks for one more thing before it lets an app go public: a **Data Use Checkup**
+under *Settings → Basic* when the dashboard shows the reminder.
+
 ### Signing in with a linked account
 
 A linked account is also a way *into* the site. `login.html` grows a **Continue with …** row

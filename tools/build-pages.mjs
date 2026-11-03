@@ -18,7 +18,7 @@ const BUILD = "20261031u"; // cache-bust for css/js
 
 /* Hand-written pages are NOT in this list: index.html, login.html, register.html,
    rest.html, watch.html, cast.html, dashboard.html, activated.html, court.html,
-   profile.html. */
+   profile.html, privacy.html. */
 const PAGES = [
   ["search.html", "Search", "search", "Search across films, series, channels, articles, documents, answers and reviews.", "Reads ?q= from the URL."],
   ["movies.html", "Movies", "film", "The full film catalogue, with filters for genre, year, rating and quality.", ""],
@@ -44,7 +44,6 @@ const PAGES = [
   ["prizes.html", "Prizes", "gift", "Monthly draws and member rewards.", ""],
   ["tasks.html", "Tasks", "tasks", "Daily and weekly missions that pay in points.", ""],
   ["about.html", "About", "info", "What 1World is, who runs it and how it is funded.", ""],
-  ["privacy.html", "Privacy", "shield", "What we store, why, and how to remove it.", ""],
   ["terms.html", "Terms", "scale", "The rules of the platform, in plain language.", ""],
   ["contact.html", "Contact", "mail", "Reach admins, moderators and the editorial team.", ""],
   ["help.html", "Help", "lifebuoy", "Guides for accounts, playback, publishing and points.", ""],
