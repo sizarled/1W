@@ -255,9 +255,21 @@ Deno.serve(async (request) => {
   const access = String(token.access_token ?? "");
   if (!access) {
     // The provider's own words, so `invalid_client` (wrong secret) and
-    // `redirect_uri_mismatch` (wrong URL) are told apart at a glance.
-    const errCode = String(token.error ?? "").trim();
-    const why = String(token.error_description ?? "").trim();
+    // `redirect_uri_mismatch` (wrong URL) are told apart at a glance. Google
+    // answers `{error, error_description}`; Facebook nests
+    // `{error:{message, type, code}}` — reading only the first shape used to
+    // print "[object Object]" instead of the one sentence that explains it.
+    const raw = token.error;
+    let errCode = "";
+    let why = "";
+    if (raw && typeof raw === "object") {
+      const node = raw as Json;
+      errCode = String(node.code ?? node.type ?? "").trim();
+      why = String(node.message ?? node.error_user_msg ?? "").trim();
+    } else {
+      errCode = String(raw ?? "").trim();
+      why = String(token.error_description ?? "").trim();
+    }
     const seen = [errCode, why].filter(Boolean).join(" — ").slice(0, 180);
     const detail = seen ? `${SAY.token} (${seen})` : netFailure ? `${SAY.token} (${netFailure})` : SAY.token;
     return page({ ok: false, detail, error: "token", provider: who, mode });

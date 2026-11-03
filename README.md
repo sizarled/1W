@@ -1071,7 +1071,11 @@ curl -s https://vtbqbhuywdhnvitbcsfy.supabase.co/functions/v1/oauth-link/health
 
 The app already in use here is **1W**, id `1142180755132298`; that id lives in
 `site_secrets.facebook_client_id` and is public by design (it travels in every authorize URL).
-The one row still missing is `facebook_client_secret` — and it is **not** the token the
+Its `facebook_client_secret` is set (rotate it: the value passed through a chat window). One
+console step is still missing and the callback says so in Facebook's own words — `191`, *the
+domain is not in the app's domains*: put `<ref>.supabase.co` in **App settings → Basic → App
+Domains** and the callback URL in **Facebook Login → Settings → Valid OAuth Redirect URIs**. The
+older note below explains which value is *not* the secret — and it is **not** the token the
 **WhatsApp → API Setup** page offers. That is a *user* access token (type `USER`, scopes
 `whatsapp_business_*`, gone in a day) and it can never finish a login: the exchange in
 `oauth-link` needs the App Secret. Take it from **App settings → Basic → App secret → Show**
@@ -1179,6 +1183,7 @@ curl -s "https://vtbqbhuywdhnvitbcsfy.supabase.co/functions/v1/oauth-link/callba
 | `invalid_client` | the secret is wrong (or the app belongs to another project) |
 | `redirect_uri_mismatch` | the console does not hold that exact callback URL |
 | `taken` | that account is already linked to another member |
+| Facebook `191` | the app's **App Domains** does not hold the callback's host (`<ref>.supabase.co`) |
 
 The Google app registered for this deployment lives in project `world-513621`, client
 `1064454656570-sau2tuji464dfd64lm0jl6iau4ml6pdk` — public by design, it travels in every
