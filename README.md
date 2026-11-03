@@ -1102,6 +1102,16 @@ quotes `invalid_client` means the secret is wrong, `invalid_grant` means everyth
 4. **Keys and tokens → OAuth 2.0 Client ID and Client Secret**. The token endpoint wants HTTP
    Basic auth, which `oauth_config()` already sets (`token_basic: true`).
 
+The app configured here answers `invalid_request — Value passed for the authorization code was
+invalid` to a made-up code, which is the good answer: the client id, the secret, the PKCE verifier
+and the callback are all accepted, only a human is missing. A **401** instead means the secret is
+wrong, and `unauthorized_client` means the app type is not *Web App, Automated App or Bot*.
+
+X has no testing mode and no review for these three scopes, so the button works for every member
+the moment the two rows are in `site_secrets` — unlike Google and Meta. Opening the authorize URL
+by hand returns the **“Authorize app / X”** page; any other page means the callback address in
+*User authentication settings* is not the one in `oauth_redirect`.
+
 #### Pinterest
 
 1. **developers.pinterest.com → My apps → Create app**: name, website, privacy policy, the use
