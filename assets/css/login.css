@@ -438,6 +438,95 @@
   color: var(--text);
 }
 
+/* a linked account ------------------------------------------------ */
+.lg-oauth {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 0.35rem;
+}
+
+.lg-oauth[hidden] {
+  display: none;
+}
+
+.lg-oauth__rule {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin: 0.35rem 0 0.1rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.lg-oauth__rule::before,
+.lg-oauth__rule::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line-2);
+}
+
+.lg-oauth__buttons {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.lg-oauth__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  width: 100%;
+  min-height: 46px;
+  padding: 0.5rem 0.8rem;
+  border: 1px solid var(--line-3);
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.86rem;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.lg-oauth__btn:hover {
+  background: var(--surface-3);
+  border-color: var(--text-2);
+}
+
+.lg-oauth__btn:active {
+  transform: translateY(1px);
+}
+
+.lg-oauth__btn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.lg-oauth__btn .lg-oauth__brand {
+  display: inline-flex;
+  color: var(--text-2);
+}
+
+.lg-oauth__btn .lg-oauth__brand svg {
+  width: 17px;
+  height: 17px;
+}
+
+.lg-oauth__note {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: var(--muted);
+  text-align: center;
+}
+
+.lg-oauth__note b {
+  color: var(--text-2);
+}
+
 /* buttons — pinned to text/bg so they always contrast ----------------- */
 .lg .btn {
   color: var(--text);

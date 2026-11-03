@@ -386,6 +386,11 @@ password, a **stay signed in** checkbox, the *Forgot password?* / *Create accoun
 the **Log in** button. The whole check happens in the database; the page only renders the
 answer.
 
+Under the button there is a second door: **Continue with Google** (and a button per network
+once its app is complete) signs a member in through an account they already linked in Account
+settings — no password. Only linked accounts are let in; see **Signing in with a linked
+account**.
+
 ### What happens on submit
 
 1. `member_login(login, password, remember, ip, agent)` resolves the account with one
@@ -1044,7 +1049,8 @@ curl -s https://vtbqbhuywdhnvitbcsfy.supabase.co/functions/v1/oauth-link/health
 1. Create (or pick) a project at **console.cloud.google.com**.
 2. **APIs & Services → OAuth consent screen**: *External*, app name `1World`, your support email,
    and the two scopes `.../auth/userinfo.email` and `.../auth/userinfo.profile`. While the app is
-   in **Testing**, add your own address under **Test users** (100 max) — nobody else can sign in yet.
+   in **Testing**, add your own address under **Test users** (100 max) — nobody else can consent yet,
+   which also means nobody else can *sign in* with Google (see **Signing in with a linked account**).
 3. **Credentials → Create credentials → OAuth client ID → Web application**. Under *Authorized
    redirect URIs* paste the URI above. No JavaScript origin is needed: the exchange happens on the
    server.
@@ -1162,6 +1168,51 @@ authorize URL. The secret is **only** in `site_secrets.google_client_secret`; if
 pasted anywhere else, rotate it in **Clients → your client → Reset secret** and update that row
 with one `insert … on conflict (key) do update`.
 
+### Signing in with a linked account
+
+A linked account is also a way *into* the site. `login.html` grows a **Continue with …** row
+under the Log in button — one button per network that is fully configured
+(`oauth_login_providers()`), each carrying the official mark from `brands.js`. A member can then
+sign in with Google and no password, and the same is true for the other networks as their apps
+come online.
+
+The rule is one line: **an unlinked account is refused**. Signing in never creates a member and
+never links anything — that would let anyone who controls a Google account walk into a fresh
+membership. So an unknown provider account gets *“this account is not linked to a member”* and is
+told to sign in with the password and link it from Account settings.
+
+**Why a ticket and not the session.** The provider returns the browser to the function, not to
+`login.html`, so the session cannot be written there — a URL is the wrong way to carry a token
+(it lands in history, in `Referer`, in screenshots). Instead:
+
+1. The button calls `member_oauth_login_start(provider, ip, agent)` — it stores a 20-minute
+   pending row (`oauth_logins`) with a 24-character `state` and a PKCE verifier, and hands back
+   the authorize URL. The window is opened **on the click**, so it is not blocked.
+2. The provider comes back to `oauth-link/callback`. `oauth_attempt_take(state)` says which kind
+   of attempt this is — `login` or `link` — from the row alone, never from the browser. A login
+   state exchanges the code, reads the id, and calls `oauth_login_complete(login_id, external,
+   handle)`, which either answers `unlinked` or mints a **ticket**: 64 hex characters, one use,
+   five minutes.
+3. The little page `postMessage`s `{type:"1world-oauth-login", ok, provider, ticket}` to the
+   window that opened it and closes itself. The login page calls
+   `member_oauth_login(ticket, remember, ip, agent)`, gets the same session shape the password
+   path returns, stores it with `setSessionToken` and shows the signed-in card — *“Signed in with
+   Google.”*
+
+Restricted members (inactive, banned, expired) sign in exactly as they do with a password: the
+session exists, the banner says which state the account is in, and the dashboard stays shut.
+
+| Function | Purpose |
+| --- | --- |
+| `oauth_login_providers()` | the networks a login button may be drawn for |
+| `member_oauth_login_start(provider, ip, agent)` | a pending `login` attempt; returns `{url, expires_at}` |
+| `oauth_login_complete(login_id, external, handle)` | after the exchange: `unlinked`, or a one-use ticket |
+| `member_oauth_login(ticket, remember, ip, agent)` | spends the ticket and returns `{session, member, restricted}` |
+| `oauth_login_sweep()` | drops the attempts that expired |
+
+`oauth_logins`, `oauth_attempt_take` and `oauth_login_complete` are service role only, so the
+browser can neither mint nor read a ticket — it can only spend the one the function gave it.
+
 ### Server surface
 
 | Function | Purpose |
@@ -1184,6 +1235,8 @@ with one `insert … on conflict (key) do update`.
 | `oauth_authorize_url(provider, state, verifier)` | the authorize URL, PKCE challenge included (internal) |
 | `oauth_state_take(state)` | the callback: which member, which verifier, and it spends the state — service role only |
 | `oauth_identity_save(member, provider, external, handle, token…)` | the verified row; one external account belongs to one member (`taken`) — service role only |
+| `oauth_login_providers()` / `member_oauth_login_start(provider, ip, agent)` | the sign-in buttons, and the pending `login` attempt behind one of them |
+| `oauth_login_complete(login_id, external, handle)` / `member_oauth_login(ticket, remember, ip, agent)` | the exchange's verdict (`unlinked`, or a one-use ticket), and the session that ticket buys |
 | `identity_token(member, provider)` | the stored token, for the service role alone |
 | `member_court_request(token)` | banned, non-permanent accounts ask for a trial |
 | `member_court_history(token)` | every case of the caller, for `court.html` |

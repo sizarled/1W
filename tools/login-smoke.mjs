@@ -39,6 +39,9 @@ const MEMBER = {
 const EXPIRES = new Date(Date.now() + 30 * 864e5).toISOString();
 
 let mode = "active"; // active | inactive | banned | password | not_found | restore-dead | restore-restricted
+let providers = [];  // the OAuth networks whose app is complete
+let opened = [];     // every window the page asked for
+const TICKET = "t".repeat(24);
 const calls = [];
 
 function reply(data) {
@@ -89,6 +92,31 @@ function stubFetch(url, opts = {}) {
     });
   }
 
+  if (href.includes("/rpc/oauth_login_providers")) return reply(providers);
+
+  if (href.includes("/rpc/member_oauth_login_start")) {
+    if (!providers.includes(body.p_provider)) return reply({ ok: false, error: "oauth" });
+    return reply({
+      ok: true,
+      provider: body.p_provider,
+      url: `https://accounts.google.com/o/oauth2/v2/auth?client_id=smoke&state=STATE&provider=${body.p_provider}`,
+      expires_at: new Date(Date.now() + 12e5).toISOString(),
+    });
+  }
+
+  if (href.includes("/rpc/member_oauth_login")) {
+    if (body.p_ticket !== TICKET) return reply({ ok: false, error: "ticket" });
+    return reply({
+      ok: true,
+      restricted: false,
+      status: "active",
+      login_method: "oauth_google",
+      provider: "google",
+      session: sessionPayload("active", body.p_remember),
+      member: MEMBER,
+    });
+  }
+
   if (href.includes("/rpc/member_logout")) return reply({ ok: true, ended_at: new Date().toISOString() });
   if (href.includes("/rpc/member_log")) return reply({ ok: true });
   return reply([]);
@@ -134,6 +162,12 @@ async function boot(pass, { token } = {}) {
   Object.defineProperty(globalThis, "navigator", { value: window.navigator, configurable: true });
   globalThis.location = { search: "?username=@youssef.amrani&next=dashboard.html", href: "http://localhost/login.html", protocol: "http:", pathname: "/login.html" };
   globalThis.fetch = stubFetch;
+  opened = [];
+  window.open = () => {
+    const handle = { location: { href: "about:blank" }, closed: false, close() { this.closed = true; } };
+    opened.push(handle);
+    return handle;
+  };
 
   // the geo lookup is warm, so no provider call is made
   window.sessionStorage.setItem("1w.geo", JSON.stringify({ ip: "41.140.12.7", country: "Morocco", at: Date.now() }));
@@ -330,8 +364,82 @@ const report = {};
 }
 
 /* ------------------------------------------------------------------ */
+/* pass 5 — a linked account                                          */
+/* ------------------------------------------------------------------ */
+{
+  // nothing configured: no block, no buttons
+  mode = "active";
+  providers = [];
+  const quiet = await boot("oauth-off");
+  report.oauthHidden = quiet.qs("[data-oauth]").hidden === true;
+  report.oauthNoButtons = quiet.document.querySelectorAll("[data-oauth-start]").length === 0;
+
+  // google configured: one button, one window, one ticket
+  providers = ["google"];
+  calls.length = 0;
+  const p = await boot("oauth-on");
+
+  report.oauthVisible = p.qs("[data-oauth]").hidden === false;
+  const button = p.qs('[data-oauth-start="google"]');
+  report.oauthButton = Boolean(button);
+  report.oauthLabel = button?.textContent.replace(/\s+/g, " ").trim() || "";
+  report.oauthGlyph = Boolean(p.qs('[data-oauth-start="google"] svg path'));
+  report.oauthNote = /linked from/i.test(p.text("[data-oauth]"));
+
+  calls.length = 0;
+  p.click(button);
+  await p.wait(160);
+  report.oauthStartCalled = calls.some((c) => c.includes("member_oauth_login_start"));
+  report.oauthPopupUrl = String(opened[0]?.location?.href || "");
+  report.oauthPopupIsGoogle = report.oauthPopupUrl.startsWith("https://accounts.google.com/o/oauth2/v2/auth");
+
+  // the callback page hands back a ticket; the ticket becomes a session
+  p.window.dispatchEvent(new p.window.MessageEvent("message", {
+    data: { type: "1world-oauth-login", ok: true, provider: "google", ticket: TICKET, detail: "Signed in as sizar.led7@gmail.com" },
+  }));
+  await p.wait(260);
+  report.oauthTicketUsed = calls.some((c) => c.includes("member_oauth_login"));
+  report.oauthSignedIn = p.qs("[data-lg-success]").hidden === false && p.qs("[data-lg-form]").hidden === true;
+  report.oauthName = p.text("[data-lg-name]");
+  report.oauthMessage = p.text("[data-lg-message]");
+  report.oauthToken =
+    p.window.sessionStorage.getItem("1w.session") || p.window.localStorage.getItem("1w.session");
+  report.oauthMethod = p.window.localStorage.getItem("1w.member")?.includes("ID100042");
+  report.oauthErrors = p.errors;
+
+  // an account nobody linked is refused, and said so
+  quiet.window.close?.();
+  p.window.close?.();
+  // session.js keeps the token in memory too, and the module is shared between
+  // the page instances this file boots — clear it so the next page starts fresh
+  const sessionMod = await import(`file://${join(root, "assets/js/session.js")}`);
+  sessionMod.clearSessionToken();
+
+  const nope = await boot("oauth-unlinked");
+  nope.window.dispatchEvent(new nope.window.MessageEvent("message", {
+    data: { type: "1world-oauth-login", ok: false, provider: "google", error: "unlinked", detail: "This account is not linked to any member yet." },
+  }));
+  await nope.wait(160);
+  report.oauthRefused = /not linked to any member/i.test(nope.document.body.textContent);
+  report.oauthRefusedStaysOnForm = nope.qs("[data-lg-form]").hidden === false;
+  report.oauthRefusedErrors = nope.errors;
+  const alertText = nope.text("[data-lg-error]");
+  // the sentence must be said once — a repeated hint is the bug this guards
+  report.oauthRefusedNoRepeat = (alertText.match(/Account settings/gi) || []).length === 1;
+  nope.window.close?.();
+  providers = [];
+}
+
+/* ------------------------------------------------------------------ */
 /* checks                                                             */
 /* ------------------------------------------------------------------ */
+const loginSource = readFileSync(join(root, "assets/js/login.js"), "utf8");
+const messagesBlock = loginSource.slice(loginSource.indexOf("const MESSAGES = {"));
+const messageBlock = messagesBlock.slice(0, messagesBlock.indexOf("\n};"));
+const messageKeys = [...messageBlock.matchAll(/^  (\w+):/gm)].map((match) => match[1]);
+report.duplicateMessageKeys = messageKeys.filter((key, index) => messageKeys.indexOf(key) !== index);
+report.noDuplicateMessages = report.duplicateMessageKeys.length === 0;
+
 const details = report.detailRows || [];
 const checks = {
   form: report.formVisible && report.successHidden && report.fields === 2 && report.prefill === "@youssef.amrani",
@@ -378,6 +486,15 @@ const checks = {
   restoredRestricted:
     report.restoredRestrictedVisible && report.restoredRestrictedNotice &&
     report.restoredRestrictedTitle.includes("not activated"),
+  oauth:
+    report.oauthHidden && report.oauthNoButtons && report.oauthVisible && report.oauthButton &&
+    /Continue with Google/.test(report.oauthLabel) && report.oauthGlyph && report.oauthNote &&
+    report.oauthStartCalled && report.oauthPopupIsGoogle && report.oauthTicketUsed &&
+    report.oauthSignedIn && report.oauthName === "@youssef.amrani" &&
+    /Signed in with Google/.test(report.oauthMessage) && report.oauthToken === CODE_TOKEN &&
+    report.oauthMethod && report.oauthRefused && report.oauthRefusedStaysOnForm &&
+    report.oauthErrors.length === 0 && report.oauthRefusedErrors.length === 0 &&
+    report.oauthRefusedNoRepeat && report.noDuplicateMessages,
   noErrors:
     [report.errors1, report.restoredErrors, report.deadTokenErrors, report.restoredRestrictedErrors].every((list) => list.length === 0),
 };

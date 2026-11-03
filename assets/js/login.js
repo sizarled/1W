@@ -14,6 +14,7 @@
 import { esc, qs, formatDate, avatarPlaceholder } from "./utils.js";
 import { levelInfo } from "./levels.js";
 import { hydrateIcons } from "./icons.js";
+import { brand } from "./brands.js";
 import { toast } from "./ui.js";
 import { playSound } from "./sound.js";
 import { rpc } from "./data.js";
@@ -33,6 +34,23 @@ const MESSAGES = {
   unknown: "That session is no longer valid. Please sign in again.",
   ended: "You already signed out of that session. Please sign in again.",
   server: "We could not sign you in right now. Please try again in a moment.",
+  unlinked: "That account is not linked to any member yet. Sign in with your password, then link it from Account settings.",
+  oauth: "That sign-in method is not available right now.",
+  provider: "That sign-in method is not available right now.",
+  ticket: "That sign-in link was already used. Please try again.",
+  tooLong: "That took too long. Please start again.",
+  state: "That sign-in link is no longer valid. Please try again.",
+  token: "The provider refused the sign-in. Please try again.",
+  profile: "The provider did not send a profile we can read. Please try again.",
+};
+
+const OAUTH_LABEL = {
+  google: "Google",
+  facebook: "Facebook",
+  x: "X",
+  pinterest: "Pinterest",
+  reddit: "Reddit",
+  tiktok: "TikTok",
 };
 
 const STATUS_NOTICE = {
@@ -70,6 +88,7 @@ export async function initLogin() {
   wireSubmit();
   wireLogout();
   setSubmitBusy(false);
+  hearOauth();
 
   const prefill = qs('[name="login"]');
   if (prefill && !prefill.value) {
@@ -82,6 +101,7 @@ export async function initLogin() {
   }
 
   await restoreSession();
+  await wireOauth();
 }
 
 function readQuery() {
@@ -265,6 +285,157 @@ function handleFailure(result) {
 
   playSound("error", 0.3);
   toast({ title: "Could not sign in", message, tone: "error", iconName: "info" });
+}
+
+/* ================================================================== */
+/* a linked account                                                   */
+/* ================================================================== */
+/**
+ * The buttons only exist for a network whose OAuth app is complete, and only
+ * a **linked** account can sign in: the provider proves who you are, the
+ * database says which member that is. Nothing here creates an account.
+ */
+async function wireOauth() {
+  const block = qs("[data-oauth]");
+  const box = qs("[data-oauth-buttons]");
+  if (!block || !box) return;
+
+  let providers = [];
+  try {
+    providers = await rpc("oauth_login_providers", {});
+  } catch (error) {
+    console.warn("[1World] login: oauth providers", error.message);
+    return;
+  }
+  if (!Array.isArray(providers) || !providers.length) return;
+
+  box.innerHTML = providers
+    .map(
+      (key) => `
+      <button class="lg-oauth__btn" type="button" data-oauth-start="${esc(key)}">
+        <span class="lg-oauth__brand">${brand(key)}</span>
+        <span>Continue with ${esc(OAUTH_LABEL[key] || key)}</span>
+      </button>`
+    )
+    .join("");
+
+  box.querySelectorAll("[data-oauth-start]").forEach((button) =>
+    button.addEventListener("click", () => startOauth(button.dataset.oauthStart, button))
+  );
+  block.hidden = false;
+}
+
+async function startOauth(provider, button) {
+  if (state.busy) return;
+  clearErrors();
+
+  // opened inside the click so no popup blocker eats it; the address is filled
+  // in once the server has minted the state
+  let popup = null;
+  try {
+    popup = window.open("", `1world-oauth-${provider}`, "width=560,height=720");
+  } catch {
+    popup = null;
+  }
+
+  setSubmitBusy(true, "Opening…");
+  if (button) button.disabled = true;
+  try {
+    const visitor = cachedVisitor() || (await lookupVisitorFast(900));
+    const result = await rpc("member_oauth_login_start", {
+      p_provider: provider,
+      p_ip: visitor?.ip || null,
+      p_agent: navigator.userAgent || null,
+    });
+
+    if (!result || result.ok !== true || !result.url) {
+      try {
+        popup?.close();
+      } catch {
+        // nothing to close
+      }
+      const message = MESSAGES[result?.error] || MESSAGES.oauth;
+      showError(message);
+      toast({ title: "Could not continue", message, tone: "error", iconName: "info" });
+      return;
+    }
+
+    if (popup) {
+      popup.location.href = String(result.url);
+    } else {
+      // no popup: same tab, and the callback comes back to this page
+      location.href = String(result.url);
+    }
+  } catch (error) {
+    console.warn("[1World] login oauth:", error.message);
+    showError(MESSAGES.server);
+  } finally {
+    setSubmitBusy(false);
+    if (button) button.disabled = false;
+  }
+}
+
+/** The callback page speaks back through postMessage, never through a URL. */
+function hearOauth() {
+  window.addEventListener("message", async (event) => {
+    const note = event?.data;
+    if (!note || note.type !== "1world-oauth-login") return;
+
+    if (note.ok !== true || !note.ticket) {
+      const code = String(note.error || "oauth");
+      const message = MESSAGES[code] || MESSAGES.oauth;
+      const label = OAUTH_LABEL[note.provider] || "That provider";
+      showError(message, code === "unlinked" ? "" : `${label} did not complete the sign-in. You can always use your password.`);
+      toast({ title: "Could not sign in", message, tone: "error", iconName: "info" });
+      playSound("error", 0.3);
+      return;
+    }
+
+    await finishOauth(String(note.ticket), String(note.provider || ""));
+  });
+}
+
+async function finishOauth(ticket, provider) {
+  clearErrors();
+  setSubmitBusy(true, "Signing you in…");
+  try {
+    const remember = Boolean(qs("[data-remember]")?.checked);
+    const visitor = cachedVisitor() || (await lookupVisitorFast(900));
+    const result = await rpc("member_oauth_login", {
+      p_ticket: ticket,
+      p_remember: remember,
+      p_ip: visitor?.ip || null,
+      p_agent: navigator.userAgent || null,
+    });
+
+    if (!result || result.ok !== true) {
+      const failure = result || { error: "server" };
+      // "expired arising from the ticket" is not "expired account"
+      handleFailure(failure.error === "expired" ? { ...failure, error: "tooLong" } : failure);
+      return;
+    }
+
+    setSessionToken(result.session?.token || "", remember);
+    const label = OAUTH_LABEL[provider] || provider || "your linked account";
+    showSignedIn(result.member, result.session, `Signed in with ${label}.`, isRestricted(result));
+    playSound("success", 0.4);
+    const restricted = isRestricted(result);
+    toast({
+      title: restricted ? "Signed in — account restricted" : "Signed in",
+      message: restricted
+        ? `${statusLabel(result.member?.status)} account. Some areas stay locked.`
+        : `Welcome back, ${displayName(result.member)}.`,
+      tone: restricted ? "info" : "success",
+      iconName: restricted ? "info" : "check",
+    });
+  } catch (error) {
+    console.warn("[1World] login oauth:", error.message);
+    showError(MESSAGES.server);
+    toast({ title: "Connection problem", message: MESSAGES.server, tone: "error" });
+    playSound("error", 0.3);
+  } finally {
+    setSubmitBusy(false);
+  }
 }
 
 /* ================================================================== */
