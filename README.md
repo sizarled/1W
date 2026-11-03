@@ -698,6 +698,30 @@ supabase functions deploy whatsapp-webhook --no-verify-jwt
 While the Meta app is **unpublished**, the console only sends the test events you trigger from
 the dashboard; real member statuses start once the app is live.
 
+#### Going live on WhatsApp
+
+The console hands you a **test number** and a token that expires in 24 hours. That is enough to
+prove the integration, not to run it:
+
+| Step | Where | Why |
+| --- | --- | --- |
+| Add up to **5 recipient numbers** | WhatsApp → API Setup | the test number can only write to numbers verified there |
+| Add **your own number** | WhatsApp → API Setup → *Add phone number* | it gets its own **Phone number ID**; the test number must not be used for members |
+| Create the **Utility template** | WhatsApp Manager → Message templates | a business-initiated message needs an approved template |
+| Substitute the token | Business settings → Users → **System users** | a system user token with `whatsapp_business_messaging` does not expire in 24 hours |
+| Subscribe the field | WhatsApp → Configuration → Webhook fields | the URL is verified, but nothing arrives until **messages** is ticked |
+
+`whatsapp_business_messaging` is the permission that sends; `whatsapp_business_management` reads
+templates, numbers and webhook subscriptions; `business_management` reaches the assets. The other
+three on that page (`email`, `public_profile`, `manage_app_solution`) have nothing to do with this
+flow.
+
+Business verification is **not** a prerequisite to start: without it a business can reply to
+unlimited user-initiated conversations and open up to **250 new conversations per rolling 24h**
+(and register two numbers). It becomes necessary to raise that ceiling, and App Review of
+`whatsapp_business_messaging` is what a provider messaging *on behalf of other businesses* needs —
+a single business sending to its own members does not.
+
 The Telegram bot is **Cineaura** (`@cineaura2bot`). Its token is in `site_secrets`; the chat
 id is captured the first time somebody writes to the bot:
 
