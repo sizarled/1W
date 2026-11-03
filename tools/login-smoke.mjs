@@ -125,7 +125,7 @@ function stubFetch(url, opts = {}) {
 /* ------------------------------------------------------------------ */
 /* one page instance                                                  */
 /* ------------------------------------------------------------------ */
-async function boot(pass, { token } = {}) {
+async function boot(pass, { token, blockPopups = false } = {}) {
   const dom = new JSDOM(html, { url: "http://localhost/login.html?username=@youssef.amrani&next=dashboard.html", pretendToBeVisual: true });
   const { window } = dom;
   const errors = [];
@@ -164,6 +164,7 @@ async function boot(pass, { token } = {}) {
   globalThis.fetch = stubFetch;
   opened = [];
   window.open = () => {
+    if (blockPopups) return null; // a browser that eats the window
     const handle = { location: { href: "about:blank" }, closed: false, close() { this.closed = true; } };
     opened.push(handle);
     return handle;
@@ -427,6 +428,19 @@ const report = {};
   // the sentence must be said once — a repeated hint is the bug this guards
   report.oauthRefusedNoRepeat = (alertText.match(/Account settings/gi) || []).length === 1;
   nope.window.close?.();
+
+  // a blocked window must not become a same-tab trip that ends nowhere
+  await sessionMod.clearSessionToken();
+  const navBefore = globalThis.location.href;
+  const blocked = await boot("oauth-blocked", { blockPopups: true });
+  const blockedButton = blocked.qs('[data-oauth-start="google"]');
+  report.oauthBlockedButton = Boolean(blockedButton);
+  blocked.click(blockedButton);
+  await blocked.wait(200);
+  report.oauthBlockedAlert = /pop-up/i.test(blocked.text("[data-lg-error]"));
+  report.oauthBlockedStaysOnForm = blocked.qs("[data-lg-form]").hidden === false;
+  report.oauthBlockedNoTrip = globalThis.location.href === navBefore;
+  blocked.window.close?.();
   providers = [];
 }
 
@@ -494,7 +508,9 @@ const checks = {
     /Signed in with Google/.test(report.oauthMessage) && report.oauthToken === CODE_TOKEN &&
     report.oauthMethod && report.oauthRefused && report.oauthRefusedStaysOnForm &&
     report.oauthErrors.length === 0 && report.oauthRefusedErrors.length === 0 &&
-    report.oauthRefusedNoRepeat && report.noDuplicateMessages,
+    report.oauthRefusedNoRepeat && report.noDuplicateMessages &&
+    report.oauthBlockedButton && report.oauthBlockedAlert && report.oauthBlockedStaysOnForm &&
+    report.oauthBlockedNoTrip,
   noErrors:
     [report.errors1, report.restoredErrors, report.deadTokenErrors, report.restoredRestrictedErrors].every((list) => list.length === 0),
 };

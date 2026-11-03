@@ -363,8 +363,13 @@ async function startOauth(provider, button) {
     if (popup) {
       popup.location.href = String(result.url);
     } else {
-      // no popup: same tab, and the callback comes back to this page
-      location.href = String(result.url);
+      // A blocked window must not become a same-tab trip: the provider returns
+      // to the function's page, which can only answer the window that opened
+      // it, so the ticket would have nowhere to go.
+      const message = "This browser blocked the sign-in window. Allow pop-ups for this site and try again.";
+      showError(message);
+      toast({ title: "Could not continue", message, tone: "error", iconName: "info" });
+      playSound("error", 0.3);
     }
   } catch (error) {
     console.warn("[1World] login oauth:", error.message);

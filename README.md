@@ -1199,6 +1199,12 @@ told to sign in with the password and link it from Account settings.
    path returns, stores it with `setSessionToken` and shows the signed-in card — *“Signed in with
    Google.”*
 
+Two windows are therefore not optional. A browser that blocks the pop-up gets
+*“Allow pop-ups for this site and try again”* instead of a same-tab trip that would end on the
+function's page with nowhere to put the ticket; and a callback opened by hand (no opener) says
+*“Signing in finishes in the window that started it”* and points at `login.html` rather than
+pretending it is done.
+
 Restricted members (inactive, banned, expired) sign in exactly as they do with a password: the
 session exists, the banner says which state the account is in, and the dashboard stays shut.
 

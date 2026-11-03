@@ -54,9 +54,11 @@ function dig(source: unknown, path: string): string {
   return cursor === null || cursor === undefined ? "" : String(cursor);
 }
 
+// every value below lands in a text node or a double-quoted attribute, so the
+// four characters that can end one are enough
 const esc = (value: string): string =>
-  String(value ?? "").replace(/[&<>"']/g, (ch) =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch] as string)
+  String(value ?? "").replace(/[&<>"]/g, (ch) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch] as string)
   );
 
 const TITLE = { link: "Account linking", login: "Signing in" };
@@ -120,12 +122,27 @@ function page(answer: Answer): Response {
     <div class="ring">${answer.ok ? "&#10003;" : "&#33;"}</div>
     <h1>${esc(answer.detail)}</h1>
     ${answer.note ? `<p class="note">${esc(answer.note)}</p>` : ""}
-    <p>${answer.ok ? "This window closes itself." : "You can close it and try again."}</p>
-    <a href="/dashboard.html">Back to 1World</a>
+    <p id="hint">${answer.ok ? "This window closes itself." : "You can close it and try again."}</p>
+    <a id="back" href="/dashboard.html">Back to 1World</a>
   </main>
   <script>
     (function () {
-      try { window.opener && window.opener.postMessage(${payload}, "*"); } catch (e) {}
+      // a tab opened by hand has nobody to answer: it can never receive the
+      // ticket, so it says so instead of pretending to be done
+      if (!window.opener) {
+        document.getElementById("hint").textContent = ${JSON.stringify(
+          mode === "login"
+            ? "Signing in finishes in the window that started it."
+            : "You can close this window."
+        )};
+        if (${mode === "login" ? "true" : "false"}) {
+          var back = document.getElementById("back");
+          back.textContent = "Go to the login page";
+          back.href = "/login.html";
+        }
+        return;
+      }
+      try { window.opener.postMessage(${payload}, "*"); } catch (e) {}
       setTimeout(function () { try { window.close(); } catch (e) {} }, ${answer.ok ? 1400 : 6000});
     })();
   </script>
