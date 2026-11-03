@@ -984,11 +984,13 @@ single button.
 | --- | --- | --- |
 | Telegram | a 10-character code inside `https://t.me/cineaura2bot?start=<code>`, verified by the bot | yes — `sendMessage` |
 | WhatsApp | a 6-character code sent to the member's own number, typed back into the row | yes, once the Cloud API token is in `site_secrets` |
-| Google, Facebook, X, Pinterest, Reddit, TikTok | each needs an **OAuth app** (client id, secret, redirect URI) | not yet |
+| Google, Facebook, X, Pinterest, Reddit, TikTok | an **OAuth app** each; the member leaves, the provider sends them back to `oauth-link` | no — they are the second door, not a mailbox |
 
-The last six are honest about it: `member_identity_start()` answers `error: oauth` and the row's
-button is disabled with a tooltip saying what is missing, instead of opening a dead popup. No
-credential ever reaches the browser — the page holds a session token and nothing else.
+The last six are honest about it: until their app exists, `member_identity_start()` answers
+`error: oauth` and the row's button is disabled with a tooltip saying what is missing, instead of
+opening a dead popup. The moment the client id and secret are in `site_secrets` the same button
+reads **Connect** and the whole flow runs — see the checklist below. No credential ever reaches
+the browser: the page holds a session token, the tokens stay in the row.
 
 A pending link lives 20 minutes. Telegram's panel prints the code and the deep link, and polls
 `member_account()` for about a minute so the row turns **Linked** by itself once the member
@@ -997,9 +999,148 @@ presses Start; WhatsApp's panel is the code box. **Disconnect** is offered on ve
 the top of the card spells out the consequence: *the recovery code is sent to this account too*.
 
 `member_identities` keeps one row per member and provider (`unique (member_id, provider)`) with
-`status`, `handle`, `external_id`, `link_code` and `link_expires_at`; the OAuth columns
-(`access_token`, `refresh_token`) are there for the day the apps exist. RLS is on with no
-policies — the browser only ever sees what `member_account()` chooses to return.
+`status`, `handle`, `external_id`, `link_code`, `link_expires_at`, the PKCE `code_verifier`, and
+the OAuth `access_token` / `refresh_token` / `token_expires_at` — none of which
+`member_account()` returns. RLS is on with no policies: the browser only ever sees the handle.
+
+DDL + functions: `tools/sql/account-settings.sql` (the table, the password, the two chat links)
+and `tools/sql/oauth-linking.sql` (the encoder, the six recipes, the callback writes).
+
+### The six OAuth apps — one checklist each
+
+The dashboard can hold eight networks. Two of them (Telegram, WhatsApp) link with a code we
+mint; the other six need an **OAuth app** each — a client id, a client secret and one redirect
+URI. Nothing is created on your behalf: the app must belong to the account that will show its
+name on the consent screen. What is already built is everything after that.
+
+**One redirect URI, for all six.** Paste this exact string into every console — same casing,
+same scheme, no trailing slash:
+
+```
+https://vtbqbhuywdhnvitbcsfy.supabase.co/functions/v1/oauth-link/callback
+```
+
+It is also the row `oauth_redirect` in `site_secrets`; if the two ever disagree the provider
+answers `redirect_uri_mismatch` and nothing else happens. Deploy the function once:
+
+```bash
+supabase functions deploy oauth-link --no-verify-jwt
+# no secrets to add: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are already in the runtime
+curl -s https://vtbqbhuywdhnvitbcsfy.supabase.co/functions/v1/oauth-link/health
+# {"ok":true,"service":"oauth-link"}
+```
+
+| Network | Console | App you create | What you copy | Scope |
+| --- | --- | --- | --- | --- |
+| Google | console.cloud.google.com | **OAuth client ID** → *Web application* | Client ID + Client secret | `openid email profile` |
+| Facebook | developers.facebook.com | **Consumer** app + *Facebook Login* | App ID + App secret | `public_profile` |
+| X | developer.x.com | App with **OAuth 2.0**, type *Web App, Automated App or Bot* | Client ID + Client secret | `users.read tweet.read offline.access` |
+| Pinterest | developers.pinterest.com | **OAuth app** (single client) | App ID + App secret | `user_accounts:read` |
+| Reddit | reddit.com/prefs/apps | **web app** | client id (under the name) + secret | `identity` |
+| TikTok | developers.tiktok.com | App + **Login Kit** | Client key + Client secret | `user.info.basic` |
+
+#### Google — the one that works on day one
+
+1. Create (or pick) a project at **console.cloud.google.com**.
+2. **APIs & Services → OAuth consent screen**: *External*, app name `1World`, your support email,
+   and the two scopes `.../auth/userinfo.email` and `.../auth/userinfo.profile`. While the app is
+   in **Testing**, add your own address under **Test users** (100 max) — nobody else can sign in yet.
+3. **Credentials → Create credentials → OAuth client ID → Web application**. Under *Authorized
+   redirect URIs* paste the URI above. No JavaScript origin is needed: the exchange happens on the
+   server.
+4. Copy the **Client ID** and **Client secret** into `site_secrets` (the block at the end of this
+   section). Nothing has to be published or verified: `email` and `profile` are not sensitive
+   scopes, so there is no review — only the *Testing* cap on test users, lifted by publishing.
+
+#### Facebook / Meta
+
+1. **developers.facebook.com → My Apps → Create app** → use case *Authenticate and request data
+   from users*, type *Consumer*.
+2. Add the product **Facebook Login → Settings** and paste the redirect URI into **Valid OAuth
+   Redirect URIs**; put your site's host in **App Domains**.
+3. **App settings → Basic** gives the **App ID** and **App secret**.
+4. While the app is in **Development** mode only admins, developers and testers can sign in (add
+   them under *App roles → Testers*). Going public needs App Review of `public_profile` plus
+   business verification — that is Meta's queue, not our code.
+
+#### X
+
+1. **developer.x.com → Projects & Apps** → create a project and an app inside it.
+2. **User authentication settings → Set up**: *App permissions* at least **Read**; *Type of App*
+   **Web App, Automated App or Bot** (a *Native App* will answer `unauthorized_client`); *Callback
+   URI* = the redirect URI above; *Website URL* your site.
+3. Scopes: `users.read`, `tweet.read`, `offline.access` (the last one is what returns a refresh
+   token — without it the row works until the access token expires).
+4. **Keys and tokens → OAuth 2.0 Client ID and Client Secret**. The token endpoint wants HTTP
+   Basic auth, which `oauth_config()` already sets (`token_basic: true`).
+
+#### Pinterest
+
+1. **developers.pinterest.com → My apps → Create app**: name, website, privacy policy, the use
+   case *Content* or *Analytics*, and the redirect URI above.
+2. A new app gets **Trial access**, which is enough to connect accounts you control; *Standard*
+   access is a short application.
+3. **App ID** and **App secret** go into `site_secrets`. Tokens last 30 days and refresh tokens
+   60 — long enough for a link, which never needs the token again until we build sign-in with it.
+
+#### Reddit
+
+1. **reddit.com/prefs/apps → create another app…**, type **web app**, redirect uri = the URI above.
+2. The **client id** is the short string under the app's name; the **secret** is beside it.
+3. Scope `identity` plus `duration=permanent` is what asks for a refresh token. Reddit refuses
+   requests without a distinctive **User-Agent**, so `oauth_config()` sends
+   `web:1world:v1.0 (by /u/1world)` — replace the handle with your own moderator account.
+
+#### TikTok
+
+1. **developers.tiktok.com → Manage apps → Connect an app**, then add the product **Login Kit**.
+2. **Redirect URI** = the URI above (https is required outside localhost); scope `user.info.basic`
+   (display name, avatar, open id).
+3. **Client key** and **Client secret** go into `site_secrets` — TikTok says *key*, not *id*, and
+   `oauth_config()` sends `client_key` for you.
+4. Before review, only accounts you list as **testers** in the app can sign in, and the `open_id`
+   is app-scoped: the same person authorises two apps under two different ids. That is why a link
+   is stored per provider and never merged across providers.
+
+#### Turning one on
+
+One block, once, replaces the placeholders. `oauth_ready()` looks at exactly these rows:
+
+```sql
+insert into public.site_secrets (key, value) values
+  ('oauth_redirect', 'https://vtbqbhuywdhnvitbcsfy.supabase.co/functions/v1/oauth-link/callback'),
+  ('google_client_id',     '<from Google>'),
+  ('google_client_secret', '<from Google>'),
+  ('facebook_client_id',     '<from Meta>'),
+  ('facebook_client_secret', '<from Meta>'),
+  ('x_client_id',     '<from X>'),
+  ('x_client_secret', '<from X>'),
+  ('pinterest_client_id',     '<from Pinterest>'),
+  ('pinterest_client_secret', '<from Pinterest>'),
+  ('reddit_client_id',     '<from Reddit>'),
+  ('reddit_client_secret', '<from Reddit>'),
+  ('tiktok_client_id',     '<from TikTok: the client key>'),
+  ('tiktok_client_secret', '<from TikTok>')
+on conflict (key) do update set value = excluded.value, updated_at = now();
+
+select public.identity_providers_ready();
+-- {"google":true,"facebook":false,"x":false,"telegram":true,"whatsapp":true,
+--  "pinterest":false,"reddit":false,"tiktok":false}
+```
+
+There is no restart and no redeploy: the button in **Account settings** becomes **Connect** the
+next time the card loads (`member_account().providers`). A network whose two halves are missing
+keeps the disabled button and the tooltip, which is the honest state.
+
+**How the flow runs.** Connect → `member_identity_start()` stores a 24-character `state` and a
+PKCE verifier in the pending row and returns the provider's authorize URL → the dashboard opens a
+small window there → the provider sends the browser back to `oauth-link/callback` → the function
+spends the state (`oauth_state_take`), exchanges the code for a token, reads the id, and writes the
+verified row (`oauth_identity_save`) → the page `postMessage`s the dashboard and closes itself.
+The token stays in the database; the browser only ever sees the row's handle.
+
+If the provider answers with an error, the page says it in one sentence, the dashboard shows the
+same sentence in a toast, and the pending row stays until it expires in 20 minutes.
 
 ### Server surface
 
@@ -1018,6 +1159,12 @@ policies — the browser only ever sees what `member_account()` chooses to retur
 | `member_identity_verify(token, provider, code)` | verifies the WhatsApp code; Telegram is verified by the bot, so it answers `use_bot` |
 | `member_identity_unlink(token, provider)` | drops a verified row |
 | `telegram_identity_link(code, chat, username)` / `telegram_identity_unlink(chat)` | what the bot calls — the only writers of a chat id |
+| `oauth_config(provider)` | the whole recipe for one network (URLs, parameter names, Basic auth, where the id hides, the client secret) — service role only |
+| `oauth_ready(provider)` / `identity_providers_ready()` | is the app complete? and which of the eight the dashboard may offer |
+| `oauth_authorize_url(provider, state, verifier)` | the authorize URL, PKCE challenge included (internal) |
+| `oauth_state_take(state)` | the callback: which member, which verifier, and it spends the state — service role only |
+| `oauth_identity_save(member, provider, external, handle, token…)` | the verified row; one external account belongs to one member (`taken`) — service role only |
+| `identity_token(member, provider)` | the stored token, for the service role alone |
 | `member_court_request(token)` | banned, non-permanent accounts ask for a trial |
 | `member_court_history(token)` | every case of the caller, for `court.html` |
 | `member_activation_state(token)` | what `activated.html` may offer: `mode` (`activate` / `choose` / `blocked`), `first_activation`, `can_reactivate`, `can_upgrade`, `upgrade_targets`, `prices`, `durations`, `ad_url`, profile, 30-day deadline |
@@ -1110,7 +1257,7 @@ returns the caller's cases.
 ### Tests
 
 ```bash
-node tools/dashboard-smoke.mjs   # 140 checks: the five gates, rail, popover, codes, sections, Unlock now, Account settings
+node tools/dashboard-smoke.mjs   # 156 checks: the five gates, rail, popover, codes, sections, Unlock now, Account settings
 node tools/sidebar-smoke.mjs     # 91 checks: the edge, the pin, Escape, the mobile drawer, the dashboard menu
 node tools/court-smoke.mjs       # 115 checks: the four steps, uploads, both doors, the court room
 node tools/iptv-smoke.mjs        # 43 checks: the playlists, the groups, the page, the deep links
@@ -1128,7 +1275,9 @@ tab and every section rendering). Its last passes walk **Account settings**: thr
 boxes and no email editor, the eight networks with the six OAuth rows disabled, Telegram's deep
 link carrying the code, WhatsApp's code box verified and the row unlinked again, a password
 mismatch that never leaves the browser, a wrong current password that says which field, and an
-already-linked chat that reads **Linked · @handle**. `court-smoke.mjs` covers the activation page as a guest, on a first activation (request sent,
+already-linked chat that reads **Linked · @handle** — and, with an OAuth app present, the live
+button, the popup, the `postMessage` that turns the row **Linked**, and a refusal that is said out
+loud. `court-smoke.mjs` covers the activation page as a guest, on a first activation (request sent,
 form closed), after activation while active (**Active now**, upgrade link with the member id),
 after activation while expired (re-activation request → “Request sent”), a paid plan that was
 never activated (no wizard, the doors) and while banned (no doors, trial links), plus the court
@@ -1532,6 +1681,7 @@ assets/js/device.js         the one device id (MAC), shared by wizard, player an
 tools/apps-script/recovery-delivery.gs  the Google Apps Script: email, WhatsApp, Telegram
 supabase/functions/whatsapp-webhook/    the edge function Meta calls: verify, statuses, inbound
 supabase/functions/telegram-bot/        the bot's webhook: /start <code> links a chat, /stop unlinks
+supabase/functions/oauth-link/          the OAuth callback for the six networks (state → code → token → profile)
 assets/css/dashboard.css    app shell: header rail, sidebar, gates, section views
 assets/js/dashboard.js      dashboard controller (member_dashboard + code/notify/court/account actions)
 assets/js/activated.js      activation wizard (profile → viewing code → ad gate → activate), reactivation, upgrade

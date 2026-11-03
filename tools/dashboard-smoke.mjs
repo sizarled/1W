@@ -126,6 +126,17 @@ function accountPayload() {
       linked: identities.filter((row) => row.status === "verified").length,
     },
     identities,
+    providers: {
+      telegram: true,
+      whatsapp: true,
+      google: false,
+      facebook: false,
+      x: false,
+      pinterest: false,
+      reddit: false,
+      tiktok: false,
+      ...(scenario.providers || {}),
+    },
   };
 }
 
@@ -162,6 +173,15 @@ function stubFetch(url, opts = {}) {
         provider: "whatsapp",
         status: "pending",
         masked_phone: "+2126••••3710",
+        expires_at: new Date(NOW + 12e5).toISOString(),
+      });
+    }
+    if (scenario.providers?.[body.p_provider]) {
+      return reply({
+        ok: true,
+        provider: body.p_provider,
+        status: "pending",
+        url: `https://accounts.google.com/o/oauth2/v2/auth?state=SMOKE&scope=openid&provider=${body.p_provider}`,
         expires_at: new Date(NOW + 12e5).toISOString(),
       });
     }
@@ -236,6 +256,7 @@ async function boot(pass) {
   };
   globalThis.fetch = stubFetch;
   window.scrollTo = () => {};
+  window.open = () => null;
 
   window.localStorage.clear();
   window.localStorage.setItem("1w.session", TOKEN);
@@ -656,6 +677,64 @@ function expect(name, condition, detail = "") {
   expect("linked: it says codes arrive there", /recovery code/i.test(linked.text('[data-identity="telegram"]')));
   expect("linked: no errors", linked.errors.length === 0, linked.errors.join(" | "));
   linked.window.close();
+}
+
+/* ------------------------------------------------------------------ */
+/* pass 7 — an OAuth app that exists                                   */
+/* ------------------------------------------------------------------ */
+{
+  scenario = {
+    status: "active",
+    identities: [],
+    providers: { google: true, tiktok: true },
+  };
+  const o = await boot("account-oauth");
+  o.click(o.qs('[data-nav] [data-goto="settings-account"]'));
+  await o.wait(80);
+
+  expect("oauth: a configured app can be offered", o.qs('[data-identity-start="google"]') !== null);
+  expect("oauth: the button is live", o.qs('[data-identity="google"] button')?.disabled === false);
+  expect("oauth: the row says the provider opens a window", /window/i.test(o.text('[data-identity="google"]')));
+  expect("oauth: an unconfigured app stays closed", o.qs('[data-identity="facebook"] button')?.disabled === true);
+  expect("oauth: tiktok is offered too", o.qs('[data-identity-start="tiktok"]') !== null);
+
+  calls.length = 0;
+  o.click(o.qs('[data-identity-start="google"]'));
+  await o.wait(200);
+  expect("oauth: start is called", calls.some((c) => c.includes("member_identity_start")));
+  const panel = o.qs("[data-identity-panel]");
+  expect("oauth: a panel takes over", Boolean(panel));
+  expect("oauth: it names the provider", /Finish with Google/i.test(panel?.textContent || ""));
+  const href = panel?.querySelector("a")?.getAttribute("href") || "";
+  expect("oauth: the link is the provider's", href.startsWith("https://accounts.google.com/o/oauth2/v2/auth"), href);
+  expect("oauth: the link keeps the opener", panel?.querySelector("a")?.getAttribute("rel") === "opener");
+
+  /* the callback page speaks back through postMessage */
+  scenario.identities = [
+    { provider: "google", status: "verified", handle: "smoke@gmail.com", verified_at: new Date().toISOString(), pending_until: null },
+  ];
+  o.window.dispatchEvent(new o.window.MessageEvent("message", {
+    data: { type: "1world-oauth", ok: true, provider: "google", detail: "linked" },
+  }));
+  await o.wait(260);
+  expect("oauth: the row turns linked", /Linked/.test(o.text('[data-identity="google"]')));
+  expect("oauth: the panel is gone", !o.qs("[data-identity-panel]"));
+  expect("oauth: a Disconnect button appears", Boolean(o.qs('[data-identity-unlink="google"]')));
+  expect("oauth: the contact is shown", /smoke@gmail\.com/.test(o.text('[data-identity="google"]')));
+
+  /* a refusal is said out loud */
+  scenario = { status: "active", identities: [], providers: { google: true } };
+  const bad = await boot("account-oauth-bad");
+  bad.click(bad.qs('[data-nav] [data-goto="settings-account"]'));
+  await bad.wait(80);
+  bad.window.dispatchEvent(new bad.window.MessageEvent("message", {
+    data: { type: "1world-oauth", ok: false, provider: "google", detail: "That account is already linked to another member." },
+  }));
+  await bad.wait(160);
+  expect("oauth refused: it says why", /already linked to another member/i.test(bad.document.body.textContent));
+  expect("oauth refused: no errors", bad.errors.length === 0, bad.errors.join(" | "));
+  o.window.close();
+  bad.window.close();
 }
 
 /* ------------------------------------------------------------------ */

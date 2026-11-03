@@ -168,7 +168,8 @@ begin
       'last_channel',        v_member.recovery_last_channel,
       'linked',              coalesce(v_linked, 0)
     ),
-    'identities', v_ids
+    'identities', v_ids,
+    'providers',  public.identity_providers_ready()
   );
 end;
 $$;
@@ -258,6 +259,9 @@ declare
   v_wa_url   text := coalesce(public.site_secret('whatsapp_url'), public.site_secret('gs_mail_url'));
   v_wa_token text := coalesce(public.site_secret('whatsapp_token'), public.site_secret('gs_mail_token'));
   v_bot      text := coalesce(public.site_secret('telegram_bot_username'), 'cineaura2bot');
+  v_state    text;
+  v_verifier text;
+  v_url      text;
   v_id       uuid;
 begin
   if v_member.id is null then
@@ -341,7 +345,41 @@ begin
     );
   end if;
 
-  -- Google, Facebook, X, Pinterest, Reddit, TikTok: an OAuth app each.
+  -- Google, Facebook, X, Pinterest, Reddit and TikTok: the member leaves for
+  -- the provider, and `oauth-link` brings them back with the account. The
+  -- state is the row's own link_code, so nothing extra has to be stored.
+  if public.oauth_ready(v_provider) then
+    v_state    := public.oauth_random(24);
+    v_verifier := public.oauth_random(48);
+    v_url      := public.oauth_authorize_url(v_provider, v_state, v_verifier);
+
+    if v_url is not null then
+      insert into public.member_identities
+        (member_id, provider, status, link_code, link_expires_at, code_verifier)
+      values
+        (v_member.id, v_provider, 'pending', v_state, now() + interval '20 minutes', v_verifier)
+      on conflict (member_id, provider) do update
+        set status          = 'pending',
+            link_code       = excluded.link_code,
+            link_expires_at = excluded.link_expires_at,
+            code_verifier   = excluded.code_verifier,
+            external_id     = null,
+            handle          = null,
+            verified_at     = null
+      returning identity_id into v_id;
+
+      perform public.member_log_write(v_member.id, null, 'identity_start',
+        jsonb_build_object('provider', v_provider), p_ip, p_agent);
+
+      return jsonb_build_object(
+        'ok', true, 'provider', v_provider, 'status', 'pending',
+        'url', v_url,
+        'expires_at', now() + interval '20 minutes',
+        'hint', 'Finish in the window that opens, and this row links itself.'
+      );
+    end if;
+  end if;
+
   return jsonb_build_object(
     'ok', false, 'error', 'oauth', 'provider', v_provider,
     'hint', 'This network needs an OAuth app (client id, secret and a redirect URI) before it can be linked.'

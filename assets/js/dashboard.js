@@ -148,6 +148,7 @@ export async function initDashboard() {
   }
 
   wireChrome();
+  hearOauth();
 
   let data = null;
   try {
@@ -1552,6 +1553,7 @@ function settingsAccountView() {
   const security = account.security || {};
   const linked = Array.isArray(account.identities) ? account.identities : [];
   const byKey = new Map(linked.map((row) => [row.provider, row]));
+  const ready = account.providers || {};
   const verified = linked.filter((row) => row.status === "verified");
   const membership = (state.data.overview || {}).membership || member.membership || "free";
 
@@ -1650,7 +1652,7 @@ function settingsAccountView() {
         mailbox then costs you nothing. Telegram and WhatsApp deliver today; the rest need an OAuth app.
       </p>
       <div class="dsh-grid dsh-grid--2">
-        ${IDENTITY_PROVIDERS.map((provider) => identityRow(provider, byKey.get(provider.key))).join("")}
+        ${IDENTITY_PROVIDERS.map((provider) => identityRow(provider, byKey.get(provider.key), ready[provider.key] === true)).join("")}
       </div>
       ${pendingPanel()}
     </section>
@@ -1663,25 +1665,31 @@ function labelForIdentity(key) {
 }
 
 /** One network: what it is, what it can do, and one button. */
-function identityRow(provider, row) {
+function identityRow(provider, row, ready) {
   const status = row?.status || "off";
   const canChat = provider.kind === "chat";
   const handle = row?.handle ? ` · ${esc(row.handle)}` : "";
   const dot = status === "verified" ? "var(--text)" : status === "pending" ? "var(--muted)" : "var(--faint)";
   const note =
     status === "verified"
-      ? `Linked${handle}${canChat ? " — recovery codes arrive here" : ""}`
+      ? `Linked${handle}${canChat ? " — recovery codes arrive here" : " — a second door into the account"}`
       : status === "pending"
-        ? "Waiting for the code"
+        ? provider.kind === "oauth"
+          ? "Waiting for the provider"
+          : "Waiting for the code"
         : provider.kind === "oauth"
-          ? `${provider.text} Needs an OAuth app.`
+          ? ready
+            ? `${provider.text} The provider opens in a small window.`
+            : `${provider.text} Needs an OAuth app.`
           : provider.text;
 
   const action =
     status === "verified"
       ? `<button class="dsh-btn dsh-btn--sm dsh-btn--ghost" type="button" data-identity-unlink="${provider.key}">Disconnect</button>`
       : provider.kind === "oauth"
-        ? `<button class="dsh-btn dsh-btn--sm" type="button" disabled title="Needs an OAuth app (client id + secret)">Unavailable</button>`
+        ? ready
+          ? `<button class="dsh-btn dsh-btn--sm" type="button" data-identity-start="${provider.key}"><i data-icon="link"></i>Connect</button>`
+          : `<button class="dsh-btn dsh-btn--sm" type="button" disabled title="Needs an OAuth app (client id + secret)">Unavailable</button>`
         : `<button class="dsh-btn dsh-btn--sm" type="button" data-identity-start="${provider.key}"><i data-icon="link"></i>Connect</button>`;
 
   return `<div class="dsh-switch" data-identity="${provider.key}">
@@ -1710,6 +1718,19 @@ function pendingPanel() {
         <a class="dsh-btn dsh-btn--sm" href="${esc(pending.url)}" target="_blank" rel="noopener">@${esc(bot)}</a>
         <span class="dsh-pending__code dsh-mono">${esc(pending.code || "")}</span>
         The link carries this code; the panel updates by itself when the bot answers.
+        <button class="dsh-btn dsh-btn--sm" type="button" data-acct-retry><i data-icon="refresh"></i>Check now</button>
+      </span>
+    </div>`;
+  }
+
+  if (pending.provider !== "whatsapp") {
+    const label = labelForIdentity(pending.provider);
+    return `<div class="dsh-note" data-identity-panel>
+      <i data-icon="external"></i>
+      <span>
+        <strong>Finish with ${esc(label)}.</strong>
+        <a class="dsh-btn dsh-btn--sm" href="${esc(pending.url)}" target="_blank" rel="opener">Open ${esc(label)}</a>
+        The provider signs you in and sends you straight back. This panel updates by itself.
         <button class="dsh-btn dsh-btn--sm" type="button" data-acct-retry><i data-icon="refresh"></i>Check now</button>
       </span>
     </div>`;
@@ -2240,6 +2261,19 @@ async function changePassword(form) {
 
 async function startIdentity(provider, button) {
   if (!provider || state.busy) return;
+
+  // A window opened inside the click handler survives the popup blocker; the
+  // address is filled in once the server has minted it.
+  const kind = IDENTITY_PROVIDERS.find((row) => row.key === provider)?.kind;
+  let popup = null;
+  if (kind === "oauth") {
+    try {
+      popup = window.open("", `1world-oauth-${provider}`, "width=560,height=720");
+    } catch {
+      popup = null;
+    }
+  }
+
   state.busy = true;
   if (button) button.disabled = true;
   const result = await rpc("member_identity_start", {
@@ -2257,8 +2291,21 @@ async function startIdentity(provider, button) {
       session: "Your session ended — sign in again.",
       provider: "That network is not known.",
     };
+    try {
+      popup?.close();
+    } catch {
+      // a window we cannot reach is a window we cannot close
+    }
     toast({ tone: "error", title: "Connect", message: why[result?.error] || "The account could not be linked." });
     return;
+  }
+
+  if (popup && result.url) {
+    try {
+      popup.location.href = String(result.url);
+    } catch {
+      popup = null;
+    }
   }
 
   if (provider === "telegram") {
@@ -2269,7 +2316,19 @@ async function startIdentity(provider, button) {
       message: "Open the bot and press Start — the code is already in the link.",
     });
     setView("settings-account", { silent: true });
-    watchTelegramLink();
+    watchLink("telegram");
+    return;
+  }
+
+  if (result.url && provider !== "telegram") {
+    state.pending = { provider, url: result.url };
+    toast({
+      tone: "info",
+      title: `Continue with ${labelForIdentity(provider)}`,
+      message: "The provider's window takes it from here; this card updates when you come back.",
+    });
+    setView("settings-account", { silent: true });
+    watchLink(provider);
     return;
   }
 
@@ -2343,28 +2402,32 @@ async function unlinkIdentity(provider, button) {
 /** Reloads the account card without reloading the whole dashboard. */
 async function refreshAccount() {
   state.account = await loadAccount();
-  const telegram = (state.account?.identities || []).find(
-    (row) => row.provider === "telegram" && row.status === "verified"
-  );
-  if (telegram && state.pending?.provider === "telegram") {
-    state.pending = null;
-    clearInterval(state.poll);
-    toast({
-      tone: "success",
-      title: "Telegram linked",
-      message: "Recovery codes also arrive in your chat now.",
-    });
+  const pending = state.pending;
+  if (pending) {
+    const row = (state.account?.identities || []).find((entry) => entry.provider === pending.provider);
+    if (row?.status === "verified") {
+      state.pending = null;
+      clearInterval(state.poll);
+      toast({
+        tone: "success",
+        title: `${labelForIdentity(pending.provider)} linked`,
+        message:
+          pending.provider === "telegram" || pending.provider === "whatsapp"
+            ? "Recovery codes also arrive there now."
+            : "You can sign in with it from now on.",
+      });
+    }
   }
   if (state.view === "settings-account") setView("settings-account", { silent: true });
 }
 
-/** Watches for the bot, for about a minute, then stops. */
-function watchTelegramLink() {
+/** Watches one link, for about a minute, then stops. */
+function watchLink(provider) {
   clearInterval(state.poll);
   let ticks = 0;
   state.poll = setInterval(async () => {
     ticks += 1;
-    if (ticks > 12 || state.view !== "settings-account") {
+    if (ticks > 12 || state.view !== "settings-account" || state.pending?.provider !== provider) {
       clearInterval(state.poll);
       return;
     }
@@ -2372,19 +2435,41 @@ function watchTelegramLink() {
     if (!account) return;
     state.account = account;
     const hit = (account.identities || []).find(
-      (row) => row.provider === "telegram" && row.status === "verified"
+      (row) => row.provider === provider && row.status === "verified"
     );
     if (hit) {
       clearInterval(state.poll);
       state.pending = null;
       toast({
         tone: "success",
-        title: "Telegram linked",
-        message: "Recovery codes also arrive in your chat now.",
+        title: `${labelForIdentity(provider)} linked`,
+        message:
+          provider === "telegram" || provider === "whatsapp"
+            ? "Recovery codes also arrive there now."
+            : "You can sign in with it from now on.",
       });
     }
     if (state.view === "settings-account") setView("settings-account", { silent: true });
   }, 5000);
+}
+
+/** The callback page in the popup says what happened; this is the listener. */
+function hearOauth() {
+  window.addEventListener("message", (event) => {
+    const note = event?.data;
+    if (!note || note.type !== "1world-oauth") return;
+    if (note.ok === false) {
+      toast({
+        tone: "error",
+        title: "Not linked",
+        message: String(note.detail || "The provider did not finish the link."),
+      });
+      state.pending = null;
+      if (state.view === "settings-account") setView("settings-account", { silent: true });
+      return;
+    }
+    refreshAccount();
+  });
 }
 
 /* ================================================================== */
