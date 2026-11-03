@@ -658,6 +658,46 @@ A separate WhatsApp gateway (Ultramsg, Green API, CallMeBot…) can be used inst
 `whatsapp_url` to its endpoint and `whatsapp_token` to its token, and the database will post
 the same JSON (`channel`, `to`, `code`, `text`, `name`, `member`) there.
 
+#### The WhatsApp webhook
+
+Meta's console asks for a **callback URL** and a **verify token** before it will tell you
+anything about a message it was handed. That endpoint is an edge function in this repo:
+`supabase/functions/whatsapp-webhook/index.ts`.
+
+| In the Meta console | Value |
+| --- | --- |
+| Callback URL | `https://vtbqbhuywdhnvitbcsfy.supabase.co/functions/v1/whatsapp-webhook` |
+| Verify token | the edge secret `WHATSAPP_VERIFY_TOKEN` |
+| Webhook fields | **messages** (statuses and inbound messages arrive together) |
+
+It answers two different calls:
+
+* **GET** `?hub.mode=subscribe&hub.verify_token=…&hub.challenge=…` — the console saving the
+  URL. The challenge goes back as **plain text**, and only when the token matches; anything
+  else is `403 forbidden`, so a stranger cannot confirm the endpoint.
+* **POST** an event. Every `statuses[]` (`sent` → `delivered` → `read`, or `failed` with a
+  code and a title) and every `messages[]` (somebody wrote to the business number) is stored in
+  `whatsapp_events`. A status is then pushed onto the `recovery_delivery` row that carries the
+  same WhatsApp message id (`external_id`, filled by `recovery_delivery_reconcile()` from the
+  script's answer), so the log can finally say **delivered** — something `pg_net` can never
+  learn by itself. `recovery_whatsapp_status()` ranks the statuses, so a late `sent` never
+  undoes a `read`.
+
+When `WHATSAPP_APP_SECRET` is set, `X-Hub-Signature-256` (HMAC-SHA256 of the raw body) must
+match or the request is dropped — set it, it is the only thing that proves the caller is Meta.
+`whatsapp_events_recent(20)` shows what arrived. Deleting the events costs nothing; they are
+not used by any page.
+
+Deploy it with `verify_jwt: false` — Meta has no Supabase JWT — and redeploy after every change
+to the file:
+
+```bash
+supabase functions deploy whatsapp-webhook --no-verify-jwt
+```
+
+While the Meta app is **unpublished**, the console only sends the test events you trigger from
+the dashboard; real member statuses start once the app is live.
+
 The Telegram bot is **Cineaura** (`@cineaura2bot`). Its token is in `site_secrets`; the chat
 id is captured the first time somebody writes to the bot:
 
@@ -698,7 +738,9 @@ pretending.
 | `whatsapp_number(phone, country, default_cc)` | The phone as E.164 digits, or `null` when it cannot be read |
 | `delivery_probe()` / `delivery_probe_read()` | Ask the web app which channels it holds; store the answer in `delivery_channels` (internal) |
 | `delivery_ready(channel)` | Is the web app configured for this channel? Optimistic until the first heartbeat (internal) |
-| `recovery_delivery_reconcile()` | Read the `pg_net` answers back into `recovery_delivery`: `queued` → `sent` / `failed` + the reason (internal) |
+| `recovery_delivery_reconcile()` | Read the `pg_net` answers back into `recovery_delivery`: `queued` → `sent` / `failed` + the reason, and keep the WhatsApp message id (internal) |
+| `recovery_whatsapp_status(wamid, status, detail)` | A webhook status on the delivery that carries that message id, ranked so a late `sent` never undoes a `read` (internal) |
+| `whatsapp_events_recent(n)` | What the webhook stored lately (internal) |
 | `recovery_code_hash(text)` / `recovery_code_key(text)` | One canonical shape — `OW-XXXX-XXXX-XXXX`, upper case, dashes — so old registration hashes keep working |
 | `recovery_phone_key(text)` | Last nine digits, so the country code never matters |
 | `site_secret(key)` | Reads one secret; executable by nobody |
@@ -1391,6 +1433,7 @@ assets/css/rest.css         recovery page: stepper, card, panels, code + link bl
 assets/js/rest.js           recovery controller (recovery_start/verify/reset/link/device)
 assets/js/device.js         the one device id (MAC), shared by wizard, player and recovery
 tools/apps-script/recovery-delivery.gs  the Google Apps Script: email, WhatsApp, Telegram
+supabase/functions/whatsapp-webhook/    the edge function Meta calls: verify, statuses, inbound
 assets/css/dashboard.css    app shell: header rail, sidebar, gates, section views
 assets/js/dashboard.js      dashboard controller (member_dashboard + code/notify/court actions)
 assets/js/activated.js      activation wizard (profile → viewing code → ad gate → activate), reactivation, upgrade

@@ -468,7 +468,13 @@ begin
               and (r.content::jsonb->>'ok') = 'true' then 'sent'
              else 'failed'
            end,
-           detail = left(coalesce(r.content::text, 'HTTP ' || coalesce(r.status_code::text, '?')), 300)
+           detail = left(coalesce(r.content::text, 'HTTP ' || coalesce(r.status_code::text, '?')), 300),
+           -- the WhatsApp message id, so the webhook can say "delivered"
+           external_id = case
+             when left(btrim(coalesce(r.content, '')), 1) = '{'
+              then nullif(r.content::jsonb->>'id', '')
+             else null
+           end
       from net._http_response r
      where d.request_id = r.id
        and d.status = 'queued'
