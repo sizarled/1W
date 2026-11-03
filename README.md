@@ -1139,8 +1139,28 @@ spends the state (`oauth_state_take`), exchanges the code for a token, reads the
 verified row (`oauth_identity_save`) → the page `postMessage`s the dashboard and closes itself.
 The token stays in the database; the browser only ever sees the row's handle.
 
-If the provider answers with an error, the page says it in one sentence, the dashboard shows the
-same sentence in a toast, and the pending row stays until it expires in 20 minutes.
+If the provider answers with an error, the page says it in one sentence — quoting what the
+provider itself replied — the dashboard shows the same sentence in a toast, and the pending row
+stays until it expires in 20 minutes.
+
+That quote is a diagnostic. Start a link, then open the callback by hand with a made-up code:
+
+```bash
+curl -s "https://vtbqbhuywdhnvitbcsfy.supabase.co/functions/v1/oauth-link/callback?code=PROBE&state=<the state from the pending row>"
+```
+
+| It answers | It means |
+| --- | --- |
+| `invalid_grant` | the client id, the client secret **and** the redirect URI are all accepted — only a human is missing |
+| `invalid_client` | the secret is wrong (or the app belongs to another project) |
+| `redirect_uri_mismatch` | the console does not hold that exact callback URL |
+| `taken` | that account is already linked to another member |
+
+The Google app registered for this deployment lives in project `world-513621`, client
+`1064454656570-sau2tuji464dfd64lm0jl6iau4ml6pdk` — public by design, it travels in every
+authorize URL. The secret is **only** in `site_secrets.google_client_secret`; if it is ever
+pasted anywhere else, rotate it in **Clients → your client → Reset secret** and update that row
+with one `insert … on conflict (key) do update`.
 
 ### Server surface
 

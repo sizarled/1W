@@ -192,7 +192,12 @@ Deno.serve(async (request) => {
 
   const access = String(token.access_token ?? "");
   if (!access) {
-    return page("Not linked", SAY.token, false, who);
+    // The provider's own words, so `invalid_client` (wrong secret) and
+    // `redirect_uri_mismatch` (wrong URL) are told apart at a glance.
+    const code = String(token.error ?? "").trim();
+    const why = String(token.error_description ?? "").trim();
+    const seen = [code, why].filter(Boolean).join(" — ").slice(0, 180);
+    return page("Not linked", seen ? `${SAY.token} (${seen})` : SAY.token, false, who);
   }
 
   // 4. token → profile
