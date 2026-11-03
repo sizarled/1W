@@ -104,6 +104,31 @@ function payload() {
   };
 }
 
+const PROVIDER_KEYS = ["telegram", "whatsapp", "google", "facebook", "x", "pinterest", "reddit", "tiktok"];
+
+function accountPayload() {
+  const identities = scenario.identities || [];
+  return {
+    ok: true,
+    member: {
+      member_id: MEMBER.member_id,
+      username: MEMBER.username,
+      email: MEMBER.email,
+      phone_number: MEMBER.phone_number,
+      status: scenario.status || "active",
+      created_at: MEMBER.created_at,
+    },
+    security: {
+      email_locked: true,
+      recovery_issued_at: null,
+      recovery_expires_at: null,
+      last_channel: null,
+      linked: identities.filter((row) => row.status === "verified").length,
+    },
+    identities,
+  };
+}
+
 function stubFetch(url, opts = {}) {
   const href = String(url);
   calls.push(href);
@@ -114,6 +139,44 @@ function stubFetch(url, opts = {}) {
     if (scenario.requestFails) return reply({ ok: false, error: "permanent" });
     scenario.court = { active: { id: "k1", case_code: "CRT-558104", reason: "Payment fraud", status: "requested", scheduled_at: null, decision: null }, history: [] };
     return reply({ ok: true, case: { case_code: "CRT-558104", status: "requested", scheduled_at: null } });
+  }
+  if (href.includes("/rpc/member_account")) return reply(accountPayload());
+  if (href.includes("/rpc/member_change_password")) {
+    if (scenario.passwordFails) return reply({ ok: false, error: "current" });
+    return reply({ ok: true, closed_sessions: 2 });
+  }
+  if (href.includes("/rpc/member_identity_start")) {
+    if (body.p_provider === "telegram") {
+      return reply({
+        ok: true,
+        provider: "telegram",
+        status: "pending",
+        code: "TGCODE1234",
+        url: "https://t.me/cineaura2bot?start=TGCODE1234",
+        expires_at: new Date(NOW + 12e5).toISOString(),
+      });
+    }
+    if (body.p_provider === "whatsapp") {
+      return reply({
+        ok: true,
+        provider: "whatsapp",
+        status: "pending",
+        masked_phone: "+2126••••3710",
+        expires_at: new Date(NOW + 12e5).toISOString(),
+      });
+    }
+    return reply({ ok: false, error: "oauth", provider: body.p_provider });
+  }
+  if (href.includes("/rpc/member_identity_verify")) {
+    scenario.identities = [
+      ...(scenario.identities || []).filter((row) => row.provider !== body.p_provider),
+      { provider: body.p_provider, status: "verified", handle: "@linked", verified_at: new Date().toISOString(), pending_until: null },
+    ];
+    return reply({ ok: true, provider: body.p_provider, status: "verified" });
+  }
+  if (href.includes("/rpc/member_identity_unlink")) {
+    scenario.identities = (scenario.identities || []).filter((row) => row.provider !== body.p_provider);
+    return reply({ ok: true, provider: body.p_provider });
   }
   if (href.includes("/rpc/member_code_action")) return reply({ ok: true });
   if (href.includes("/rpc/member_device_delete")) return reply({ ok: true });
@@ -477,6 +540,122 @@ function expect(name, condition, detail = "") {
 
   expect("active: no errors", p.errors.length === 0, p.errors.join(" | "));
   report.pass5 = p.qs("[data-view]")?.dataset.view || "";
+}
+
+/* ------------------------------------------------------------------ */
+/* pass 6 — account settings                                           */
+/* ------------------------------------------------------------------ */
+{
+  scenario = { status: "active", identities: [] };
+  calls.length = 0;
+  const a = await boot("account");
+  a.click(a.qs('[data-nav] [data-goto="settings-account"]'));
+  await a.wait(80);
+
+  expect("account: the view renders", Boolean(a.qs('[data-view="settings-account"]')));
+  expect("account: password form asks three times", a.qsa("[data-acct-password] input").length === 3, String(a.qsa("[data-acct-password] input").length));
+  expect("account: current password is required", Boolean(a.qs('[data-acct-password] input[name="current"]')));
+  expect("account: email is not editable", a.qsa('[data-view="settings-account"] input[type="email"]').length === 0);
+  expect("account: email marked fixed", /fixed/i.test(a.text('[data-view="settings-account"]')));
+  expect("account: no change-email wording", !/change email/i.test(a.text('[data-view="settings-account"]')));
+
+  const rows = a.qsa("[data-identity]").map((row) => row.dataset.identity);
+  expect("account: eight networks", rows.length === 8, rows.join(","));
+  expect("account: the eight requested networks", PROVIDER_KEYS.every((key) => rows.includes(key)), rows.join(","));
+  expect("account: brand glyphs drawn", a.qsa('[data-identity="telegram"] .dsh-brand svg').length === 1);
+  expect("account: oauth cannot pretend", a.qs('[data-identity="google"] button')?.disabled === true);
+  expect("account: chats can connect", a.qs('[data-identity-start="telegram"]') !== null && a.qs('[data-identity-start="whatsapp"]') !== null);
+  expect("account: unlinked says email only", /email only|None yet/i.test(a.text('[data-view="settings-account"]')));
+
+  // telegram: the deep link and the code
+  calls.length = 0;
+  a.click(a.qs('[data-identity-start="telegram"]'));
+  await a.wait(200);
+  expect("telegram: start is called", calls.some((c) => c.includes("member_identity_start")));
+  const panel = a.qs("[data-identity-panel]");
+  expect("telegram: a panel explains the step", Boolean(panel));
+  expect("telegram: deep link carries the code", (panel?.querySelector("a")?.getAttribute("href") || "") === "https://t.me/cineaura2bot?start=TGCODE1234", panel?.querySelector("a")?.getAttribute("href") || "");
+  expect("telegram: the code is on screen", /TGCODE1234/.test(panel?.textContent || ""));
+  a.window.close();
+
+  // whatsapp: the 6-character form
+  scenario = { status: "active", identities: [] };
+  const w = await boot("account-whatsapp");
+  w.click(w.qs('[data-nav] [data-goto="settings-account"]'));
+  await w.wait(80);
+  w.click(w.qs('[data-identity-start="whatsapp"]'));
+  await w.wait(200);
+  const waForm = w.qs("[data-identity-verify]");
+  expect("whatsapp: a code box appears", Boolean(waForm));
+  expect("whatsapp: it says where the code went", /\+2126/.test(w.qs("[data-identity-panel]")?.textContent || ""));
+  calls.length = 0;
+  w.qs('[data-identity-verify] input[name="code"]').value = "abc123";
+  w.qs("[data-identity-verify]").dispatchEvent(new w.window.Event("submit", { bubbles: true, cancelable: true }));
+  await w.wait(200);
+  expect("whatsapp: the code is sent upper-cased", calls.some((c) => c.includes("member_identity_verify")));
+  expect("whatsapp: the row turns linked", /Linked/.test(w.text('[data-identity="whatsapp"]')));
+  expect("whatsapp: a Disconnect button appears", Boolean(w.qs('[data-identity-unlink="whatsapp"]')));
+  expect("whatsapp: the panel is gone", !w.qs("[data-identity-panel]"));
+  expect("whatsapp: no errors", w.errors.length === 0, w.errors.join(" | "));
+
+  // unlinking a verified row
+  calls.length = 0;
+  w.click(w.qs('[data-identity-unlink="whatsapp"]'));
+  await w.wait(200);
+  expect("unlink: the call is made", calls.some((c) => c.includes("member_identity_unlink")));
+  expect("unlink: the row is back to Connect", Boolean(w.qs('[data-identity-start="whatsapp"]')));
+  w.window.close();
+
+  // the password: a mismatch never reaches the server
+  scenario = { status: "active", identities: [], passwordFails: false };
+  const pw = await boot("account-password");
+  pw.click(pw.qs('[data-nav] [data-goto="settings-account"]'));
+  await pw.wait(80);
+  const form = pw.qs("[data-acct-password]");
+  form.querySelector('[name="current"]').value = "old-password";
+  form.querySelector('[name="password"]').value = "new-password-1";
+  form.querySelector('[name="confirm"]').value = "new-password-2";
+  calls.length = 0;
+  form.dispatchEvent(new pw.window.Event("submit", { bubbles: true, cancelable: true }));
+  await pw.wait(120);
+  expect("password: mismatch is caught here", !calls.some((c) => c.includes("member_change_password")));
+  expect("password: mismatch says why", /not the same/i.test(pw.text("[data-acct-error]")), pw.text("[data-acct-error]"));
+
+  form.querySelector('[name="confirm"]').value = "new-password-1";
+  form.dispatchEvent(new pw.window.Event("submit", { bubbles: true, cancelable: true }));
+  await pw.wait(200);
+  expect("password: it is sent", calls.some((c) => c.includes("member_change_password")));
+  expect("password: the fields are cleared", form.querySelector('[name="password"]').value === "");
+  expect("password: the closed sessions are named", /2 other sessions/i.test(pw.document.body.textContent));
+  pw.window.close();
+
+  // a wrong current password is reported, not swallowed
+  scenario = { status: "active", identities: [], passwordFails: true };
+  const bad = await boot("account-password-bad");
+  bad.click(bad.qs('[data-nav] [data-goto="settings-account"]'));
+  await bad.wait(80);
+  const badForm = bad.qs("[data-acct-password]");
+  badForm.querySelector('[name="current"]').value = "wrong";
+  badForm.querySelector('[name="password"]').value = "new-password-1";
+  badForm.querySelector('[name="confirm"]').value = "new-password-1";
+  badForm.dispatchEvent(new bad.window.Event("submit", { bubbles: true, cancelable: true }));
+  await bad.wait(200);
+  expect("password refused: it says which field", /current password/i.test(bad.text("[data-acct-error]")), bad.text("[data-acct-error]"));
+  bad.window.close();
+
+  // an already linked account says so on arrival
+  scenario = {
+    status: "active",
+    identities: [{ provider: "telegram", status: "verified", handle: "@member_chat", verified_at: new Date().toISOString(), pending_until: null }],
+  };
+  const linked = await boot("account-linked");
+  linked.click(linked.qs('[data-nav] [data-goto="settings-account"]'));
+  await linked.wait(80);
+  expect("linked: the row reads Linked", /Linked/.test(linked.text('[data-identity="telegram"]')));
+  expect("linked: the count is on the card", /1 linked/i.test(linked.text('[data-view="settings-account"]')));
+  expect("linked: it says codes arrive there", /recovery code/i.test(linked.text('[data-identity="telegram"]')));
+  expect("linked: no errors", linked.errors.length === 0, linked.errors.join(" | "));
+  linked.window.close();
 }
 
 /* ------------------------------------------------------------------ */

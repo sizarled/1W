@@ -582,7 +582,7 @@ close the account:
 | --- | --- | --- |
 | Email | the member's email, sent by a Google Apps Script web app | `gs_mail_url`, `gs_mail_token`, optional `gs_mail_cc` |
 | WhatsApp | the member's phone, through Meta **WhatsApp Cloud API** — the same web app posts it | `gs_mail_url`, `gs_mail_token`, optional `whatsapp_cc` |
-| Telegram | `sendMessage` to the member's chat, or to the site's chat | `telegram_bot_token`, `telegram_chat_id` |
+| Telegram | `sendMessage` to the chat the member **linked** (or `members.telegram_chat_id`) | `telegram_bot_token` — see the bot below |
 
 WhatsApp is dialled, not mailed: `whatsapp_number(phone, country, default_cc)` turns whatever
 was typed — `0668313718`, `+212 668-313718`, `00212668313718` — into E.164 digits
@@ -722,18 +722,38 @@ unlimited user-initiated conversations and open up to **250 new conversations pe
 `whatsapp_business_messaging` is what a provider messaging *on behalf of other businesses* needs —
 a single business sending to its own members does not.
 
-The Telegram bot is **Cineaura** (`@cineaura2bot`). Its token is in `site_secrets`; the chat
-id is captured the first time somebody writes to the bot:
+The Telegram bot is **Cineaura** (`@cineaura2bot`). It is an edge function, not a polling loop,
+and it links a chat to an account instead of to the site:
+
+```bash
+supabase functions deploy telegram-bot --no-verify-jwt
+supabase secrets set TELEGRAM_BOT_TOKEN=<token from @BotFather> \
+                     TELEGRAM_WEBHOOK_SECRET=<openssl rand -hex 16>
+```
 
 ```sql
--- the database can read Telegram itself
-select net.http_get(url := 'https://api.telegram.org/bot'
-  || public.site_secret('telegram_bot_token') || '/getUpdates');
+-- once: point Telegram at the function, and drop whatever was queued while it was offline
+select net.http_post(url := 'https://api.telegram.org/bot'
+  || public.site_secret('telegram_bot_token') || '/setWebhook',
+  body := jsonb_build_object(
+    'url', 'https://<project>.supabase.co/functions/v1/telegram-bot',
+    'secret_token', '<the same TELEGRAM_WEBHOOK_SECRET>',
+    'allowed_updates', jsonb_build_array('message'),
+    'drop_pending_updates', true));
 select content::text from net._http_response order by id desc limit 1;
--- then, for the chat that comes back:
-insert into public.site_secrets (key, value) values ('telegram_chat_id', '123456789')
-on conflict (key) do update set value = excluded.value, updated_at = now();
 ```
+
+The member presses **Connect** beside Telegram in **Account settings**, and the panel hands them
+`https://t.me/cineaura2bot?start=<code>`. `/start <code>` writes the chat id to
+`member_identities` (and to `members.telegram_chat_id`), so the bot answers “Linked” without the
+site ever seeing the chat. `/stop` unlinks it again, `/id` prints the chat id for support, and
+anything else gets help in Arabic and English. Every request must carry
+`X-Telegram-Bot-Api-Secret-Token`, so a stranger who learns the function URL can do nothing.
+
+While a webhook is registered `getUpdates` answers `409 Conflict` — that is why the old polling
+recipe is gone. Read the **edge function logs** instead (`supabase functions logs telegram-bot`).
+`telegram_chat_id` in `site_secrets` is no longer a fallback: a member's code must never land in
+the operator's chat. `telegram_bot_username` is optional (it defaults to `cineaura2bot`).
 
 `gs_mail_cc` is an optional copy — the operator's own address, so a test recovery can be
 read while the script is still new. Remove the row when the mailer is trusted:
@@ -742,10 +762,12 @@ read while the script is still new. Remove the row when the mailer is trusted:
 delete from public.site_secrets where key = 'gs_mail_cc';
 ```
 
-A member can carry their own Telegram chat in `members.telegram_chat_id`, which wins over the
-site default. If no channel is configured the code is still issued and every `channels` flag
-(`email`, `whatsapp`, `telegram`) comes back `false`, so the page says so instead of
-pretending.
+Telegram and WhatsApp reach the **member's own** chat: `recovery_send()` reads
+`members.telegram_chat_id` / `member_telegram_chat(member)` and
+`member_whatsapp_number(member)` (falling back to the sign-up phone), and nothing site-wide.
+`members.recovery_last_channel` records which channels actually took the code. If none is
+configured the code is still issued and every `channels` flag (`email`, `whatsapp`, `telegram`)
+comes back `false`, so the page says so instead of pretending.
 
 ### Functions
 
@@ -758,7 +780,7 @@ pretending.
 | `recovery_device(name, phone, email, view_code, device, password, ip, agent)` | The no-code path: the device's **original** code only, refused with `other_device` / `unknown_device` |
 | `recovery_device_status(name, phone, email, device)` | The accounts this browser holds original codes for, with a verdict per field, for the "check this device" button; nothing else leaves the server |
 | `recovery_device_key(text)` / `recovery_name_key(text)` | The device and the name in one comparable shape |
-| `recovery_send(member, code)` | Builds the email, the WhatsApp message and the Telegram message and posts them with `pg_net`; answers `{email, whatsapp, telegram}` (internal) |
+| `recovery_send(member, code)` | Builds the email, the WhatsApp message and the Telegram message and posts them with `pg_net`, each to the member's own address / number / chat; answers `{email, whatsapp, telegram}` (internal) |
 | `whatsapp_number(phone, country, default_cc)` | The phone as E.164 digits, or `null` when it cannot be read |
 | `delivery_probe()` / `delivery_probe_read()` | Ask the web app which channels it holds; store the answer in `delivery_channels` (internal) |
 | `delivery_ready(channel)` | Is the web app configured for this channel? Optimistic until the first heartbeat (internal) |
@@ -930,13 +952,54 @@ server-side — hiding the link is a courtesy, not the permission.
   **Open**, filtered by type and by date; movie and series titles are resolved from TMDB.
 - **Website settings** — language, country and theme, written to the same local keys the rest
   of the site reads, plus the skin gallery.
+- **Account settings** — the identity card (member id, username and email locked, phone,
+  status, plan), a real **Change password** form (current + new + repeat), and the recovery
+  accounts — Telegram, WhatsApp, Google, Facebook, X, Pinterest, Reddit and TikTok. See below.
 
 **Staged — the layout and copy are in place, the aggregation comes next**
 
 Payments (the wallet, the 100:1 calculator, the payout form and the status chain are drawn,
-no transfer row is written yet), Analytics, Creator, Publisher, Advertiser, Profile settings,
-Account settings and Platforms. Each one states what it will do instead of pretending to have
-data.
+no transfer row is written yet), Analytics, Creator, Publisher, Advertiser and Profile settings.
+Each one states what it will do instead of pretending to have data.
+
+### Account settings — the password, and where a code can find you
+
+The email on an account **cannot be changed** from the dashboard: it is the address the member
+signed up with and the one `recovery_start()` matches on, so a screen that renamed it would only
+break the recovery page. It is printed with a `fixed` chip and the card says so. What *can* be
+changed is the password, and it needs the current one:
+
+| Field | Rule |
+| --- | --- |
+| Current password | compared against the stored bcrypt hash — a wrong one answers `current` |
+| New password | 8–72 characters, must differ from the old one (`same`) and be typed twice |
+| After it | every other session is revoked (`closed_sessions` says how many), this one survives |
+
+The second card is **Recovery accounts**. Linking a network is what makes a recovery code
+reachable without the mailbox, which is the point: eight rows, one per network the member asked
+for, each showing the state (`Not connected` / `Waiting for the code` / `Linked · @handle`) and a
+single button.
+
+| Network | How it links | Delivers a code |
+| --- | --- | --- |
+| Telegram | a 10-character code inside `https://t.me/cineaura2bot?start=<code>`, verified by the bot | yes — `sendMessage` |
+| WhatsApp | a 6-character code sent to the member's own number, typed back into the row | yes, once the Cloud API token is in `site_secrets` |
+| Google, Facebook, X, Pinterest, Reddit, TikTok | each needs an **OAuth app** (client id, secret, redirect URI) | not yet |
+
+The last six are honest about it: `member_identity_start()` answers `error: oauth` and the row's
+button is disabled with a tooltip saying what is missing, instead of opening a dead popup. No
+credential ever reaches the browser — the page holds a session token and nothing else.
+
+A pending link lives 20 minutes. Telegram's panel prints the code and the deep link, and polls
+`member_account()` for about a minute so the row turns **Linked** by itself once the member
+presses Start; WhatsApp's panel is the code box. **Disconnect** is offered on verified rows only
+(`member_identity_unlink`), and the badge on the card counts what is really linked. The note at
+the top of the card spells out the consequence: *the recovery code is sent to this account too*.
+
+`member_identities` keeps one row per member and provider (`unique (member_id, provider)`) with
+`status`, `handle`, `external_id`, `link_code` and `link_expires_at`; the OAuth columns
+(`access_token`, `refresh_token`) are there for the day the apps exist. RLS is on with no
+policies — the browser only ever sees what `member_account()` chooses to return.
 
 ### Server surface
 
@@ -949,6 +1012,12 @@ data.
 | `member_notify_set(token, source, enabled)` | per-section switch; `messages` and `court` return `locked` |
 | `member_notify_read(token, id)` | marks one notification read |
 | `member_list_remove(token, list_id)` | drops a favorites / later / completed row |
+| `member_account(token)` | identity, security flags and the linked identities — the Account settings card |
+| `member_change_password(token, current, password)` | the current password is required; every other session is revoked |
+| `member_identity_start(token, provider)` | mints the link: Telegram's deep link + code, WhatsApp's 6-character code, `oauth` for the six networks that need an app |
+| `member_identity_verify(token, provider, code)` | verifies the WhatsApp code; Telegram is verified by the bot, so it answers `use_bot` |
+| `member_identity_unlink(token, provider)` | drops a verified row |
+| `telegram_identity_link(code, chat, username)` / `telegram_identity_unlink(chat)` | what the bot calls — the only writers of a chat id |
 | `member_court_request(token)` | banned, non-permanent accounts ask for a trial |
 | `member_court_history(token)` | every case of the caller, for `court.html` |
 | `member_activation_state(token)` | what `activated.html` may offer: `mode` (`activate` / `choose` / `blocked`), `first_activation`, `can_reactivate`, `can_upgrade`, `upgrade_targets`, `prices`, `durations`, `ad_url`, profile, 30-day deadline |
@@ -1041,7 +1110,7 @@ returns the caller's cases.
 ### Tests
 
 ```bash
-node tools/dashboard-smoke.mjs   # the five gates, rail, popover, codes, sections, Unlock now
+node tools/dashboard-smoke.mjs   # 140 checks: the five gates, rail, popover, codes, sections, Unlock now, Account settings
 node tools/sidebar-smoke.mjs     # 91 checks: the edge, the pin, Escape, the mobile drawer, the dashboard menu
 node tools/court-smoke.mjs       # 115 checks: the four steps, uploads, both doors, the court room
 node tools/iptv-smoke.mjs        # 43 checks: the playlists, the groups, the page, the deep links
@@ -1055,7 +1124,11 @@ five states: inactive (activation link with the member id, no rail, no menu), ba
 request → requested), scheduled (date, `court.html?id=…`, absence warning), upheld (closed,
 log out only) and active (12 rail items, drag-enabled rail, sidebar, overview numbers, the
 popover's filters and both paths, the two locked switches, the code generator, the devices
-tab and every section rendering). `court-smoke.mjs` covers the activation page as a guest, on a first activation (request sent,
+tab and every section rendering). Its last passes walk **Account settings**: three password
+boxes and no email editor, the eight networks with the six OAuth rows disabled, Telegram's deep
+link carrying the code, WhatsApp's code box verified and the row unlinked again, a password
+mismatch that never leaves the browser, a wrong current password that says which field, and an
+already-linked chat that reads **Linked · @handle**. `court-smoke.mjs` covers the activation page as a guest, on a first activation (request sent,
 form closed), after activation while active (**Active now**, upgrade link with the member id),
 after activation while expired (re-activation request → “Request sent”), a paid plan that was
 never activated (no wizard, the doors) and while banned (no doors, trial links), plus the court
@@ -1458,8 +1531,9 @@ assets/js/rest.js           recovery controller (recovery_start/verify/reset/lin
 assets/js/device.js         the one device id (MAC), shared by wizard, player and recovery
 tools/apps-script/recovery-delivery.gs  the Google Apps Script: email, WhatsApp, Telegram
 supabase/functions/whatsapp-webhook/    the edge function Meta calls: verify, statuses, inbound
+supabase/functions/telegram-bot/        the bot's webhook: /start <code> links a chat, /stop unlinks
 assets/css/dashboard.css    app shell: header rail, sidebar, gates, section views
-assets/js/dashboard.js      dashboard controller (member_dashboard + code/notify/court actions)
+assets/js/dashboard.js      dashboard controller (member_dashboard + code/notify/court/account actions)
 assets/js/activated.js      activation wizard (profile → viewing code → ad gate → activate), reactivation, upgrade
 assets/js/court.js          court room page (member_court_history)
 tools/build-pages.mjs       regenerates the placeholder pages

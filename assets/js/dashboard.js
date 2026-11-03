@@ -33,6 +33,7 @@ import { hydrateIcons, icon } from "./icons.js";
 import { toast } from "./ui.js";
 import { setMember, signOut, sessionToken, clearSessionToken } from "./session.js";
 import { createEdgeRail } from "./edge.js";
+import { brand } from "./brands.js";
 
 /* ================================================================== */
 /* vocabulary                                                          */
@@ -104,8 +105,25 @@ const VIEW_META = {
   "settings-platforms": ["Platforms", "Connect the services your account publishes to."],
 };
 
+/* Account settings — the networks a member can link, and what each one can do.
+   `chat` providers can really carry a recovery code; `oauth` ones need an OAuth
+   app per network and say so instead of pretending to connect. */
+const IDENTITY_PROVIDERS = [
+  { key: "telegram", label: "Telegram", kind: "chat", text: "The recovery code arrives in a chat you control." },
+  { key: "whatsapp", label: "WhatsApp", kind: "chat", text: "Verified by a 6-character code sent to your number." },
+  { key: "google", label: "Google", kind: "oauth", text: "Sign-in with Google." },
+  { key: "facebook", label: "Facebook", kind: "oauth", text: "Sign-in with Facebook." },
+  { key: "x", label: "X", kind: "oauth", text: "Sign-in with X." },
+  { key: "pinterest", label: "Pinterest", kind: "oauth", text: "Sign-in with Pinterest." },
+  { key: "reddit", label: "Reddit", kind: "oauth", text: "Sign-in with Reddit." },
+  { key: "tiktok", label: "TikTok", kind: "oauth", text: "Sign-in with TikTok." },
+];
+
 const state = {
   data: null,
+  account: null,
+  pending: null,
+  poll: 0,
   view: "overview",
   popFilter: "hour",
   popOpen: false,
@@ -147,6 +165,7 @@ export async function initDashboard() {
 
   state.data = data;
   if (data.member) setMember(data.member);
+  state.account = await loadAccount();
 
   paintIdentity();
   paintSideState();
@@ -168,8 +187,15 @@ async function reload() {
     return;
   }
   state.data = data;
+  state.account = await loadAccount();
   paintIdentity();
   paintGate();
+}
+
+/** The account card: identity, security and the linked recovery accounts. */
+async function loadAccount() {
+  const account = await rpc("member_account", { p_token: token }).catch(() => null);
+  return account && account.ok === true ? account : null;
 }
 
 /* ================================================================== */
@@ -1521,28 +1547,185 @@ function settingsProfileView() {
 
 function settingsAccountView() {
   const member = state.data.member || {};
+  const account = state.account || {};
+  const identity = account.member || {};
+  const security = account.security || {};
+  const linked = Array.isArray(account.identities) ? account.identities : [];
+  const byKey = new Map(linked.map((row) => [row.provider, row]));
+  const verified = linked.filter((row) => row.status === "verified");
+  const membership = (state.data.overview || {}).membership || member.membership || "free";
+
+  const recoveryChannels = ["email", ...verified.map((row) => labelForIdentity(row.provider))];
+
   return `
+    ${
+      state.account
+        ? ""
+        : `<div class="dsh-note" role="status"><i data-icon="info"></i><span>
+             The account card could not be loaded.
+             <button class="dsh-btn dsh-btn--sm" type="button" data-acct-retry>Try again</button>
+           </span></div>`
+    }
+
     <section class="dsh-card">
-      <div class="dsh-card__head"><h2 class="dsh-card__title">Identity</h2></div>
+      <div class="dsh-card__head">
+        <h2 class="dsh-card__title">Identity</h2>
+        <span class="dsh-chip">${esc(cap(member.status || identity.status || "member"))}</span>
+      </div>
       <dl class="dsh-kv">
-        <div><dt>Member ID</dt><dd>${esc(member.member_id || "—")}</dd></div>
-        <div><dt>Username</dt><dd>${esc(member.username || "—")} <span class="dsh-chip" data-tone="off">locked</span></dd></div>
-        <div><dt>Email</dt><dd>${esc(member.email || "—")}</dd></div>
-        <div><dt>Phone</dt><dd>${esc(member.phone_number || "—")}</dd></div>
-        <div><dt>Status</dt><dd>${esc(cap(member.status || ""))}</dd></div>
-        <div><dt>Membership</dt><dd>${esc(cap(member.membership || "free"))}</dd></div>
+        <div><dt>Member ID</dt><dd><b class="dsh-mono">${esc(member.member_id || identity.member_id || "—")}</b></dd></div>
+        <div><dt>Username</dt><dd>${esc(member.username || identity.username || "—")} <span class="dsh-chip" data-tone="off">locked</span></dd></div>
+        <div><dt>Email</dt><dd>${esc(member.email || identity.email || "—")} <span class="dsh-chip" data-tone="off">fixed</span></dd></div>
+        <div><dt>Phone</dt><dd>${esc(member.phone_number || identity.phone_number || "—")}</dd></div>
+        <div><dt>Status</dt><dd>${esc(cap(member.status || identity.status || ""))}</dd></div>
+        <div><dt>Membership</dt><dd>${esc(cap(membership))}</dd></div>
       </dl>
+      <p class="dsh-card__note">
+        The email on the account is the address you signed up with and it cannot be changed here.
+        A recovery code always goes to it — and to every chat you link below.
+      </p>
     </section>
+
     <section class="dsh-card">
       <div class="dsh-card__head"><h2 class="dsh-card__title">Security</h2></div>
+      <form class="dsh-form dsh-form--account" data-acct-password novalidate>
+        <label class="dsh-field">
+          <span>Current password</span>
+          <input class="dsh-input" type="password" name="current" autocomplete="current-password" required />
+        </label>
+        <label class="dsh-field">
+          <span>New password</span>
+          <input class="dsh-input" type="password" name="password" autocomplete="new-password" minlength="8" required />
+        </label>
+        <label class="dsh-field">
+          <span>Repeat it</span>
+          <input class="dsh-input" type="password" name="confirm" autocomplete="new-password" minlength="8" required />
+        </label>
+        <p class="dsh-form__error" data-acct-error role="alert" hidden></p>
+        <div class="dsh-form__actions">
+          <button class="dsh-btn" type="submit"><i data-icon="key"></i>Change password</button>
+          <span class="dsh-form__hint">8 characters or more. Every other signed-in device is signed out.</span>
+        </div>
+      </form>
+
       <div class="dsh-grid dsh-grid--2">
-        <div class="dsh-switch"><span class="dsh-switch__text"><strong>Change password</strong><span>Needs the current password and a new one.</span></span><span class="dsh-chip" data-tone="off">Staged</span></div>
-        <div class="dsh-switch"><span class="dsh-switch__text"><strong>Change email</strong><span>Confirmed from both addresses.</span></span><span class="dsh-chip" data-tone="off">Staged</span></div>
-        <div class="dsh-switch"><span class="dsh-switch__text"><strong>Recovery code</strong><span>One-time code issued at sign-up.</span></span><span class="dsh-chip" data-tone="off">Hashed</span></div>
-        <div class="dsh-switch"><span class="dsh-switch__text"><strong>Upgrade membership</strong><span>Premium, family and creator plans.</span></span><a class="dsh-btn dsh-btn--sm" href="index.html#membership">Upgrade</a></div>
+        <div class="dsh-switch">
+          <span class="dsh-switch__text">
+            <strong>Email</strong>
+            <span>Fixed on the account — it is the address you signed up with.</span>
+          </span>
+          <span class="dsh-chip" data-tone="off">Locked</span>
+        </div>
+        <div class="dsh-switch">
+          <span class="dsh-switch__text">
+            <strong>Recovery code</strong>
+            <span>One-time code, 30 minutes, replaced after every use. Goes to ${esc(recoveryChannels.join(" + "))}.</span>
+          </span>
+          <a class="dsh-btn dsh-btn--sm" href="rest.html"><i data-icon="lock"></i>Recover</a>
+        </div>
+        <div class="dsh-switch">
+          <span class="dsh-switch__text">
+            <strong>Upgrade membership</strong>
+            <span>Premium, family and creator plans.</span>
+          </span>
+          <a class="dsh-btn dsh-btn--sm" href="index.html#membership"><i data-icon="crown"></i>Upgrade</a>
+        </div>
+        <div class="dsh-switch">
+          <span class="dsh-switch__text">
+            <strong>Linked accounts</strong>
+            <span>${verified.length ? `${verified.length} linked — the code also lands there` : "None yet — the code only reaches your email"}</span>
+          </span>
+          <span class="dsh-chip" data-tone="${verified.length ? "on" : "off"}">${verified.length ? `${verified.length} linked` : "Email only"}</span>
+        </div>
       </div>
     </section>
+
+    <section class="dsh-card">
+      <div class="dsh-card__head">
+        <h2 class="dsh-card__title">Recovery accounts</h2>
+        <span class="dsh-chip">${verified.length}/${IDENTITY_PROVIDERS.length} linked</span>
+      </div>
+      <p class="dsh-card__note">
+        Link an account you control and the recovery code reaches it as well as your email — a dead
+        mailbox then costs you nothing. Telegram and WhatsApp deliver today; the rest need an OAuth app.
+      </p>
+      <div class="dsh-grid dsh-grid--2">
+        ${IDENTITY_PROVIDERS.map((provider) => identityRow(provider, byKey.get(provider.key))).join("")}
+      </div>
+      ${pendingPanel()}
+    </section>
   `;
+}
+
+function labelForIdentity(key) {
+  const row = IDENTITY_PROVIDERS.find((provider) => provider.key === key);
+  return row ? row.label : cap(key || "");
+}
+
+/** One network: what it is, what it can do, and one button. */
+function identityRow(provider, row) {
+  const status = row?.status || "off";
+  const canChat = provider.kind === "chat";
+  const handle = row?.handle ? ` · ${esc(row.handle)}` : "";
+  const dot = status === "verified" ? "var(--text)" : status === "pending" ? "var(--muted)" : "var(--faint)";
+  const note =
+    status === "verified"
+      ? `Linked${handle}${canChat ? " — recovery codes arrive here" : ""}`
+      : status === "pending"
+        ? "Waiting for the code"
+        : provider.kind === "oauth"
+          ? `${provider.text} Needs an OAuth app.`
+          : provider.text;
+
+  const action =
+    status === "verified"
+      ? `<button class="dsh-btn dsh-btn--sm dsh-btn--ghost" type="button" data-identity-unlink="${provider.key}">Disconnect</button>`
+      : provider.kind === "oauth"
+        ? `<button class="dsh-btn dsh-btn--sm" type="button" disabled title="Needs an OAuth app (client id + secret)">Unavailable</button>`
+        : `<button class="dsh-btn dsh-btn--sm" type="button" data-identity-start="${provider.key}"><i data-icon="link"></i>Connect</button>`;
+
+  return `<div class="dsh-switch" data-identity="${provider.key}">
+    <span class="dsh-switch__text">
+      <strong>
+        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${dot};margin-right:.45rem"></span>
+        <span class="dsh-brand">${brand(provider.key, "dsh-brand__svg")}</span>${esc(provider.label)}
+      </strong>
+      <span>${note}</span>
+    </span>
+    ${action}
+  </div>`;
+}
+
+/** The instructions for the link that is in flight — a deep link, or a code box. */
+function pendingPanel() {
+  const pending = state.pending;
+  if (!pending) return "";
+
+  if (pending.provider === "telegram") {
+    const bot = String(pending.url || "").replace(/^https:\/\/t\.me\//i, "").split("?")[0] || "the 1World bot";
+    return `<div class="dsh-note" data-identity-panel>
+      <i data-icon="send"></i>
+      <span>
+        <strong>Open the bot and press Start.</strong>
+        <a class="dsh-btn dsh-btn--sm" href="${esc(pending.url)}" target="_blank" rel="noopener">@${esc(bot)}</a>
+        <span class="dsh-pending__code dsh-mono">${esc(pending.code || "")}</span>
+        The link carries this code; the panel updates by itself when the bot answers.
+        <button class="dsh-btn dsh-btn--sm" type="button" data-acct-retry><i data-icon="refresh"></i>Check now</button>
+      </span>
+    </div>`;
+  }
+
+  return `<div class="dsh-note" data-identity-panel>
+    <i data-icon="smartphone"></i>
+    <span>
+      <strong>Code sent to ${esc(pending.masked_phone || "your WhatsApp")}.</strong>
+      <form class="dsh-pending__form" data-identity-verify="whatsapp">
+        <input class="dsh-input dsh-mono" name="code" placeholder="ABC123" maxlength="6" autocomplete="one-time-code" />
+        <button class="dsh-btn dsh-btn--sm" type="submit">Verify</button>
+      </form>
+      <button class="dsh-btn dsh-btn--sm dsh-btn--ghost" type="button" data-acct-retry>Start over</button>
+    </span>
+  </div>`;
 }
 
 function settingsPlatformsView() {
@@ -1900,6 +2083,8 @@ function onChange(event) {
 }
 
 function wireView(key, root) {
+  if (key === "settings-account") wireAccount(root);
+
   const form = qs("[data-code-form]", root);
   if (form) {
     form.addEventListener("submit", (event) => {
@@ -1970,6 +2155,236 @@ function wireView(key, root) {
   }
 
   if (key === "history") enrichHistory(root);
+}
+
+/* ================================================================== */
+/* account settings                                                    */
+/* ================================================================== */
+function wireAccount(root) {
+  const password = qs("[data-acct-password]", root);
+  if (password) {
+    password.addEventListener("submit", (event) => {
+      event.preventDefault();
+      changePassword(password);
+    });
+  }
+
+  qsa("[data-acct-retry]", root).forEach((btn) =>
+    btn.addEventListener("click", () => refreshAccount())
+  );
+
+  qsa("[data-identity-start]", root).forEach((btn) =>
+    btn.addEventListener("click", () => startIdentity(btn.dataset.identityStart, btn))
+  );
+
+  qsa("[data-identity-unlink]", root).forEach((btn) =>
+    btn.addEventListener("click", () => unlinkIdentity(btn.dataset.identityUnlink, btn))
+  );
+
+  qsa("[data-identity-verify]", root).forEach((form) =>
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      verifyIdentity(form.dataset.identityVerify, form);
+    })
+  );
+}
+
+async function changePassword(form) {
+  if (state.busy) return;
+  const data = new FormData(form);
+  const current = String(data.get("current") || "");
+  const next = String(data.get("password") || "");
+  const again = String(data.get("confirm") || "");
+  const error = qs("[data-acct-error]", form);
+  const say = (message) => {
+    if (!error) return;
+    error.hidden = !message;
+    error.textContent = message || "";
+  };
+  say("");
+
+  if (next.length < 8) return say("Use at least 8 characters.");
+  if (next !== again) return say("The two new passwords are not the same.");
+  if (next === current) return say("The new password is the one you are already using.");
+
+  state.busy = true;
+  const button = qs("button[type=submit]", form);
+  if (button) button.disabled = true;
+  const result = await rpc("member_change_password", {
+    p_token: token,
+    p_current: current,
+    p_password: next,
+  }).catch(() => null);
+  state.busy = false;
+  if (button) button.disabled = false;
+
+  if (!result || result.ok !== true) {
+    const why = {
+      current: "That is not your current password.",
+      password: "The new password must be 8–72 characters.",
+      same: "The new password is the old one.",
+      session: "Your session ended — sign in again.",
+    };
+    return say(why[result?.error] || "The password could not be changed.");
+  }
+
+  form.reset();
+  toast({
+    tone: "success",
+    title: "Password changed",
+    message: result.closed_sessions
+      ? `${num(result.closed_sessions)} other session${result.closed_sessions === 1 ? "" : "s"} signed out.`
+      : "No other session was open.",
+  });
+}
+
+async function startIdentity(provider, button) {
+  if (!provider || state.busy) return;
+  state.busy = true;
+  if (button) button.disabled = true;
+  const result = await rpc("member_identity_start", {
+    p_token: token,
+    p_provider: provider,
+  }).catch(() => null);
+  state.busy = false;
+  if (button) button.disabled = false;
+
+  if (!result || result.ok !== true) {
+    const why = {
+      oauth: "This network needs an OAuth app (client id, secret, redirect URI) before it can be linked.",
+      whatsapp_not_configured: "WhatsApp is not configured on this site yet — the Cloud API token has to be added first.",
+      phone: "The phone on your account cannot be read as an international number.",
+      session: "Your session ended — sign in again.",
+      provider: "That network is not known.",
+    };
+    toast({ tone: "error", title: "Connect", message: why[result?.error] || "The account could not be linked." });
+    return;
+  }
+
+  if (provider === "telegram") {
+    state.pending = { provider, url: result.url, code: result.code };
+    toast({
+      tone: "success",
+      title: "One step left",
+      message: "Open the bot and press Start — the code is already in the link.",
+    });
+    setView("settings-account", { silent: true });
+    watchTelegramLink();
+    return;
+  }
+
+  if (provider === "whatsapp") {
+    state.pending = { provider, masked_phone: result.masked_phone };
+    toast({
+      tone: "success",
+      title: "Code sent",
+      message: `Check WhatsApp on ${result.masked_phone} and type the code here.`,
+    });
+    setView("settings-account", { silent: true });
+  }
+}
+
+async function verifyIdentity(provider, form) {
+  if (!provider || state.busy) return;
+  const code = String(new FormData(form).get("code") || "").trim().toUpperCase();
+  if (code.length < 4) {
+    toast({ tone: "error", title: "Verify", message: "Type the code exactly as it arrived." });
+    return;
+  }
+
+  state.busy = true;
+  const button = qs("button[type=submit]", form);
+  if (button) button.disabled = true;
+  const result = await rpc("member_identity_verify", {
+    p_token: token,
+    p_provider: provider,
+    p_code: code,
+  }).catch(() => null);
+  state.busy = false;
+  if (button) button.disabled = false;
+
+  if (!result || result.ok !== true) {
+    const why = {
+      code: "That code is not the one we sent.",
+      expired: "The code expired — start again.",
+      not_started: "Start the link first, then type the code.",
+      session: "Your session ended — sign in again.",
+    };
+    toast({ tone: "error", title: "Verify", message: why[result?.error] || "The code could not be verified." });
+    return;
+  }
+
+  state.pending = null;
+  toast({
+    tone: "success",
+    title: `${labelForIdentity(provider)} linked`,
+    message: "The recovery code also arrives there now.",
+  });
+  await refreshAccount();
+}
+
+async function unlinkIdentity(provider, button) {
+  if (!provider || state.busy) return;
+  state.busy = true;
+  if (button) button.disabled = true;
+  const result = await rpc("member_identity_unlink", { p_token: token, p_provider: provider }).catch(() => null);
+  state.busy = false;
+  if (button) button.disabled = false;
+
+  if (!result || result.ok !== true) {
+    toast({ tone: "error", title: "Disconnect", message: "The account was not disconnected." });
+    return;
+  }
+  state.pending = null;
+  toast({ tone: "info", title: "Disconnected", message: `${labelForIdentity(provider)} no longer receives recovery codes.` });
+  await refreshAccount();
+}
+
+/** Reloads the account card without reloading the whole dashboard. */
+async function refreshAccount() {
+  state.account = await loadAccount();
+  const telegram = (state.account?.identities || []).find(
+    (row) => row.provider === "telegram" && row.status === "verified"
+  );
+  if (telegram && state.pending?.provider === "telegram") {
+    state.pending = null;
+    clearInterval(state.poll);
+    toast({
+      tone: "success",
+      title: "Telegram linked",
+      message: "Recovery codes also arrive in your chat now.",
+    });
+  }
+  if (state.view === "settings-account") setView("settings-account", { silent: true });
+}
+
+/** Watches for the bot, for about a minute, then stops. */
+function watchTelegramLink() {
+  clearInterval(state.poll);
+  let ticks = 0;
+  state.poll = setInterval(async () => {
+    ticks += 1;
+    if (ticks > 12 || state.view !== "settings-account") {
+      clearInterval(state.poll);
+      return;
+    }
+    const account = await loadAccount();
+    if (!account) return;
+    state.account = account;
+    const hit = (account.identities || []).find(
+      (row) => row.provider === "telegram" && row.status === "verified"
+    );
+    if (hit) {
+      clearInterval(state.poll);
+      state.pending = null;
+      toast({
+        tone: "success",
+        title: "Telegram linked",
+        message: "Recovery codes also arrive in your chat now.",
+      });
+    }
+    if (state.view === "settings-account") setView("settings-account", { silent: true });
+  }, 5000);
 }
 
 /* ================================================================== */

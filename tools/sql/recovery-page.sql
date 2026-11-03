@@ -507,12 +507,16 @@ declare
   -- WhatsApp rides the same web app; `whatsapp_url` points it at another one
   v_wa_url     text := coalesce(public.site_secret('whatsapp_url'), public.site_secret('gs_mail_url'));
   v_wa_token   text := coalesce(public.site_secret('whatsapp_token'), public.site_secret('gs_mail_token'));
-  v_wa_to      text := public.whatsapp_number(
-                         p_member.phone_number,
-                         p_member.country,
-                         public.site_secret('whatsapp_cc'));
+  -- the number the member verified in Account settings wins over the one typed
+  -- at sign-up; the sign-up phone is the fallback, not the other way round
+  v_wa_to      text := coalesce(
+                         public.member_whatsapp_number(p_member.id),
+                         public.whatsapp_number(p_member.phone_number, p_member.country,
+                                                public.site_secret('whatsapp_cc')));
   v_bot        text := public.site_secret('telegram_bot_token');
-  v_chat       text := coalesce(nullif(p_member.telegram_chat_id, ''), public.site_secret('telegram_chat_id'));
+  -- only the member's **own** chat: a code for one member must never land in
+  -- the operator's chat, so the site-wide `telegram_chat_id` is not a fallback
+  v_chat       text := coalesce(nullif(p_member.telegram_chat_id, ''), public.member_telegram_chat(p_member.id));
   v_name       text := coalesce(nullif(btrim(p_member.full_name), ''), p_member.username, 'member');
   v_text       text;
   v_wa_text    text;

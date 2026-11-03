@@ -1440,6 +1440,81 @@
   flex: 1;
 }
 
+/* account settings ------------------------------------------------- */
+.dsh-form--account {
+  align-items: start;
+  margin-bottom: 0.9rem;
+}
+
+.dsh-form__error,
+.dsh-form__actions {
+  grid-column: 1 / -1;
+}
+
+.dsh-form__error {
+  margin: 0;
+  padding-left: 0.6rem;
+  border-left: 3px solid var(--line-3);
+  font-size: 0.8rem;
+  color: var(--text);
+}
+
+.dsh-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.dsh-form__hint {
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+.dsh-card__note {
+  margin: 0.15rem 0 0.2rem;
+  max-width: 72ch;
+  font-size: 0.8rem;
+  line-height: 1.65;
+  color: var(--muted);
+}
+
+.dsh-brand {
+  display: inline-flex;
+  vertical-align: -3px;
+  margin-right: 0.4rem;
+  color: var(--text-2);
+}
+
+.dsh-brand__svg {
+  width: 15px;
+  height: 15px;
+}
+
+.dsh-pending__code {
+  display: inline-block;
+  margin: 0 0.35rem;
+  padding: 0.12rem 0.45rem;
+  border: 1px solid var(--line-3);
+  border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.14em;
+  color: var(--text);
+}
+
+.dsh-pending__form {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.45rem 0.5rem 0.2rem 0;
+}
+
+.dsh-pending__form .dsh-input {
+  width: 9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
 .dsh-help {
   margin: 0;
   font-size: 0.72rem;
