@@ -1069,6 +1069,24 @@ curl -s https://vtbqbhuywdhnvitbcsfy.supabase.co/functions/v1/oauth-link/health
    them under *App roles → Testers*). Going public needs App Review of `public_profile` plus
    business verification — that is Meta's queue, not our code.
 
+The app already in use here is **1W**, id `1142180755132298`; that id lives in
+`site_secrets.facebook_client_id` and is public by design (it travels in every authorize URL).
+The one row still missing is `facebook_client_secret` — and it is **not** the token the
+**WhatsApp → API Setup** page offers. That is a *user* access token (type `USER`, scopes
+`whatsapp_business_*`, gone in a day) and it can never finish a login: the exchange in
+`oauth-link` needs the App Secret. Take it from **App settings → Basic → App secret → Show**
+(the account password is asked again), then:
+
+```sql
+insert into public.site_secrets (key, value) values ('facebook_client_secret', '<the secret>')
+on conflict (key) do update set value = excluded.value;
+```
+
+`oauth_ready('facebook')` turns true on its own, so the button appears in `login.html` and in
+**Account settings** at the next load — no deploy, no code. To check from the outside without a
+human, start a sign-in and open the callback by hand with a made-up code: a `token` answer that
+quotes `invalid_client` means the secret is wrong, `invalid_grant` means everything is right.
+
 #### X
 
 1. **developer.x.com → Projects & Apps** → create a project and an app inside it.
