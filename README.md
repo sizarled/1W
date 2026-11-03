@@ -1210,8 +1210,15 @@ session exists, the banner says which state the account is in, and the dashboard
 | `member_oauth_login(ticket, remember, ip, agent)` | spends the ticket and returns `{session, member, restricted}` |
 | `oauth_login_sweep()` | drops the attempts that expired |
 
-`oauth_logins`, `oauth_attempt_take` and `oauth_login_complete` are service role only, so the
-browser can neither mint nor read a ticket — it can only spend the one the function gave it.
+`oauth_attempt_take` and `oauth_login_complete` are **service role only**, so the browser can
+neither mint nor read a ticket — it can only spend the one the function gave it. Of the whole
+OAuth surface exactly three functions answer the anon key: `oauth_login_providers`,
+`member_oauth_login_start` and `member_oauth_login`. The rest — `oauth_config` (which returns a
+client secret), `identity_token`, `oauth_identity_save`, `oauth_state_take`, `oauth_attempt_take`,
+`oauth_login_complete` — are revoked from `public`, `anon` and `authenticated` and granted to
+`service_role`; the block that does it is the last section of `tools/sql/oauth-signin.sql`. Run it
+in any project where a blanket `grant execute on all functions in schema public` ever ran: without
+it, `POST /rest/v1/rpc/oauth_config` with the anon key hands out the Google client secret.
 
 ### Server surface
 

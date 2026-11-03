@@ -347,3 +347,42 @@ begin
   return v_gone;
 end;
 $$;
+
+-- ------------------------------------------------------------------
+-- 6. grants — the browser may start and spend, nothing else
+-- ------------------------------------------------------------------
+/**
+ * Only three of these are called from a page: the button list, the attempt
+ * that mints a state, and the ticket that buys a session. Everything else is
+ * the edge function's, and it asks with the service key.
+ *
+ * `oauth_config` answers with the client secret, `identity_token` answers with
+ * a stored provider token, `oauth_identity_save` writes any identity it is
+ * told to write. Left reachable from the anon key, they are a way to read the
+ * secrets or bind a stranger's account. Revoke first, then grant the one role
+ * that needs them — a project-wide `grant execute` in an earlier install is
+ * exactly how they became public.
+ */
+do $$
+declare
+  r record;
+begin
+  for r in
+    select p.oid::regprocedure as sig
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname in ('oauth_config', 'identity_token', 'oauth_state_take', 'oauth_attempt_take',
+                        'oauth_login_complete', 'oauth_identity_save', 'oauth_authorize_url',
+                        'oauth_query', 'oauth_random', 'oauth_login_sweep', 'oauth_ready',
+                        'oauth_challenge', 'identity_providers_ready', 'site_secret')
+  loop
+    execute format('revoke execute on function %s from public, anon, authenticated', r.sig);
+    execute format('grant execute on function %s to service_role', r.sig);
+  end loop;
+end
+$$;
+
+grant execute on function public.oauth_login_providers()                        to anon, authenticated, service_role;
+grant execute on function public.member_oauth_login_start(text, text, text)     to anon, authenticated, service_role;
+grant execute on function public.member_oauth_login(text, boolean, text, text)  to anon, authenticated, service_role;
