@@ -1247,12 +1247,69 @@ DDL + functions: `tools/sql/creator-public.sql` — **applied**, and exercised o
 the kind constraint widened to seven, `creator_kind_allowed` covering `server` and `cinema`, the
 directory answering with a real creator (`fields` free of empty strings), a creator page by
 `@handle` with its hubs, and a hub view answering `{role: visitor}` for a guest. `tools/creator-smoke.mjs`
-covers it in jsdom — **175 checks** over eleven passes: the directory with no session, typing that
+covers it in jsdom — **249 checks** over fourteen passes: the directory with no session, typing that
 narrows the list, an empty filter that explains itself, a creator page grouped by kind, a hub as a
 visitor, a member subscribing, a guest asked to sign in first, a private hub behind a wrong and then a
 right password, `?section=studio` without a session still gated, the Participants tab (a pending ask,
 approve, the two lists, the ad table, a removal), a member already let in writing a draft and putting
-an ad live, and asking to advertise with its four formats.
+an ad live, asking to advertise with its four formats, a server (its tabs, its management tab, a
+channel with a group and an EPG, a pasted list counted and saved, an Xtream account with its port, and
+a seat count above the level refused), a cinema (a film with TMDB, two qualities, subtitles and their
+languages and the ads flag; an episode with its season and number; a playlist with two picks and a
+backdrop), and the public side of a closed door (the device count, the closed badge, a disabled
+Subscribe button, the qualities, the seats and the ads flag on the card).
+
+### Server and cinema — every door, every seat
+
+Two more sections sit in the rail: **Server** and **Cinema**. A server holds `channel`,
+`channel_list` and `xtream` items (plus videos, podcasts and playlists); a cinema holds `film`,
+`episode` and `playlist`. `creator_kind_allowed` names all seven hub kinds, and
+`member_content.kind` carries the five new item kinds.
+
+Every hub and **every item** now answers the same three doors, by the same rule:
+
+| Door | Who walks in |
+| --- | --- |
+| `public` | everybody except the `excluded` list (member codes, up to 200, on the hub and on each item) |
+| `exclusive` | the `audience` criteria: `requires` (`subscribe`/`follow`), `countries`, `languages`, `level_min`, `wealth_min` — every one that is set must pass |
+| `private` | the hub's **VIP** list, or the password its publisher set (with its own window) |
+
+The owner, the staff, and anyone the VIP list names always see their own. The doors are computed by
+`creator_audience_ok`, `creator_hub_open_to` and `creator_item_open_to`; `creator_hub_access` saves a
+hub's `excluded`, `audience`, `auto_accept` and `max_viewers`; `creator_item_meta` saves the same on one
+item, together with the `meta` each kind needs and its `seats`.
+
+**Simultaneous viewers** are capped by the owner's level — `creator_viewer_limit`: a server and a
+cinema film take **100 × level** (100 at L1, 1000 at L10), a cinema series/episode **1000 × level**
+(1000 → 10000), and the top level (11) has **no limit**. The hub may lower its own number
+(`max_viewers`), a single film or episode may lower it again (`seats`, refused when above the level's
+ceiling), and `creator_hub_view` reports the `cap` that really applies to each item.
+
+**Auto-accept** (`creator_hubs.auto_accept`) is a switch in every management tab: with it off,
+`creator_subscribe` answers `closed`, the hub page disables Subscribe, and
+`creator_hub_view` carries `can_subscribe: false`.
+
+What each kind keeps in `member_content.meta`:
+
+| Kind | `meta` |
+| --- | --- |
+| `channel` | `{ group, epg_url }` |
+| `channel_list` | `{ list_name, source: paste\|url\|file, content, url, epg_url, count }` |
+| `xtream` | `{ host, port, username, password }` |
+| `film` | `{ tmdb, quality: [SD…8K], subtitles, subtitle_langs, ads }` |
+| `episode` | the same, plus `{ season, episode }` |
+| `playlist` | `{ items: [{ id, kind, title }] }` |
+
+DDL + functions: `tools/sql/creator-server-cinema.sql` — **applied**, and exercised on the real
+database: a `server` hub came back as `IDSV100004` with `viewer_limit: 100`; `creator_hub_access`
+refused 5000 viewers above the level's 100, then saved `excluded: ["ID100015"]`, an exclusive rule of
+`{requires: subscribe, countries: [Morocco], level_min: 1}`, `auto_accept: false` and 50 viewers; a
+channel published with `seats: 100` (5000 was refused as `seats`), a channel list with a pasted
+`#EXTM3U` and its EPG, a guest then saw **only** the public channel (the exclusive list stayed shut),
+the excluded member was answered `{locked: true, reason: "excluded"}`, and `creator_subscribe` returned
+`closed`. A `cinema` hub (`IDCN100005`) took a film with `{tmdb, quality: [4K, FHD], subtitles, ads}`,
+an episode with `seats: 900` (1500 refused, the ceiling being 1000) — the owner saw both and the guest
+only the public film. The test hubs, items and sessions were removed afterwards.
 
 ### The six OAuth apps — one checklist each
 

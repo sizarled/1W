@@ -140,6 +140,12 @@ function creatorRow(over = {}) {
     items: 4,
     minutes: 88,
     likes: 9,
+    excluded: [],
+    audience: {},
+    auto_accept: true,
+    max_viewers: null,
+    viewers: 100,
+    viewer_limit: 100,
     joined: new Date(NOW - 40 * 864e5).toISOString(),
     counts: { channel: 1, blog: 1 },
     ...over,
@@ -255,6 +261,33 @@ function stubFetch(url, opts = {}) {
       ? scenario.items.map((entry) => (entry.id === id ? { ...entry, ...row } : entry))
       : [row, ...(scenario.items || [])];
     return reply({ ok: true, row: { id, code: row.code, kind: row.kind, title: row.title, status: row.status, visibility: row.visibility } });
+  }
+
+  if (href.includes("/rpc/creator_hub_access")) {
+    scenario.savedAccess = body;
+    if (scenario.accessError) return reply({ ok: false, error: scenario.accessError, limit: 100 });
+    return reply({
+      ok: true,
+      hub: hub({
+        ...(scenario.hubs || []).find((entry) => entry.id === body.p_hub) || {},
+        id: body.p_hub,
+        excluded: body.p_excluded || [],
+        audience: body.p_audience || {},
+        auto_accept: body.p_auto_accept !== false,
+        max_viewers: body.p_viewers || null,
+        viewers: body.p_viewers || 100,
+      }),
+    });
+  }
+
+  if (href.includes("/rpc/creator_item_meta")) {
+    scenario.savedMeta = body;
+    const cap = scenario.seatCap || 100;
+    if (body.p_seats && body.p_seats > cap) return reply({ ok: false, error: "seats", limit: cap });
+    return reply({
+      ok: true,
+      item: { id: body.p_item, meta: body.p_meta || {}, excluded: body.p_excluded || [], seats: body.p_seats || null, cap },
+    });
   }
 
   if (href.includes("/rpc/creator_item_status")) {
@@ -660,9 +693,9 @@ async function main() {
   calls.length = 0;
   const p = await boot(2, { search: "?section=studio" });
   expect("empty: the shell is shown", !p.hidden("[data-cr-shell]"));
-  expect("empty: five sections in the rail", p.qsa("[data-cr-sections] .cr-section").length === 5, String(p.qsa("[data-cr-sections] .cr-section").length));
+  expect("empty: seven sections in the rail", p.qsa("[data-cr-sections] .cr-section").length === 7, String(p.qsa("[data-cr-sections] .cr-section").length));
   const railText = p.text("[data-cr-sections]");
-  expect("empty: the rail names them", /Studio[\s\S]*Blog[\s\S]*Space[\s\S]*Library[\s\S]*Gallery/.test(railText), railText);
+  expect("empty: the rail names them", /Studio[\s\S]*Blog[\s\S]*Space[\s\S]*Library[\s\S]*Gallery[\s\S]*Server[\s\S]*Cinema/.test(railText), railText);
   expect("empty: the member is in the rail", p.text("[data-cr-name]") === "Youssef El Amrani", p.text("[data-cr-name]"));
   expect("empty: the member code is there", p.text("[data-cr-code]") === "ID100042", p.text("[data-cr-code]"));
   expect("empty: the switcher offers the add option", /Add a studio/i.test(p.text("[data-cr-hub]")), p.text("[data-cr-hub]"));
@@ -1110,6 +1143,273 @@ async function main() {
   expect("ask: with the budget", scenario.sentRequest && scenario.sentRequest.p_budget === 250, JSON.stringify(scenario.sentRequest));
   expect("ask: no errors", c11.errors.length === 0, c11.errors.join(" | "));
   c11.window.close();
+
+  await passServer();
+  await passCinema();
+  await passDoors();
+}
+
+
+/* ------------------------------------------------------------------ */
+/* pass 12 — a server: channels, a pasted list, an Xtream account      */
+/* ------------------------------------------------------------------ */
+async function passServer() {
+  scenario = {
+    hubs: [hub({ id: "hub-srv", kind: "server", name: "Server One", field: "IPTV", viewer_limit: 100, viewers: 100 })],
+    items: [
+      item({ id: "ch-1", kind: "channel", title: "BBC One", status: "published", seats: 100, cap: 100, meta: { group: "News" } }),
+      item({ id: "ch-2", kind: "channel", title: "BBC Two", status: "published", seats: null, cap: 100, meta: { group: "News" } }),
+    ],
+    categories: [],
+    subscribers: [],
+    seatCap: 100,
+  };
+  calls.length = 0;
+  const s = await boot(12, { search: "?section=server" });
+
+  expect("server: the section is there", /Channels[\s\S]*Channel lists[\s\S]*Xtream accounts[\s\S]*Playlists[\s\S]*Server management[\s\S]*Subscribers/.test(s.text("[data-cr-tabs]")), s.text("[data-cr-tabs]"));
+  expect("server: the channels are listed", /BBC One/.test(s.text("[data-cr-view]")));
+  expect("server: the list carries seats", /Seats/.test(s.text("[data-cr-view] thead")), s.text("[data-cr-view] thead"));
+
+  // the management tab
+  s.click(s.qs('[data-cr-tab="settings"]'));
+  await s.wait(220);
+  expect("server: available devices are asked for", Boolean(s.qs("[data-hub-viewers]")));
+  expect("server: the level's ceiling is stated", /100 at once/.test(s.text("[data-cr-view]")), s.text("[data-cr-view]").slice(0, 200));
+  expect("server: the excluded list is offered", Boolean(s.qs('[data-excluded-input="hub"]')));
+  expect("server: subscriptions can be switched off", Boolean(s.qs("[data-hub-auto]")));
+
+  s.change(s.qs("[data-hub-visibility]"), "exclusive");
+  await s.wait(40);
+  expect("server: exclusive reveals the criteria", !s.hidden('[data-aud="hub"]'));
+  expect("server: the criteria are the five", Boolean(s.qs('[data-aud-requires="hub"]')) && Boolean(s.qs('[data-aud-countries="hub"]')) && Boolean(s.qs('[data-aud-languages="hub"]')) && Boolean(s.qs('[data-aud-level="hub"]')) && Boolean(s.qs('[data-aud-wealth="hub"]')));
+  s.type(s.qs('[data-aud-countries="hub"]'), "Morocco, Egypt");
+  s.type(s.qs('[data-excluded-input="hub"]'), "ID100016");
+  s.type(s.qs("[data-hub-viewers]"), "50");
+  calls.length = 0;
+  s.click(s.qs("[data-cr-save-hub]"));
+  await s.wait(280);
+  expect("server: the hub save went out", calls.some((c) => c.includes("creator_hub_save")));
+  expect("server: the access rules followed it", calls.some((c) => c.includes("creator_hub_access")), calls.join(" "));
+  expect("server: the excluded codes travel", (scenario.savedAccess?.p_excluded || []).includes("ID100016"), JSON.stringify(scenario.savedAccess));
+  expect("server: the country rule travels", (scenario.savedAccess?.p_audience?.countries || []).includes("Morocco"), JSON.stringify(scenario.savedAccess));
+  expect("server: the device cap travels", scenario.savedAccess?.p_viewers === 50, JSON.stringify(scenario.savedAccess));
+
+  // a channel with its group and EPG
+  s.click(s.qs("[data-cr-add-toggle]"));
+  await s.wait(40);
+  s.click(s.qs('[data-cr-add="channel"]'));
+  await s.wait(80);
+  expect("channel: a group is asked for", Boolean(s.qs("[data-meta-group]")));
+  expect("channel: an EPG link is asked for", Boolean(s.qs("[data-meta-epg]")));
+  s.type(s.qs("[data-item-title]"), "Sky News");
+  s.type(s.qs("[data-item-media]"), "https://example.com/sky.m3u8");
+  s.type(s.qs("[data-meta-group]"), "News");
+  s.type(s.qs("[data-meta-epg]"), "https://example.com/epg.xml");
+  s.type(s.qs("[data-item-seats]"), "50");
+  calls.length = 0;
+  s.click(s.qs("[data-cr-item-publish]"));
+  await s.wait(320);
+  expect("channel: the item is saved", calls.some((c) => c.includes("creator_item_save")));
+  expect("channel: its details follow the save", calls.some((c) => c.includes("creator_item_meta")), calls.join(" "));
+  expect("channel: the group travels", scenario.savedMeta?.p_meta?.group === "News", JSON.stringify(scenario.savedMeta));
+  expect("channel: the EPG travels", scenario.savedMeta?.p_meta?.epg_url === "https://example.com/epg.xml", JSON.stringify(scenario.savedMeta));
+  expect("channel: the seats travel", scenario.savedMeta?.p_seats === 50, JSON.stringify(scenario.savedMeta));
+
+  // more seats than the level allows
+  s.click(s.qs("[data-cr-add-toggle]"));
+  await s.wait(40);
+  s.click(s.qs('[data-cr-add="channel"]'));
+  await s.wait(80);
+  s.type(s.qs("[data-item-title]"), "Too many seats");
+  s.type(s.qs("[data-item-media]"), "https://example.com/x.m3u8");
+  s.type(s.qs("[data-item-seats]"), "5000");
+  s.click(s.qs("[data-cr-item-publish]"));
+  await s.wait(340);
+  expect("channel: more seats than the level allows is refused", /more seats than this level allows/i.test(s.text("[data-item-state]")), s.text("[data-item-state]"));
+
+  // a pasted channel list
+  s.click(s.qs("[data-cr-add-toggle]"));
+  await s.wait(40);
+  s.click(s.qs('[data-cr-add="channel_list"]'));
+  await s.wait(80);
+  expect("list: a paste box is offered", Boolean(s.qs("[data-meta-content]")));
+  expect("list: a file import is offered", Boolean(s.qs("[data-meta-file]")));
+  expect("list: a list URL is offered", Boolean(s.qs("[data-meta-url]")));
+  expect("list: its own EPG link is offered", Boolean(s.qs("[data-meta-epg]")));
+  s.type(s.qs("[data-item-title]"), "Free channels");
+  s.type(s.qs("[data-meta-content]"), "#EXTM3U\n#EXTINF:-1,BBC One\nhttps://example.com/1.m3u8\n#EXTINF:-1,BBC Two\nhttps://example.com/2.m3u8");
+  await s.wait(60);
+  expect("list: the channels are counted", /2 channels/.test(s.text("[data-meta-count]")), s.text("[data-meta-count]"));
+  s.type(s.qs("[data-meta-url]"), "https://example.com/IPTV-Free.m3u");
+  s.type(s.qs("[data-meta-epg]"), "https://example.com/epg.xml");
+  calls.length = 0;
+  s.click(s.qs("[data-cr-item-publish]"));
+  await s.wait(320);
+  expect("list: it is saved", calls.some((c) => c.includes("creator_item_meta")));
+  expect("list: the count travels", scenario.savedMeta?.p_meta?.count === 2, JSON.stringify(scenario.savedMeta));
+  expect("list: the URL travels", scenario.savedMeta?.p_meta?.url === "https://example.com/IPTV-Free.m3u", JSON.stringify(scenario.savedMeta));
+  expect("list: its source is named", scenario.savedMeta?.p_meta?.source === "paste", JSON.stringify(scenario.savedMeta));
+
+  // an Xtream account
+  s.click(s.qs("[data-cr-add-toggle]"));
+  await s.wait(40);
+  s.click(s.qs('[data-cr-add="xtream"]'));
+  await s.wait(80);
+  expect("xtream: the address is asked for", Boolean(s.qs("[data-meta-host]")));
+  expect("xtream: the port is asked for", Boolean(s.qs("[data-meta-port]")));
+  expect("xtream: the username is asked for", Boolean(s.qs("[data-meta-username]")));
+  expect("xtream: the password is asked for", Boolean(s.qs("[data-meta-password]")));
+  s.type(s.qs("[data-item-title]"), "My panel");
+  s.type(s.qs("[data-meta-host]"), "http://panel.example.com");
+  s.type(s.qs("[data-meta-port]"), "8080");
+  s.type(s.qs("[data-meta-username]"), "user1");
+  s.type(s.qs("[data-meta-password]"), "secret");
+  calls.length = 0;
+  s.click(s.qs("[data-cr-item-publish]"));
+  await s.wait(320);
+  expect("xtream: it is saved", calls.some((c) => c.includes("creator_item_meta")));
+  expect("xtream: the port is a number", scenario.savedMeta?.p_meta?.port === 8080, JSON.stringify(scenario.savedMeta));
+  expect("xtream: the account travels", scenario.savedMeta?.p_meta?.username === "user1" && scenario.savedMeta?.p_meta?.host === "http://panel.example.com", JSON.stringify(scenario.savedMeta));
+  expect("server: no errors", s.errors.length === 0, s.errors.join(" | "));
+  s.window.close();
+}
+
+/* ------------------------------------------------------------------ */
+/* pass 13 — a cinema: a film, an episode, a playlist                  */
+/* ------------------------------------------------------------------ */
+async function passCinema() {
+  scenario = {
+    hubs: [hub({ id: "hub-cin", kind: "cinema", name: "Cinema One", field: "Film", viewer_limit: 100 })],
+    items: [
+      item({ id: "f-1", kind: "film", title: "Dune", status: "published", seats: 100, cap: 100, meta: { tmdb: "603692", quality: ["4K"], subtitles: true, subtitle_langs: ["ar"] } }),
+      item({ id: "e-1", kind: "episode", title: "Dune S01E01", status: "published", seats: null, cap: 100, meta: { season: 1, episode: 1 } }),
+      item({ id: "p-1", kind: "playlist", title: "Weekend", status: "published" }),
+    ],
+    categories: [],
+    subscribers: [],
+    seatCap: 100,
+  };
+  calls.length = 0;
+  const s = await boot(13, { search: "?section=cinema" });
+
+  expect("cinema: the tabs are the cinema's", /Films[\s\S]*Episodes[\s\S]*Playlists[\s\S]*Cinema management[\s\S]*Subscribers/.test(s.text("[data-cr-tabs]")), s.text("[data-cr-tabs]"));
+  expect("cinema: the films are listed", /Dune/.test(s.text("[data-cr-view]")));
+  expect("cinema: the seats column is there", /Seats/.test(s.text("[data-cr-view] thead")));
+
+  s.click(s.qs('[data-cr-tab="settings"]'));
+  await s.wait(220);
+  expect("cinema: the film ceiling is stated", /100 at once/.test(s.text("[data-cr-view]")), s.text("[data-cr-view]").slice(0, 200));
+  expect("cinema: the series ceiling is explained", /1000/.test(s.text("[data-cr-view]")), s.text("[data-cr-view]").slice(0, 300));
+
+  // a film
+  s.click(s.qs("[data-cr-add-toggle]"));
+  await s.wait(40);
+  s.click(s.qs('[data-cr-add="film"]'));
+  await s.wait(80);
+  expect("film: TMDB is asked for", Boolean(s.qs("[data-meta-tmdb]")));
+  expect("film: its link is asked for", Boolean(s.qs("[data-item-media]")));
+  expect("film: the qualities are chips", s.qsa("[data-cr-quality]").length === 6, String(s.qsa("[data-cr-quality]").length));
+  expect("film: subtitles can be switched on", Boolean(s.qs("[data-meta-subs]")));
+  expect("film: ads in the source can be marked", Boolean(s.qs("[data-meta-ads]")));
+  s.type(s.qs("[data-item-title]"), "Dune: Part Two");
+  s.type(s.qs("[data-item-media]"), "https://example.com/dune2.mp4");
+  s.type(s.qs("[data-meta-tmdb]"), "693134");
+  s.click(s.qs('[data-cr-quality="4K"]'));
+  s.click(s.qs('[data-cr-quality="FHD"]'));
+  await s.wait(40);
+  const tick = (node) => {
+    node.checked = true;
+    node.dispatchEvent(new s.window.Event("change", { bubbles: true }));
+  };
+  tick(s.qs("[data-meta-subs]"));
+  tick(s.qs("[data-meta-ads]"));
+  s.type(s.qs("[data-meta-sub-langs]"), "ar, en");
+  calls.length = 0;
+  s.click(s.qs("[data-cr-item-publish]"));
+  await s.wait(340);
+  expect("film: it is saved", calls.some((c) => c.includes("creator_item_meta")), calls.join(" "));
+  expect("film: TMDB travels", scenario.savedMeta?.p_meta?.tmdb === "693134", JSON.stringify(scenario.savedMeta));
+  expect("film: both qualities travel", (scenario.savedMeta?.p_meta?.quality || []).sort().join(",") === "4K,FHD", JSON.stringify(scenario.savedMeta?.p_meta));
+  expect("film: subtitles travel", scenario.savedMeta?.p_meta?.subtitles === true, JSON.stringify(scenario.savedMeta?.p_meta));
+  expect("film: the subtitle languages travel", (scenario.savedMeta?.p_meta?.subtitle_langs || []).join(",") === "ar,en", JSON.stringify(scenario.savedMeta?.p_meta));
+  expect("film: the ads flag travels", scenario.savedMeta?.p_meta?.ads === true, JSON.stringify(scenario.savedMeta?.p_meta));
+
+  // an episode
+  s.click(s.qs("[data-cr-add-toggle]"));
+  await s.wait(40);
+  s.click(s.qs('[data-cr-add="episode"]'));
+  await s.wait(80);
+  expect("episode: a season is asked for", Boolean(s.qs("[data-meta-season]")));
+  expect("episode: an episode number is asked for", Boolean(s.qs("[data-meta-episode]")));
+  s.type(s.qs("[data-item-title]"), "Dune S01E03");
+  s.type(s.qs("[data-item-media]"), "https://example.com/dune-e3.mp4");
+  s.type(s.qs("[data-meta-tmdb]"), "https://www.themoviedb.org/tv/94997");
+  s.type(s.qs("[data-meta-season]"), "1");
+  s.type(s.qs("[data-meta-episode]"), "3");
+  calls.length = 0;
+  s.click(s.qs("[data-cr-item-publish]"));
+  await s.wait(340);
+  expect("episode: it is saved", calls.some((c) => c.includes("creator_item_meta")));
+  expect("episode: the season travels", scenario.savedMeta?.p_meta?.season === 1, JSON.stringify(scenario.savedMeta?.p_meta));
+  expect("episode: the number travels", scenario.savedMeta?.p_meta?.episode === 3, JSON.stringify(scenario.savedMeta?.p_meta));
+
+  // a playlist of films and episodes
+  s.click(s.qs("[data-cr-add-toggle]"));
+  await s.wait(40);
+  s.click(s.qs('[data-cr-add="playlist"]'));
+  await s.wait(240);
+  expect("playlist: the things to pick are offered", s.qsa("[data-meta-picks] option").length >= 2, String(s.qsa("[data-meta-picks] option").length));
+  expect("playlist: a backdrop is asked for", Boolean(s.qs("[data-item-cover]")));
+  expect("playlist: a thumbnail is asked for", Boolean(s.qs("[data-item-thumb]")));
+  s.type(s.qs("[data-item-title]"), "Weekend picks");
+  s.type(s.qs("[data-item-media]"), "https://example.com/picks.mp4");
+  s.type(s.qs("[data-item-cover]"), "https://example.com/backdrop.jpg");
+  const picks = s.qs("[data-meta-picks]");
+  Array.from(picks.options).slice(0, 2).forEach((option) => {
+    option.selected = true;
+  });
+  picks.dispatchEvent(new s.window.Event("change", { bubbles: true }));
+  await s.wait(40);
+  calls.length = 0;
+  s.click(s.qs("[data-cr-item-publish]"));
+  await s.wait(340);
+  expect("playlist: it is saved", calls.some((c) => c.includes("creator_item_meta")));
+  expect("playlist: two things travel", (scenario.savedMeta?.p_meta?.items || []).length === 2, JSON.stringify(scenario.savedMeta?.p_meta));
+  expect("playlist: no errors", s.errors.length === 0, s.errors.join(" | "));
+  s.window.close();
+}
+
+/* ------------------------------------------------------------------ */
+/* pass 14 — the public side of a server or a cinema                  */
+/* ------------------------------------------------------------------ */
+async function passDoors() {
+  scenario = {
+    hubs: [hub({ id: "pub-cin", kind: "cinema", name: "Cinema One" })],
+    hubView: { viewers: 50, viewer_limit: 100, can_subscribe: false, auto_accept: false, visibility: "public" },
+    hubItems: [
+      item({
+        id: "f-9",
+        kind: "film",
+        title: "Dune",
+        visibility: "public",
+        seats: 40,
+        cap: 40,
+        minutes: 155,
+        meta: { quality: ["4K", "FHD"], subtitles: true, subtitle_langs: ["ar"], ads: true },
+      }),
+    ],
+  };
+  const c = await boot(14, { search: "?studio=IDCN100005" });
+  expect("door: the device count is on the hub", /50 at once/.test(c.text(".crp-hubhero")), c.text(".crp-hubhero").slice(0, 240));
+  expect("door: a closed door is announced", Boolean(c.qs("[data-crp-closed]")));
+  expect("door: subscribing is refused", c.qs("[data-crp-sub]")?.disabled === true);
+  expect("door: the film's qualities are shown", /4K/.test(c.text(".crp-items")) && /FHD/.test(c.text(".crp-items")), c.text(".crp-items").slice(0, 200));
+  expect("door: its seats are shown", /40 at once/.test(c.text(".crp-items")), c.text(".crp-items").slice(0, 240));
+  expect("door: subtitles are named", /subtitles/.test(c.text(".crp-items")));
+  expect("door: ads in the source are marked", /carries ads/.test(c.text(".crp-items")));
+  expect("door: no errors", c.errors.length === 0, c.errors.join(" | "));
+  c.window.close();
 }
 
 /* ------------------------------------------------------------------ */

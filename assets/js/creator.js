@@ -38,6 +38,8 @@ const COLS = {
   item: "Title",
   title: "Title",
   vis: "Visibility",
+  seats: "Seats",
+  quality: "Quality",
   cat: "Category",
   minutes: "Minutes",
   likes: "Likes",
@@ -161,6 +163,52 @@ const SECTIONS = [
       { category: true, label: "Category" },
     ],
   },
+  {
+    key: "server",
+    slug: "server",
+    kind: "server",
+    label: "Server",
+    icon: "monitor",
+    noun: "server",
+    caps: true,
+    tabs: [
+      { key: "channels", label: "Channels", type: "list", kind: "channel", cols: ["item", "vis", "seats", "minutes", "likes", "comments", "act"], actions: ["edit", "link", "delete"] },
+      { key: "lists", label: "Channel lists", type: "list", kind: "channel_list", cols: ["item", "vis", "seats", "minutes", "act"], actions: ["edit", "delete"] },
+      { key: "xtream", label: "Xtream accounts", type: "list", kind: "xtream", cols: ["item", "vis", "act"], actions: ["edit", "delete"] },
+      { key: "playlists", label: "Playlists", type: "list", kind: "playlist", cols: ["item", "vis", "minutes", "likes", "act"], actions: ["edit", "link", "delete"] },
+      { key: "participants", label: "Participants", type: "participants" },
+      { key: "settings", label: "Server management", type: "settings" },
+      { key: "subscribers", label: "Subscribers", type: "subscribers" },
+    ],
+    add: [
+      { kind: "channel", label: "Channel" },
+      { kind: "channel_list", label: "Channel list" },
+      { kind: "xtream", label: "Xtream account" },
+      { kind: "playlist", label: "Playlist" },
+    ],
+  },
+  {
+    key: "cinema",
+    slug: "cinema",
+    kind: "cinema",
+    label: "Cinema",
+    icon: "film",
+    noun: "cinema",
+    caps: true,
+    tabs: [
+      { key: "films", label: "Films", type: "list", kind: "film", cols: ["item", "vis", "seats", "minutes", "likes", "comments", "act"], actions: ["edit", "link", "delete"] },
+      { key: "episodes", label: "Episodes", type: "list", kind: "episode", cols: ["item", "vis", "seats", "minutes", "likes", "act"], actions: ["edit", "link", "delete"] },
+      { key: "playlists", label: "Playlists", type: "list", kind: "playlist", cols: ["item", "vis", "minutes", "likes", "act"], actions: ["edit", "link", "delete"] },
+      { key: "participants", label: "Participants", type: "participants" },
+      { key: "settings", label: "Cinema management", type: "settings" },
+      { key: "subscribers", label: "Subscribers", type: "subscribers" },
+    ],
+    add: [
+      { kind: "film", label: "Film" },
+      { kind: "episode", label: "Episode" },
+      { kind: "playlist", label: "Playlist" },
+    ],
+  },
 ];
 
 const KIND_LABEL = {
@@ -173,6 +221,11 @@ const KIND_LABEL = {
   book: "Book",
   document: "Document",
   image: "Image",
+  channel: "Channel",
+  channel_list: "Channel list",
+  xtream: "Xtream account",
+  film: "Film",
+  episode: "Episode",
 };
 
 const KIND_ICON = {
@@ -185,6 +238,11 @@ const KIND_ICON = {
   book: "bookmark",
   document: "file",
   image: "image",
+  channel: "tv",
+  channel_list: "broadcast",
+  xtream: "key",
+  film: "film",
+  episode: "play",
 };
 
 /* which fields an item of each kind asks for */
@@ -198,7 +256,29 @@ const KIND_FIELDS = {
   book: { media: "Ebook link (PDF / EPUB)", body: "Description", words: false },
   document: { media: "File link", body: "Description", words: false },
   image: { media: "Image link", body: "Description", words: false },
+  channel: { media: "Channel link (m3u8 / stream)", body: "Description", words: false },
+  channel_list: { media: "List URL — or paste it below", body: "Notes", words: false },
+  xtream: { media: "", body: "Notes", words: false },
+  film: { media: "", body: "Description", words: false },
+  episode: { media: "Episode link", body: "Description", words: false },
 };
+
+/* the qualities a film or an episode may carry */
+const QUALITIES = ["SD", "HD", "FHD", "2K", "4K", "8K"];
+
+/* what a channel list may be fed with */
+const LIST_SOURCES = [
+  ["paste", "Paste the list"],
+  ["url", "A list URL"],
+  ["file", "An M3U / TXT file"],
+];
+
+/* how an exclusive item lets people in */
+const REQUIRES = [
+  ["", "Anybody inside the criteria"],
+  ["subscribe", "Subscribers only"],
+  ["follow", "Followers only"],
+];
 
 const AGES = [
   ["none", "Everyone"],
@@ -224,6 +304,14 @@ const VISIBILITY = [
   ["private", "Private"],
 ];
 
+const ACCESS_MESSAGES = {
+  code: "One of those member codes is unknown.",
+  audience: "That exclusive rule is not one we know.",
+  viewers: "More viewers than this level allows.",
+  not_found: "That hub is not yours.",
+  seats: "More seats than this level allows.",
+};
+
 const MESSAGES = {
   session: "Your session ended — sign in again.",
   hub: "That hub is not yours, or it is gone.",
@@ -248,6 +336,12 @@ const MESSAGES = {
   password: "This hub has no password yet.",
   expired: "The password window has closed.",
   denied: "Wrong password.",
+  closed: "This hub has closed its door — subscriptions and follows are off.",
+  viewers: "That many viewers is above this level's ceiling.",
+  seats: "That many seats is above this level's ceiling.",
+  code: "One of those member codes is unknown.",
+  audience: "That exclusive rule is not one we know.",
+  own: "This hub is yours already.",
 };
 
 /* ================================================================== */
@@ -301,6 +395,114 @@ function currentHub() {
 }
 
 const visLabel = (v) => ({ public: "Public", exclusive: "Exclusive", private: "Private" }[v] || "Public");
+
+/* ------------------------------------------------------------------ */
+/* the three doors, shared by every hub and every item                */
+/* ------------------------------------------------------------------ */
+/* public   — everybody except the excluded list                      */
+/* exclusive — a subscription or follow, plus country, language,      */
+/*             account level and wealth                               */
+/* private  — the VIP list, or the password its publisher set          */
+
+const splitCodes = (value) =>
+  String(value || "")
+    .split(",")
+    .map((code) => code.trim().toUpperCase())
+    .filter(Boolean);
+
+const splitList = (value) =>
+  String(value || "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+function excludedField(codes, prefix) {
+  const list = Array.isArray(codes) ? codes : [];
+  return `
+    <div class="cr-excluded" data-aud-excluded="${prefix}">
+      <span class="dsh-field__label">Excluded members — comma separated codes</span>
+      <div class="cr-chips" data-excluded-chips>
+        ${
+          list
+            .map(
+              (code) => `<span class="cr-chip-x">${esc(code)}<button type="button" data-cr-excl-remove="${esc(code)}" data-excl-prefix="${prefix}" aria-label="Stop excluding ${esc(code)}"><i data-icon="close"></i></button></span>`
+            )
+            .join("") || '<span class="cr-card__hint">Nobody is excluded.</span>'
+        }
+      </div>
+      <input class="dsh-input" type="text" placeholder="ID100016, ID100015" data-excluded-input="${prefix}" />
+    </div>`;
+}
+
+function audienceFields(audience, prefix, open = false) {
+  const aud = audience && typeof audience === "object" ? audience : {};
+  const requires = String(aud.requires || "");
+  const countries = Array.isArray(aud.countries) ? aud.countries.join(", ") : "";
+  const langs = Array.isArray(aud.languages) ? aud.languages.join(", ") : "";
+  return `
+    <div class="cr-aud" data-aud="${prefix}" ${open ? "" : "hidden"}>
+      <div class="cr-grid3">
+        <label class="dsh-field">
+          <span class="dsh-field__label">Who gets in</span>
+          <select class="dsh-select" data-aud-requires="${prefix}">
+            ${REQUIRES.map(([value, label]) => `<option value="${value}" ${requires === value ? "selected" : ""}>${label}</option>`).join("")}
+          </select>
+        </label>
+        <label class="dsh-field">
+          <span class="dsh-field__label">Countries — comma separated, empty is any</span>
+          <input class="dsh-input" type="text" value="${esc(countries)}" placeholder="Morocco, Egypt" data-aud-countries="${prefix}" />
+        </label>
+        <label class="dsh-field">
+          <span class="dsh-field__label">Languages — comma separated, empty is any</span>
+          <input class="dsh-input" type="text" value="${esc(langs)}" placeholder="ar, fr" data-aud-languages="${prefix}" />
+        </label>
+      </div>
+      <div class="cr-grid2">
+        <label class="dsh-field">
+          <span class="dsh-field__label">Account level at least</span>
+          <input class="dsh-input" type="number" min="0" max="10" value="${esc(String(aud.level_min || 0))}" data-aud-level="${prefix}" />
+        </label>
+        <label class="dsh-field">
+          <span class="dsh-field__label">Wealth — points at least</span>
+          <input class="dsh-input" type="number" min="0" value="${esc(String(aud.wealth_min || 0))}" data-aud-wealth="${prefix}" />
+        </label>
+      </div>
+    </div>`;
+}
+
+function audienceOf(prefix) {
+  const val = (name) => el(`[data-${name}="${prefix}"]`)?.value ?? "";
+  return {
+    requires: val("aud-requires"),
+    countries: splitList(val("aud-countries")),
+    languages: splitList(val("aud-languages")),
+    level_min: Number(val("aud-level") || 0),
+    wealth_min: Number(val("aud-wealth") || 0),
+  };
+}
+
+const audienceIsEmpty = (aud) =>
+  !aud.requires && !aud.countries.length && !aud.languages.length && !aud.level_min && !aud.wealth_min;
+
+function audienceFor(visibility, prefix) {
+  if (visibility !== "exclusive") return {};
+  const aud = audienceOf(prefix);
+  return audienceIsEmpty(aud) ? {} : aud;
+}
+
+function excludedOf(prefix) {
+  const node = el(`[data-excluded-input="${prefix}"]`);
+  const typed = splitCodes(node ? node.value : "");
+  const chips = qsa(`[data-aud-excluded="${prefix}"] [data-cr-excl-remove]`).map((btn) =>
+    String(btn.dataset.crExclRemove || "").toUpperCase()
+  );
+  return [...new Set([...chips, ...typed])].slice(0, 200);
+}
+
+/* how many may watch at the same time */
+const capText = (value) => (value === null || value === undefined || value === "" ? "no limit" : `${num(Number(value))} at once`);
+const hubCeiling = (hub) => (hub && hub.viewer_limit != null ? Number(hub.viewer_limit) : null);
+
 const numCell = (value) =>
   `<td class="cr-num ${Number(value) ? "" : "is-zero"}">${esc(num(Number(value) || 0))}</td>`;
 
@@ -584,6 +786,10 @@ function cellFor(key, row, tab) {
       return `<td>${titleCell(row)}</td>`;
     case "vis":
       return `<td><span class="cr-vis" data-vis="${esc(row.visibility)}">${esc(visLabel(row.visibility))}</span></td>`;
+    case "seats":
+      return `<td><span class="cr-seats" data-cap="${row.cap != null ? esc(String(row.cap)) : ""}">${esc(row.seats != null ? num(row.seats) : "—")}</span> <span class="cr-code">${esc(row.cap != null ? `of ${num(row.cap)}` : "no cap")}</span></td>`;
+    case "quality":
+      return `<td>${esc((row.meta?.quality || []).join(" · ") || "—")}</td>`;
     case "cat":
       return `<td>${esc(row.category_name || "—")}</td>`;
     case "minutes":
@@ -779,6 +985,39 @@ function renderSettings(host, hub) {
           </label>
         </div>
         <p class="cr-card__hint">${hub.password_until ? `The current password closes on ${esc(new Date(hub.password_until).toLocaleString())}.` : "A private hub asks for its password before anything opens; the window runs from one hour to one month."}</p>
+
+        ${excludedField(hub.excluded, "hub")}
+
+        <p class="cr-card__hint">Public is everyone except the excluded list. Exclusive asks for a subscription or a follow, and optionally a country, a language, an account level and a wealth of points.</p>
+        ${audienceFields(hub.audience, "hub", hub.visibility === "exclusive")}
+
+        <label class="cr-switch">
+          <input type="checkbox" data-hub-auto ${hub.auto_accept === false ? "" : "checked"} />
+          <span><strong>Take subscriptions and follows</strong> — with this off, nobody can subscribe to or follow this ${esc(section.noun)}.</span>
+        </label>
+      </div>
+
+      <div class="cr-card">
+        <div class="cr-card__head">
+          <h2 class="cr-card__title">${section.caps ? "Available devices" : "Viewers"}</h2>
+          <span class="cr-bar__count">${esc(section.caps ? "how many may watch at once" : "level based")}</span>
+        </div>
+        <div class="cr-grid2">
+          <label class="dsh-field">
+            <span class="dsh-field__label">Simultaneous viewers — empty means the level's ceiling</span>
+            <input class="dsh-input" type="number" min="0" value="${hub.max_viewers != null ? esc(String(hub.max_viewers)) : ""}" placeholder="${esc(String(hubCeiling(hub) ?? ""))}" data-hub-viewers />
+          </label>
+          <div class="cr-pill-wrap">
+            <span class="cr-pill" data-hub-cap><i data-icon="users"></i>${esc(capText(hubCeiling(hub)))}</span>
+          </div>
+        </div>
+        <p class="cr-card__hint">${
+          section.kind === "cinema"
+            ? "A cinema's films take 100 viewers per level and its series and episodes 1000; the top level has no ceiling. A film or an episode may carry a smaller number of its own."
+            : section.kind === "server"
+              ? "A server takes 100 simultaneous viewers per level, and the top level has no ceiling. A channel or a list may carry a smaller number of its own."
+              : "Simultaneous viewers stay open for this kind of hub."
+        }</p>
       </div>
 
       <div class="cr-card">
@@ -786,6 +1025,7 @@ function renderSettings(host, hub) {
           <h2 class="cr-card__title">Staff</h2>
           <span class="cr-bar__count">they see this ${esc(section.noun)} in their own studio</span>
         </div>
+        <p class="cr-card__hint">Staff are the publishers whose requests you approved — the Participants tab lists them. A member code added here works too.</p>
         <div class="cr-chips" data-staff>
           ${(hub.staff || []).map((code) => `<span class="cr-chip-x">${esc(code)}<button type="button" data-cr-chip-remove="staff" data-code="${esc(code)}" aria-label="Remove ${esc(code)} from staff"><i data-icon="close"></i></button></span>`).join("") || '<span class="cr-card__hint">Nobody yet.</span>'}
         </div>
@@ -950,7 +1190,248 @@ function blankItem(kind, hubId, status = "draft") {
     micro_niche: "",
     nano_niche: "",
     status,
+    meta: {},
+    excluded: [],
+    audience: {},
+    seats: null,
   };
+}
+
+
+/* ------------------------------------------------------------------ */
+/* what each new kind needs beyond a title and a link                 */
+/* ------------------------------------------------------------------ */
+const countChannels = (text) =>
+  String(text || "")
+    .split(/\r?\n/)
+    .filter((line) => /^#extinf/i.test(line.trim())).length;
+
+function qualityChips(meta) {
+  const picked = Array.isArray(meta.quality) ? meta.quality.map((q) => String(q).toUpperCase()) : [];
+  return `
+    <div class="cr-qchips" data-quality>
+      ${QUALITIES.map(
+        (q) => `<button class="cr-qchip ${picked.includes(q) ? "is-on" : ""}" type="button" data-cr-quality="${q}" aria-pressed="${picked.includes(q)}">${q}</button>`
+      ).join("")}
+    </div>`;
+}
+
+function pickedQuality() {
+  return qsa("[data-cr-quality]")
+    .filter((btn) => btn.classList.contains("is-on"))
+    .map((btn) => String(btn.dataset.crQuality || ""));
+}
+
+function metaCard(draft) {
+  const meta = draft.meta && typeof draft.meta === "object" ? draft.meta : {};
+  const kind = draft.kind;
+  let body = "";
+
+  if (kind === "channel") {
+    body = `
+      <div class="cr-grid2">
+        <label class="dsh-field">
+          <span class="dsh-field__label">Group</span>
+          <input class="dsh-input" type="text" maxlength="40" value="${esc(meta.group || "")}" placeholder="News" data-meta-group />
+        </label>
+        <label class="dsh-field">
+          <span class="dsh-field__label">EPG link</span>
+          <input class="dsh-input" type="url" value="${esc(meta.epg_url || "")}" placeholder="https://…/epg.xml" data-meta-epg />
+        </label>
+      </div>`;
+  } else if (kind === "channel_list") {
+    const source = String(meta.source || "paste");
+    const text = String(meta.content || "");
+    body = `
+      <div class="cr-grid2">
+        <label class="dsh-field">
+          <span class="dsh-field__label">List name</span>
+          <input class="dsh-input" type="text" maxlength="80" value="${esc(meta.list_name || draft.title || "")}" placeholder="Free channels" data-meta-listname />
+        </label>
+        <label class="dsh-field">
+          <span class="dsh-field__label">Where it comes from</span>
+          <select class="dsh-select" data-meta-source>
+            ${LIST_SOURCES.map(([value, label]) => `<option value="${value}" ${source === value ? "selected" : ""}>${label}</option>`).join("")}
+          </select>
+        </label>
+      </div>
+      <label class="dsh-field">
+        <span class="dsh-field__label">Paste the list — one #EXTINF line per channel</span>
+        <textarea class="dsh-textarea" rows="6" maxlength="20000" data-meta-content placeholder="#EXTM3U&#10;#EXTINF:-1,BBC One&#10;https://…/bbc.m3u8">${esc(text)}</textarea>
+      </label>
+      <div class="cr-grid2">
+        <label class="dsh-field">
+          <span class="dsh-field__label">List URL</span>
+          <input class="dsh-input" type="url" value="${esc(meta.url || "")}" placeholder="https://…/IPTV-Free.m3u" data-meta-url />
+        </label>
+        <label class="dsh-field">
+          <span class="dsh-field__label">Or import an M3U / TXT file</span>
+          <input class="dsh-input" type="file" accept=".m3u,.m3u8,.txt" data-meta-file />
+        </label>
+      </div>
+      <div class="cr-grid2">
+        <label class="dsh-field">
+          <span class="dsh-field__label">List EPG link</span>
+          <input class="dsh-input" type="url" value="${esc(meta.epg_url || "")}" placeholder="https://…/epg.xml" data-meta-epg />
+        </label>
+        <div class="cr-pill-wrap">
+          <span class="cr-pill" data-meta-count><i data-icon="broadcast"></i>${esc(num(countChannels(text)))} channel${countChannels(text) === 1 ? "" : "s"}</span>
+        </div>
+      </div>`;
+  } else if (kind === "xtream") {
+    body = `
+      <div class="cr-grid2">
+        <label class="dsh-field">
+          <span class="dsh-field__label">Server address</span>
+          <input class="dsh-input" type="text" value="${esc(meta.host || "")}" placeholder="http://panel.example.com" data-meta-host />
+        </label>
+        <label class="dsh-field">
+          <span class="dsh-field__label">Port</span>
+          <input class="dsh-input" type="number" min="1" max="65535" value="${esc(meta.port != null ? String(meta.port) : "")}" placeholder="8080" data-meta-port />
+        </label>
+      </div>
+      <div class="cr-grid2">
+        <label class="dsh-field">
+          <span class="dsh-field__label">Username</span>
+          <input class="dsh-input" type="text" value="${esc(meta.username || "")}" autocomplete="off" data-meta-username />
+        </label>
+        <label class="dsh-field">
+          <span class="dsh-field__label">Password</span>
+          <input class="dsh-input" type="password" value="${esc(meta.password || "")}" autocomplete="new-password" data-meta-password />
+        </label>
+      </div>`;
+  } else if (kind === "film" || kind === "episode") {
+    body = `
+      <div class="cr-grid2">
+        <label class="dsh-field">
+          <span class="dsh-field__label">TMDB link or id</span>
+          <input class="dsh-input" type="text" value="${esc(meta.tmdb || "")}" placeholder="603692 — or the themoviedb.org link" data-meta-tmdb />
+        </label>
+        ${
+          kind === "episode"
+            ? `<div class="cr-grid2">
+                 <label class="dsh-field">
+                   <span class="dsh-field__label">Season number</span>
+                   <input class="dsh-input" type="number" min="0" max="99" value="${esc(meta.season != null ? String(meta.season) : "1")}" data-meta-season />
+                 </label>
+                 <label class="dsh-field">
+                   <span class="dsh-field__label">Episode number</span>
+                   <input class="dsh-input" type="number" min="0" max="999" value="${esc(meta.episode != null ? String(meta.episode) : "1")}" data-meta-episode />
+                 </label>
+               </div>`
+            : `<label class="dsh-field">
+                 <span class="dsh-field__label">Film link</span>
+                 <input class="dsh-input" type="url" value="${esc(draft.media_url || "")}" placeholder="https://…/film.mp4" data-item-media />
+               </label>`
+        }
+      </div>
+      <div class="dsh-field">
+        <span class="dsh-field__label">Quality — pick every one the source offers</span>
+        ${qualityChips(meta)}
+      </div>
+      <div class="cr-grid3">
+        <label class="cr-switch">
+          <input type="checkbox" data-meta-subs ${meta.subtitles ? "checked" : ""} />
+          <span><strong>Subtitles</strong> — the source carries them</span>
+        </label>
+        <label class="dsh-field">
+          <span class="dsh-field__label">Subtitle languages — comma separated</span>
+          <input class="dsh-input" type="text" value="${esc((meta.subtitle_langs || []).join(", "))}" placeholder="ar, en" data-meta-sub-langs />
+        </label>
+        <label class="cr-switch">
+          <input type="checkbox" data-meta-ads ${meta.ads ? "checked" : ""} />
+          <span><strong>Ads in the source</strong> — it plays with advertising</span>
+        </label>
+      </div>`;
+  } else if (kind === "playlist") {
+    const picked = Array.isArray(meta.items) ? meta.items.map((row) => row.id) : [];
+    const options = (state.pickables || [])
+      .filter((row) => row.kind !== "playlist")
+      .map(
+        (row) => `<option value="${esc(row.id)}" ${picked.includes(row.id) ? "selected" : ""}>${esc(KIND_LABEL[row.kind] || row.kind)} · ${esc(row.title)}</option>`
+      )
+      .join("");
+    body = `
+      <div class="cr-grid2">
+        <label class="dsh-field">
+          <span class="dsh-field__label">Backdrop link</span>
+          <input class="dsh-input" type="url" value="${esc(draft.cover_url || "")}" placeholder="https://…/backdrop.jpg" data-item-cover />
+        </label>
+        <div class="cr-pill-wrap">
+          <span class="cr-pill" data-playlist-count><i data-icon="bookmark"></i>${esc(num(picked.length))} picked</span>
+        </div>
+      </div>
+      <label class="dsh-field">
+        <span class="dsh-field__label">Films or series in this playlist — pick one or more</span>
+        <select class="dsh-select" multiple size="8" data-meta-picks>
+          ${options || '<option value="" disabled>Nothing to pick yet — add a film or an episode first.</option>'}
+        </select>
+      </label>`;
+  }
+
+  if (!body) return "";
+  return `
+    <div class="cr-card" data-meta-card="${esc(kind)}">
+      <div class="cr-card__head">
+        <h2 class="cr-card__title">${esc(KIND_LABEL[kind] || kind)} details</h2>
+        <span class="cr-bar__count">${esc(kind === "film" || kind === "episode" ? "TMDB, quality, subtitles, ads" : kind === "channel_list" ? "paste, file or URL" : kind === "xtream" ? "kept for you only" : "where it sits")}</span>
+      </div>
+      ${body}
+    </div>`;
+}
+
+function metaOf(draft) {
+  const value = (name) => el(`[data-meta-${name}]`)?.value ?? "";
+  const checked = (name) => Boolean(el(`[data-meta-${name}]`)?.checked);
+  const kind = draft.kind;
+  if (kind === "channel") {
+    return { group: value("group").trim(), epg_url: value("epg").trim() };
+  }
+  if (kind === "channel_list") {
+    const content = value("content");
+    return {
+      list_name: value("listname").trim() || draft.title || "",
+      source: value("source") || "paste",
+      content,
+      url: value("url").trim(),
+      epg_url: value("epg").trim(),
+      count: countChannels(content),
+    };
+  }
+  if (kind === "xtream") {
+    const port = Number(value("port"));
+    return {
+      host: value("host").trim(),
+      port: Number.isFinite(port) && port > 0 ? port : null,
+      username: value("username").trim(),
+      password: value("password"),
+    };
+  }
+  if (kind === "film" || kind === "episode") {
+    const meta = {
+      tmdb: value("tmdb").trim(),
+      quality: pickedQuality(),
+      subtitles: checked("subs"),
+      subtitle_langs: splitList(value("sub-langs")),
+      ads: checked("ads"),
+    };
+    if (kind === "episode") {
+      meta.season = Number(value("season") || 0);
+      meta.episode = Number(value("episode") || 0);
+    }
+    return meta;
+  }
+  if (kind === "playlist") {
+    const picks = Array.from(el("[data-meta-picks]")?.selectedOptions || []).map((option) => option.value).filter(Boolean);
+    const pool = state.pickables || [];
+    return {
+      items: picks.map((id) => {
+        const row = pool.find((entry) => entry.id === id);
+        return { id, kind: row ? row.kind : "", title: row ? row.title : "" };
+      }),
+    };
+  }
+  return {};
 }
 
 function renderEditor(host) {
@@ -1002,6 +1483,8 @@ function renderEditor(host) {
         </label>
         <p class="cr-card__hint" data-item-count>${esc(num(String(draft.body || "").trim() ? String(draft.body).trim().split(/\s+/).filter(Boolean).length : 0))} words</p>
       </div>
+
+      ${metaCard(draft)}
 
       <div class="cr-card">
         <div class="cr-grid3">
@@ -1072,6 +1555,25 @@ function renderEditor(host) {
                 : "This kind publishes with its link and a title of 3 characters."
           )} ${esc(currentHub()?.visibility === "private" ? "This hub is private, so its items inherit the password." : "")}</span>
         </p>
+      </div>
+
+      <div class="cr-card" data-item-door>
+        <div class="cr-card__head">
+          <h2 class="cr-card__title">Who sees it</h2>
+          <span class="cr-bar__count">public, exclusive or private — this one only</span>
+        </div>
+        <p class="cr-card__hint">Public reaches everyone except the excluded list. Exclusive needs a subscription or a follow, and can ask for a country, a language, an account level and a wealth of points. Private opens only to the hub's VIP list or its password.</p>
+        ${excludedField(draft.excluded, "item")}
+        ${audienceFields(draft.audience, "item", draft.visibility === "exclusive")}
+        <div class="cr-grid2">
+          <label class="dsh-field">
+            <span class="dsh-field__label">Seats — how many may watch this one at once, empty for the hub's number</span>
+            <input class="dsh-input" type="number" min="0" value="${draft.seats != null ? esc(String(draft.seats)) : ""}" placeholder="${esc(String(hubCeiling(currentHub()) ?? ""))}" data-item-seats />
+          </label>
+          <div class="cr-pill-wrap">
+            <span class="cr-pill" data-item-cap><i data-icon="users"></i>${esc(capText(hubCeiling(currentHub())))}</span>
+          </div>
+        </div>
       </div>
 
       <div class="cr-editor__foot">
@@ -1242,18 +1744,14 @@ const PLURALS = {
   cinema: "Cinemas",
 };
 
-const HUBS = [
-  ...SECTIONS.map((section) => ({
-    kind: section.kind,
-    label: section.label,
-    icon: section.icon,
-    slug: section.slug,
-    noun: section.noun,
-    plural: PLURALS[section.kind],
-  })),
-  { kind: "server", label: "Server", icon: "monitor", slug: "server", noun: "server", plural: PLURALS.server },
-  { kind: "cinema", label: "Cinema", icon: "film", slug: "cinema", noun: "cinema", plural: PLURALS.cinema },
-];
+const HUBS = SECTIONS.map((section) => ({
+  kind: section.kind,
+  label: section.label,
+  icon: section.icon,
+  slug: section.slug,
+  noun: section.noun,
+  plural: PLURALS[section.kind],
+}));
 
 const hubInfo = (kind) =>
   HUBS.find((row) => row.kind === kind) || {
@@ -1675,13 +2173,15 @@ function renderHubPage(host) {
                    <a class="dsh-btn dsh-btn--sm" href="creator.html?section=${encodeURIComponent(manageSection)}&hub=${encodeURIComponent(hub.id)}&tab=participants"><i data-icon="users"></i> Requests</a>`
                 : ""
             }
-            <button class="dsh-btn dsh-btn--primary dsh-btn--sm" type="button" data-crp-sub="${esc(hub.id)}" data-on="${hub.subscribed ? "1" : "0"}">
-              <i data-icon="${hub.subscribed ? "check" : "users"}"></i> ${hub.subscribed ? "Subscribed" : "Subscribe"}
+            <button class="dsh-btn dsh-btn--primary dsh-btn--sm" type="button" data-crp-sub="${esc(hub.id)}" data-on="${hub.subscribed ? "1" : "0"}" ${hub.can_subscribe === false && !hub.subscribed ? "disabled aria-disabled=\"true\"" : ""}>
+              <i data-icon="${hub.subscribed ? "check" : hub.can_subscribe === false ? "lock" : "users"}"></i> ${hub.subscribed ? "Subscribed" : hub.can_subscribe === false ? "Closed" : "Subscribe"}
             </button>
           </div>
         </div>
         <div class="crp-hubhero__meta">
           <span class="cr-pill" data-tone="${esc(hub.visibility || "public")}"><i data-icon="${hub.visibility === "private" ? "lock" : "shield"}"></i>${esc(visLabel(hub.visibility))}</span>
+          ${hub.viewers != null ? `<span class="cr-pill" data-crp-devices><i data-icon="users"></i>${esc(num(Number(hub.viewers)))} at once</span>` : ""}
+          ${hub.auto_accept === false ? '<span class="cr-pill" data-crp-closed><i data-icon="lock"></i>Subscriptions closed</span>' : ""}
           ${statPill("users", hub.subscribers, "subscribers")}
           ${statPill("file", hub.items, "items")}
           ${statPill("clock", hub.minutes, "min")}
@@ -1712,8 +2212,20 @@ function itemCard(row) {
         <p class="crp-item__kind"><i data-icon="${esc(info.icon)}"></i>${esc(KIND_LABEL[row.kind] || info.label)}${row.visibility && row.visibility !== "public" ? ` · ${esc(visLabel(row.visibility))}` : ""}</p>
         <h3 class="crp-item__title">${esc(row.title || "Untitled")}</h3>
         ${row.summary ? `<p class="crp-item__summary">${esc(row.summary)}</p>` : ""}
+        ${
+          (row.meta?.quality || []).length
+            ? `<p class="crp-item__quality">${(row.meta.quality || []).map((q) => `<span class="cr-qchip is-on">${esc(String(q))}</span>`).join("")}</p>`
+            : ""
+        }
         <p class="crp-item__meta">
           <span><i data-icon="clock"></i>${esc(num(Number(row.minutes) || 0))} min</span>
+          ${
+            row.meta?.subtitles
+              ? `<span><i data-icon="article"></i>subtitles${(row.meta.subtitle_langs || []).length ? ` · ${esc(row.meta.subtitle_langs.join(", "))}` : ""}</span>`
+              : ""
+          }
+          ${row.meta?.ads ? `<span><i data-icon="flag"></i>carries ads</span>` : ""}
+          ${row.cap != null ? `<span><i data-icon="users"></i>${esc(num(Number(row.cap)))} at once</span>` : ""}
           <span><i data-icon="thumbUp"></i>${esc(num(Number(row.likes) || 0))}</span>
           <span><i data-icon="comment"></i>${esc(num(Number(row.comments) || 0))}</span>
           ${date ? `<span>${esc(date)}</span>` : ""}
@@ -2515,6 +3027,19 @@ function hubPayload(hub) {
   };
 }
 
+function accessPayload(hub) {
+  const vis = el("[data-hub-visibility]")?.value || hub.visibility || "public";
+  const viewers = el("[data-hub-viewers]")?.value ?? "";
+  return {
+    p_token: state.token,
+    p_hub: hub.id,
+    p_excluded: excludedOf("hub"),
+    p_audience: audienceFor(vis, "hub"),
+    p_auto_accept: Boolean(el("[data-hub-auto]")?.checked),
+    p_viewers: viewers === "" ? 0 : Number(viewers),
+  };
+}
+
 function saveStateText(text, tone = "") {
   const node = el("[data-hub-state]");
   if (!node) return;
@@ -2542,7 +3067,18 @@ async function saveHub() {
     toast({ title: "Not saved", message, tone: "error" });
     return;
   }
-  const saved = res.hub;
+  let access = null;
+  try {
+    access = await rpc("creator_hub_access", accessPayload(res.hub));
+  } catch {
+    access = null;
+  }
+  if (access && access.ok === false && access.error) {
+    const message = ACCESS_MESSAGES[access.error] || MESSAGES[access.error] || "The access rules were refused.";
+    saveStateText(message, "error");
+    toast({ title: "Access not saved", message, tone: "error" });
+  }
+  const saved = access && access.ok ? access.hub : res.hub;
   state.hubs = state.hubs.map((entry) => (entry.id === saved.id ? saved : entry));
   const pass = el("[data-hub-password]");
   if (pass) {
@@ -2635,6 +3171,15 @@ function openEditor(kind, row = null) {
   state.view = "editor";
   if (row) state.editor.tags = row.tags || [];
   renderView();
+  if (state.editor.kind === "playlist" && !(state.pickables || []).length) {
+    rpc("creator_items", { p_token: state.token, p_hub: hub.id, p_kind: null, p_status: null, p_search: "" })
+      .then((res) => {
+        if (!res || !res.ok) return;
+        state.pickables = (res.rows || []).filter((row) => row.kind !== "playlist");
+        if (state.view === "editor" && state.editor?.kind === "playlist") renderView();
+      })
+      .catch(() => {});
+  }
   if (!state.categories.length) {
     rpc("creator_categories", { p_token: state.token, p_hub: hub.id })
       .then((res) => {
@@ -2676,7 +3221,7 @@ function itemPayload(publish) {
     p_body: value("[data-item-body]"),
     p_media_url: value("[data-item-media]").trim(),
     p_thumbnail: value("[data-item-thumb]").trim(),
-    p_cover_url: "",
+    p_cover_url: value("[data-item-cover]").trim(),
     p_tags: value("[data-item-tags]")
       .split(",")
       .map((tag) => tag.trim())
@@ -2721,6 +3266,28 @@ async function saveItem(publish) {
   const row = res.row || {};
   state.editor.id = row.id || state.editor.id;
   state.editor.status = row.status || state.editor.status;
+
+  const seats = Number(el("[data-item-seats]")?.value || 0);
+  let detail = null;
+  try {
+    detail = await rpc("creator_item_meta", {
+      p_token: state.token,
+      p_item: row.id || state.editor.id,
+      p_meta: metaOf(draft),
+      p_excluded: excludedOf("item"),
+      p_audience: audienceFor(row.visibility || draft.visibility, "item"),
+      p_seats: Number.isFinite(seats) && seats > 0 ? seats : 0,
+    });
+  } catch {
+    detail = null;
+  }
+  if (detail && detail.ok === false) {
+    const message = ACCESS_MESSAGES[detail.error] || MESSAGES[detail.error] || "The details were not saved.";
+    say(message, "error");
+    toast({ title: "Details not saved", message, tone: "error" });
+    return;
+  }
+
   toast({
     title: row.status === "published" ? "Published" : "Draft saved",
     message: row.status === "published" ? `“${row.title}” is live.` : "Only you can see it until it is published.",
@@ -3020,6 +3587,26 @@ document.addEventListener("click", (event) => {
     return openConfirm("Delete this item?", "This cannot be undone.", "item", itemDelete.dataset.crItemDelete);
   }
 
+  const quality = target.closest("[data-cr-quality]");
+  if (quality) {
+    event.preventDefault();
+    const on = quality.classList.toggle("is-on");
+    quality.setAttribute("aria-pressed", on ? "true" : "false");
+    return;
+  }
+
+  const excl = target.closest("[data-cr-excl-remove]");
+  if (excl) {
+    event.preventDefault();
+    const chip = excl.closest(".cr-chip-x");
+    const box = excl.closest("[data-excluded-chips]");
+    if (chip) chip.remove();
+    if (box && !box.querySelector(".cr-chip-x")) {
+      box.innerHTML = '<span class="cr-card__hint">Nobody is excluded.</span>';
+    }
+    return;
+  }
+
   if (target.closest("[data-cr-save-hub]")) {
     event.preventDefault();
     return saveHub();
@@ -3132,6 +3719,52 @@ document.addEventListener("change", (event) => {
       hours.hidden = !priv;
       hours.style.display = priv ? "" : "none";
     }
+    const aud = el('[data-aud="hub"]');
+    if (aud) {
+      const open = select.value === "exclusive";
+      aud.hidden = !open;
+      aud.style.display = open ? "" : "none";
+    }
+    return;
+  }
+
+  if (select.matches("[data-item-visibility]")) {
+    const aud = el('[data-aud="item"]');
+    if (aud) {
+      const open = select.value === "exclusive";
+      aud.hidden = !open;
+      aud.style.display = open ? "" : "none";
+    }
+    return;
+  }
+
+  if (select.matches("[data-meta-file]")) {
+    const file = select.files && select.files[0];
+    if (!file) return;
+    const box = el("[data-meta-content]");
+    const count = el("[data-meta-count]");
+    const swallow = (text) => {
+      if (box) box.value = text;
+      if (count) count.innerHTML = `<i data-icon="broadcast"></i>${num(countChannels(text))} channel${countChannels(text) === 1 ? "" : "s"}`;
+      const source = el("[data-meta-source]");
+      if (source && !source.value) source.value = "file";
+      hydrateIcons(count || document.body);
+    };
+    if (file.text) {
+      file.text().then(swallow).catch(() => {});
+    } else if (typeof FileReader !== "undefined") {
+      const reader = new FileReader();
+      reader.onload = () => swallow(String(reader.result || ""));
+      reader.readAsText(file);
+    }
+    return;
+  }
+
+  if (select.matches("[data-meta-picks]")) {
+    const count = el("[data-playlist-count]");
+    const picked = Array.from(select.selectedOptions || []).filter((option) => option.value).length;
+    if (count) count.innerHTML = `<i data-icon="bookmark"></i>${num(picked)} picked`;
+    hydrateIcons(count || document.body);
     return;
   }
 });
@@ -3148,6 +3781,15 @@ document.addEventListener("input", (event) => {
     renderView();
     const box = el("[data-cr-search]");
     if (box) box.focus?.();
+    return;
+  }
+  if (target.matches("[data-meta-content]")) {
+    const count = el("[data-meta-count]");
+    if (count) {
+      const lines = countChannels(target.value);
+      count.innerHTML = `<i data-icon="broadcast"></i>${num(lines)} channel${lines === 1 ? "" : "s"}`;
+      hydrateIcons(count);
+    }
     return;
   }
   if (target.matches("[data-item-body]")) {
