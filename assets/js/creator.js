@@ -3,13 +3,13 @@
  * ------------------------------------------------------------------
  * Five things a member runs, one working area:
  *
- *   channel   videos · podcasts · playlists · channel management · subscribers
+ *   studio    videos · podcasts · playlists · studio management · subscribers
  *   blog      articles · drafts · categories · blog management · subscribers
  *   space     questions · answers · categories · space management · subscribers
  *   library   books · documents · categories · library management · subscribers
  *   gallery   images · categories · gallery management · subscribers
  *
- * The channel / blog / space / library / gallery is a *hub* on the server
+ * The studio / blog / space / library / gallery is a *hub* on the server
  * (`creator_hubs`); the rows under every tab are items (`member_content`)
  * that hang from a hub. Every call is token-scoped and the server checks
  * that the caller owns the hub or sits in its staff list — the studio never
@@ -60,15 +60,16 @@ const COLS = {
 const SECTIONS = [
   {
     key: "channel",
+    slug: "studio",
     kind: "channel",
-    label: "Channel",
+    label: "Studio",
     icon: "tv",
-    noun: "channel",
+    noun: "studio",
     tabs: [
       { key: "videos", label: "Videos", type: "list", kind: "video", cols: ["item", "vis", "minutes", "likes", "dislikes", "comments", "shares", "reports", "act"], actions: ["edit", "link", "delete"] },
       { key: "podcasts", label: "Podcasts", type: "list", kind: "podcast", cols: ["item", "vis", "minutes", "likes", "dislikes", "comments", "shares", "reports", "act"], actions: ["edit", "link", "delete"] },
       { key: "playlists", label: "Playlists", type: "list", kind: "playlist", cols: ["item", "vis", "minutes", "likes", "dislikes", "comments", "shares", "reports", "act"], actions: ["edit", "link", "delete"] },
-      { key: "settings", label: "Channel management", type: "settings" },
+      { key: "settings", label: "Studio management", type: "settings" },
       { key: "subscribers", label: "Subscribers", type: "subscribers" },
     ],
     add: [
@@ -79,6 +80,7 @@ const SECTIONS = [
   },
   {
     key: "blog",
+    slug: "blog",
     kind: "blog",
     label: "Blog",
     icon: "article",
@@ -98,6 +100,7 @@ const SECTIONS = [
   },
   {
     key: "space",
+    slug: "space",
     kind: "space",
     label: "Space",
     icon: "help",
@@ -116,6 +119,7 @@ const SECTIONS = [
   },
   {
     key: "library",
+    slug: "library",
     kind: "library",
     label: "Library",
     icon: "database",
@@ -135,6 +139,7 @@ const SECTIONS = [
   },
   {
     key: "gallery",
+    slug: "gallery",
     kind: "gallery",
     label: "Gallery",
     icon: "image",
@@ -265,6 +270,9 @@ const state = {
 
 const el = (sel, root = document) => qs(sel, root);
 const sectionOf = (key) => SECTIONS.find((s) => s.key === key) || SECTIONS[0];
+const sectionFromUrl = (value) =>
+  SECTIONS.find((s) => s.key === value || s.slug === value) || null;
+const slugOf = (section) => section.slug || section.key;
 const hubKind = () => sectionOf(state.section).kind;
 
 function hubsOf(kind) {
@@ -1119,7 +1127,7 @@ async function switchTab(key) {
 function syncUrl() {
   try {
     const params = new URLSearchParams(location.search);
-    params.set("section", state.section);
+    params.set("section", slugOf(sectionOf(state.section)));
     if (state.hub) params.set("hub", state.hub);
     else params.delete("hub");
     params.set("tab", state.tab);
@@ -1792,7 +1800,7 @@ async function boot() {
     return showGate(
       "lock",
       "Sign in to the studio",
-      "The creator studio needs a member session — your channels, blogs, spaces, libraries and galleries hang from your member.",
+      "The creator studio needs a member session — your studios, blogs, spaces, libraries and galleries hang from your member.",
       `<a class="btn btn--primary btn--sm" href="login.html"><i data-icon="login"></i> Sign in</a>
        <a class="btn btn--ghost btn--sm" href="register.html"><i data-icon="user"></i> Create an account</a>`
     );
@@ -1809,8 +1817,8 @@ async function boot() {
   }
 
   const params = new URLSearchParams(location.search);
-  const wantedSection = params.get("section");
-  state.section = SECTIONS.some((section) => section.key === wantedSection) ? wantedSection : state.section;
+  const wantedSection = sectionFromUrl(params.get("section"));
+  if (wantedSection) state.section = wantedSection.key;
   const wantedHub = params.get("hub");
   if (wantedHub && state.hubs.some((hub) => hub.id === wantedHub)) state.hub = wantedHub;
 

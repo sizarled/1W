@@ -5,7 +5,7 @@
  *
  * Pass 1 — no session: the studio asks for a sign-in and calls nothing.
  * Pass 2 — no hub yet: the rail, the switcher, the empty view, the "add
- *          channel" modal, the settings form (logo, cover, field, niches,
+ *          studio" modal, the settings form (logo, cover, field, niches,
  *          private + password window, staff), save, and delete.
  * Pass 3 — a studio with one of each hub: the videos table and its columns,
  *          the action menu, the item editor (save draft then publish), the
@@ -385,7 +385,7 @@ async function main() {
   anon.window.close();
 
   /* ---------------------------------------------------------------- */
-  /* pass 2 — an empty studio: create a channel, fill it, delete it    */
+  /* pass 2 — an empty studio: create one, fill it, delete it         */
   /* ---------------------------------------------------------------- */
   scenario = { hubs: [], items: [], categories: [], subscribers: [] };
   calls.length = 0;
@@ -393,14 +393,14 @@ async function main() {
   expect("empty: the shell is shown", !p.hidden("[data-cr-shell]"));
   expect("empty: five sections in the rail", p.qsa("[data-cr-sections] .cr-section").length === 5, String(p.qsa("[data-cr-sections] .cr-section").length));
   const railText = p.text("[data-cr-sections]");
-  expect("empty: the rail names them", /Channel[\s\S]*Blog[\s\S]*Space[\s\S]*Library[\s\S]*Gallery/.test(railText), railText);
+  expect("empty: the rail names them", /Studio[\s\S]*Blog[\s\S]*Space[\s\S]*Library[\s\S]*Gallery/.test(railText), railText);
   expect("empty: the member is in the rail", p.text("[data-cr-name]") === "Youssef El Amrani", p.text("[data-cr-name]"));
   expect("empty: the member code is there", p.text("[data-cr-code]") === "ID100042", p.text("[data-cr-code]"));
-  expect("empty: the switcher offers the add option", /Add a channel/i.test(p.text("[data-cr-hub]")), p.text("[data-cr-hub]"));
-  expect("empty: the view asks for a channel", /No channel yet/i.test(p.text("[data-cr-view]")));
-  expect("empty: the limit is stated", /0 of 1 channels/i.test(p.text("[data-cr-hub-hint]")), p.text("[data-cr-hub-hint]"));
+  expect("empty: the switcher offers the add option", /Add a studio/i.test(p.text("[data-cr-hub]")), p.text("[data-cr-hub]"));
+  expect("empty: the view asks for a studio", /No studio yet/i.test(p.text("[data-cr-view]")));
+  expect("empty: the limit is stated", /0 of 1 studios/i.test(p.text("[data-cr-hub-hint]")), p.text("[data-cr-hub-hint]"));
 
-  // create the channel
+  // create the studio
   p.click(p.qs("[data-cr-new-hub]"));
   await p.wait(60);
   expect("create: the modal opens", Boolean(p.qs("[data-new-hub-name]")));
@@ -451,7 +451,7 @@ async function main() {
   p.click(p.qs("[data-cr-confirm]"));
   await p.wait(240);
   expect("delete hub: the call is sent", calls.some((c) => c.includes("creator_hub_delete")));
-  expect("delete hub: the view is empty again", /No channel yet/i.test(p.text("[data-cr-view]")));
+  expect("delete hub: the view is empty again", /No studio yet/i.test(p.text("[data-cr-view]")));
   expect("delete hub: no errors", p.errors.length === 0, p.errors.join(" | "));
   p.window.close();
 
@@ -484,9 +484,9 @@ async function main() {
   };
   calls.length = 0;
   const s = await boot(3);
-  expect("studio: the channel is selected", /Studio One/.test(s.text("[data-cr-hub]")), s.text("[data-cr-hub]"));
+  expect("studio: the studio is selected", /Studio One/.test(s.text("[data-cr-hub]")), s.text("[data-cr-hub]"));
   expect("studio: the hub head carries subscribers", /1200|1,200/.test(s.text("[data-cr-hubhead]")), s.text("[data-cr-hubhead]"));
-  expect("studio: the tabs are the channel's", /Videos[\s\S]*Podcasts[\s\S]*Playlists[\s\S]*Channel management[\s\S]*Subscribers/.test(s.text("[data-cr-tabs]")), s.text("[data-cr-tabs]"));
+  expect("studio: the tabs are the studio's", /Videos[\s\S]*Podcasts[\s\S]*Playlists[\s\S]*Studio management[\s\S]*Subscribers/.test(s.text("[data-cr-tabs]")), s.text("[data-cr-tabs]"));
   expect("studio: the videos table has its two rows", s.qsa("[data-cr-view] tbody tr").length === 2, String(s.qsa("[data-cr-view] tbody tr").length));
   const head = s.text("[data-cr-view] thead");
   expect("studio: the columns are the spec's", /Visibility[\s\S]*Minutes[\s\S]*Likes[\s\S]*Dislikes[\s\S]*Comments[\s\S]*Shares[\s\S]*Reports/.test(head), head);
@@ -601,12 +601,18 @@ async function main() {
     categories: [],
     subscribers: [],
   };
-  const d = await boot(4, { search: "?section=library&tab=documents" });
-  expect("deep link: the library section is open", /Library/.test(d.text(".cr-section.is-on")), d.text(".cr-section.is-on"));
-  expect("deep link: the documents tab is active", /Documents/.test(d.text(".cr-tab.is-on")), d.text(".cr-tab.is-on"));
-  expect("deep link: the documents are listed", /Shooting script/.test(d.text("[data-cr-view]")));
-  expect("deep link: no errors", d.errors.length === 0, d.errors.join(" | "));
+  const d = await boot(4, { search: "?section=studio&tab=videos" });
+  expect("deep link: `studio` opens the studio section", /Studio/.test(d.text(".cr-section.is-on")), d.text(".cr-section.is-on"));
+  expect("deep link: the videos tab is active", /Videos/.test(d.text(".cr-tab.is-on")), d.text(".cr-tab.is-on"));
   d.window.close();
+
+  const lib = await boot(5, { search: "?section=library&tab=documents" });
+  const d2 = lib;
+  expect("deep link: the library section is open", /Library/.test(d2.text(".cr-section.is-on")), d2.text(".cr-section.is-on"));
+  expect("deep link: the documents tab is active", /Documents/.test(d2.text(".cr-tab.is-on")), d2.text(".cr-tab.is-on"));
+  expect("deep link: the documents are listed", /Shooting script/.test(d2.text("[data-cr-view]")));
+  expect("deep link: no errors", d2.errors.length === 0, d2.errors.join(" | "));
+  d2.window.close();
 }
 
 /* ------------------------------------------------------------------ */

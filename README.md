@@ -1063,15 +1063,15 @@ same settings; what differs is what hangs underneath:
 
 | Section | Tabs | Items |
 | --- | --- | --- |
-| **Channel** | Videos · Podcasts · Playlists · Channel management · Subscribers | `video`, `podcast`, `playlist` |
+| **Studio** | Videos · Podcasts · Playlists · Studio management · Subscribers | `video`, `podcast`, `playlist` |
 | **Blog** | Articles · Drafts · Categories · Blog management · Subscribers | `article` (published / draft) |
 | **Space** | Questions · Answers · Categories · Space management · Subscribers | `question`, `answer` (a child row) |
 | **Library** | Books · Documents · Categories · Library management · Subscribers | `book`, `document` |
 | **Gallery** | Images · Categories · Gallery management · Subscribers | `image` |
 
 The bar above the tabs is the two dropdowns the brief asks for: **Managing** (every hub of this
-kind, with its subscriber count, and `＋ Add a channel` at the end) and **Add content** (the kinds
-that belong in the open hub, then `New channel`).
+kind, with its subscriber count, and `＋ Add a studio` at the end) and **Add content** (the kinds
+that belong in the open hub, then `New studio`).
 
 #### The hub — identity, access, staff, VIP
 
@@ -1085,7 +1085,7 @@ that belong in the open hub, then `New channel`).
 | password | bcrypt hash (`extensions.crypt`), valid **1 hour to 1 month** (`1..720` hours), then it closes |
 | staff | member codes (`ID100015`); the hub then appears in their own studio, in that section's management tab |
 | VIP | member codes allowed in even while the hub is private |
-| how many | `creator_hub_limit(kind, level)`: channels 1→4, blogs **3**→5, space/library/gallery 2→4 as the level rises 1→10 |
+| how many | `creator_hub_limit(kind, level)`: studios (kind `channel`) 1→4, blogs **3**→5, space/library/gallery 2→4 as the level rises 1→10 |
 
 `creator_hub_unlock(hub, password)` is the only door that reads the hash, it is callable without a
 session (a visitor on the public page), and it answers `expired` once the window has closed.
@@ -1126,15 +1126,15 @@ have RLS on with no policies: the functions are the only doors, every one starts
 `member_from_token()` and then `creator_hub_manage()` (owner, or a member whose code is staff).
 
 DDL + functions: `tools/sql/creator-studio.sql` — **applied**, and exercised on a real session:
-a channel created, a private blog created with a 48-hour password (`unlocked` for the right one,
+a studio created, a private blog created with a 48-hour password (`unlocked` for the right one,
 `denied` for a wrong one, `expired` after the window moved into the past), a draft video saved and
-published (and refused without a media link), an article refused in a channel hub (`kind`),
+published (and refused without a media link), an article refused in a studio hub (`kind`),
 categories three deep with the fourth refused (`deep`) and a duplicate refused, a third blog created
 then a fourth refused (`limit`, level 1), staff added by code and an unknown code refused
 (`member`), and the subscriber list reporting a real member with their country.
 `tools/creator-smoke.mjs` runs the studio end to end — **72 checks** over four passes: no session,
 an empty studio that creates, configures (private + password + staff), saves, refuses, and deletes a
-channel; a studio holding one of each hub (tables, columns, action menus, the editor saving a draft
+studio; a studio page holding one of each hub (tables, columns, action menus, the editor saving a draft
 then publishing, blog articles vs drafts, categories, subscribers, library books); and the
 `?section=&tab=` deep links.
 

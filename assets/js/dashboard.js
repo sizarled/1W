@@ -1396,13 +1396,13 @@ function analyticsView() {
  * button still explains itself.
  */
 const SURFACE_KINDS = {
-  "e-Studio": "channel/videos",
-  "e-Server": "channel/videos",
+  "e-Studio": "studio/videos",
+  "e-Server": "studio/videos",
   "e-Blog": "blog/articles",
   "e-Gallery": "gallery/images",
   "e-Space": "space/questions",
   "e-Library": "library/books",
-  "e-Cinema": "channel/videos",
+  "e-Cinema": "studio/videos",
 };
 
 /** The studio deep link for a surface: `creator.html?section=…&tab=…`. */
