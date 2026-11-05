@@ -1098,6 +1098,9 @@ async function main() {
 
   c10.click(c10.qs("[data-crp-write]"));
   await c10.wait(200);
+  const desk = c10.qs("[data-crp-desk]");
+  expect("desk: an approved publisher is handed their own page", Boolean(desk), "no desk link");
+  expect("desk: which carries this hub's code", desk && desk.getAttribute("href") === "publisher.html?studio=IDST100001", desk && desk.getAttribute("href"));
   expect("write: the form opens", Boolean(c10.qs("[data-crp-write-form]")));
   const kindOpts = c10.qsa("[data-write-kind] option").map((o) => String(o.value || o.textContent || "").trim());
   expect("write: the kinds are the hub's — podcast and playlist", kindOpts.join(",") === "podcast,playlist", kindOpts.join(","));
@@ -1146,6 +1149,8 @@ async function main() {
   await c10b.wait(300);
   expect("cinema: the hub opens", /Cinema Seven/.test(c10b.text(".crp-hubhero__name")), c10b.text(".crp-hubhero__name"));
   expect("cinema: an approved publisher gets no write button", !c10b.qs("[data-crp-write]"), c10b.text(".crp-hubhero"));
+  const desk10b = c10b.qs("[data-crp-desk]");
+  expect("cinema: but the desk is where their films come from", desk10b && desk10b.getAttribute("href") === "publisher.html?studio=IDCN100006", desk10b && desk10b.getAttribute("href"));
   expect("cinema: no errors", c10b.errors.length === 0, c10b.errors.join(" | "));
   c10b.window.close();
 

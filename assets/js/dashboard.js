@@ -1392,8 +1392,8 @@ function analyticsView() {
  *
  * A creator surface is a door into the editor: it carries the content kind
  * the surface holds (`creator.html?kind=…`), so the button opens the right
- * form instead of a dead toast. A publisher surface has no writer yet — its
- * button still explains itself.
+ * form instead of a dead toast. A publisher surface opens `publisher.html` —
+ * the desk, with the video editor embedded in it.
  */
 const SURFACE_KINDS = {
   "e-Studio": "studio/videos",
@@ -1437,7 +1437,7 @@ function surfacesView(kind) {
   const editorDoor =
     kind === "creator"
       ? `<a class="dsh-btn dsh-btn--sm" href="creator.html?section=studio"><i data-icon="plus"></i>Open the studio</a>`
-      : `<span class="dsh-chip">${rows.length} types</span>`;
+      : `<a class="dsh-btn dsh-btn--sm" href="publisher.html"><i data-icon="upload"></i>The publisher's desk</a>`;
 
   return `
     <div class="dsh-note"><i data-icon="info"></i><span>

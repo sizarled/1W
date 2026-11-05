@@ -2641,6 +2641,11 @@ function participationBlock(hub, view) {
   } else if (!request || request.status !== "pending") {
     acts.push(`<button class="dsh-btn dsh-btn--sm" type="button" data-crp-join="publisher"><i data-icon="article"></i> Request to publish</button>`);
   }
+  /* an approved publisher has a page of their own: the editor itself, embedded,
+     writing straight into this hub — that is where a video comes from here */
+  if (can.publish && role === "visitor" && hub.code) {
+    acts.push(`<a class="dsh-btn dsh-btn--sm" href="publisher.html?studio=${esc(hub.code)}" data-crp-desk><i data-icon="upload"></i> The publisher's desk</a>`);
+  }
   if (can.advertise) {
     acts.push(`<button class="dsh-btn dsh-btn--sm" type="button" data-crp-ad="${esc(hub.id)}"><i data-icon="target"></i> Place an ad</button>`);
   } else if (!request || request.status !== "pending") {

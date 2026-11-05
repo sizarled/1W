@@ -102,6 +102,14 @@ const ERRORS = {
 const $ = (sel) => qs(sel);
 const el = {};
 
+/* publisher.html embeds this editor — the same form, the same call, the same
+   rules — rather than keeping a second, thinner one for publishers. The page
+   says so on <body data-ved-embed="1">, and names the hub it has selected on
+   <body data-ved-hub="IDCN100006">. In that mode the desk's list of hubs comes
+   from `publisher_hubs` (the hubs an owner approved this member into), and a
+   publish never carries the member off the page. */
+const EMBED = document.body.dataset.vedEmbed === "1";
+
 /* ================================================================== */
 /* helpers                                                            */
 /* ================================================================== */
@@ -348,7 +356,7 @@ function paintHub() {
   if (select) {
     const known = Boolean(hub);
     select.innerHTML =
-      `<option value="">My own feed — no studio</option>` +
+      (EMBED ? "" : `<option value="">My own feed — no studio</option>`) +
       list
         .map(
           (h) =>
@@ -367,11 +375,15 @@ function paintHub() {
 
   if (note) {
     if (hub) {
-      note.textContent = `${hub.name} · ${hub.code} — it appears in this studio's Videos tab, and in the feed.`;
+      note.textContent = EMBED
+        ? `${hub.name} · ${hub.code} — published here, live, under your name.`
+        : `${hub.name} · ${hub.code} — it appears in this studio's Videos tab, and in the feed.`;
     } else if (S.hub) {
       note.textContent = `${S.hubName || S.hub} · ${S.hub} — it appears in that studio's Videos tab, and in the feed.`;
     } else if (!list.length) {
-      note.textContent = "You run no studio yet. Create one, and it appears here.";
+      note.textContent = EMBED
+        ? "No hub has approved you as a publisher yet. Ask its owner from the hub's own page."
+        : "You run no studio yet. Create one, and it appears here.";
     } else {
       note.textContent = "It stays in your own feed. Pick a studio and it appears in that studio too.";
     }
@@ -381,7 +393,7 @@ function paintHub() {
     if (hub) {
       link.hidden = false;
       link.href = `creator.html?studio=${encodeURIComponent(hub.code)}`;
-      link.innerHTML = `${icon("tv")} Open this studio`;
+      link.innerHTML = `${icon("tv")} ${EMBED ? "Open the hub" : "Open this studio"}`;
     } else if (!list.length) {
       link.hidden = false;
       link.href = "creator.html?section=studio";
@@ -554,6 +566,10 @@ async function save(status) {
   if (status === "draft") {
     scheduleDraft();
     toast({ title: "Draft saved", message: "Find it again under your videos.", tone: "success", iconName: "check" });
+    if (EMBED) {
+      document.dispatchEvent(new CustomEvent("ved:drafted", { detail: { code: S.code, hub: S.hub } }));
+      return;
+    }
     if (!location.search.includes("id=")) window.history.replaceState(null, "", `?id=${encodeURIComponent(S.code)}`);
     const heading = $("[data-ved-heading]");
     if (heading) heading.textContent = "Edit a video";
@@ -567,9 +583,70 @@ async function save(status) {
     tone: "success",
     iconName: "check",
   });
+
+  if (EMBED) {
+    /* the desk stays where it is: it lists the new video and hands the member a
+       clean form for the next one, instead of carrying them away from the hub */
+    const done = { code: S.code, status: S.status, hub: S.hub, title: S.title };
+    resetForm();
+    document.dispatchEvent(new CustomEvent("ved:published", { detail: done }));
+    return;
+  }
+
   setTimeout(() => {
     location.href = `videos.html#/v/${encodeURIComponent(S.code)}`;
   }, 650);
+}
+
+/* ================================================================== */
+/* a fresh form — the desk's, after a publish                         */
+/* ================================================================== */
+function resetForm() {
+  S.code = "";
+  S.title = "";
+  S.desc = "";
+  S.embed = "";
+  S.thumb = "";
+  S.thumbChosen = false;
+  S.thumbAuto = false;
+  S.tags = [];
+  S.people = [];
+  S.passes = [];
+  S.hasPassword = false;
+  S.countries = [];
+  S.langs = [];
+  S.lvMin = 1;
+  S.lvMax = 10;
+  S.followers = false;
+  S.vis = "general";
+  S.when = "now";
+  S.whenAt = "";
+  S.language = "en";
+  S.age = "none";
+  S.download = false;
+  S.vertical = false;
+  S.status = "draft";
+  S.busy = false;
+  /* the hub is the desk's, and it stays: the next video goes to the same place */
+  if (el.title) el.title.value = "";
+  if (el.desc) el.desc.value = "";
+  if (el.embed) el.embed.value = "";
+  if (el.thumb) el.thumb.value = "";
+  if (el.tagInput) el.tagInput.value = "";
+  if (el.lang) el.lang.value = "en";
+  const vertical = $("[data-ved-vertical]");
+  if (vertical) vertical.checked = false;
+  const download = $("[data-ved-download]");
+  if (download) download.checked = false;
+  const followers = $("[data-ved-followers]");
+  if (followers) followers.checked = false;
+  const lvMin = $("[data-ved-lv-min]");
+  if (lvMin) lvMin.value = "1";
+  const lvMax = $("[data-ved-lv-max]");
+  if (lvMax) lvMax.value = "10";
+  paintAll();
+  if (el.embed) el.embed.dispatchEvent(new Event("input"));
+  if (el.title) el.title.focus();
 }
 
 /* ================================================================== */
@@ -618,7 +695,9 @@ function addTag(raw) {
 async function loadHubs() {
   let res = null;
   try {
-    res = await rpc("creator_hubs_list", { p_token: S.token });
+    /* on the desk a hub is somewhere this member was approved to publish —
+       owned, staffed, or a publisher's place — so it asks a different door */
+    res = await rpc(EMBED ? "publisher_hubs" : "creator_hubs_list", { p_token: S.token });
   } catch (error) {
     console.warn("[1World] studios:", error.message);
   }
@@ -1395,6 +1474,8 @@ function bind() {
     paintPreview();
     paintStatus();
     scheduleDraft();
+    /* the desk's own rail moves with this picker */
+    if (EMBED) document.dispatchEvent(new CustomEvent("ved:hub", { detail: { code: S.hub, from: "editor" } }));
   });
 
   el.lang.addEventListener("change", () => {
@@ -1430,9 +1511,26 @@ async function boot() {
   el.shell.hidden = false;
   el.foot.hidden = false;
 
-  /* a link from the studio (`video-editor.html?studio=IDST100001`) preselects it */
+  /* a link from the studio (`video-editor.html?studio=IDST100001`) preselects it,
+     and so does the desk, which names its hub on the body */
   const wantedHub = (new URLSearchParams(location.search).get("studio") || "").trim().toUpperCase();
   if (wantedHub) S.hub = wantedHub;
+  if (EMBED) {
+    const handed = (document.body.dataset.vedHubcode || "").trim().toUpperCase();
+    if (handed) S.hub = handed;
+    /* the rail on the left of the desk changes the hub without touching the picker */
+    document.addEventListener("ved:hub", (event) => {
+      const code = String((event.detail && event.detail.code) || "").trim().toUpperCase();
+      if (code === S.hub) return;
+      S.hub = code;
+      const hub = S.hubs.find((h) => h.code === code);
+      S.hubName = hub ? hub.name : "";
+      paintHub();
+      paintPreview();
+      paintStatus();
+      scheduleDraft();
+    });
+  }
 
   await loadHubs();
 

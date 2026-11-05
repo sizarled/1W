@@ -1110,8 +1110,10 @@ have — carries **Publish a video** in its bar, and the same button in its empt
 says plainly that a video is written over there. `openEditor("video")` navigates instead of opening a
 form, so no path — old markup, a keyboard, a link — can bring the table form back.
 
-The table editor keeps one job, and a video is not it either: **a video is published only from
-`video-editor.html`, by the owner or the staff.** The public hub page's *Write in this hub* form
+The table editor keeps one job, and a video is not it either: **a video is published only from the
+editor — `video-editor.html` for the owner and the staff, the same editor embedded in
+`publisher.html` for a publisher the hub approved** (see *The publisher's desk* below). The public
+hub page's *Write in this hub* form
 used to offer Video among the kinds a publisher could hand in; it does not any more. The list is
 podcast and playlist for a studio or a server, article for a blog, and **nothing for a cinema** —
 a cinema's films are its owner's, so an approved publisher there gets no button at all rather than
@@ -1150,7 +1152,7 @@ published (and refused without a media link), an article refused in a studio hub
 categories three deep with the fourth refused (`deep`) and a duplicate refused, a third blog created
 then a fourth refused (`limit`, level 1), staff added by code and an unknown code refused
 (`member`), and the subscriber list reporting a real member with their country.
-`tools/creator-smoke.mjs` (281 checks) runs the studio end to end — an empty studio that creates, configures
+`tools/creator-smoke.mjs` (284 checks) runs the studio end to end — an empty studio that creates, configures
 (private + password + staff), saves, refuses, and deletes a studio; a studio page holding one of each
 hub (tables, columns, action menus, the editor saving a draft then publishing, blog articles vs
 drafts, categories, subscribers, library books); and the `?section=&tab=` deep links.
@@ -1253,6 +1255,50 @@ way, under "Advertising in this hub"; the public reply only ever carries the `li
 | `creator_ad_save / creator_ad_delete / creator_ads` | the ad itself, for an approved advertiser and for the owner |
 | `creator_submit_item(token, hub, kind, …)` | a publisher's draft |
 
+#### The publisher's desk — `publisher.html`
+
+An approved publisher is not a guest of the studio: they have a page of their own, and it holds the
+**real editor**, not a thinner copy of it. `publisher.html` embeds `video-editor.html`'s own form —
+the link with drag & drop and the whole host list, the thumbnail (upload / picture / from the video),
+the title and description counters, the tags, the language, the age, the visibility with its
+exclusive rules and its private list and passwords, the schedule, the autosaved draft, the sticky
+bar and <kbd>Ctrl/Cmd</kbd>+<kbd>Enter</kbd> — because it is the same markup and the same module:
+`<body data-ved-embed="1">` tells `video-editor.js` it is embedded, and it then
+
+| instead of | on the desk |
+| --- | --- |
+| listing the hubs the member owns or staffs (`creator_hubs_list`) | listing the hubs that may take their videos: owned, staffed, **or approved as a publisher** (`publisher_hubs`) |
+| offering "my own feed — no studio" | offering the hubs themselves — a publisher publishes *somewhere* |
+| navigating to `videos.html#/v/<code>` after a publish | staying put: `ved:published` hands the new video to the page, the form comes back clean for the next one |
+
+Around the editor the page carries the rail of those hubs (name, kind, code, their video count, and
+whether the member is staff or a publisher there), the two tabs **New video** and **Your videos
+here**, and that list — `video_mine`, filtered to the selected hub, with the status, the visibility,
+the views and the date, and *Open* / *Edit here* (`publisher.html?studio=<code>&id=<code>` opens that
+video in the embedded editor). A member with no hub yet gets a sentence and two ways out instead of
+an editor pointed at nothing. The hub page hands every approved publisher the door: **The
+publisher's desk** (`data-crp-desk`).
+
+**Publishing there is live.** `video_save`'s `hub_role` guard used to accept only the owner or the
+staff; it now also accepts a member whose code is in `creator_hubs.publishers` — the owner's approval
+*is* the review, so a publisher's video goes into the hub the moment they press Publish, under their
+name, with the visibility and the schedule they chose. Everything else still stands: the hub must
+exist, and its kind must be able to hold a video.
+
+| Function | Answers |
+| --- | --- |
+| `publisher_hubs(token)` | the hubs that may take this member's videos — `{id, code, kind, name, logo_url, cover_url, visibility, role: staff\|publisher, published, drafts, mine}` |
+
+DDL + functions: `tools/sql/publisher-desk.sql` — **applied**, and exercised on the real database in a
+block that rolled itself back: a member who owned nothing asked the desk and got an empty list, and
+`video_save` refused their hub with `hub_role`; the owner then approved them into a cinema
+(`IDCN100006`), the desk listed it as `role: publisher`, and the same call wrote a **published**
+video into that hub (`{ok:true, status:"published", code:"PST-001034", hub:"IDCN100006"}`) while a hub
+that never approved them still answered `hub_role`. `tools/publisher-smoke.mjs` (76 checks) runs the
+page end to end in jsdom: signed out, approved nowhere, the rail and the editor's picker agreeing,
+the full form present, a publish that names the hub and stays on the page, the clean form, the two
+tabs, the rail retargeting the editor, and both deep links (`?studio=`, `?id=`).
+
 DDL + functions: `tools/sql/creator-requests.sql` — **applied**, and exercised on the real database:
 a member asked to advertise (banner, 500 points) and to publish in a hub, the owner read both in
 `creator_participants`, approved both (the two arrays filled with their code), the advertiser put a
@@ -1333,7 +1379,8 @@ only the public film. The test hubs, items and sessions were removed afterwards.
 
 Two screens that used to be placeholders are now live, dressed in the site's own tokens rather than
 the mock's: **`videos.html`** (the feed and the player, one page, `#/v/<code>` for a single video)
-and **`video-editor.html`** (publishing).
+and **`video-editor.html`** (publishing) — and, for a member an owner approved as a publisher,
+**`publisher.html`**, which is that same editor embedded in the publisher's own desk.
 
 Neither invents a table. A member video is a row of `posts` with `content_type = 'video'` — the same
 row likes, comments, reports and reach already live on — plus one column of its own,
@@ -2394,7 +2441,9 @@ assets/js/icons.js          line icon set + brand glyphs (brands.js)
 assets/js/blocks.js         blocked people/media cache used by every list
 assets/css/video.css        member videos: the feed, the player, the publish page
 assets/js/videos.js         videos.html: feed, watch screen, comments, reactions
-assets/js/video-editor.js   video-editor.html: the publish form and video_save
+assets/js/video-editor.js   video-editor.html: the publish form and video_save (embedded by publisher.html)
+assets/js/publisher.js       publisher.html: the desk — the rail, the tabs, the published list
+assets/css/publisher.css    the desk around the embedded editor
 assets/css/article.css      member articles: the index, the reader, the writing page
 assets/js/articles.js       articles.html: the index, the search, the shelves
 assets/js/article.js        article.html: one piece, the two doors, the comments
