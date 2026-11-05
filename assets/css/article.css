@@ -1564,6 +1564,62 @@
   vertical-align: bottom;
 }
 
+/* what the writing surface itself produces */
+.aed__body h2,
+.aed__body h3 {
+  margin: 1.4rem 0 0.5rem;
+}
+
+.aed__body p {
+  margin: 0 0 0.85rem;
+}
+
+.aed__body ul,
+.aed__body ol {
+  margin: 0 0 0.9rem;
+  padding-left: 1.35rem;
+}
+
+.aed__body li + li {
+  margin-top: 0.3rem;
+}
+
+.aed__body li > ul,
+.aed__body li > ol {
+  margin: 0.3rem 0 0.2rem;
+}
+
+.aed__body blockquote {
+  margin: 1rem 0;
+  padding: 0.2rem 0 0.2rem 0.9rem;
+  border-left: 2px solid var(--line-2);
+  color: var(--muted);
+}
+
+.aed__body a {
+  color: var(--text);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.aed__body hr {
+  height: 1px;
+  margin: 1.6rem 0;
+  border: 0;
+  background: var(--line);
+}
+
+.aed__body figure {
+  margin: 1.2rem 0;
+}
+
+.aed__body figcaption {
+  margin-top: 0.4rem;
+  color: var(--faint);
+  font-size: 0.78rem;
+}
+
 .aed__body img[data-sel="1"] {
   outline: 2px solid var(--line-3);
   outline-offset: 2px;

@@ -506,7 +506,154 @@ async function editor(tag) {
 }
 
 /* ================================================================== */
-/* pass 8 — the old address and the stylesheet                        */
+/* pass 8 — a file from the machine, the draft, and the key           */
+/* ================================================================== */
+{
+  /* a stand-in for XMLHttpRequest: the storage upload, without a network */
+  const uploads = [];
+  class FakeXhr {
+    constructor() {
+      this.upload = {};
+      this.status = 0;
+      this.responseText = "";
+    }
+    open(method, url) {
+      this.method = method;
+      this.url = url;
+    }
+    setRequestHeader(key, value) {
+      this.headers = { ...(this.headers || {}), [key]: value };
+    }
+    send(file) {
+      uploads.push({ url: this.url, headers: this.headers, name: file && file.name, size: file && file.size });
+      this.upload.onprogress?.({ lengthComputable: true, loaded: 5, total: 10 });
+      this.status = 200;
+      this.responseText = "{}";
+      setTimeout(() => this.onload?.(), 5);
+    }
+  }
+  globalThis.XMLHttpRequest = FakeXhr;
+
+  const seen = [];
+  const ctx = boot("video-editor.html", {
+    storage: STORAGE,
+    fetchImpl: (href) => {
+      const fn = fnName(href);
+      seen.push(fn);
+      if (fn === "video_save") return reply({ ok: true, code: "PST-001101", status: "published", scheduled_at: null });
+      return reply([]);
+    },
+  });
+  await import(`file://${join(root, "assets/js/video-editor.js")}?p8hands`);
+  await wait(70);
+  const { document, window, calls } = ctx;
+
+  expect("files: an upload button for the video", Boolean(document.querySelector("[data-ved-file-btn]")));
+  expect("files: a hidden file input for it", document.querySelector("[data-ved-file]")?.type === "file");
+  expect("files: an upload button for the picture", Boolean(document.querySelector("[data-ved-thumb-upload]")));
+  expect("files: a hidden input for the picture", document.querySelector("[data-ved-thumb-file]")?.type === "file");
+
+  /* a dropped file becomes the source */
+  const drop = document.querySelector("[data-ved-drop]");
+  const dropEvent = new window.Event("drop", { bubbles: true, cancelable: true });
+  dropEvent.dataTransfer = {
+    files: [{ name: "short.mp4", type: "video/mp4", size: 1024 * 1024 }],
+    getData: () => "",
+  };
+  drop.dispatchEvent(dropEvent);
+  await wait(80);
+  expect("files: the upload went to storage", uploads.length === 1, JSON.stringify(uploads.map((u) => u.url)));
+  expect("files: under the videos folder", uploads[0]?.url.includes("/storage/v1/object/source/users/videos/"), uploads[0]?.url);
+  expect("files: with the publishable key", Boolean(uploads[0]?.headers?.apikey), JSON.stringify(uploads[0]?.headers));
+  const embed = document.querySelector("[data-ved-embed]");
+  expect("files: the source field holds the new address", embed.value.includes("/storage/v1/object/public/source/users/videos/"), embed.value);
+  expect("files: the note says what happened", document.querySelector("[data-ved-file-note]")?.textContent.includes("short.mp4"), document.querySelector("[data-ved-file-note]")?.textContent);
+  expect("files: a file is named as one", document.querySelector("[data-ved-source-badge]")?.textContent === "File", document.querySelector("[data-ved-source-badge]")?.textContent);
+
+  /* a picture from the machine */
+  const thumbInput = document.querySelector("[data-ved-thumb-file]");
+  Object.defineProperty(thumbInput, "files", { value: [{ name: "still.jpg", type: "image/jpeg", size: 2048 }], configurable: true });
+  thumbInput.dispatchEvent(new window.Event("change", { bubbles: true }));
+  await wait(60);
+  expect("files: the picture was uploaded", uploads.length === 2 && uploads[1].url.includes("/users/posts/"), JSON.stringify(uploads.map((u) => u.url)));
+  expect("files: and becomes the thumbnail", document.querySelector("[data-ved-thumb-box] img")?.getAttribute("src")?.includes("/users/posts/"), document.querySelector("[data-ved-thumb-box]")?.innerHTML.slice(0, 90));
+
+  /* the hosts the field understands */
+  const badge = () => document.querySelector("[data-ved-source-badge]")?.textContent;
+  embed.value = "https://vimeo.com/76979871";
+  embed.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await wait(20);
+  expect("hosts: Vimeo is named", badge() === "Vimeo", badge());
+  embed.value = "https://drive.google.com/file/d/1AbCdEfGhIjKlMnOp/view";
+  embed.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await wait(20);
+  expect("hosts: Drive is named", badge() === "Google Drive", badge());
+  embed.value = "https://www.dailymotion.com/video/x8abc12";
+  embed.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await wait(20);
+  expect("hosts: Dailymotion is named", badge() === "Dailymotion", badge());
+
+  /* ages */
+  document.querySelector('[data-age="3"]').dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await wait(20);
+  expect("ages: 3+ can be chosen", document.querySelector('[data-age="3"]').classList.contains("is-on"));
+
+  /* the draft on the device */
+  const title = document.querySelector("[data-ved-title]");
+  title.value = "A draft kept on the device";
+  title.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await wait(1150);
+  const kept = window.localStorage.getItem("1w.videos.draft");
+  expect("draft: it is kept on the device", Boolean(kept), kept ? kept.slice(0, 60) : "nothing");
+  expect("draft: with the title in it", kept?.includes("A draft kept on the device"));
+  expect("draft: and the source", kept?.includes("dailymotion.com/video"), kept ? kept.slice(0, 200) : "");
+  expect("draft: the bar says when", document.querySelector("[data-ved-draft-note]")?.textContent.includes("kept on this device"), document.querySelector("[data-ved-draft-note]")?.textContent);
+
+  /* Ctrl+Enter publishes */
+  const before = calls.filter((c) => fnName(c.href) === "video_save").length;
+  document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, bubbles: true, cancelable: true }));
+  await wait(120);
+  const after = calls.filter((c) => fnName(c.href) === "video_save").length;
+  expect("keys: Ctrl+Enter publishes", after === before + 1, `${before} → ${after}`);
+  const payload = lastCall(calls, "video_save")?.body.p_payload || {};
+  expect("keys: the age rides in meta", payload.meta?.age === "3", JSON.stringify(payload.meta));
+  expect("keys: the file is named as a file or a host", ["file", "dailymotion", "vimeo", "drive", "embed"].includes(payload.meta?.source), payload.meta?.source);
+  expect("keys: publishing clears the draft", window.localStorage.getItem("1w.videos.draft") === null, String(window.localStorage.getItem("1w.videos.draft")));
+  expect("files: nothing threw", ctx.errors.length === 0, ctx.errors.join(" | "));
+}
+
+/* ================================================================== */
+/* pass 9 — a draft left behind comes back                            */
+/* ================================================================== */
+{
+  const left = JSON.stringify({
+    code: "",
+    savedAt: new Date().toISOString(),
+    embed: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    title: "Written yesterday",
+    desc: "and never published",
+    tags: ["animation"],
+    vis: "limited",
+    countries: ["Morocco"],
+    language: "ar",
+    age: "16",
+  });
+  const ctx = boot("video-editor.html", {
+    storage: { ...STORAGE, "1w.videos.draft": left },
+    fetchImpl: (href) => (fnName(href) === "video_save" ? reply({ ok: true, code: "PST-001102", status: "draft", scheduled_at: null }) : reply([])),
+  });
+  await import(`file://${join(root, "assets/js/video-editor.js")}?p9draft`);
+  await wait(80);
+  const { document } = ctx;
+  expect("restore: the title is back", document.querySelector("[data-ved-title]")?.value === "Written yesterday", document.querySelector("[data-ved-title]")?.value);
+  expect("restore: the source is back", document.querySelector("[data-ved-embed]")?.value.includes("youtube.com"), document.querySelector("[data-ved-embed]")?.value);
+  expect("restore: the door is back", document.querySelector('[data-vis="limited"]')?.getAttribute("aria-pressed") === "true" || document.querySelector('[data-vis="limited"]')?.classList.contains("is-on"));
+  expect("restore: the age is back", document.querySelector('[data-age="16"]')?.classList.contains("is-on"));
+  expect("restore: the language is back", document.querySelector("[data-ved-lang]")?.value === "ar", document.querySelector("[data-ved-lang]")?.value);
+}
+
+/* ================================================================== */
+/* pass 10 — the old address and the stylesheet                       */
 /* ================================================================== */
 {
   const html = readFileSync(join(root, "video.html"), "utf8");

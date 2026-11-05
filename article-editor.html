@@ -153,12 +153,21 @@
               <div class="aed__row" style="margin-top:0">
                 <label class="afield"><span class="alabel">Field</span>
                   <input class="input" data-e-field list="e-fields" placeholder="Film, Cinema, Series…" maxlength="60" /></label>
+                <label class="afield"><span class="alabel">Niche</span>
+                  <input class="input" data-e-niche placeholder="Long takes, Sound, Festivals…" maxlength="60" /></label>
                 <label class="afield"><span class="alabel">Category</span>
                   <input class="input" data-e-category placeholder="Craft, Industry, Notebook…" maxlength="60" /></label>
+              </div>
+              <datalist id="e-fields" data-e-fields></datalist>
+
+              <div class="aed__row" style="margin-top:.6rem">
+                <label class="afield"><span class="alabel">Micro niche</span>
+                  <input class="input" data-e-micro placeholder="Needs a niche above" maxlength="60" disabled /></label>
+                <label class="afield"><span class="alabel">Nano niche</span>
+                  <input class="input" data-e-nano placeholder="Needs a micro niche" maxlength="60" disabled /></label>
                 <label class="afield"><span class="alabel">Language</span>
                   <select class="input" data-e-lang></select></label>
               </div>
-              <datalist id="e-fields" data-e-fields></datalist>
 
               <div class="aed__row" style="margin-top:.7rem">
                 <input class="input" data-e-tag-input placeholder="Add a tag and press Enter — twelve at most" maxlength="40" />
@@ -313,6 +322,9 @@
         <select class="input" data-prev-country aria-label="Simulated reader country"></select>
         <select class="input" data-prev-lang aria-label="Simulated reader language"></select>
         <input class="input" type="number" min="1" max="10" value="1" data-prev-level aria-label="Simulated reader level" style="flex:0 0 90px" />
+        <label class="acheck" style="margin:0;flex:0 0 auto">
+          <input type="checkbox" data-prev-follow /> <span>Follows you</span>
+        </label>
         <button class="btn btn--quiet btn--sm" type="button" data-e-prev-close><i data-icon="close"></i> Close</button>
       </div>
       <div class="aprev__scroll" data-prev-scroll></div>

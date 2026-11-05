@@ -24,6 +24,7 @@ import { icon } from "./icons.js";
 import { toast } from "./ui.js";
 import { sessionToken, getMember } from "./session.js";
 import { COUNTRIES } from "./countries.js";
+import { SUPABASE, storageUrl } from "./config.js";
 
 const S = {
   token: "",
@@ -93,6 +94,31 @@ const el = {};
 function isFile(raw = "") {
   return /\.(mp4|webm|ogv|ogg|mov|m4v)(\?|#|$)/i.test(String(raw));
 }
+
+/** Which host a link belongs to — the watch page frames the same list. */
+function sourceKind(raw = "") {
+  const value = String(raw).trim();
+  if (!value) return "";
+  if (isFile(value)) return "file";
+  if (findYouTube(value)) return "youtube";
+  if (/vimeo\.com\//i.test(value)) return "vimeo";
+  if (/dailymotion\.com\//i.test(value)) return "dailymotion";
+  if (/facebook\.com|fb\.watch/i.test(value)) return "facebook";
+  if (/drive\.google\.com\//i.test(value)) return "drive";
+  if (/tiktok\.com\//i.test(value)) return "tiktok";
+  return "embed";
+}
+
+const SOURCE_LABEL = {
+  file: "File",
+  youtube: "YouTube",
+  vimeo: "Vimeo",
+  dailymotion: "Dailymotion",
+  facebook: "Facebook",
+  drive: "Google Drive",
+  tiktok: "TikTok",
+  embed: "Embed",
+};
 
 function findYouTube(raw = "") {
   const value = String(raw).trim();
@@ -195,7 +221,7 @@ function paintPreview() {
 
   const badge2 = $("[data-ved-source-badge]");
   if (badge2) {
-    badge2.textContent = !S.embed ? "" : isFile(S.embed) ? "File" : findYouTube(S.embed) ? "YouTube" : "Embed";
+    badge2.textContent = S.embed ? SOURCE_LABEL[sourceKind(S.embed)] || "Link" : "";
   }
 }
 
@@ -414,7 +440,7 @@ function payload(status) {
       age: S.age,
       download: Boolean(S.download),
       vertical: Boolean(S.vertical),
-      source: isFile(S.embed) ? "file" : findYouTube(S.embed) ? "youtube" : "embed",
+      source: sourceKind(S.embed) || "embed",
     },
   };
   /* the passwords we were never shown are the passwords we must not wipe:
@@ -465,6 +491,7 @@ async function save(status) {
   paintAll();
 
   if (status === "draft") {
+    scheduleDraft();
     toast({ title: "Draft saved", message: "Find it again under your videos.", tone: "success", iconName: "check" });
     if (!location.search.includes("id=")) window.history.replaceState(null, "", `?id=${encodeURIComponent(S.code)}`);
     const heading = $("[data-ved-heading]");
@@ -472,6 +499,7 @@ async function save(status) {
     return;
   }
 
+  clearDraft();
   toast({
     title: status === "scheduled" ? "Scheduled" : "Published",
     message: status === "scheduled" ? "It opens by itself at the moment you picked." : "It is in the feed now.",
@@ -595,6 +623,211 @@ function showState({ title, text, action = "" }) {
 /* ================================================================== */
 /* events                                                             */
 /* ================================================================== */
+/* ================================================================== */
+/* files: a picture or a video, from the machine                      */
+/* ================================================================== */
+const IMAGE_TYPES = /^image\/(png|jpeg|webp|gif)$/;
+const VIDEO_TYPES = /^video\/(mp4|webm|ogg|quicktime)$/;
+
+function fileNote(text, tone = "") {
+  const note = $("[data-ved-file-note]");
+  if (!note) return;
+  note.hidden = !text;
+  note.textContent = text || "";
+  note.style.color = tone === "error" ? "var(--red, #e5484d)" : "";
+}
+
+/** A small file straight to storage, with the percentage on the page. */
+function uploadFile(file, folder, note) {
+  return new Promise((resolve, reject) => {
+    const ext = (file.name.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const name = `${folder}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const path = `users/${folder}/${name}`;
+    let request;
+    try {
+      request = new XMLHttpRequest();
+    } catch {
+      reject(new Error("This browser cannot upload."));
+      return;
+    }
+    request.open("POST", `${SUPABASE.url}/storage/v1/object/source/${path}`);
+    request.setRequestHeader("apikey", SUPABASE.publishableKey);
+    request.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+    request.setRequestHeader("x-upsert", "true");
+    if (request.upload && note) {
+      request.upload.onprogress = (event) => {
+        if (!event.lengthComputable) return;
+        note(`Uploading… ${Math.round((event.loaded / event.total) * 100)}%`);
+      };
+    }
+    request.onload = () => {
+      if (request.status >= 200 && request.status < 300) {
+        resolve(storageUrl(path));
+        return;
+      }
+      reject(new Error(String(request.responseText || `HTTP ${request.status}`).slice(0, 120)));
+    };
+    request.onerror = () => reject(new Error("The upload did not reach the server."));
+    request.send(file);
+  });
+}
+
+async function uploadThumbnail(file) {
+  if (!file) return;
+  if (!IMAGE_TYPES.test(file.type)) {
+    toast({ title: "That is not a picture", message: "PNG, JPEG, WEBP or GIF.", tone: "error" });
+    return;
+  }
+  if (file.size > 4 * 1024 * 1024) {
+    toast({ title: "Too large", message: "4 MB at most.", tone: "error" });
+    return;
+  }
+  try {
+    const url = await uploadFile(file, "posts");
+    S.thumb = url;
+    paintThumb();
+    paintPreview();
+    paintStatus();
+    scheduleDraft();
+    toast({ title: "Picture uploaded", message: "", tone: "success", iconName: "image" });
+  } catch (error) {
+    toast({ title: "Upload failed", message: error?.message || "Try again.", tone: "error" });
+  }
+}
+
+async function uploadVideoFile(file) {
+  if (!file) return;
+  if (!VIDEO_TYPES.test(file.type)) {
+    fileNote("MP4, WEBM, OGG or MOV — those are the files a browser can play.", "error");
+    return;
+  }
+  if (file.size > 50 * 1024 * 1024) {
+    fileNote("50 MB at most here. A longer film belongs on a host — paste its link.", "error");
+    return;
+  }
+  const button = $("[data-ved-file-btn]");
+  if (button) button.disabled = true;
+  fileNote("Uploading… 0%");
+  try {
+    const url = await uploadFile(file, "videos", (text) => fileNote(text));
+    el.embed.value = url;
+    el.embed.dispatchEvent(new Event("input"));
+    fileNote(`${file.name} · ${(file.size / (1024 * 1024)).toFixed(1)} MB — in the site's storage`);
+    toast({ title: "File uploaded", message: "The link is in the field above.", tone: "success", iconName: "check" });
+  } catch (error) {
+    fileNote(error?.message || "The upload failed. Paste a link instead.", "error");
+    toast({ title: "Upload failed", message: error?.message || "Paste a link instead.", tone: "error" });
+  } finally {
+    if (button) button.disabled = false;
+    scheduleDraft();
+  }
+}
+
+/* ================================================================== */
+/* the draft on this device                                           */
+/* ================================================================== */
+const DRAFT_KEY = "1w.videos.draft";
+let draftTimer = null;
+
+function draftFields() {
+  return {
+    code: S.code,
+    savedAt: new Date().toISOString(),
+    embed: S.embed,
+    title: S.title,
+    desc: S.desc,
+    tags: S.tags,
+    thumb: S.thumb,
+    vis: S.vis,
+    when: S.when,
+    whenAt: S.whenAt,
+    countries: S.countries,
+    langs: S.langs,
+    lvMin: S.lvMin,
+    lvMax: S.lvMax,
+    followers: S.followers,
+    people: S.people,
+    language: S.language,
+    age: S.age,
+    download: S.download,
+    vertical: S.vertical,
+  };
+}
+
+function writeDraft() {
+  try {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(draftFields()));
+    paintDraftNote();
+  } catch {
+    /* storage blocked — the form still holds everything */
+  }
+}
+
+function scheduleDraft() {
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(writeDraft, 900);
+}
+
+function readDraft() {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const draft = JSON.parse(raw);
+    if (!draft) return null;
+    if (!draft.title && !draft.embed) return null;
+    if ((draft.code || "") !== (S.code || "")) return null;
+    return draft;
+  } catch {
+    return null;
+  }
+}
+
+function clearDraft() {
+  clearTimeout(draftTimer);
+  try {
+    localStorage.removeItem(DRAFT_KEY);
+  } catch {
+    /* nothing to clear */
+  }
+  paintDraftNote();
+}
+
+function restoreDraft(draft) {
+  S.embed = draft.embed || "";
+  S.title = draft.title || "";
+  S.desc = draft.desc || "";
+  S.tags = Array.isArray(draft.tags) ? draft.tags.slice(0, 12) : [];
+  S.thumb = draft.thumb || "";
+  S.vis = draft.vis || "general";
+  S.when = draft.when || "now";
+  S.whenAt = draft.whenAt || "";
+  S.countries = Array.isArray(draft.countries) ? draft.countries : [];
+  S.langs = Array.isArray(draft.langs) ? draft.langs : [];
+  S.lvMin = Number(draft.lvMin) || 1;
+  S.lvMax = Number(draft.lvMax) || 10;
+  S.followers = Boolean(draft.followers);
+  S.people = Array.isArray(draft.people) ? draft.people : [];
+  S.language = draft.language || "en";
+  S.age = draft.age || "none";
+  S.download = Boolean(draft.download);
+  S.vertical = Boolean(draft.vertical);
+}
+
+function paintDraftNote() {
+  const host = $("[data-ved-draft-note]");
+  if (!host) return;
+  let at = "";
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    const kept = raw ? JSON.parse(raw) : null;
+    if (kept && kept.savedAt) at = new Date(kept.savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    at = "";
+  }
+  host.hidden = !at;
+  host.textContent = at ? `kept on this device · ${at}` : "";
+}
+
 function bind() {
   /* the source */
   el.embed.addEventListener("input", () => {
@@ -614,8 +847,9 @@ function bind() {
         note.hidden = false;
         note.innerHTML = `${icon("check")} <span>A YouTube link — the thumbnail comes with it</span>`;
       } else {
+        const label = SOURCE_LABEL[sourceKind(value)] || "Embed";
         note.hidden = false;
-        note.innerHTML = `${icon("check")} <span>An embed link — it plays inside the frame</span>`;
+        note.innerHTML = `${icon("check")} <span>${esc(label)} — it plays inside the frame</span>`;
       }
     }
     if (!S.thumb) paintThumb();
@@ -658,6 +892,11 @@ function bind() {
     );
     drop.addEventListener("drop", (event) => {
       event.preventDefault();
+      const file = event.dataTransfer.files && event.dataTransfer.files[0];
+      if (file) {
+        uploadVideoFile(file);
+        return;
+      }
       const uri = event.dataTransfer.getData("text/uri-list") || event.dataTransfer.getData("text/plain");
       if (uri && /^https?:\/\//i.test(uri.trim())) {
         el.embed.value = uri.trim();
@@ -725,6 +964,61 @@ function bind() {
     S.thumb = "";
     paintThumb();
     paintPreview();
+    scheduleDraft();
+  });
+
+  /* a picture from the machine */
+  const thumbButton = $("[data-ved-thumb-upload]");
+  const thumbFile = $("[data-ved-thumb-file]");
+  thumbButton?.addEventListener("click", () => thumbFile?.click());
+  thumbFile?.addEventListener("change", () => {
+    const file = thumbFile.files && thumbFile.files[0];
+    if (file) uploadThumbnail(file);
+    thumbFile.value = "";
+  });
+
+  /* a file from the machine, as the video itself */
+  const fileButton = $("[data-ved-file-btn]");
+  const videoFile = $("[data-ved-file]");
+  fileButton?.addEventListener("click", () => videoFile?.click());
+  videoFile?.addEventListener("change", () => {
+    const file = videoFile.files && videoFile.files[0];
+    if (file) uploadVideoFile(file);
+    videoFile.value = "";
+  });
+
+  /* anything typed is a draft within a second */
+  [el.title, el.desc, el.thumb, el.embed].forEach((input) => input?.addEventListener("input", scheduleDraft));
+  el.shell.addEventListener("change", scheduleDraft);
+  el.shell.addEventListener("click", (event) => {
+    if (event.target.closest("[data-vis], [data-when], [data-age]")) scheduleDraft();
+  });
+
+  /* a member may paste the link anywhere on the page */
+  document.addEventListener("paste", (event) => {
+    if (S.embed.trim()) return;
+    const target = event.target;
+    if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+    const data = event.clipboardData;
+    const text = data ? String(data.getData("text/plain") || "").trim() : "";
+    if (!text || !/^https?:\/\//i.test(text)) return;
+    event.preventDefault();
+    el.embed.value = text;
+    el.embed.dispatchEvent(new Event("input"));
+    const auto = autoThumb(text);
+    if (auto && !S.thumb) {
+      S.thumb = auto;
+      paintThumb();
+      paintPreview();
+    }
+    toast({ title: "Link pasted", message: "The video is in the form.", tone: "success", iconName: "check" });
+  });
+
+  /* Ctrl/Cmd+Enter publishes, from anywhere on the page */
+  document.addEventListener("keydown", (event) => {
+    if (!(event.ctrlKey || event.metaKey) || event.key !== "Enter") return;
+    event.preventDefault();
+    save(S.when === "later" ? "scheduled" : "published");
   });
 
   /* extras */
@@ -912,6 +1206,12 @@ async function boot() {
     if (heading) heading.textContent = "Edit a video";
     const ok = await loadExisting(code);
     if (!ok) return;
+  } else {
+    const draft = readDraft();
+    if (draft) {
+      restoreDraft(draft);
+      toast({ title: "Draft restored", message: "The last thing you wrote here is back.", tone: "info", iconName: "file" });
+    }
   }
 
   /* write the loaded values into the form */
@@ -932,6 +1232,7 @@ async function boot() {
 
   bind();
   paintAll();
+  paintDraftNote();
 
   if (!S.code) {
     el.title.focus();

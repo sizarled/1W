@@ -118,6 +118,21 @@ export function embedUrl(raw = "") {
       const id = u.pathname.split("/").filter(Boolean).pop();
       if (/^\d+$/.test(id || "")) return `https://player.vimeo.com/video/${id}`;
     }
+    if (host.endsWith("dailymotion.com") || host === "dai.ly") {
+      const id = u.pathname.split("/").filter(Boolean).pop();
+      if (id && /^[a-z0-9]+$/i.test(id)) return `https://www.dailymotion.com/embed/video/${id}`;
+    }
+    if (host.endsWith("tiktok.com")) {
+      const id = (u.pathname.match(/\/video\/(\d+)/) || [])[1];
+      if (id) return `https://www.tiktok.com/embed/v2/${id}`;
+    }
+    if (host === "drive.google.com") {
+      const id = (u.pathname.match(/\/file\/d\/([\w-]+)/) || [])[1];
+      if (id) return `https://drive.google.com/file/d/${id}/preview`;
+    }
+    if (host.endsWith("facebook.com") || host === "fb.watch") {
+      return `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(url)}&show_text=false`;
+    }
   } catch {
     /* a plain text source, used as it is */
   }

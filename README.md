@@ -1447,14 +1447,69 @@ that reader would see the piece or the door.
 taken off that list so the generator cannot overwrite them.
 
 DDL + functions: `tools/sql/articles-page.sql` — **applied**. Test: `node tools/article-smoke.mjs` —
-**155/155** (the index, the empty index, the reader and its sanitizer, reaction→comment→vote, the
+**189/189** (the index, the empty index, the reader and its sanitizer, reaction→comment→vote, the
 exclusive gate with its steps and reminder, the private gate with a wrong and a right password, a
-missing piece, the editor signed out and in, a draft payload, an audience payload, a private payload
-with its member and password, Help going to review, and the shared word-count / reading-time rules).
+missing piece, the editor signed out and in, every toolbar function on a real range, the draft on the
+device, Ctrl+Enter, a draft payload, an audience payload, a private payload with its member and
+password, Help going to review, and the shared word-count / reading-time rules).
 
 Eleven pieces from @ledsizar, @jhon007 and @ledsizar7 remain on the index — nine public, one
 exclusive (`PST-001020`, open to LV5–LV10) and one private (`PST-001021`, the password is
 `1world2026`), so both gates can be seen without publishing anything.
+
+### The writing surface — one editor, every function
+
+Both writing pages now edit through **`assets/js/rte.js`**, a small rich-text core written on DOM
+ranges instead of `document.execCommand` — deprecated, unavailable after a programmatic insert, and
+in charge of an undo stack nobody can reason about. It is one code path in every browser, which is
+also why it can be tested at all: jsdom has no `execCommand`, so `node tools/rte-smoke.mjs` exercises
+the real thing.
+
+What it does, all of it reachable from the toolbar:
+
+| | |
+| --- | --- |
+| **Inline** | bold · italic · underline · strikethrough — press again to take it off |
+| **Blocks** | paragraph · heading 2 · heading 3 · quote, applied to everything the selection touches |
+| **Lists** | bulleted · numbered, and pressing the same button again turns them back into paragraphs; **Tab** nests an item, **Shift+Tab** lifts it |
+| **Alignment** | left · centre · right |
+| **Links** | a link around the words that were selected, or one inserted at the caret; unlink |
+| **Insertion** | image (as a figure with a caption) · video (as a captioned link, never a frame) · rule |
+| **Clearing** | remove the formatting, keep the words |
+| **History** | its own undo and redo, with the caret bookmarked by path, so undo survives an inserted picture |
+| **Keys** | Ctrl/Cmd + B · I · U · Shift+X · K (link) · Z / Shift+Z / Y · Enter (publish) |
+| **Paste and drop** | pasted text arrives as paragraphs with the markup escaped; a pasted or dropped address becomes a link; a dropped picture is uploaded and inserted |
+
+The bar also **reflects the caret**: stand in a bold run and Bold lights up; move into a heading and
+the block select follows. `keepSelection` on the toolbar stops a click from taking the caret with it,
+and the engine remembers the range when a dialog opens, so a link or a picture lands where the member
+was writing rather than at the end.
+
+The article editor gained the rest of the mock while it was open: **micro and nano niche** under the
+niche (each waiting for the one above it), the **draft on this device** (written 900 ms after the last
+keystroke, restored on the next visit, cleared when the piece is published or sent to review, and
+dated in the status line), **Ctrl/Cmd+Enter** to publish, and a **follows-you** switch in the reader
+preview so the followers-only door can be tried as well.
+
+The video editor gained the mock's uploads and the same safety net: **a picture from the machine** as
+the thumbnail, **a video file from the machine** (up to 50 MB, with the percentage on the page, and
+the storage address written into the field when it lands), a **draft on the device**, **Ctrl/Cmd+Enter**,
+a link **pasted anywhere** on the page, the mock's five **age ratings** (3+, 6+, 13+, 16+, 18+), and
+the hosts the field recognises — YouTube, Vimeo, Dailymotion, Facebook, Google Drive, TikTok and a
+direct file. The watch page's `embedUrl` understands the same list, so what the editor promises plays.
+
+**The uploads needed a database change, and did not have one.** The `source` bucket is public to read
+but every write passes a policy on `storage.objects`, and the only folders a browser could write to
+were `users/messages`, `users/posts` and `users/profile`. `users/articles/…` — where the article
+editor was already uploading — was refused. `tools/sql/storage-editors.sql` **opened the two folders
+the editors need**, each pinned to a name pattern and a set of extensions (`users/articles/*.jpg|png|webp|gif`,
+`users/videos/*.mp4|webm|ogg|mov`); video thumbnails go to `users/posts/`, which was already allowed.
+
+| Gate | Result |
+| --- | --- |
+| `node tools/rte-smoke.mjs` | **45/45** (every command, links, insertion, history, paste, drop, keys, toolbar state) |
+| `node tools/article-smoke.mjs` | **189/189** |
+| `node tools/video-smoke.mjs` | **142/142** (including the two uploads through a stand-in for `XMLHttpRequest`) |
 
 ### The six OAuth apps — one checklist each
 
@@ -2270,6 +2325,7 @@ assets/js/articles.js       articles.html: the index, the search, the shelves
 assets/js/article.js        article.html: one piece, the two doors, the comments
 assets/js/article-editor.js article-editor.html: the editor and article_save
 assets/js/article-text.js   word count, reading time and the body allowlist, shared by both
+assets/js/rte.js            the writing surface: ranges, formatting, history, paste, keys
 assets/css/cast.css         cast page (profile, dials, reels, mentions)
 assets/js/cast.js           cast page controller (TMDB + person_* RPCs)
 assets/css/register.css     registration form + success card (high-contrast, both themes)
@@ -2299,6 +2355,8 @@ tools/dashboard-smoke.mjs   dashboard test (five gates, rail, popover, codes, se
 tools/sidebar-smoke.mjs     sidebar rail test (edge reveal, pin, Escape, mobile drawer, dashboard menu)
 tools/video-smoke.mjs       videos + video editor test (feed, player, doors, payload)
 tools/article-smoke.mjs     articles test (index, reader, sanitizer, doors, payload)
+tools/rte-smoke.mjs         the editor itself (every command, on real ranges)
+tools/sql/storage-editors.sql  the two storage folders the editors may write to
 tools/court-smoke.mjs       activation wizard + court room test
 tools/visit-smoke.mjs       visit tracker test (5 modes)
 ```

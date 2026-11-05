@@ -17,9 +17,10 @@
  * Pass 7  — the writing page: signed out it asks for a sign-in; signed
  *           in it counts words, builds the checks and saves a draft with
  *           exactly the payload the server expects.
- * Pass 8  — publishing: the audience rules, the private list and its
+ * Pass 8  — the editor's hands: every toolbar function on a real range.
+ * Pass 9  — publishing: the audience rules, the private list and its
  *           passwords; a Help page goes to review, public and pending.
- * Pass 9  — the rules both pages share: word count, reading time, the
+ * Pass 10 — the rules both pages share: word count, reading time, the
  *           sanitizer; and the stylesheet carries every class worn.
  */
 import { JSDOM } from "jsdom";
@@ -588,7 +589,196 @@ const MEMBER = {
 }
 
 /* ================================================================== */
-/* pass 8 — the audience, the private list, and Help                  */
+/* pass 8 — the editor's hands: every toolbar function, for real       */
+/* ================================================================== */
+{
+  const { document, window, calls, errors } = boot("article-editor.html", {
+    url: "article-editor.html",
+    storage: MEMBER,
+    fetchImpl: (href) => {
+      const fn = fnName(href);
+      if (fn === "article_mine") return reply({ ok: true, rows: [] });
+      if (fn === "article_feed") return reply({ ok: true, rows: [], fields: [{ name: "Film", count: 1 }], rails: [], total: 0 });
+      if (fn === "article_save") return reply({ ok: true, code: "PST-001042", status: "published", scheduled_at: null, article: row({ code: "PST-001042" }) });
+      return reply([]);
+    },
+  });
+  await import(`file://${join(root, "assets/js/article-editor.js")}?p8hands`);
+  await wait(70);
+
+  const body = document.querySelector("[data-e-body]");
+  const pick = (node, start, end) => {
+    const range = document.createRange();
+    try {
+      range.setStart(node, Math.min(start, (node.textContent || "").length));
+      range.setEnd(node, end == null ? (node.textContent || "").length : Math.min(end, (node.textContent || "").length));
+    } catch (error) {
+      console.log("pick failed", node?.nodeName, start, end, node?.textContent, error.message);
+      throw error;
+    }
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  };
+  const click = (selector) => document.querySelector(selector).dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+  const caretIn = (node, at = 0) => {
+    const range = document.createRange();
+    const limit = node?.nodeType === 3 ? (node.textContent || "").length : node?.childNodes.length ?? 0;
+    try {
+      range.setStart(node, Math.min(at, limit));
+    } catch (error) {
+      console.log("caret failed", node?.nodeName, at, limit, node?.textContent, error.message);
+      throw error;
+    }
+    range.collapse(true);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  };
+
+  /* the body starts empty and the toolbar has nothing to grey */
+  expect("hands: the body is editable", body.getAttribute("contenteditable") === "true", body.getAttribute("contenteditable"));
+
+  body.innerHTML = "<p>the kitchen scene is the argument</p>";
+  pick(body.querySelector("p").firstChild, 4, 11);
+  click('[data-cmd="bold"]');
+  await wait(20);
+  expect("hands: bold bolds the words", body.innerHTML.includes("<strong>kitchen</strong>"), body.innerHTML);
+  expect("hands: the count survives formatting", document.querySelector("[data-e-words]")?.textContent === "6 words", document.querySelector("[data-e-words]")?.textContent);
+
+  caretIn(body.querySelector("strong").firstChild, 2);
+  body.dispatchEvent(new window.KeyboardEvent("keyup", { key: "ArrowRight", bubbles: true }));
+  await wait(20);
+  expect("hands: the bold button shows the caret is bold", document.querySelector('[data-cmd="bold"]').classList.contains("is-on"));
+
+  click('[data-cmd="bold"]');
+  await wait(20);
+  expect("hands: pressing it again takes it off", !body.innerHTML.includes("<strong>"), body.innerHTML);
+
+  pick(body.querySelector("p").firstChild, 0, 3);
+  click('[data-cmd="italic"]');
+  await wait(20);
+  expect("hands: italic works", body.innerHTML.includes("<em>the</em>"), body.innerHTML);
+
+  const block = document.querySelector("[data-e-block]");
+  caretIn(body.querySelector("p").firstChild, 2);
+  block.value = "h2";
+  block.dispatchEvent(new window.Event("change", { bubbles: true }));
+  await wait(20);
+  expect("hands: the block select makes a heading", Boolean(body.querySelector("h2")), body.innerHTML);
+
+  click('[data-cmd="insertUnorderedList"]');
+  await wait(20);
+  expect("hands: the list button makes a list", Boolean(body.querySelector("ul li")), body.innerHTML);
+  click('[data-cmd="insertUnorderedList"]');
+  await wait(20);
+  expect("hands: and puts it back", !body.querySelector("ul"), body.innerHTML);
+
+  body.innerHTML = "<h2>a heading to centre</h2><p>and a line under it</p>";
+  body.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await wait(420);
+  caretIn(body.querySelector("h2").firstChild, 1);
+  click('[data-cmd="justifyCenter"]');
+  await wait(20);
+  expect("hands: centring sets the block style", body.querySelector("h2").style.textAlign === "center", body.innerHTML);
+
+  click('[data-cmd="undo"]');
+  await wait(20);
+  expect("hands: undo walks back", body.querySelector("h2").style.textAlign !== "center", body.innerHTML);
+  click('[data-cmd="redo"]');
+  await wait(20);
+  expect("hands: redo walks forward", body.querySelector("h2").style.textAlign === "center", body.innerHTML);
+
+  /* a link through the dialog */
+  body.innerHTML = "<p>read the rest of it</p>";
+  pick(body.querySelector("p").firstChild, 9, 13);
+  click('[data-cmd="insertLink"]');
+  await wait(20);
+  expect("hands: the link dialog is filled", Boolean(document.querySelector("[data-dlg-url]")), document.querySelector("[data-e-dlg-body]")?.innerHTML.slice(0, 80));
+  document.querySelector("[data-dlg-url]").value = "https://example.com/more";
+  document.querySelector("[data-dlg-text]").value = "";
+  click("[data-e-dlg-ok]");
+  await wait(30);
+  expect("hands: the link lands in the piece", body.querySelector("a")?.getAttribute("href") === "https://example.com/more", body.innerHTML);
+  expect("hands: on the words that were selected", body.querySelector("a")?.textContent === "rest", body.innerHTML);
+
+  /* an image through the dialog */
+  const caretAtEndOf = (node) => {
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  };
+  caretAtEndOf(body.querySelector("p"));
+  click('[data-cmd="insertImage"]');
+  await wait(20);
+  document.querySelector("[data-dlg-url]").value = "https://example.com/still.jpg";
+  document.querySelector("[data-dlg-alt]").value = "a still";
+  click("[data-e-dlg-ok]");
+  await wait(30);
+  expect("hands: the image is inserted as a figure", Boolean(body.querySelector("figure img")), body.innerHTML);
+  expect("hands: with its description", body.querySelector("figure img")?.getAttribute("alt") === "a still", body.innerHTML);
+  expect("hands: an empty line follows it", Boolean(body.querySelector("p")), body.innerHTML);
+
+  /* a video, as a captioned link */
+  click('[data-cmd="insertVideo"]');
+  await wait(20);
+  document.querySelector("[data-dlg-url]").value = "https://www.youtube.com/watch?v=abc123def45";
+  document.querySelector("[data-dlg-caption]").value = "the shot in question";
+  click("[data-e-dlg-ok]");
+  await wait(30);
+  expect("hands: the video becomes a captioned link", body.innerHTML.includes("the shot in question"), body.innerHTML);
+  expect("hands: nothing is embedded", !body.innerHTML.includes("<iframe"), body.innerHTML);
+
+  /* clear formatting */
+  body.innerHTML = "<p><strong>thick</strong> and <em>slanted</em></p>";
+  caretIn(body.querySelector("strong").firstChild, 1);
+  click('[data-cmd="removeFormat"]');
+  await wait(20);
+  expect("hands: clear formatting strips the tags", !body.querySelector("strong") && !body.querySelector("em"), body.innerHTML);
+  expect("hands: the words are still there", body.textContent.includes("thick") && body.textContent.includes("slanted"), body.textContent);
+
+  /* the niche ladder */
+  const micro = document.querySelector("[data-e-micro]");
+  const nano = document.querySelector("[data-e-nano]");
+  expect("hands: micro waits for a niche", micro?.disabled === true);
+  document.querySelector("[data-e-niche]").value = "Long takes";
+  document.querySelector("[data-e-niche]").dispatchEvent(new window.Event("input", { bubbles: true }));
+  await wait(20);
+  expect("hands: a niche unlocks micro", micro?.disabled === false);
+  expect("hands: nano still waits", nano?.disabled === true);
+  micro.value = "Static camera";
+  micro.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await wait(20);
+  expect("hands: a micro unlocks nano", nano?.disabled === false);
+
+  /* the draft on the device */
+  document.querySelector("[data-e-title]").value = "Hands on the toolbar";
+  document.querySelector("[data-e-title]").dispatchEvent(new window.Event("input", { bubbles: true }));
+  document.querySelector("[data-e-field]").value = "Film";
+  await wait(1100);
+  const kept = window.localStorage.getItem("1w.articles.draft");
+  expect("hands: the draft is kept on the device", Boolean(kept), kept ? kept.slice(0, 60) : "nothing");
+  expect("hands: with the body inside it", kept?.includes("thick") || kept?.includes("slanted"), kept ? kept.slice(0, 120) : "");
+  expect("hands: the status line says so", document.querySelector("[data-e-status]")?.textContent.includes("on this device"), document.querySelector("[data-e-status]")?.textContent);
+
+  /* Ctrl+Enter publishes */
+  const before = calls.filter((c) => fnName(c.href) === "article_save").length;
+  body.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, bubbles: true, cancelable: true }));
+  await wait(120);
+  const sent = calls.filter((c) => fnName(c.href) === "article_save");
+  expect("hands: Ctrl+Enter publishes", sent.length === before + 1, String(sent.length));
+  const last = sent[sent.length - 1];
+  expect("hands: as a published piece", last?.body.p_payload.status === "published", last?.body.p_payload.status);
+  expect("hands: with the niche in meta", last?.body.p_payload.meta.niche === "Long takes", JSON.stringify(last?.body.p_payload.meta));
+  expect("hands: with micro and nano too", last?.body.p_payload.meta.micro === "Static camera" && last?.body.p_payload.meta.nano === "", JSON.stringify(last?.body.p_payload.meta));
+  expect("hands: nothing threw", errors.length === 0, errors.join(" | "));
+}
+
+/* ================================================================== */
+/* pass 9 — the audience, the private list, and Help                  */
 /* ================================================================== */
 {
   const { document, calls, errors } = boot("article-editor.html", {

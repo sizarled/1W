@@ -83,7 +83,13 @@
                   <input class="input" type="url" data-ved-embed placeholder="https://www.youtube.com/watch?v=…  or  https://…/film.mp4" aria-label="Video link" spellcheck="false" />
                   <button class="btn btn--ghost btn--sm" type="button" data-ved-detect><i data-icon="sparkle"></i> Read it</button>
                 </div>
+                <div class="vsrc__row">
+                  <button class="btn btn--ghost btn--sm" type="button" data-ved-file-btn><i data-icon="upload"></i> Upload a file</button>
+                  <span class="vhint" style="flex:1 1 220px">A file up to 50 MB goes to the site's storage and the link is filled in for you.</span>
+                  <input type="file" accept="video/mp4,video/webm,video/ogg,video/quicktime" data-ved-file hidden />
+                </div>
                 <p class="vsrc__found" data-ved-source-note hidden></p>
+                <p class="vhint" data-ved-file-note hidden></p>
               </div>
             </section>
 
@@ -168,9 +174,11 @@
               <div class="vthumb__box" data-ved-thumb-box>No picture yet</div>
               <input class="input" type="url" data-ved-thumb placeholder="https://…/still.jpg" aria-label="Thumbnail link" spellcheck="false" />
               <div class="vthumb__btns">
+                <button class="btn btn--ghost btn--sm" type="button" data-ved-thumb-upload><i data-icon="upload"></i> Upload</button>
                 <button class="btn btn--ghost btn--sm" type="button" data-ved-thumb-auto><i data-icon="sparkle"></i> From the video</button>
                 <button class="btn btn--quiet btn--sm" type="button" data-ved-thumb-clear><i data-icon="trash"></i> Remove</button>
               </div>
+              <input class="input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" data-ved-thumb-file hidden />
             </section>
 
             <!-- visibility --------------------------------------------- -->
@@ -298,6 +306,8 @@
                   <span>Age</span>
                   <div class="vseg" data-ved-age role="group" aria-label="Age rating">
                     <button class="vseg__btn is-on" type="button" data-age="none">All</button>
+                    <button class="vseg__btn" type="button" data-age="3">3+</button>
+                    <button class="vseg__btn" type="button" data-age="6">6+</button>
                     <button class="vseg__btn" type="button" data-age="13">13+</button>
                     <button class="vseg__btn" type="button" data-age="16">16+</button>
                     <button class="vseg__btn" type="button" data-age="18">18+</button>
@@ -316,6 +326,7 @@
         <span class="vfoot__state">
           <span class="vfoot__dot" data-ved-dot></span>
           <span data-ved-status>Add a link and a title to begin</span>
+          <span class="vcount" data-ved-draft-note hidden></span>
         </span>
         <div class="vfoot__acts">
           <button class="btn btn--ghost btn--sm" type="button" data-ved-save><i data-icon="check"></i> Save draft</button>

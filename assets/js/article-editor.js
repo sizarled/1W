@@ -31,6 +31,7 @@ import { sessionToken } from "./session.js";
 import { COUNTRIES } from "./countries.js";
 import { wordsIn, readingTime, sanitizeHtml, firstImage } from "./article-text.js";
 import { SUPABASE, storageUrl } from "./config.js";
+import { createRte } from "./rte.js";
 
 const S = {
   token: "",
@@ -41,6 +42,8 @@ const S = {
   field: "",
   category: "",
   niche: "",
+  micro: "",
+  nano: "",
   place: "content",
   help: "",
   tags: [],
@@ -103,6 +106,7 @@ const ERRORS = {
 };
 
 const $ = (sel) => qs(sel);
+let rte = null;
 
 /* ================================================================== */
 /* helpers                                                            */
@@ -134,7 +138,98 @@ function randomPassword() {
 
 function bodyHtml() {
   const body = $("[data-e-body]");
-  return body ? body.innerHTML : S.html;
+  if (!body) return S.html;
+  return body.innerHTML;
+}
+
+/* ================================================================== */
+/* the draft on this device                                           */
+/* ================================================================== */
+const DRAFT_KEY = "1w.articles.draft";
+let draftTimer = null;
+
+function draftFields() {
+  return {
+    code: S.code,
+    savedAt: new Date().toISOString(),
+    title: S.title,
+    desc: S.desc,
+    html: S.html,
+    field: S.field,
+    category: S.category,
+    niche: S.niche,
+    micro: S.micro,
+    nano: S.nano,
+    tags: S.tags,
+    language: S.language,
+    thumb: S.thumb,
+    place: S.place,
+    help: S.help,
+    vis: S.vis,
+    countries: S.countries,
+    langs: S.langs,
+    lvMin: S.lvMin,
+    lvMax: S.lvMax,
+  };
+}
+
+function writeDraft() {
+  try {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(draftFields()));
+    paintStatus();
+  } catch {
+    /* storage full or blocked — the piece is still on screen */
+  }
+}
+
+/** Two seconds after the last keystroke, the draft is on the device. */
+function scheduleDraft() {
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(writeDraft, 900);
+}
+
+function readDraft() {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const draft = JSON.parse(raw);
+    if (!draft) return null;
+    if (!draft.title && !draft.html) return null;
+    if ((draft.code || "") !== (S.code || "")) return null;
+    return draft;
+  } catch {
+    return null;
+  }
+}
+
+function clearDraft() {
+  clearTimeout(draftTimer);
+  try {
+    localStorage.removeItem(DRAFT_KEY);
+  } catch {
+    /* nothing to clear */
+  }
+}
+
+function restoreDraft(draft) {
+  S.title = draft.title || "";
+  S.desc = draft.desc || "";
+  S.html = draft.html || "";
+  S.field = draft.field || "";
+  S.category = draft.category || "";
+  S.niche = draft.niche || "";
+  S.micro = draft.micro || "";
+  S.nano = draft.nano || "";
+  S.tags = Array.isArray(draft.tags) ? draft.tags.slice(0, 12) : [];
+  S.language = draft.language || "en";
+  S.thumb = draft.thumb || "";
+  S.place = draft.place === "help" ? "help" : "content";
+  S.help = draft.help || "";
+  S.vis = draft.vis || "general";
+  S.countries = Array.isArray(draft.countries) ? draft.countries : [];
+  S.langs = Array.isArray(draft.langs) ? draft.langs : [];
+  S.lvMin = Number(draft.lvMin) || 1;
+  S.lvMax = Number(draft.lvMax) || 10;
 }
 
 function sync() {
@@ -142,11 +237,17 @@ function sync() {
   const desc = $("[data-e-desc]");
   const field = $("[data-e-field]");
   const category = $("[data-e-category]");
+  const niche = $("[data-e-niche]");
+  const micro = $("[data-e-micro]");
+  const nano = $("[data-e-nano]");
   const lang = $("[data-e-lang]");
   if (title) S.title = title.value;
   if (desc) S.desc = desc.value;
   if (field) S.field = field.value;
   if (category) S.category = category.value;
+  if (niche) S.niche = niche.value;
+  if (micro) S.micro = micro.value;
+  if (nano) S.nano = nano.value;
   if (lang) S.language = lang.value || "en";
   S.html = bodyHtml();
 }
@@ -345,6 +446,26 @@ function paintFields() {
   list.innerHTML = S.fields.map((row) => `<option value="${esc(row.name)}"></option>`).join("");
 }
 
+/**
+ * Field → niche → micro → nano, the same ladder the studio uses: one cannot
+ * be named before the thing above it exists.
+ */
+function paintNicheChain() {
+  const niche = $("[data-e-niche]");
+  const micro = $("[data-e-micro]");
+  const nano = $("[data-e-nano]");
+  const hasNiche = Boolean(niche && niche.value.trim());
+  if (micro) {
+    micro.disabled = !hasNiche;
+    if (!hasNiche) micro.value = "";
+  }
+  const hasMicro = Boolean(hasNiche && micro && micro.value.trim());
+  if (nano) {
+    nano.disabled = !hasMicro;
+    if (!hasMicro) nano.value = "";
+  }
+}
+
 /* ================================================================== */
 /* readiness                                                          */
 /* ================================================================== */
@@ -415,7 +536,18 @@ function paintStatus() {
     text = "Nothing saved yet.";
     iconName = "info";
   }
-  line.innerHTML = `${icon(iconName)} <span>${esc(text)}</span>`;
+  let draftNote = "";
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    const kept = raw ? JSON.parse(raw) : null;
+    if (kept && kept.savedAt) {
+      const at = new Date(kept.savedAt);
+      draftNote = ` <span style="opacity:.65">· on this device ${esc(at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))}</span>`;
+    }
+  } catch {
+    /* no draft, or storage blocked */
+  }
+  line.innerHTML = `${icon(iconName)} <span>${esc(text)}</span>${draftNote}`;
 
   const publish = $("[data-e-publish]");
   if (publish) {
@@ -491,6 +623,8 @@ function payload(status) {
     field: S.place === "help" ? "" : S.field.trim(),
     category: S.category.trim(),
     niche: S.niche.trim(),
+    micro: S.micro.trim(),
+    nano: S.nano.trim(),
     help: S.place === "help" ? S.help : "",
   };
   const body = {
@@ -511,6 +645,12 @@ function payload(status) {
   /* a password we were never shown is a password we must not wipe */
   if (S.passes.length) body.passwords = S.passes;
   return body;
+}
+
+/** What the publish button means, in one place: the keyboard gets the same. */
+function publishStatus() {
+  if (S.place === "help") return "pending";
+  return S.when === "later" ? "scheduled" : "published";
 }
 
 async function save(status) {
@@ -578,6 +718,7 @@ async function save(status) {
   }
 
   if (S.status === "pending") {
+    clearDraft();
     toast({
       title: "Sent for review",
       message: "The moderators have it. It stays private until they publish it in Help.",
@@ -587,6 +728,7 @@ async function save(status) {
     return;
   }
 
+  clearDraft();
   toast({
     title: S.status === "scheduled" ? "Scheduled" : "Published",
     message: S.status === "scheduled" ? "It opens by itself at the moment you picked." : "It is on the index now.",
@@ -658,24 +800,19 @@ function closeDialog() {
 }
 
 function insertHtml(html) {
-  const body = $("[data-e-body]");
-  if (!body) return;
-  body.focus();
-  if (document.execCommand) {
-    try {
-      document.execCommand("insertHTML", false, html);
-      return;
-    } catch {
-      /* fall through */
-    }
+  if (rte) {
+    rte.insert(html);
+    return;
   }
-  body.insertAdjacentHTML("beforeend", html);
+  const body = $("[data-e-body]");
+  if (body) body.insertAdjacentHTML("beforeend", html);
 }
 
 async function confirmDialog() {
   const body = $("[data-e-dlg-body]");
   const err = $("[data-e-dlg-err]");
   if (!body) return;
+  rte?.restore();
   const value = (body.querySelector("[data-dlg-url]") || {}).value || "";
   const url = String(value).trim();
 
@@ -688,11 +825,16 @@ async function confirmDialog() {
   }
 
   if (dialogMode === "link") {
-    const text = String((body.querySelector("[data-dlg-text]") || {}).value || "").trim() || url;
+    const typed = String((body.querySelector("[data-dlg-text]") || {}).value || "").trim();
     const blank = Boolean((body.querySelector("[data-dlg-blank]") || {}).checked);
-    insertHtml(
-      `<a href="${esc(url)}"${blank ? ' target="_blank" rel="noopener noreferrer"' : ""}>${esc(text)}</a>&nbsp;`
-    );
+    if (rte) {
+      /* the engine keeps the words that were selected and links them */
+      rte.run("insertLink", { url, text: typed, blank });
+    } else {
+      insertHtml(
+        `<a href="${esc(url)}"${blank ? ' target="_blank" rel="noopener noreferrer"' : ""}>${esc(typed || url)}</a>&nbsp;`
+      );
+    }
   } else if (dialogMode === "image" && dialogFor === "cover") {
     S.thumb = url;
     paintCover();
@@ -804,15 +946,21 @@ function applyImage(action, value) {
     if (parent && parent.tagName === "FIGURE" && !parent.querySelector("img")) parent.remove();
     selectImage(null);
   }
+  rte?.snapshot();
   sync();
   paintCounts();
+  scheduleDraft();
 }
 
 /* ================================================================== */
 /* the reader preview                                                 */
 /* ================================================================== */
-function previewVerdict(country, language, level) {
-  if (S.vis === "followers") return { ok: false, text: "This reader does not follow the writer: they see the door." };
+function previewVerdict(country, language, level, follows = false) {
+  if (S.vis === "followers") {
+    return follows
+      ? { ok: true, text: "This reader follows you, so the piece opens." }
+      : { ok: false, text: "This reader does not follow the writer: they see the door." };
+  }
   if (S.vis === "general") return { ok: true, text: "Everyone can open this piece." };
   if (S.vis === "private") {
     if (S.people.length || S.passes.length || S.hasPassword) {
@@ -872,7 +1020,8 @@ function paintVerdict() {
   const country = ($("[data-prev-country]") || {}).value || "Morocco";
   const language = ($("[data-prev-lang]") || {}).value || "en";
   const level = Number(($("[data-prev-level]") || {}).value || 1);
-  const verdict = previewVerdict(country, language, level);
+  const follows = Boolean(($("[data-prev-follow]") || {}).checked);
+  const verdict = previewVerdict(country, language, level, follows);
   host.innerHTML = `
     <span><strong>${verdict.ok ? "Opens" : "Blocked"}</strong> · ${esc(verdict.text)}</span>
     <span style="opacity:.75">A simulated reader: ${esc(country)} · ${esc(language)} · LV${level}</span>`;
@@ -882,33 +1031,32 @@ function paintVerdict() {
 /* toolbar                                                            */
 /* ================================================================== */
 function command(name, value = null) {
-  const body = $("[data-e-body]");
-  if (!body) return;
-  body.focus();
-  if (!document.execCommand) return;
-  try {
-    document.execCommand("styleWithCSS", false, false);
-    document.execCommand(name, false, value);
-  } catch {
-    /* the browser refused — nothing changes */
-  }
+  if (!rte) return;
+  rte.run(name, value);
   sync();
   paintCounts();
   paintChecks();
   paintToolState();
+  scheduleDraft();
 }
 
+/** The bar shows what the caret is standing in, not what was last pressed. */
 function paintToolState() {
-  if (!document.queryCommandState) return;
-  const map = { bold: "bold", italic: "italic", underline: "underline", strikeThrough: "strike" };
-  Object.entries(map).forEach(([cmd, key]) => {
-    const btn = qs(`[data-cmd="${cmd}"]`);
-    if (!btn) return;
-    try {
-      btn.classList.toggle("is-on", document.queryCommandState(cmd));
-    } catch {
-      /* ignore */
-    }
+  if (!rte) return;
+  const st = rte.state();
+  ["bold", "italic", "underline", "strikeThrough"].forEach((cmd) => {
+    const on = Boolean(st[cmd]);
+    qsa(`[data-cmd="${cmd}"]`).forEach((btn) => btn.classList.toggle("is-on", on));
+  });
+  ["justifyLeft", "justifyCenter", "justifyRight"].forEach((cmd) => {
+    qsa(`[data-cmd="${cmd}"]`).forEach((btn) => btn.classList.toggle("is-on", st.align === cmd));
+  });
+  qsa('[data-cmd="insertUnorderedList"]').forEach((btn) => btn.classList.toggle("is-on", st.list === "ul"));
+  qsa('[data-cmd="insertOrderedList"]').forEach((btn) => btn.classList.toggle("is-on", st.list === "ol"));
+  qsa("[data-e-block]").forEach((select) => {
+    if (!select.options.length) return;
+    const value = ["p", "h2", "h3", "blockquote"].includes(st.block) ? st.block : "p";
+    if (select.value !== value) select.value = value;
   });
 }
 
@@ -922,37 +1070,39 @@ function bind() {
       S.title = title.value;
       paintCounts();
       paintChecks();
+      scheduleDraft();
     });
   }
   const desc = $("[data-e-desc]");
   if (desc) {
     desc.addEventListener("input", () => {
       S.desc = desc.value;
+      scheduleDraft();
     });
   }
   const body = $("[data-e-body]");
   if (body) {
-    body.addEventListener("input", () => {
-      S.html = body.innerHTML;
-      paintCounts();
-      paintChecks();
+    rte = createRte(body, {
+      onChange: (html) => {
+        S.html = html;
+        paintCounts();
+        paintChecks();
+        scheduleDraft();
+      },
+      onTool: paintToolState,
+      onAsk: (kind) => openDialog(kind === "link" ? "link" : "image"),
+      onSubmit: () => save(publishStatus()),
+      onFile: (file) => {
+        uploadImage(file, (url) => {
+          rte.insert(`<figure><img src="${esc(url)}" alt="" /><figcaption></figcaption></figure><p><br /></p>`);
+        });
+      },
     });
-    body.addEventListener("keyup", paintToolState);
-    body.addEventListener("mouseup", paintToolState);
+    /* a click on the toolbar must not take the caret with it */
+    rte.keepSelection($("[data-e-tools]"));
     body.addEventListener("click", (event) => {
       if (event.target.tagName === "IMG") selectImage(event.target);
       else selectImage(null);
-    });
-    body.addEventListener("blur", () => {
-      /* keep the bar reachable: it acts on the image we selected */
-    });
-    body.addEventListener("paste", (event) => {
-      const text = event.clipboardData?.getData("text/plain");
-      if (!text) return;
-      event.preventDefault();
-      insertHtml(esc(text).replace(/\n{2,}/g, "</p><p>").replace(/\n/g, "<br />"));
-      sync();
-      paintCounts();
     });
   }
 
@@ -964,14 +1114,17 @@ function bind() {
       if (btn) {
         const cmd = btn.getAttribute("data-cmd");
         if (cmd === "insertLink") {
+          rte?.save();
           openDialog("link");
           return;
         }
         if (cmd === "insertImage") {
+          rte?.save();
           openDialog("image");
           return;
         }
         if (cmd === "insertVideo") {
+          rte?.save();
           openDialog("video");
           return;
         }
@@ -980,7 +1133,7 @@ function bind() {
     });
     tools.addEventListener("change", (event) => {
       const block = event.target.closest("[data-e-block]");
-      if (block) command("formatBlock", `<${block.value}>`);
+      if (block) command("formatBlock", block.value);
     });
   }
 
@@ -1062,7 +1215,7 @@ function bind() {
   /* the preview */
   qsa("[data-e-preview-open]").forEach((btn) => btn.addEventListener("click", openPreview));
   $("[data-e-prev-close]")?.addEventListener("click", () => $("[data-e-prev]")?.close?.());
-  qsa("[data-prev-country], [data-prev-lang], [data-prev-level]").forEach((el) =>
+  qsa("[data-prev-country], [data-prev-lang], [data-prev-level], [data-prev-follow]").forEach((el) =>
     el.addEventListener("change", paintVerdict)
   );
   const prev = $("[data-e-prev]");
@@ -1073,7 +1226,7 @@ function bind() {
   }
 
   /* save */
-  $("[data-e-publish]")?.addEventListener("click", () => save(S.place === "help" ? "pending" : S.when === "later" ? "scheduled" : "published"));
+  $("[data-e-publish]")?.addEventListener("click", () => save(publishStatus()));
   $("[data-e-draft]")?.addEventListener("click", () => save("draft"));
 
   /* one delegated listener for everything painted after boot */
@@ -1255,8 +1408,16 @@ function bind() {
   });
   $("[data-e-field]")?.addEventListener("change", () => {
     sync();
+    paintNicheChain();
     paintChecks();
     paintStatus();
+    scheduleDraft();
+  });
+  ["[data-e-niche]", "[data-e-micro]", "[data-e-nano]"].forEach((sel) => {
+    $(sel)?.addEventListener("input", () => {
+      paintNicheChain();
+      scheduleDraft();
+    });
   });
 }
 
@@ -1341,6 +1502,8 @@ async function loadExisting(code) {
   S.field = meta.field || "";
   S.category = meta.category || "";
   S.niche = meta.niche || "";
+  S.micro = meta.micro || "";
+  S.nano = meta.nano || "";
   S.help = meta.help || "";
   S.tags = (Array.isArray(row.keywords) ? row.keywords : []).filter((tag) => tag.role === "main").map((tag) => tag.keyword);
   S.hasPassword = Boolean(row.asks_password);
@@ -1369,13 +1532,23 @@ async function loadExisting(code) {
   const body = $("[data-e-body]");
   const field = $("[data-e-field]");
   const category = $("[data-e-category]");
+  const niche = $("[data-e-niche]");
+  const micro = $("[data-e-micro]");
+  const nano = $("[data-e-nano]");
   const lang = $("[data-e-lang]");
   if (title) title.value = S.title;
   if (desc) desc.value = S.desc;
-  if (body) body.innerHTML = S.html;
+  if (body) {
+    if (rte) rte.setHtml(S.html);
+    else body.innerHTML = S.html;
+  }
   if (field) field.value = S.field;
   if (category) category.value = S.category;
+  if (niche) niche.value = S.niche;
+  if (micro) micro.value = S.micro;
+  if (nano) nano.value = S.nano;
   if (lang) lang.value = S.language;
+  paintNicheChain();
 
   const heading = $("[data-e-heading]");
   if (heading) heading.textContent = "Edit an article";
@@ -1413,6 +1586,21 @@ async function boot() {
   if (code) await loadExisting(code);
 
   paintAll();
+
+  /* a draft left on this device comes back before anything else is typed */
+  const draft = readDraft();
+  if (draft) {
+    restoreDraft(draft);
+    const title = $("[data-e-title]");
+    if (title) title.value = S.title;
+    const desc = $("[data-e-desc]");
+    if (desc) desc.value = S.desc;
+    if (rte) rte.setHtml(S.html);
+    paintNicheChain();
+    paintAll();
+    toast({ title: "Draft restored", message: "The last thing you wrote here is back. Publish or discard it.", tone: "info", iconName: "file" });
+  }
+
   loadMine();
   loadFields();
 }
