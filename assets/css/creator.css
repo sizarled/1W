@@ -388,6 +388,7 @@
   color: var(--text-2);
   font-size: 0.8rem;
   text-align: left;
+  text-decoration: none;
   cursor: pointer;
 }
 
@@ -1040,6 +1041,38 @@
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--faint);
+}
+
+/* the way out to the video editor, next to the kind of the thing */
+.cr-editor__head-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.cr-editor__open {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.32rem 0.6rem;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  color: var(--text-2);
+  font-size: 0.72rem;
+  text-decoration: none;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.cr-editor__open:hover {
+  background: var(--surface-3);
+  border-color: var(--line-3);
+  color: var(--text);
+}
+
+.cr-editor__open .ico {
+  width: 13px;
+  height: 13px;
 }
 
 .cr-editor .dsh-textarea {

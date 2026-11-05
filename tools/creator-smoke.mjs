@@ -839,6 +839,26 @@ async function main() {
   expect("add: publishing is sent", calls.some((c) => c.includes("creator_item_save")));
   expect("add: no errors", s.errors.length === 0, s.errors.join(" | "));
 
+  // the way out to the video editor
+  s.click(s.qs("[data-cr-add-toggle]"));
+  await s.wait(40);
+  const toEditor = s.qs('a.cr-drop__item[href="video-editor.html"]');
+  expect("editor link: the studio menu opens it", Boolean(toEditor), s.text("[data-cr-add-menu]"));
+  expect("editor link: and names it", /video in the editor/i.test(toEditor ? toEditor.textContent : ""), toEditor ? toEditor.textContent.trim() : "");
+  expect("editor link: no dead data-cr-add on it", !(toEditor && toEditor.hasAttribute("data-cr-add")));
+
+  s.click(s.qs('[data-cr-add="video"]'));
+  await s.wait(60);
+  expect("editor link: a new video still opens the table form", /Video/i.test(s.text(".cr-editor__kind")), s.text(".cr-editor__kind"));
+  const openEditor = s.qs("[data-cr-video-editor]");
+  expect("editor link: «Video · new» carries the button", Boolean(openEditor), s.text(".cr-editor__head"));
+  expect("editor link: it points at video-editor.html", openEditor && openEditor.getAttribute("href") === "video-editor.html", openEditor ? openEditor.getAttribute("href") : "");
+  expect("editor link: it reads as a button", /open video-editor\.html/i.test(openEditor ? openEditor.textContent : ""), openEditor ? openEditor.textContent.trim() : "");
+  expect("editor link: it is only on a video", s.qsa("[data-cr-video-editor]").length === 1, String(s.qsa("[data-cr-video-editor]").length));
+  s.click(s.qs("[data-cr-editor-back]"));
+  await s.wait(80);
+  expect("editor link: back to the table", Boolean(s.qs("[data-cr-view]")), s.text("[data-cr-view]").slice(0, 40));
+
   // the blog section
   calls.length = 0;
   s.click(s.qs('[data-cr-section="blog"]'));

@@ -1101,6 +1101,15 @@ lines / words / characters (drafts).
 
 #### The item editor
 
+**A hub's table is not the vault.** A studio's `Videos` tab holds the videos that belong to that hub,
+with their counters and their niche — that is what a `creator_item_save` row is. A *member* video,
+the kind that lands in the videos feed with a player, a thumbnail and a playlist, is published from
+**`video-editor.html`** — so the studio no longer hides it: the `＋ Add content` menu carries
+**Video in the editor** (a plain link, not another table row), and the head of a **`Video · new`**
+screen — the same place the kind is written — carries **Open video-editor.html**. Two ways in, one
+of them where a creator already is. Both are hidden on every other kind of draft (a podcast or an
+article has its own surface), and the link's title says plainly which of the two doors it is.
+
 `creator_item_save` takes the hub, the kind, the title, summary, body, media link, thumbnail, tags,
 language, age, visibility, category, parent (an answer points at its question), field, niche,
 **micro** and **nano** niche. Publishing is guarded on the server: an active membership, a title of
@@ -1132,7 +1141,7 @@ published (and refused without a media link), an article refused in a studio hub
 categories three deep with the fourth refused (`deep`) and a duplicate refused, a third blog created
 then a fourth refused (`limit`, level 1), staff added by code and an unknown code refused
 (`member`), and the subscriber list reporting a real member with their country.
-`tools/creator-smoke.mjs` runs the studio end to end — an empty studio that creates, configures
+`tools/creator-smoke.mjs` (258 checks) runs the studio end to end — an empty studio that creates, configures
 (private + password + staff), saves, refuses, and deletes a studio; a studio page holding one of each
 hub (tables, columns, action menus, the editor saving a draft then publishing, blog articles vs
 drafts, categories, subscribers, library books); and the `?section=&tab=` deep links.

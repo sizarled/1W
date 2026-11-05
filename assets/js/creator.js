@@ -78,6 +78,15 @@ const SECTIONS = [
     ],
     add: [
       { kind: "video", label: "Video" },
+      /* the same button the vault shows: a member video is published with the
+         editor, not typed into a table. `href` makes the entry a link. */
+      {
+        kind: "video",
+        label: "Video in the editor",
+        href: "video-editor.html",
+        icon: "upload",
+        note: "opens video-editor.html",
+      },
       { kind: "podcast", label: "Podcast" },
       { kind: "playlist", label: "Playlist" },
     ],
@@ -664,7 +673,9 @@ function renderTop() {
         (entry) =>
           entry.category
             ? `<button class="cr-drop__item" type="button" data-cr-add="category"><i data-icon="filter"></i> Category</button>`
-            : `<button class="cr-drop__item" type="button" data-cr-add="${esc(entry.kind)}" data-draft="${entry.draft ? "1" : "0"}"><i data-icon="${esc(KIND_ICON[entry.kind] || "plus")}"></i> ${esc(entry.label)}</button>`
+            : entry.href
+              ? `<a class="cr-drop__item" href="${esc(entry.href)}"><i data-icon="${esc(entry.icon || KIND_ICON[entry.kind] || "plus")}"></i> ${esc(entry.label)}</a>`
+              : `<button class="cr-drop__item" type="button" data-cr-add="${esc(entry.kind)}" data-draft="${entry.draft ? "1" : "0"}"><i data-icon="${esc(KIND_ICON[entry.kind] || "plus")}"></i> ${esc(entry.label)}</button>`
       ),
       `<span class="cr-drop__sep"></span>`,
       `<button class="cr-drop__item" type="button" data-cr-add="hub"><i data-icon="plus"></i> New ${esc(section.noun)}</button>`,
@@ -1448,7 +1459,14 @@ function renderEditor(host) {
     <div class="cr-editor">
       <div class="cr-editor__head">
         <button class="cr-editor__back" type="button" data-cr-editor-back><i data-icon="arrowLeft"></i> Back to ${esc(sectionOf(state.section).noun)}</button>
-        <span class="cr-editor__kind"><i data-icon="${esc(KIND_ICON[draft.kind] || "file")}"></i> ${esc(KIND_LABEL[draft.kind] || draft.kind)} · ${draft.id ? esc(draft.status) : "new"}</span>
+        <span class="cr-editor__head-right">
+          <span class="cr-editor__kind"><i data-icon="${esc(KIND_ICON[draft.kind] || "file")}"></i> ${esc(KIND_LABEL[draft.kind] || draft.kind)} · ${draft.id ? esc(draft.status) : "new"}</span>
+          ${
+            draft.kind === "video"
+              ? `<a class="cr-editor__open" href="video-editor.html" data-cr-video-editor title="A member video is published from video-editor.html and appears in the videos feed — this table holds the hub's own library."><i data-icon="upload"></i> Open video-editor.html</a>`
+              : ""
+          }
+        </span>
       </div>
 
       <div class="cr-card">
