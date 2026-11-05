@@ -4,16 +4,17 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Videos — 1World Web</title>
-    <meta name="description" content="Member uploads — trailers, shorts and full-length pieces." />
+    <meta name="description" content="Every video members publish: search it, open it, react to it, comment on it." />
     <meta name="theme-color" content="#060607" />
     <meta name="robots" content="noindex" />
     <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="assets/css/base.css?v=20261101k" />
-    <link rel="stylesheet" href="assets/css/layout.css?v=20261101k" />
-    <link rel="stylesheet" href="assets/css/components.css?v=20261101k" />
+    <link rel="stylesheet" href="assets/css/base.css?v=20261105e" />
+    <link rel="stylesheet" href="assets/css/layout.css?v=20261105e" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261105e" />
+    <link rel="stylesheet" href="assets/css/video.css?v=20261106a" />
     <script>
       /* apply the saved theme (or the OS preference) before first paint */
       (function () {
@@ -31,42 +32,73 @@
         } catch (e) {}
       })();
     </script>
-    <script type="module" src="assets/js/app.js?v=20261101k"></script>
+    <script type="module" src="assets/js/app.js?v=20261105e"></script>
+    <script type="module" src="assets/js/videos.js?v=20261106a"></script>
   </head>
   <body data-page="videos" data-title="Videos">
     <a class="skip-link" href="#main">Skip to content</a>
     <div data-site-header></div>
     <div data-site-sidebar></div>
 
-    <main class="site-main" id="main">
-      <section class="soon">
-        <div class="soon__inner">
-          <span class="soon__icon"><i data-icon="video"></i></span>
-          <p class="eyebrow"><span class="eyebrow__dot"></span>Page in build</p>
-          <h1 class="soon__title">Videos</h1>
-          <p class="soon__text">Member uploads — trailers, shorts and full-length pieces.</p>
+    <main class="site-main vids" id="main">
+      <div class="wrap">
+        <!-- ============================================================ -->
+        <!-- the feed                                                     -->
+        <!-- ============================================================ -->
+        <div data-v-browse>
+          <header class="vids__head">
+            <div class="vids__intro">
+              <p class="eyebrow"><span class="eyebrow__dot"></span>Member videos</p>
+              <h1 class="vids__title">Videos</h1>
+              <p class="vids__sub">
+                Everything members publish — a review, a teaser, a full piece. Search it, open it, react to it and
+                talk about it. Nothing here needs a subscription: a video opens to whoever its publisher let in.
+              </p>
+            </div>
+            <div class="vids__acts">
+              <a class="btn btn--ghost btn--sm" href="#yours"><i data-icon="film"></i> Your videos</a>
+              <a class="btn btn--primary" href="video-editor.html" data-v-publish>
+                <i data-icon="upload"></i> Publish a video
+              </a>
+            </div>
+          </header>
 
-          <div class="soon__meta">
-            <span class="badge badge--solid">videos.html</span>
-            <span class="badge">Next release</span>
-            <span class="badge">1World Web</span>
+          <div class="vbar">
+            <div class="vbar__row">
+              <label class="vbar__search">
+                <i data-icon="search"></i>
+                <input class="input" type="search" data-v-search placeholder="Search a title or a description" aria-label="Search videos" autocomplete="off" />
+              </label>
+              <span class="vbar__count" data-v-count></span>
+              <div class="segmented" data-v-sort role="tablist" aria-label="Sort the feed">
+                <button class="segmented__btn is-active" type="button" role="tab" aria-selected="true" data-sort="popular">Popular</button>
+                <button class="segmented__btn" type="button" role="tab" aria-selected="false" data-sort="new">New</button>
+                <button class="segmented__btn" type="button" role="tab" aria-selected="false" data-sort="liked">Most liked</button>
+                <button class="segmented__btn" type="button" role="tab" aria-selected="false" data-sort="discussed">Discussed</button>
+              </div>
+            </div>
+            <div class="vbar__fields" data-v-fields></div>
           </div>
 
-          <div class="soon__actions">
-            <a class="btn btn--primary" href="index.html"><i data-icon="arrowLeft"></i> Back to homepage</a>
-            <a class="btn btn--ghost" href="index.html#membership"><i data-icon="crown"></i> Membership</a>
-          </div>
+          <div class="vgrid" data-v-grid></div>
+          <div data-v-empty hidden></div>
+          <div data-v-more></div>
 
-          <div class="soon__links">
-            <a class="soon__link" href="index.html"><i data-icon="home"></i>Home</a>
-            <a class="soon__link" href="search.html"><i data-icon="search"></i>Search</a>
-            <a class="soon__link" href="movies.html"><i data-icon="film"></i>Movies</a>
-            <a class="soon__link" href="series.html"><i data-icon="tv"></i>Series</a>
-            <a class="soon__link" href="iptv.html"><i data-icon="broadcast"></i>IPTV</a>
-            <a class="soon__link" href="help.html"><i data-icon="lifebuoy"></i>Help</a>
-          </div>
+          <!-- the member's own videos -->
+          <section class="vsect" id="yours" data-v-yours hidden>
+            <div class="vsect__head">
+              <h2 class="vsect__title"><i data-icon="film"></i> In your name</h2>
+              <span class="vsect__sub" data-v-yours-count></span>
+            </div>
+            <div class="vshelf" data-v-shelf></div>
+          </section>
         </div>
-      </section>
+
+        <!-- ============================================================ -->
+        <!-- one video (rendered from the hash)                           -->
+        <!-- ============================================================ -->
+        <div data-v-watch hidden></div>
+      </div>
     </main>
 
     <div data-site-footer></div>

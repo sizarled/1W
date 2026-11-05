@@ -18,20 +18,19 @@ const BUILD = "20261031u"; // cache-bust for css/js
 
 /* Hand-written pages are NOT in this list: index.html, login.html, register.html,
    rest.html, watch.html, cast.html, dashboard.html, activated.html, court.html,
-   profile.html, creator.html, privacy.html. */
+   profile.html, creator.html, privacy.html, videos.html, video.html,
+   video-editor.html. */
 const PAGES = [
   ["search.html", "Search", "search", "Search across films, series, channels, articles, documents, answers and reviews.", "Reads ?q= from the URL."],
   ["movies.html", "Movies", "film", "The full film catalogue, with filters for genre, year, rating and quality.", ""],
   ["series.html", "Series", "tv", "Every series on 1World, grouped by season count and status.", ""],
   ["iptv.html", "IPTV", "broadcast", "Free and premium channels with EPG, groups and viewer counts.", "Opens a channel with ?M3U=channelId."],
-  ["video.html", "Video", "video", "One member video: player, description, publisher and watch minutes.", "Reads ?id= from the URL."],
   ["article.html", "Article", "article", "One member article with reading time, publisher and reactions.", "Reads ?id= from the URL."],
   ["answer.html", "Answer", "help", "One question and its answers from the community.", "Reads ?id= from the URL."],
   ["document.html", "Document", "file", "One shared document with preview, download and publisher.", "Reads ?id= from the URL."],
   ["playlist.html", "Playlist", "bookmark", "A member playlist: titles, visibility, creator and publisher chain.", "Reads ?id=playlistId&amp;creator=memberId."],
   ["download.html", "Download", "download", "Download options for a film or an episode.", "Reads ?movie=ID or ?tv=ID."],
   ["prize.html", "Prize", "gift", "One prize: rules, points required, stock and expiration.", "Reads ?id=prizeId."],
-  ["videos.html", "Videos", "video", "Member uploads — trailers, shorts and full-length pieces.", ""],
   ["podcast.html", "Podcast", "mic", "Audio shows published by the community and the editorial team.", ""],
   ["pictures.html", "Pictures", "image", "Stills, posters and member photography.", ""],
   ["documents.html", "Documents", "file", "Scripts, subtitles, study documents and member essays.", ""],

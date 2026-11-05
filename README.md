@@ -1311,6 +1311,78 @@ the excluded member was answered `{locked: true, reason: "excluded"}`, and `crea
 an episode with `seats: 900` (1500 refused, the ceiling being 1000) — the owner saw both and the guest
 only the public film. The test hubs, items and sessions were removed afterwards.
 
+### Member videos — the feed, the watch screen and the publish page
+
+Two screens that used to be placeholders are now live, dressed in the site's own tokens rather than
+the mock's: **`videos.html`** (the feed and the player, one page, `#/v/<code>` for a single video)
+and **`video-editor.html`** (publishing).
+
+Neither invents a table. A member video is a row of `posts` with `content_type = 'video'` — the same
+row likes, comments, reports and reach already live on — plus one column of its own,
+`posts.video_meta`, and one small table, `video_keys`, for a door's passwords (bcrypt, via
+`extensions.crypt`).
+
+| Call | What it answers |
+| --- | --- |
+| `video_feed(token, field, sort, search, limit, offset)` | the cards the caller may see, the fields that have videos, the total |
+| `video_get(token, ref, key)` | the player, the publisher, `related` (shared keyword) and `more` (same host) — or the locked door |
+| `video_mine(token)` | the member's own rows, drafts and scheduled ones included |
+| `video_save(token, payload)` | one call for a draft, a publish or a schedule; an edit carries the `code` back |
+| `video_card(post, viewer)` | `post_card` plus `video { meta, embed, file, host }` |
+
+`video_save` takes `title`, `description`, `thumbnail`, `embed`, `language`, `visibility`, `status`
+(`draft`/`published`/`scheduled`), `scheduled_at`, `tags` (main keywords, twelve at most),
+`audience[{kind, value}]`, `profiles[]`, `passwords[]` and `meta { age, download, vertical, source }`.
+A key it is **not** given is a list it leaves alone — so a partial save can never wipe an audience, the
+nominated people, the passwords or the tags of the video it edits.
+
+The three doors keep their meaning, on the feed as well as on the door:
+
+| What the editor says | `posts.visibility` | Who gets in |
+| --- | --- | --- |
+| Public | `general` | everyone |
+| Exclusive | `limited` | at least one `post_audience_rules` `include` rule matches — country, language or level |
+| Private | `private` | the `post_authorized_profiles` list only |
+| Followers only | `followers` | whoever follows the publisher |
+
+Exclusive also accepts a named member (`kind = 'entity'`, the `@username` as the value), and a level
+*range* becomes one rule per level — that is the shape `post_visible_to` matches. Private and
+exclusive can both carry **join passwords**: the editor never sees them again (only `asks_password`),
+and a correct password opens that one visit for anyone, without granting a reaction.
+
+The feed searches titles and descriptions, filters by one field, and sorts four ways (`popular` by
+`rank_points`, `new`, `liked`, `discussed`). A card carries the thumbnail, the age badge, the door it
+belongs to, the publisher, the time and the counters.
+
+The watch screen is the mock's, in the site's clothes: the player (`<video>` for a real file, a frame
+for YouTube/Vimeo and anything else), the title, views, language, the action row — like, dislike,
+comments, reshare, save (on the device), download when the publisher allowed it, report — the
+publisher card with **Follow** (`profile_follow_toggle`), a clamped description, the tags as field
+chips, the related shelf and the member's other videos. Commenting follows the site rule: **like or
+dislike first**, then the composer appears. A video the viewer may not see arrives `locked` — with its
+title and its thumbnail, never its source.
+
+`video.html?id=…` still answers its old address: it forwards to `videos.html#/v/<code>`, so the links
+`watch.js` and `cast.js` already write keep working.
+
+**One boundary to remember:** the Creator studio's *Videos* tab is `member_content` (`kind = 'video'`),
+the hub's own library, and it is unchanged by this page. A video published from `video-editor.html` is
+a `post`, so it appears in the feed and under *In your name* on `videos.html`, not in that tab. Joining
+the two — one list, one editor — is the next step if the studio should own publishing outright.
+
+DDL + functions: `tools/sql/videos-page.sql` — **applied**, and exercised on the real database: a
+published video came back with its code (`PST-001005`), a guest saw it in the feed and its
+`impressions` ticked; a private one stayed `locked` for a guest, `asks_password` was true, a wrong
+password stayed locked and the right one opened it; an exclusive one dated to Morocco stayed shut for a
+guest and for an Andorran member, and opened for the Moroccan one; a draft was absent from the feed but
+present in `video_mine`; a like opened the composer and a comment landed; a save **without** the
+`passwords` key left the existing password in place. The test rows were removed afterwards (three demo
+videos from the Blender open movies remain in the feed).
+
+Test: `node tools/video-smoke.mjs` — **112/112** (feed, sort, search, watch, reaction→comment, a locked
+door and its password, a missing video, the editor signed out and in, the payload of a publish, of an
+exclusive rule set and of a private list, and the forwarding page).
+
 ### The six OAuth apps — one checklist each
 
 The dashboard can hold eight networks. Two of them (Telegram, WhatsApp) link with a code we
@@ -2117,6 +2189,9 @@ assets/js/ui.js             toasts (+points banner, level-up)
 assets/js/sound.js          audio pool and mute state
 assets/js/icons.js          line icon set + brand glyphs (brands.js)
 assets/js/blocks.js         blocked people/media cache used by every list
+assets/css/video.css        member videos: the feed, the player, the publish page
+assets/js/videos.js         videos.html: feed, watch screen, comments, reactions
+assets/js/video-editor.js   video-editor.html: the publish form and video_save
 assets/css/cast.css         cast page (profile, dials, reels, mentions)
 assets/js/cast.js           cast page controller (TMDB + person_* RPCs)
 assets/css/register.css     registration form + success card (high-contrast, both themes)
@@ -2144,6 +2219,7 @@ tools/rest-smoke.mjs        recovery test (three steps, link, device path, .txt)
 tools/delivery-smoke.mjs    the Apps Script under Node: token, email, WhatsApp template, Telegram
 tools/dashboard-smoke.mjs   dashboard test (five gates, rail, popover, codes, sections)
 tools/sidebar-smoke.mjs     sidebar rail test (edge reveal, pin, Escape, mobile drawer, dashboard menu)
+tools/video-smoke.mjs       videos + video editor test (feed, player, doors, payload)
 tools/court-smoke.mjs       activation wizard + court room test
 tools/visit-smoke.mjs       visit tracker test (5 modes)
 ```
