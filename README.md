@@ -1047,9 +1047,12 @@ starts with `member_from_token()`.
 | `api_key_secret(id)` | the decrypted key, for the server alone |
 | `api_platforms()` / `api_platform_known(slug)` / `api_platform_label(slug)` | the list the select is built from |
 
-DDL + functions: `tools/sql/member-api-keys.sql`. `tools/dashboard-smoke.mjs` runs the panel end to
-end — the four-character cell, the full key nowhere in the DOM, replace keeping one row, remove,
-and a refusal that explains itself.
+DDL + functions: `tools/sql/member-api-keys.sql` — **applied**, and exercised against a real
+session afterwards: store → `tail 9012` in the list, `api_key_secret()` returning the original
+string, a duplicate label refused case-insensitively, a 3-character key refused, an unknown
+platform refused, then delete leaving zero rows and `site_secret` still closed to `anon`.
+`tools/dashboard-smoke.mjs` runs the panel end to end — the four-character cell, the full key
+nowhere in the DOM, replace keeping one row, remove, and a refusal that explains itself.
 
 ### The six OAuth apps — one checklist each
 
