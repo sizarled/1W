@@ -25,6 +25,7 @@ import { toast } from "./ui.js";
 import { sessionToken, getMember } from "./session.js";
 import { COUNTRIES } from "./countries.js";
 import { SUPABASE, storageUrl } from "./config.js";
+import { embedUrl, autoThumb, isFile, sourceKind, sourceLabel, HOSTS, pinterestId, redditPath } from "./embed.js";
 
 const S = {
   token: "",
@@ -34,6 +35,8 @@ const S = {
   desc: "",
   tags: [],
   thumb: "",
+  thumbChosen: false,
+  thumbAuto: false,
   vis: "general",
   when: "now",
   whenAt: "",
@@ -91,59 +94,6 @@ const el = {};
 /* ================================================================== */
 /* helpers                                                            */
 /* ================================================================== */
-function isFile(raw = "") {
-  return /\.(mp4|webm|ogv|ogg|mov|m4v)(\?|#|$)/i.test(String(raw));
-}
-
-/** Which host a link belongs to — the watch page frames the same list. */
-function sourceKind(raw = "") {
-  const value = String(raw).trim();
-  if (!value) return "";
-  if (isFile(value)) return "file";
-  if (findYouTube(value)) return "youtube";
-  if (/vimeo\.com\//i.test(value)) return "vimeo";
-  if (/dailymotion\.com\//i.test(value)) return "dailymotion";
-  if (/facebook\.com|fb\.watch/i.test(value)) return "facebook";
-  if (/drive\.google\.com\//i.test(value)) return "drive";
-  if (/tiktok\.com\//i.test(value)) return "tiktok";
-  return "embed";
-}
-
-const SOURCE_LABEL = {
-  file: "File",
-  youtube: "YouTube",
-  vimeo: "Vimeo",
-  dailymotion: "Dailymotion",
-  facebook: "Facebook",
-  drive: "Google Drive",
-  tiktok: "TikTok",
-  embed: "Embed",
-};
-
-function findYouTube(raw = "") {
-  const value = String(raw).trim();
-  if (!value) return "";
-  try {
-    const u = new URL(value, location.href);
-    const host = u.hostname.replace(/^www\./, "");
-    if (host === "youtu.be") return u.pathname.slice(1);
-    if (host.endsWith("youtube.com")) {
-      const v = u.searchParams.get("v");
-      if (v) return v;
-      const parts = u.pathname.split("/").filter(Boolean);
-      if (["embed", "shorts", "live"].includes(parts[0])) return parts[1] || "";
-    }
-  } catch {
-    return "";
-  }
-  return "";
-}
-
-function autoThumb(raw = "") {
-  const id = findYouTube(raw);
-  return id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : "";
-}
-
 function randomPassword() {
   const alphabet = "abcdefghjkmnpqrstuvwxyz23456789";
   let out = "";
@@ -197,9 +147,15 @@ function paintPreview() {
   const media = $("[data-ved-preview-media]");
   if (media) {
     const src = S.thumb || autoThumb(S.embed);
-    media.innerHTML = src
-      ? `<img src="${esc(src)}" alt="" loading="lazy" />`
-      : `<div class="vprev__ph">${icon("film")}</div>`;
+    const kind = sourceKind(S.embed);
+    if (src) {
+      media.innerHTML = `<img src="${esc(src)}" alt="" loading="lazy" /><span class="vprev__play" aria-hidden="true">${icon("play")}</span>`;
+    } else if (kind) {
+      /* no still to read: name the host inside the card rather than a blank */
+      media.innerHTML = `<div class="vprev__ph"><span>${esc(HOSTS[kind] || "Link")}</span>${icon("playCircle")}<span>${esc(S.embed ? "A picture would make the card" : "")}</span></div>`;
+    } else {
+      media.innerHTML = `<div class="vprev__ph">${icon("film")}</div>`;
+    }
   }
   const title = $("[data-ved-preview-title]");
   if (title) title.textContent = S.title.trim() || "No title yet";
@@ -221,7 +177,7 @@ function paintPreview() {
 
   const badge2 = $("[data-ved-source-badge]");
   if (badge2) {
-    badge2.textContent = S.embed ? SOURCE_LABEL[sourceKind(S.embed)] || "Link" : "";
+    badge2.textContent = S.embed ? HOSTS[sourceKind(S.embed)] || "Link" : "";
   }
 }
 
@@ -232,6 +188,25 @@ function paintThumb() {
   box.innerHTML = src ? `<img src="${esc(src)}" alt="" loading="lazy" />` : "No picture yet";
   const input = $("[data-ved-thumb]");
   if (input && input.value !== S.thumb) input.value = S.thumb;
+
+  /* the honest part: only YouTube hands us a still by itself */
+  const hint = $("[data-ved-thumb-hint]");
+  if (hint) {
+    const kind = sourceKind(S.embed);
+    if (src && S.thumbAuto) {
+      hint.textContent = "Taken from the video. Upload one to replace it.";
+    } else if (src) {
+      hint.textContent = "";
+    } else if (!S.embed.trim()) {
+      hint.textContent = "Add the video first, then upload a picture for the card.";
+    } else if (kind === "youtube") {
+      hint.textContent = "The still from the video is on its way.";
+    } else if (kind === "file") {
+      hint.textContent = "A file has no still we can read — upload a picture, or the card goes grey.";
+    } else {
+      hint.textContent = `${HOSTS[kind] || "This host"} does not hand us a picture — upload one so the card is not blank.`;
+    }
+  }
 }
 
 function paintTags() {
@@ -358,6 +333,8 @@ function paintStatus() {
 }
 
 function paintAll() {
+  paintSourceNote();
+  paintPlayer();
   paintCounters();
   paintPreview();
   paintThumb();
@@ -623,6 +600,118 @@ function showState({ title, text, action = "" }) {
 /* ================================================================== */
 /* events                                                             */
 /* ================================================================== */
+/**
+ * The still that comes with a link. YouTube hands one over; every other host
+ * does not, so an automatic picture is dropped when the source leaves YouTube
+ * — but a picture the member chose or uploaded is never touched.
+ */
+function syncAutoThumb() {
+  if (S.thumbChosen) return false;
+  const auto = autoThumb(S.embed);
+  if (auto) {
+    if (S.thumb === auto) return false;
+    S.thumb = auto;
+    S.thumbAuto = true;
+    return true;
+  }
+  if (S.thumbAuto) {
+    S.thumb = "";
+    S.thumbAuto = false;
+    return true;
+  }
+  return false;
+}
+
+/** The oEmbed endpoints that answer a browser without a key. */
+const OEMBED = {
+  tiktok: (url) => `https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`,
+  pinterest: (url) => `https://www.pinterest.com/oembed.json?url=${encodeURIComponent(url)}`,
+  vimeo: (url) => `https://vimeo.com/api/oembed.json?url=${encodeURIComponent(url)}`,
+  dailymotion: (url) => `https://www.dailymotion.com/services/oembed?url=${encodeURIComponent(url)}&format=json`,
+  reddit: (url) => `https://www.reddit.com/oembed?url=${encodeURIComponent(url)}`,
+};
+
+/**
+ * Some hosts will hand a still to anyone who asks nicely (oEmbed). We ask
+ * once per link, with a short leash, and say nothing when the answer is no —
+ * Facebook and Drive insist on a token, and a network that blocks the call
+ * must not break the page.
+ */
+async function stillFromHost(url) {
+  const kind = sourceKind(url);
+  const build = OEMBED[kind];
+  if (!build) return "";
+  let timer = null;
+  try {
+    const controller = typeof AbortController === "function" ? new AbortController() : null;
+    if (controller) timer = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(build(url), { signal: controller ? controller.signal : undefined });
+    if (!res || !res.ok) return "";
+    const data = await res.json();
+    const still = String(data?.thumbnail_url || data?.thumbnail || data?.image || "");
+    return /^https?:\/\//i.test(still) ? still : "";
+  } catch {
+    return "";
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+function paintSourceNote() {
+  const note = $("[data-ved-source-note]");
+  if (!note) return;
+  const value = S.embed.trim();
+  if (!value) {
+    note.hidden = true;
+    return;
+  }
+  note.hidden = false;
+  if (!/^https?:\/\//i.test(value)) {
+    note.innerHTML = `${icon("info")} <span>A link starts with http:// or https://</span>`;
+    return;
+  }
+  const kind = sourceKind(value);
+  if (kind === "file") {
+    note.innerHTML = `${icon("check")} <span>A file we can play here${S.download ? " — and download" : ""}</span>`;
+    return;
+  }
+  if (kind === "pinterest" && !pinterestId(value)) {
+    note.innerHTML = `${icon("info")} <span>A short Pinterest link — a full /pin/ address frames better</span>`;
+    return;
+  }
+  if (kind === "reddit" && !redditPath(value)) {
+    note.innerHTML = `${icon("info")} <span>A Reddit short link — the full thread address frames better</span>`;
+    return;
+  }
+  const label = HOSTS[kind] || "Embed";
+  note.innerHTML = `${icon("check")} <span>${esc(label)} — it plays inside the frame${kind === "youtube" ? ", and the thumbnail comes with it" : ""}</span>`;
+}
+
+/**
+ * The player, in the editor. A member should see what they are publishing
+ * before they publish it — a file plays in a <video>, everything else in the
+ * frame the host allows, and the still we already have becomes the poster.
+ */
+function paintPlayer() {
+  const host = $("[data-ved-player]");
+  if (!host) return;
+  const value = S.embed.trim();
+  const usable = value && /^https?:\/\//i.test(value) && !/^\./.test(value);
+  if (!usable) {
+    host.hidden = true;
+    host.innerHTML = "";
+    return;
+  }
+  host.hidden = false;
+  const poster = S.thumb || autoThumb(value);
+  if (isFile(value)) {
+    host.innerHTML = `<video controls playsinline preload="metadata"${poster ? ` poster="${esc(poster)}"` : ""} src="${esc(value)}"></video>`;
+    return;
+  }
+  const src = embedUrl(value);
+  host.innerHTML = `<iframe src="${esc(src)}" title="The video, before it is published" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+}
+
 /* ================================================================== */
 /* files: a picture or a video, from the machine                      */
 /* ================================================================== */
@@ -685,8 +774,11 @@ async function uploadThumbnail(file) {
   try {
     const url = await uploadFile(file, "posts");
     S.thumb = url;
+    S.thumbChosen = true;
+    S.thumbAuto = false;
     paintThumb();
     paintPreview();
+    paintPlayer();
     paintStatus();
     scheduleDraft();
     toast({ title: "Picture uploaded", message: "", tone: "success", iconName: "image" });
@@ -830,31 +922,31 @@ function paintDraftNote() {
 
 function bind() {
   /* the source */
+  let stillTimer = null;
   el.embed.addEventListener("input", () => {
     S.embed = el.embed.value;
-    const note = $("[data-ved-source-note]");
-    if (note) {
-      const value = S.embed.trim();
-      if (!value) {
-        note.hidden = true;
-      } else if (!/^https?:\/\//i.test(value)) {
-        note.hidden = false;
-        note.innerHTML = `${icon("info")} <span>A link starts with http:// or https://</span>`;
-      } else if (isFile(value)) {
-        note.hidden = false;
-        note.innerHTML = `${icon("check")} <span>A file we can play directly${S.download ? " — and download" : ""}</span>`;
-      } else if (findYouTube(value)) {
-        note.hidden = false;
-        note.innerHTML = `${icon("check")} <span>A YouTube link — the thumbnail comes with it</span>`;
-      } else {
-        const label = SOURCE_LABEL[sourceKind(value)] || "Embed";
-        note.hidden = false;
-        note.innerHTML = `${icon("check")} <span>${esc(label)} — it plays inside the frame</span>`;
-      }
-    }
-    if (!S.thumb) paintThumb();
+    syncAutoThumb();
+    paintSourceNote();
+    paintPlayer();
+    paintThumb();
     paintPreview();
     paintStatus();
+    scheduleDraft();
+
+    /* one look, half a second after the typing stops */
+    clearTimeout(stillTimer);
+    const asked = S.embed.trim();
+    if (!asked || S.thumbChosen || S.thumb) return;
+    stillTimer = setTimeout(async () => {
+      const still = await stillFromHost(asked);
+      if (!still || S.thumbChosen || S.thumb || S.embed.trim() !== asked) return;
+      S.thumb = still;
+      S.thumbAuto = true;
+      paintThumb();
+      paintPreview();
+      paintPlayer();
+      scheduleDraft();
+    }, 500);
   });
 
   $("[data-ved-detect]")?.addEventListener("click", () => {
@@ -947,23 +1039,39 @@ function bind() {
   /* thumbnail */
   el.thumb.addEventListener("input", () => {
     S.thumb = el.thumb.value.trim();
+    S.thumbChosen = Boolean(S.thumb);
+    S.thumbAuto = false;
     paintThumb();
     paintPreview();
+    paintPlayer();
+    scheduleDraft();
   });
   $("[data-ved-thumb-auto]")?.addEventListener("click", () => {
     const auto = autoThumb(S.embed);
     if (!auto) {
-      toast({ title: "No frame to take", message: "Only YouTube links carry their own picture.", tone: "error", iconName: "info" });
+      toast({
+        title: "No still to take",
+        message: "Only YouTube hands over a picture. Upload one for the other hosts.",
+        tone: "error",
+        iconName: "info",
+      });
       return;
     }
     S.thumb = auto;
+    S.thumbAuto = true;
+    S.thumbChosen = false;
     paintThumb();
     paintPreview();
+    paintPlayer();
+    scheduleDraft();
   });
   $("[data-ved-thumb-clear]")?.addEventListener("click", () => {
     S.thumb = "";
+    S.thumbChosen = false;
+    S.thumbAuto = false;
     paintThumb();
     paintPreview();
+    paintPlayer();
     scheduleDraft();
   });
 
@@ -1006,10 +1114,12 @@ function bind() {
     el.embed.value = text;
     el.embed.dispatchEvent(new Event("input"));
     const auto = autoThumb(text);
-    if (auto && !S.thumb) {
+    if (auto && !S.thumbChosen && S.thumb !== auto) {
       S.thumb = auto;
+      S.thumbAuto = true;
       paintThumb();
       paintPreview();
+      paintPlayer();
     }
     toast({ title: "Link pasted", message: "The video is in the form.", tone: "success", iconName: "check" });
   });

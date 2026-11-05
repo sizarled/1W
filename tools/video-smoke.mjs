@@ -653,7 +653,139 @@ async function editor(tag) {
 }
 
 /* ================================================================== */
-/* pass 10 — the old address and the stylesheet                       */
+/* pass 10 — the host list, and the player in the editor              */
+/* ================================================================== */
+{
+  const embed = await import(`file://${join(root, "assets/js/embed.js")}`);
+  const cases = [
+    ["https://www.youtube.com/watch?v=dQw4w9WgXcQ", "https://www.youtube.com/embed/dQw4w9WgXcQ", "youtube", "YouTube"],
+    ["https://youtu.be/dQw4w9WgXcQ", "https://www.youtube.com/embed/dQw4w9WgXcQ", "youtube", "YouTube"],
+    ["https://www.youtube.com/shorts/dQw4w9WgXcQ", "https://www.youtube.com/embed/dQw4w9WgXcQ", "youtube", "YouTube"],
+    ["https://vimeo.com/76979871", "https://player.vimeo.com/video/76979871", "vimeo", "Vimeo"],
+    ["https://www.dailymotion.com/video/x8abc12", "https://www.dailymotion.com/embed/video/x8abc12", "dailymotion", "Dailymotion"],
+    ["https://www.tiktok.com/@who/video/7312345678901234567", "https://www.tiktok.com/embed/v2/7312345678901234567", "tiktok", "TikTok"],
+    ["https://www.facebook.com/watch/?v=123456789", "https://www.facebook.com/plugins/video.php?href=", "facebook", "Facebook"],
+    ["https://fb.watch/abcdEFG/", "https://www.facebook.com/plugins/video.php?href=", "facebook", "Facebook"],
+    ["https://drive.google.com/file/d/1AbCdEfGhIjKlMnOp/view", "https://drive.google.com/file/d/1AbCdEfGhIjKlMnOp/preview", "drive", "Google Drive"],
+    ["https://www.pinterest.com/pin/99360735500167749/", "https://assets.pinterest.com/ext/embed.html?id=99360735500167749", "pinterest", "Pinterest"],
+    ["https://pin.it/abc123", "https://assets.pinterest.com/ext/embed.html?url=", "pinterest", "Pinterest"],
+    ["https://www.reddit.com/r/filmmaking/comments/1abc2de/the_long_take/", "https://embed.reddit.com/r/filmmaking/comments/1abc2de/?embed=true&theme=dark", "reddit", "Reddit"],
+    ["https://redd.it/1abc2de", "https://embed.reddit.com/comments/1abc2de/?embed=true&theme=dark", "reddit", "Reddit"],
+    ["https://cdn.example.com/film.mp4", "https://cdn.example.com/film.mp4", "file", "File"],
+    ["https://somewhere.example/watch/1", "https://somewhere.example/watch/1", "embed", "Embed"],
+  ];
+  cases.forEach(([input, expected, kind, label]) => {
+    const out = embed.embedUrl(input);
+    expect(`hosts: ${kind} — ${input}`, out.startsWith(expected), out);
+    expect(`hosts: ${kind} is named`, embed.sourceKind(input) === kind, embed.sourceKind(input));
+    expect(`hosts: ${kind} wears its label`, embed.sourceLabel(input) === label, embed.sourceLabel(input));
+  });
+  expect("hosts: a YouTube still comes free", embed.autoThumb("https://youtu.be/dQw4w9WgXcQ") === "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg", embed.autoThumb("https://youtu.be/dQw4w9WgXcQ"));
+  expect("hosts: nothing else pretends to have one", embed.autoThumb("https://www.tiktok.com/@a/video/7312345678901234567") === "");
+
+  /* the player in the editor */
+  const ctx = boot("video-editor.html", {
+    storage: STORAGE,
+    fetchImpl: () => reply([]),
+  });
+  await import(`file://${join(root, "assets/js/video-editor.js")}?p10player`);
+  await wait(70);
+  const { document, window } = ctx;
+  const field = document.querySelector("[data-ved-embed]");
+  const player = () => document.querySelector("[data-ved-player]");
+  const frame = () => player()?.querySelector("iframe")?.getAttribute("src") || "";
+  const type = (value) => {
+    field.value = value;
+    field.dispatchEvent(new window.Event("input", { bubbles: true }));
+  };
+
+  expect("player: nothing is framed before a link", player()?.hidden === true, String(player()?.hidden));
+
+  type("https://youtu.be/dQw4w9WgXcQ");
+  await wait(30);
+  expect("player: a YouTube link is framed", frame() === "https://www.youtube.com/embed/dQw4w9WgXcQ", frame());
+  expect("player: the still is shown straight away", document.querySelector("[data-ved-thumb-box] img")?.getAttribute("src")?.includes("i.ytimg.com"));
+  await wait(400);
+  expect("player: and the still is now the form's", document.querySelector("[data-ved-thumb]")?.value.includes("i.ytimg.com"), document.querySelector("[data-ved-thumb]")?.value);
+
+  type("https://www.pinterest.com/pin/99360735500167749/");
+  await wait(30);
+  expect("player: a Pinterest pin is framed", frame().startsWith("https://assets.pinterest.com/ext/embed.html?id=99360735500167749"), frame());
+  expect("player: Pinterest does not hand over a still", document.querySelector("[data-ved-thumb-box] img") === null, document.querySelector("[data-ved-thumb-box]")?.innerHTML.slice(0, 60));
+  expect("player: and says so", document.querySelector("[data-ved-thumb-hint]")?.textContent.includes("does not hand us a picture"), document.querySelector("[data-ved-thumb-hint]")?.textContent);
+
+  type("https://www.reddit.com/r/filmmaking/comments/1abc2de/the_long_take/");
+  await wait(30);
+  expect("player: a Reddit thread is framed", frame() === "https://embed.reddit.com/r/filmmaking/comments/1abc2de/?embed=true&theme=dark", frame());
+
+  type("https://www.tiktok.com/@who/video/7312345678901234567");
+  await wait(30);
+  expect("player: a TikTok is framed", frame() === "https://www.tiktok.com/embed/v2/7312345678901234567", frame());
+
+  type("https://www.facebook.com/watch/?v=123456789");
+  await wait(30);
+  expect("player: a Facebook video is framed", frame().includes("facebook.com/plugins/video.php"), frame());
+
+  type("https://cdn.example.com/film.mp4");
+  await wait(30);
+  const video = player()?.querySelector("video");
+  expect("player: a file plays as a video", video?.getAttribute("src") === "https://cdn.example.com/film.mp4", player()?.innerHTML.slice(0, 80));
+  expect("player: the still is its poster", video?.getAttribute("poster") === S_postOf(document), String(video?.getAttribute("poster")));
+  expect("player: nothing threw", ctx.errors.length === 0, ctx.errors.join(" | "));
+
+  type("");
+  await wait(20);
+  expect("player: an emptied field takes the frame away", player()?.hidden === true, String(player()?.hidden));
+}
+
+function S_postOf(document) {
+  return document.querySelector("[data-ved-thumb]")?.value || null;
+}
+
+/* ================================================================== */
+/* pass 11 — a still the host will hand over (oEmbed), and a quiet no  */
+/* ================================================================== */
+{
+  const ctx = boot("video-editor.html", {
+    storage: STORAGE,
+    fetchImpl: (href) => {
+      if (href.includes("tiktok.com/oembed")) {
+        return reply({ thumbnail_url: "https://p16-sign.tiktokcdn.com/still.jpg" });
+      }
+      if (href.includes("pinterest.com/oembed")) {
+        return Promise.reject(new Error("blocked"));
+      }
+      return reply([]);
+    },
+  });
+  await import(`file://${join(root, "assets/js/video-editor.js")}?p11oembed`);
+  await wait(70);
+  const { document, window } = ctx;
+  const field = document.querySelector("[data-ved-embed]");
+  const type = async (value, ms = 640) => {
+    field.value = value;
+    field.dispatchEvent(new window.Event("input", { bubbles: true }));
+    await wait(ms);
+  };
+
+  await type("https://www.tiktok.com/@who/video/7312345678901234567");
+  expect("oembed: TikTok hands over a still", document.querySelector("[data-ved-thumb]")?.value === "https://p16-sign.tiktokcdn.com/still.jpg", document.querySelector("[data-ved-thumb]")?.value);
+  expect("oembed: the box shows it", document.querySelector("[data-ved-thumb-box] img")?.getAttribute("src")?.includes("tiktokcdn"), document.querySelector("[data-ved-thumb-box]")?.innerHTML.slice(0, 60));
+
+  await type("https://www.pinterest.com/pin/99360735500167749/");
+  expect("oembed: a host that refuses changes nothing", document.querySelector("[data-ved-thumb]")?.value === "", document.querySelector("[data-ved-thumb]")?.value);
+  expect("oembed: nothing threw when the call failed", ctx.errors.length === 0, ctx.errors.join(" | "));
+
+  /* a picture the member chose is never overwritten by a host */
+  const thumbField = document.querySelector("[data-ved-thumb]");
+  thumbField.value = "https://example.com/mine.jpg";
+  thumbField.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await type("https://www.tiktok.com/@who/video/7312345678901234999");
+  expect("oembed: a chosen picture stays", document.querySelector("[data-ved-thumb]")?.value === "https://example.com/mine.jpg", document.querySelector("[data-ved-thumb]")?.value);
+}
+
+/* ================================================================== */
+/* pass 12 — the old address and the stylesheet                       */
 /* ================================================================== */
 {
   const html = readFileSync(join(root, "video.html"), "utf8");

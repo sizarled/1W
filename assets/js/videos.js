@@ -98,57 +98,10 @@ function signedIn() {
   return Boolean(state.token && getMember());
 }
 
-/** Any share link → something an <iframe> will accept. */
-export function embedUrl(raw = "") {
-  const url = String(raw).trim();
-  if (!url) return "";
-  try {
-    const u = new URL(url, location.href);
-    const host = u.hostname.replace(/^www\./, "");
-    if (host === "youtu.be") return `https://www.youtube.com/embed/${u.pathname.slice(1)}`;
-    if (host.endsWith("youtube.com")) {
-      const v = u.searchParams.get("v");
-      if (v) return `https://www.youtube.com/embed/${v}`;
-      const parts = u.pathname.split("/").filter(Boolean);
-      if (parts[0] === "embed" || parts[0] === "shorts" || parts[0] === "live") {
-        return `https://www.youtube.com/embed/${parts[1] || ""}`;
-      }
-    }
-    if (host === "vimeo.com" || host.endsWith(".vimeo.com")) {
-      const id = u.pathname.split("/").filter(Boolean).pop();
-      if (/^\d+$/.test(id || "")) return `https://player.vimeo.com/video/${id}`;
-    }
-    if (host.endsWith("dailymotion.com") || host === "dai.ly") {
-      const id = u.pathname.split("/").filter(Boolean).pop();
-      if (id && /^[a-z0-9]+$/i.test(id)) return `https://www.dailymotion.com/embed/video/${id}`;
-    }
-    if (host.endsWith("tiktok.com")) {
-      const id = (u.pathname.match(/\/video\/(\d+)/) || [])[1];
-      if (id) return `https://www.tiktok.com/embed/v2/${id}`;
-    }
-    if (host === "drive.google.com") {
-      const id = (u.pathname.match(/\/file\/d\/([\w-]+)/) || [])[1];
-      if (id) return `https://drive.google.com/file/d/${id}/preview`;
-    }
-    if (host.endsWith("facebook.com") || host === "fb.watch") {
-      return `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(url)}&show_text=false`;
-    }
-  } catch {
-    /* a plain text source, used as it is */
-  }
-  return url;
-}
+/** The host list lives in one place now: see assets/js/embed.js. */
+import { embedUrl, autoThumb, isFile } from "./embed.js";
 
-function isFile(raw = "") {
-  return /\.(mp4|webm|ogv|ogg|mov|m4v)(\?|#|$)/i.test(String(raw));
-}
-
-/** YouTube gives us a thumbnail for free — nothing else does. */
-export function autoThumb(raw = "") {
-  const src = embedUrl(raw);
-  const match = src.match(/youtube\.com\/embed\/([\w-]{6,})/);
-  return match ? `https://i.ytimg.com/vi/${match[1]}/hqdefault.jpg` : "";
-}
+export { embedUrl, autoThumb, isFile, sourceKind } from "./embed.js";
 
 function skeleton(count = 8) {
   return Array.from(

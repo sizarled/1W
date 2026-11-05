@@ -1494,9 +1494,29 @@ preview so the followers-only door can be tried as well.
 The video editor gained the mock's uploads and the same safety net: **a picture from the machine** as
 the thumbnail, **a video file from the machine** (up to 50 MB, with the percentage on the page, and
 the storage address written into the field when it lands), a **draft on the device**, **Ctrl/Cmd+Enter**,
-a link **pasted anywhere** on the page, the mock's five **age ratings** (3+, 6+, 13+, 16+, 18+), and
-the hosts the field recognises — YouTube, Vimeo, Dailymotion, Facebook, Google Drive, TikTok and a
-direct file. The watch page's `embedUrl` understands the same list, so what the editor promises plays.
+a link **pasted anywhere** on the page, and the mock's five **age ratings** (3+, 6+, 13+, 16+, 18+).
+
+**The player is now in the editor.** As soon as the field holds a link the source is framed under it —
+a `<video>` for a real file, the host's own frame for everything else, with the thumbnail as the
+poster — so a member sees what they are publishing before they publish it. The live-preview card
+carries a play glyph over the still, and when there is no still it names the host rather than showing
+a grey rectangle.
+
+**The hosts live in one place**, `assets/js/embed.js`, used by the editor, the watch screen and the
+`meta.source` the save records: **YouTube** (watch · youtu.be · shorts · live · embed) · **Vimeo** ·
+**Dailymotion** · **TikTok** · **Facebook** (watch · fb.watch · fb.me) · **Google Drive** ·
+**Pinterest** (a `/pin/<id>/` link frames the pin; a `pin.it` short link is handed to Pinterest) ·
+**Reddit** (`/r/…/comments/<id>/` and `redd.it` frame the thread) · a direct file. Anything else is
+framed as it is — some sites refuse to be framed, and the player then says so instead of showing a
+blank rectangle.
+
+**Thumbnails, honestly.** YouTube hands a still over with the link, so it arrives by itself and the
+member never clicks anything; TikTok, Pinterest, Vimeo, Dailymotion and Reddit are asked through
+their **oEmbed** endpoint, once per link, with a five-second leash — if the host answers, the still is
+used, and if it refuses (Facebook and Drive want a token) nothing happens and the thumbnail panel says
+*"Facebook does not hand us a picture — upload one so the card is not blank."* A picture the member
+uploaded or typed is never overwritten by an automatic one, and an automatic picture is dropped when
+the source leaves the host that gave it.
 
 **The uploads needed a database change, and did not have one.** The `source` bucket is public to read
 but every write passes a policy on `storage.objects`, and the only folders a browser could write to
@@ -1509,7 +1529,7 @@ the editors need**, each pinned to a name pattern and a set of extensions (`user
 | --- | --- |
 | `node tools/rte-smoke.mjs` | **45/45** (every command, links, insertion, history, paste, drop, keys, toolbar state) |
 | `node tools/article-smoke.mjs` | **189/189** |
-| `node tools/video-smoke.mjs` | **142/142** (including the two uploads through a stand-in for `XMLHttpRequest`) |
+| `node tools/video-smoke.mjs` | **208/208** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
 
 ### The six OAuth apps — one checklist each
 
@@ -2326,6 +2346,8 @@ assets/js/article.js        article.html: one piece, the two doors, the comments
 assets/js/article-editor.js article-editor.html: the editor and article_save
 assets/js/article-text.js   word count, reading time and the body allowlist, shared by both
 assets/js/rte.js            the writing surface: ranges, formatting, history, paste, keys
+assets/js/embed.js          the one host list: YouTube · Vimeo · Dailymotion · TikTok · Facebook·
+                            Drive · Pinterest · Reddit · a file — for the editor and the watch screen
 assets/css/cast.css         cast page (profile, dials, reels, mentions)
 assets/js/cast.js           cast page controller (TMDB + person_* RPCs)
 assets/css/register.css     registration form + success card (high-contrast, both themes)
