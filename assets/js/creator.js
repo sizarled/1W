@@ -69,24 +69,18 @@ const SECTIONS = [
     icon: "tv",
     noun: "studio",
     tabs: [
-      { key: "videos", label: "Videos", type: "list", kind: "video", cols: ["item", "vis", "minutes", "likes", "dislikes", "comments", "shares", "reports", "act"], actions: ["edit", "link", "delete"] },
+      { key: "videos", label: "Videos", type: "list", kind: "video", cols: ["item", "vis", "minutes", "likes", "dislikes", "comments", "shares", "reports", "act"], actions: ["edit", "link", "delete"], cta: { label: "Publish a video", href: "video-editor.html", icon: "upload" } },
       { key: "podcasts", label: "Podcasts", type: "list", kind: "podcast", cols: ["item", "vis", "minutes", "likes", "dislikes", "comments", "shares", "reports", "act"], actions: ["edit", "link", "delete"] },
       { key: "playlists", label: "Playlists", type: "list", kind: "playlist", cols: ["item", "vis", "minutes", "likes", "dislikes", "comments", "shares", "reports", "act"], actions: ["edit", "link", "delete"] },
       { key: "participants", label: "Participants", type: "participants" },
       { key: "settings", label: "Studio management", type: "settings" },
       { key: "subscribers", label: "Subscribers", type: "subscribers" },
     ],
+    /* A video is not typed into this table any more. `video-editor.html` is
+       the video form — the player, the thumbnail, the audience, the schedule —
+       and the studio lends it the row. The entry is a link, not a button. */
     add: [
-      { kind: "video", label: "Video" },
-      /* the same button the vault shows: a member video is published with the
-         editor, not typed into a table. `href` makes the entry a link. */
-      {
-        kind: "video",
-        label: "Video in the editor",
-        href: "video-editor.html",
-        icon: "upload",
-        note: "opens video-editor.html",
-      },
+      { kind: "video", label: "Video", href: "video-editor.html", icon: "upload", note: "opens the video editor" },
       { kind: "podcast", label: "Podcast" },
       { kind: "playlist", label: "Playlist" },
     ],
@@ -185,6 +179,7 @@ const SECTIONS = [
       { key: "lists", label: "Channel lists", type: "list", kind: "channel_list", cols: ["item", "vis", "seats", "minutes", "act"], actions: ["edit", "delete"] },
       { key: "xtream", label: "Xtream accounts", type: "list", kind: "xtream", cols: ["item", "vis", "act"], actions: ["edit", "delete"] },
       { key: "playlists", label: "Playlists", type: "list", kind: "playlist", cols: ["item", "vis", "minutes", "likes", "act"], actions: ["edit", "link", "delete"] },
+      { key: "videos", label: "Videos", type: "list", kind: "video", cols: ["item", "vis", "minutes", "likes", "comments", "act"], actions: ["edit", "link", "delete"], cta: { label: "Publish a video", href: "video-editor.html", icon: "upload" } },
       { key: "participants", label: "Participants", type: "participants" },
       { key: "settings", label: "Server management", type: "settings" },
       { key: "subscribers", label: "Subscribers", type: "subscribers" },
@@ -208,6 +203,7 @@ const SECTIONS = [
       { key: "films", label: "Films", type: "list", kind: "film", cols: ["item", "vis", "seats", "minutes", "likes", "comments", "act"], actions: ["edit", "link", "delete"] },
       { key: "episodes", label: "Episodes", type: "list", kind: "episode", cols: ["item", "vis", "seats", "minutes", "likes", "act"], actions: ["edit", "link", "delete"] },
       { key: "playlists", label: "Playlists", type: "list", kind: "playlist", cols: ["item", "vis", "minutes", "likes", "act"], actions: ["edit", "link", "delete"] },
+      { key: "videos", label: "Videos", type: "list", kind: "video", cols: ["item", "vis", "minutes", "likes", "comments", "act"], actions: ["edit", "link", "delete"], cta: { label: "Publish a video", href: "video-editor.html", icon: "upload" } },
       { key: "participants", label: "Participants", type: "participants" },
       { key: "settings", label: "Cinema management", type: "settings" },
       { key: "subscribers", label: "Subscribers", type: "subscribers" },
@@ -684,7 +680,7 @@ function renderTop() {
           entry.category
             ? `<button class="cr-drop__item" type="button" data-cr-add="category"><i data-icon="filter"></i> Category</button>`
             : entry.href
-              ? `<a class="cr-drop__item" href="${esc(withHub(entry.href))}"><i data-icon="${esc(entry.icon || KIND_ICON[entry.kind] || "plus")}"></i> ${esc(entry.label)}</a>`
+              ? `<a class="cr-drop__item" href="${esc(withHub(entry.href))}"><i data-icon="${esc(entry.icon || KIND_ICON[entry.kind] || "plus")}"></i> ${esc(entry.label)}${entry.note ? ` <span class="cr-drop__note">${esc(entry.note)}</span>` : ""}</a>`
               : `<button class="cr-drop__item" type="button" data-cr-add="${esc(entry.kind)}" data-draft="${entry.draft ? "1" : "0"}"><i data-icon="${esc(KIND_ICON[entry.kind] || "plus")}"></i> ${esc(entry.label)}</button>`
       ),
       `<span class="cr-drop__sep"></span>`,
@@ -886,16 +882,24 @@ function rowsFiltered(rows) {
 function renderList(host, hub, tab) {
   const rows = rowsFiltered(state.rows);
   const counts = state.counts || {};
+  /* some tabs are written somewhere else — the Videos tab is written in
+     video-editor.html, so it says so instead of offering an empty form */
+  const cta = tab.cta
+    ? `<a class="dsh-btn dsh-btn--primary dsh-btn--sm" href="${esc(withHub(tab.cta.href))}" data-cr-video-new><i data-icon="${esc(tab.cta.icon || "upload")}"></i> ${esc(tab.cta.label)}</a>`
+    : "";
   const head = `
     <div class="cr-bar">
       <div class="cr-bar__left">
         <span class="cr-bar__title">${esc(tab.label)}</span>
         <span class="cr-bar__count">${rows.length} shown · ${esc(num(counts.all || 0))} in this ${esc(sectionOf(state.section).noun)}</span>
       </div>
-      <label class="cr-search">
-        <i data-icon="search" aria-hidden="true"></i>
-        <input class="dsh-input" type="search" placeholder="Search ${esc(tab.label.toLowerCase())}" aria-label="Search this table" data-cr-search value="${esc(state.search)}" />
-      </label>
+      <div class="cr-bar__right">
+        <label class="cr-search">
+          <i data-icon="search" aria-hidden="true"></i>
+          <input class="dsh-input" type="search" placeholder="Search ${esc(tab.label.toLowerCase())}" aria-label="Search this table" data-cr-search value="${esc(state.search)}" />
+        </label>
+        ${cta && (rows.length || state.search) ? cta : ""}
+      </div>
     </div>`;
 
   const table = rows.length
@@ -910,7 +914,10 @@ function renderList(host, hub, tab) {
         state.search ? "Nothing matches this search" : `No ${tab.label.toLowerCase()} yet`,
         state.search
           ? "Clear the search, or add something new."
-          : `Add the first one from “Add content” — it appears here with its numbers as soon as it is saved.`
+          : tab.cta
+            ? `A video is written in the video editor — the player, the thumbnail, the audience — and it lands here with its numbers as soon as it is published.`
+            : `Add the first one from “Add content” — it appears here with its numbers as soon as it is saved.`,
+        tab.cta && !state.search ? cta : ""
       );
 
   host.innerHTML = head + table;
@@ -1478,11 +1485,6 @@ function renderEditor(host) {
         <button class="cr-editor__back" type="button" data-cr-editor-back><i data-icon="arrowLeft"></i> Back to ${esc(sectionOf(state.section).noun)}</button>
         <span class="cr-editor__head-right">
           <span class="cr-editor__kind"><i data-icon="${esc(KIND_ICON[draft.kind] || "file")}"></i> ${esc(KIND_LABEL[draft.kind] || draft.kind)} · ${draft.id ? esc(draft.status) : "new"}</span>
-          ${
-            draft.kind === "video"
-              ? `<a class="cr-editor__open" href="${esc(withHub("video-editor.html"))}" data-cr-video-editor title="A member video is published from video-editor.html and appears in the videos feed — this table holds the hub's own library."><i data-icon="upload"></i> Open video-editor.html</a>`
-              : ""
-          }
         </span>
       </div>
 
@@ -3224,6 +3226,12 @@ async function deletePostItem(ref) {
 function openEditor(kind, row = null) {
   const hub = currentHub();
   if (!hub) return;
+  /* a new video is written in video-editor.html, not in this table. A row that
+     already exists in the hub's own library still opens, so nothing is lost. */
+  if (kind === "video" && !row) {
+    location.href = withHub("video-editor.html");
+    return;
+  }
   state.editor = row ? { ...row } : blankItem(kind || "video", hub.id);
   state.view = "editor";
   if (row) state.editor.tags = row.tags || [];

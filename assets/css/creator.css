@@ -550,6 +550,14 @@
   flex-wrap: wrap;
 }
 
+/* the search and the tab's own button, on one line */
+.cr-bar__right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 .cr-bar__title {
   font-size: 0.95rem;
   font-weight: 650;
@@ -563,6 +571,15 @@
 .cr-search {
   position: relative;
   display: block;
+}
+
+/* an entry that leaves the studio says where it goes, quietly */
+.cr-drop__note {
+  margin-left: auto;
+  padding-left: 0.5rem;
+  color: var(--faint);
+  font-size: 0.68rem;
+  white-space: nowrap;
 }
 
 .cr-search .ico {

@@ -839,29 +839,24 @@ async function main() {
   expect("add: publishing is sent", calls.some((c) => c.includes("creator_item_save")));
   expect("add: no errors", s.errors.length === 0, s.errors.join(" | "));
 
-  // the way out to the video editor
+  /* a video is not written in this table: the editor is the form */
   s.click(s.qs("[data-cr-add-toggle]"));
   await s.wait(40);
+  expect("video: there is no table-form Video button left", !s.qs('[data-cr-add="video"]'), s.text("[data-cr-add-menu]"));
   const toEditor = s.qs('a.cr-drop__item[href="video-editor.html?studio=IDST100001"]');
-  expect("editor link: the studio menu opens it", Boolean(toEditor), s.text("[data-cr-add-menu]"));
-  expect("editor link: and names it", /video in the editor/i.test(toEditor ? toEditor.textContent : ""), toEditor ? toEditor.textContent.trim() : "");
-  expect("editor link: no dead data-cr-add on it", !(toEditor && toEditor.hasAttribute("data-cr-add")));
+  expect("video: the menu's Video is a link to the editor", Boolean(toEditor), s.text("[data-cr-add-menu]"));
+  expect("video: and says where it goes", /opens the video editor/i.test(toEditor ? toEditor.textContent : ""), toEditor ? toEditor.textContent.trim() : "");
+  expect("video: it is the first entry, where the old button was", toEditor === s.qsa("[data-cr-add-menu] .cr-drop__item")[0], s.text("[data-cr-add-menu]"));
+  expect("video: it is not a dead data-cr-add", !(toEditor && toEditor.hasAttribute("data-cr-add")));
+  s.click(s.qs("[data-cr-add-toggle]"));
+  await s.wait(30);
 
-  s.click(s.qs('[data-cr-add="video"]'));
-  await s.wait(60);
-  expect("editor link: a new video still opens the table form", /Video/i.test(s.text(".cr-editor__kind")), s.text(".cr-editor__kind"));
-  const openEditor = s.qs("[data-cr-video-editor]");
-  expect("editor link: «Video · new» carries the button", Boolean(openEditor), s.text(".cr-editor__head"));
-  expect(
-    "editor link: it points at video-editor.html with this studio",
-    openEditor && openEditor.getAttribute("href") === "video-editor.html?studio=IDST100001",
-    openEditor ? openEditor.getAttribute("href") : ""
-  );
-  expect("editor link: it reads as a button", /open video-editor\.html/i.test(openEditor ? openEditor.textContent : ""), openEditor ? openEditor.textContent.trim() : "");
-  expect("editor link: it is only on a video", s.qsa("[data-cr-video-editor]").length === 1, String(s.qsa("[data-cr-video-editor]").length));
-  s.click(s.qs("[data-cr-editor-back]"));
-  await s.wait(80);
-  expect("editor link: back to the table", Boolean(s.qs("[data-cr-view]")), s.text("[data-cr-view]").slice(0, 40));
+  /* and the tab itself carries it, not only the menu */
+  const cta = s.qs("[data-cr-video-new]");
+  expect("video: the Videos tab has its own button", Boolean(cta), s.text(".cr-bar"));
+  expect("video: which opens the editor with this studio", cta?.getAttribute("href") === "video-editor.html?studio=IDST100001", cta?.getAttribute("href"));
+  expect("video: and it is called Publish a video", /publish a video/i.test(cta ? cta.textContent : ""), cta ? cta.textContent.trim() : "");
+  expect("video: no «Video · new» screen is left anywhere", s.qsa("[data-cr-video-editor]").length === 0);
 
   // the blog section
   calls.length = 0;
@@ -1496,12 +1491,17 @@ async function passDoors() {
   await s.wait(40);
   const link = s.qs('a.cr-drop__item[href="video-editor.html?studio=IDST100001"]');
   expect("studio link: the menu passes the studio's code", Boolean(link), s.text("[data-cr-add-menu]"));
-  expect("studio link: it is still called Video in the editor", /Video in the editor/i.test(link ? link.textContent : ""), link ? link.textContent.trim() : "");
+  expect("studio link: it is simply called Video", /^Video\b/.test(link ? link.textContent.trim() : ""), link ? link.textContent.trim() : "");
+  expect("studio link: and carries the note", /opens the video editor/i.test(link ? link.textContent : ""), link ? link.textContent.trim() : "");
 
-  s.click(s.qs('[data-cr-add="video"]'));
-  await s.wait(80);
-  const head = s.qs("[data-cr-video-editor]");
-  expect("studio link: «Video · new» passes it too", head?.getAttribute("href") === "video-editor.html?studio=IDST100001", head?.getAttribute("href"));
+  s.click(s.qs("[data-cr-add-toggle]"));
+  await s.wait(30);
+  const cta = s.qs("[data-cr-video-new]");
+  expect("studio link: the tab's button passes it too", cta?.getAttribute("href") === "video-editor.html?studio=IDST100001", cta?.getAttribute("href"));
+
+  /* the empty state of a hub with no videos points at the editor, not a form */
+  expect("studio link: the empty state explains it", /written in the video editor/i.test(s.text("[data-cr-view]")), s.text("[data-cr-view]").slice(0, 200));
+  expect("studio link: and offers the button there too", Boolean(s.qs("[data-cr-view] [data-cr-video-new]")));
 }
 
 /* ------------------------------------------------------------------ */

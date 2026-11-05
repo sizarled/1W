@@ -1101,14 +1101,19 @@ lines / words / characters (drafts).
 
 #### The item editor
 
-**A hub's table is not the vault.** A studio's `Videos` tab holds the videos that belong to that hub,
-with their counters and their niche — that is what a `creator_item_save` row is. A *member* video,
-the kind that lands in the videos feed with a player, a thumbnail and a playlist, is published from
-**`video-editor.html`** — so the studio no longer hides it: the `＋ Add content` menu carries
-**Video in the editor** (a plain link, not another table row), and the head of a **`Video · new`**
-screen — the same place the kind is written — carries **Open video-editor.html**. Two ways in, one
-of them where a creator already is. Both are hidden on every other kind of draft (a podcast or an
-article has its own surface), and the link's title says plainly which of the two doors it is.
+**A hub's table is not the vault, and a video is not typed into a table.** A video's form —
+the player, the thumbnail from the host, the audience, the schedule — is `video-editor.html`, so the
+studio stopped offering a second, weaker one: there is **no `Video · new` screen any more**. The
+`＋ Add content` menu's **Video** entry is a link to the editor (it carries the hub's code, so the
+studio is already chosen), and the `Videos` tab — which the studio, a server and a cinema each now
+have — carries **Publish a video** in its bar, and the same button in its empty state, where the text
+says plainly that a video is written over there. `openEditor("video")` navigates instead of opening a
+form, so no path — old markup, a keyboard, a link — can bring the table form back.
+
+The one row that still opens the table editor is a video **somebody else submitted** to the hub:
+`creator_submit_item` writes a draft the owner reviews, fixes and publishes from the *Videos* tab.
+That is the form's remaining purpose — reviewing a publisher's draft — not writing a video of your
+own.
 
 `creator_item_save` takes the hub, the kind, the title, summary, body, media link, thumbnail, tags,
 language, age, visibility, category, parent (an answer points at its question), field, niche,
@@ -1141,7 +1146,7 @@ published (and refused without a media link), an article refused in a studio hub
 categories three deep with the fourth refused (`deep`) and a duplicate refused, a third blog created
 then a fourth refused (`limit`, level 1), staff added by code and an unknown code refused
 (`member`), and the subscriber list reporting a real member with their country.
-`tools/creator-smoke.mjs` (272 checks) runs the studio end to end — an empty studio that creates, configures
+`tools/creator-smoke.mjs` (275 checks) runs the studio end to end — an empty studio that creates, configures
 (private + password + staff), saves, refuses, and deletes a studio; a studio page holding one of each
 hub (tables, columns, action menus, the editor saving a draft then publishing, blog articles vs
 drafts, categories, subscribers, library books); and the `?section=&tab=` deep links.
@@ -1404,8 +1409,8 @@ my studio*. `video-editor.html` can say it now:
 | --- | --- |
 | the editor | a **Where it goes** card under the live preview: a select of the member's studios, servers and cinemas, then `My own feed — no studio`, and one plain sentence about what the choice does |
 | the preview card | `in <studio>` on the card itself, so the studio is visible while the video is being written |
-| the studio | `creator.html?section=studio` → *Videos*, where the video appears with its counters, its door and a `· video editor` mark on its code |
-| the link between them | the studio's `＋ Add content` menu and its *Video · new* screen both open `video-editor.html?studio=<code>`, so the studio is already chosen |
+| the studio | `creator.html?section=studio` → *Videos*, where the video appears with its counters, its door and a `· video editor` mark on its code. A server and a cinema have that tab too |
+| the link between them | the studio's `＋ Add content` → **Video** and the *Videos* tab's **Publish a video** both open `video-editor.html?studio=<code>`, so the studio is already chosen |
 
 `posts.hub_id` (uuid, `on delete set null`) is the whole schema. `video_save` accepts `hub` as a hub
 **code** (`IDST100001`) or its uuid; a payload **without** the key leaves the studio where it is, and
