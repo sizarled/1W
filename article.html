@@ -4,16 +4,17 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Article — 1World Web</title>
-    <meta name="description" content="One member article with reading time, publisher and reactions." />
+    <meta name="description" content="One article by a member: the piece, its writer, the reactions and the comments." />
     <meta name="theme-color" content="#060607" />
     <meta name="robots" content="noindex" />
     <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="assets/css/base.css?v=20261101k" />
-    <link rel="stylesheet" href="assets/css/layout.css?v=20261101k" />
-    <link rel="stylesheet" href="assets/css/components.css?v=20261101k" />
+    <link rel="stylesheet" href="assets/css/base.css?v=20261105e" />
+    <link rel="stylesheet" href="assets/css/layout.css?v=20261105e" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261105e" />
+    <link rel="stylesheet" href="assets/css/article.css?v=20261106a" />
     <script>
       /* apply the saved theme (or the OS preference) before first paint */
       (function () {
@@ -31,42 +32,82 @@
         } catch (e) {}
       })();
     </script>
-    <script type="module" src="assets/js/app.js?v=20261101k"></script>
+    <script type="module" src="assets/js/app.js?v=20261106a"></script>
+    <script type="module" src="assets/js/article.js?v=20261106a"></script>
   </head>
   <body data-page="article" data-title="Article">
     <a class="skip-link" href="#main">Skip to content</a>
     <div data-site-header></div>
     <div data-site-sidebar></div>
 
-    <main class="site-main" id="main">
-      <section class="soon">
-        <div class="soon__inner">
-          <span class="soon__icon"><i data-icon="article"></i></span>
-          <p class="eyebrow"><span class="eyebrow__dot"></span>Page in build</p>
-          <h1 class="soon__title">Article</h1>
-          <p class="soon__text">One member article with reading time, publisher and reactions. Reads ?id= from the URL.</p>
+    <main class="site-main arts" id="main">
+      <div class="wrap">
+        <!-- the door, the empty page, or the answer -->
+        <div data-r-state hidden></div>
 
-          <div class="soon__meta">
-            <span class="badge badge--solid">article.html</span>
-            <span class="badge">Next release</span>
-            <span class="badge">1World Web</span>
-          </div>
+        <article class="reader" data-r-reader hidden>
+          <!-- ========================================================== -->
+          <!-- the piece and the column beside it                         -->
+          <!-- ========================================================== -->
+          <div class="reader__top">
+            <div class="reader__main">
+              <nav class="reader__crumbs">
+                <a href="articles.html">All articles</a>
+                <span data-r-field></span>
+              </nav>
 
-          <div class="soon__actions">
-            <a class="btn btn--primary" href="index.html"><i data-icon="arrowLeft"></i> Back to homepage</a>
-            <a class="btn btn--ghost" href="index.html#membership"><i data-icon="crown"></i> Membership</a>
-          </div>
+              <header class="reader__head">
+                <div class="reader__badges" data-r-badges></div>
+                <h1 class="reader__title" data-r-title></h1>
+                <p class="reader__desc" data-r-desc hidden></p>
+                <div class="reader__by" data-r-by></div>
+              </header>
 
-          <div class="soon__links">
-            <a class="soon__link" href="index.html"><i data-icon="home"></i>Home</a>
-            <a class="soon__link" href="search.html"><i data-icon="search"></i>Search</a>
-            <a class="soon__link" href="movies.html"><i data-icon="film"></i>Movies</a>
-            <a class="soon__link" href="series.html"><i data-icon="tv"></i>Series</a>
-            <a class="soon__link" href="iptv.html"><i data-icon="broadcast"></i>IPTV</a>
-            <a class="soon__link" href="help.html"><i data-icon="lifebuoy"></i>Help</a>
+              <figure class="reader__cover" data-r-cover hidden>
+                <img src="" alt="" data-r-cover-img />
+              </figure>
+
+              <!-- the body, sanitised against an allowlist -->
+              <div class="prose" data-r-body></div>
+
+              <div class="reader__tags" data-r-tags hidden></div>
+              <div class="reader__acts" data-r-acts></div>
+
+              <!-- report -->
+              <div class="reader__report" data-r-report-box hidden>
+                <div class="afield">
+                  <span class="alabel">Why are you reporting it?</span>
+                  <select class="input" data-r-report-reason>
+                    <option value="spam">Spam</option>
+                    <option value="abuse">Abuse or harassment</option>
+                    <option value="copyright">Copyright</option>
+                    <option value="misleading">Misleading</option>
+                    <option value="other" selected>Something else</option>
+                  </select>
+                </div>
+                <div class="afield">
+                  <span class="alabel">A note for the moderators (optional)</span>
+                  <textarea class="input" data-r-report-note rows="2" maxlength="400"></textarea>
+                </div>
+                <div class="reader__report-acts">
+                  <button class="btn btn--quiet btn--sm" type="button" data-r-report-cancel>Cancel</button>
+                  <button class="btn btn--primary btn--sm" type="button" data-r-report-send>Send report</button>
+                </div>
+              </div>
+
+              <!-- the conversation -->
+              <div data-r-talk></div>
+            </div>
+
+            <aside class="reader__side">
+              <div data-r-author></div>
+              <div class="rsug" data-r-suggest hidden>
+                <div data-r-suggest-list></div>
+              </div>
+            </aside>
           </div>
-        </div>
-      </section>
+        </article>
+      </div>
     </main>
 
     <div data-site-footer></div>

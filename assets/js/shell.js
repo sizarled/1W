@@ -37,7 +37,15 @@ import { createEdgeRail, isDesktop } from "./edge.js";
  * it carries its own menu (Reach · Dashboard · Profile · Network · Account ·
  * In build) in `.pf-side`, with the same pin and edge behaviour.
  */
-const SIDEBAR_PAGES = new Set(["index.html", "watch.html", "videos.html", "video-editor.html"]);
+const SIDEBAR_PAGES = new Set([
+  "index.html",
+  "watch.html",
+  "videos.html",
+  "video-editor.html",
+  "articles.html",
+  "article.html",
+  "article-editor.html",
+]);
 
 function pageFile() {
   return window.location.pathname.split("/").pop() || "index.html";
@@ -48,7 +56,15 @@ function pageFile() {
 function hasSidebar() {
   if (SIDEBAR_PAGES.has(pageFile())) return true;
   const page = document.body?.dataset.page;
-  return page === "home" || page === "watch" || page === "videos" || page === "videoEditor";
+  return (
+    page === "home" ||
+    page === "watch" ||
+    page === "videos" ||
+    page === "videoEditor" ||
+    page === "articles" ||
+    page === "article" ||
+    page === "articleEditor"
+  );
 }
 
 /* the rail instance, shared with the header button */

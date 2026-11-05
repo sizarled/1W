@@ -1384,6 +1384,78 @@ Test: `node tools/video-smoke.mjs` — **112/112** (feed, sort, search, watch, r
 door and its password, a missing video, the editor signed out and in, the payload of a publish, of an
 exclusive rule set and of a private list, and the forwarding page).
 
+### Member articles — the index, the reader and the writing page
+
+The three article mocks became three real pages, in the site's own clothes: **`articles.html`** (the
+index), **`article.html?id=<code>`** (one piece) and **`article-editor.html`** (writing and
+publishing). The mocks' own theme system and palette were not carried over — only their geometry.
+
+An article is a row of `posts` with `content_type = 'article'`, the same row likes, comments, reports
+and reach already live on. It needed one column of its own — `posts.article_meta` (`place`, `field`,
+`category`, `niche`, `help`) — and nothing else: the door's passwords table was **renamed**
+`video_keys → post_keys`, so a video and an article share one kind of door, and `video_save` is now a
+thin wrapper around one general save.
+
+| Call | What it answers |
+| --- | --- |
+| `article_feed(token, field, sort, search, limit, offset)` | the cards, the fields that have articles, one shelf per field (`rails`), the total |
+| `article_get(token, ref, key)` | the piece with its body, `related` (shared keyword) and `more` (same host) — or the door, with the audience, the viewer's own attributes and `asks_password` |
+| `article_mine(token)` | the member's own rows, drafts, scheduled and pending ones included |
+| `article_save(token, payload)` | one call for a draft, a publish, a schedule or a review; the wrapper on `member_post_save` |
+| `article_card(post, viewer)` | `post_card` plus `article { meta, field, category, place, words, reading, host }` |
+| `post_comment_vote(token, comment_id, agree)` | agree / disagree under a comment, one vote per member |
+
+`member_post_save(token, payload, type)` is the one save behind both editors: `title`,
+`description`, `body` (article) or `embed` (video), `thumbnail`, `language`, `visibility`, `status`
+(`draft` / `published` / `scheduled` / `pending`), `scheduled_at`, `tags[]`, `audience[]`,
+`profiles[]`, `passwords[]`, `meta{}`. A key it is **not** given is a list it leaves alone, so a
+partial save can never wipe an audience, the named people, the passwords or the tags.
+
+The index searches titles, descriptions **and the body**, filters by one field, and sorts five ways
+(`popular`, `newest`, `liked`, `discussed`, `longest`). Unfiltered it leads with one piece, draws a
+shelf per field, then lists everything; a card carries the cover, the door's badge (*Exclusive*,
+*Private*, *Followers*, *Draft*), the field and category, the writer, the reading time, the reads,
+the comments and the age.
+
+The reader keeps the measure: a 68-character prose column with the site's type scale, a sticky column
+with the writer's card (**Follow** through `profile_follow_toggle`) and the suggestions, a bar with
+*Useful / Not useful / Save / Share / Report*, and the conversation. Commenting follows the site rule:
+**react first, then the composer**. Bodies are displayed through one allowlist (`article-text.js`) —
+no scripts, no frames, no inline handlers, no `javascript:` links — so the body the editor wrote is
+the only thing the page can render.
+
+The two doors are the mock's idea on the site's rules:
+
+* **Exclusive** (`limited`) — the gate lists the audience as steps (country, language, level range,
+  named member) and marks the ones already true for the viewer; any one is enough. The viewer's own
+  attributes come from the server, not from the page. *Remind me* is kept on the device.
+* **Private** (`private`) — the gate counts the writer's list and asks for one of the passwords; a
+  wrong one says so and stays shut, the right one opens the piece **for that visit** (`?key=…`) and is
+  taken back out of the address bar.
+
+The writing page carries what the mock carried, in the site's words: a toolbar (bold, italic,
+underline, strike, headings and quote, lists, alignment, link, unlink, clear, image, video, undo,
+redo), a title and a description with counters, a contenteditable body that counts words the same way
+the server does, a cover (upload, link, first image in the piece, remove), a field + category +
+language + tags, the four doors, and *Content* or a *Help section* — a Help piece goes to the
+reviewers (`pending`) and is forced **public**, because a help page nobody can read helps nobody. An
+image picked in the body gets a floating bar (small / medium / full, left / centre / right, delete).
+*Reader preview* opens the piece with a simulated reader (country, language, level) and says whether
+that reader would see the piece or the door.
+
+`articles.html` and `article.html` were placeholder pages from `tools/build-pages.mjs`; both were
+taken off that list so the generator cannot overwrite them.
+
+DDL + functions: `tools/sql/articles-page.sql` — **applied**. Test: `node tools/article-smoke.mjs` —
+**155/155** (the index, the empty index, the reader and its sanitizer, reaction→comment→vote, the
+exclusive gate with its steps and reminder, the private gate with a wrong and a right password, a
+missing piece, the editor signed out and in, a draft payload, an audience payload, a private payload
+with its member and password, Help going to review, and the shared word-count / reading-time rules).
+
+Eleven pieces from @ledsizar, @jhon007 and @ledsizar7 remain on the index — nine public, one
+exclusive (`PST-001020`, open to LV5–LV10) and one private (`PST-001021`, the password is
+`1world2026`), so both gates can be seen without publishing anything.
+
 ### The six OAuth apps — one checklist each
 
 The dashboard can hold eight networks. Two of them (Telegram, WhatsApp) link with a code we
@@ -2193,6 +2265,11 @@ assets/js/blocks.js         blocked people/media cache used by every list
 assets/css/video.css        member videos: the feed, the player, the publish page
 assets/js/videos.js         videos.html: feed, watch screen, comments, reactions
 assets/js/video-editor.js   video-editor.html: the publish form and video_save
+assets/css/article.css      member articles: the index, the reader, the writing page
+assets/js/articles.js       articles.html: the index, the search, the shelves
+assets/js/article.js        article.html: one piece, the two doors, the comments
+assets/js/article-editor.js article-editor.html: the editor and article_save
+assets/js/article-text.js   word count, reading time and the body allowlist, shared by both
 assets/css/cast.css         cast page (profile, dials, reels, mentions)
 assets/js/cast.js           cast page controller (TMDB + person_* RPCs)
 assets/css/register.css     registration form + success card (high-contrast, both themes)
@@ -2221,6 +2298,7 @@ tools/delivery-smoke.mjs    the Apps Script under Node: token, email, WhatsApp t
 tools/dashboard-smoke.mjs   dashboard test (five gates, rail, popover, codes, sections)
 tools/sidebar-smoke.mjs     sidebar rail test (edge reveal, pin, Escape, mobile drawer, dashboard menu)
 tools/video-smoke.mjs       videos + video editor test (feed, player, doors, payload)
+tools/article-smoke.mjs     articles test (index, reader, sanitizer, doors, payload)
 tools/court-smoke.mjs       activation wizard + court room test
 tools/visit-smoke.mjs       visit tracker test (5 modes)
 ```
