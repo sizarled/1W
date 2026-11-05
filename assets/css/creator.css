@@ -691,39 +691,3 @@
 .cr-start__kinds .cr-kind {
   height: 36px;
 }
-
-/* the tag input chips ----------------------------------------------- */
-.cr-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-}
-
-.cr-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  height: 24px;
-  padding: 0 0.5rem;
-  border-radius: 999px;
-  border: 1px solid var(--line-2);
-  font-size: 0.72rem;
-  color: var(--text-2);
-}
-
-.cr-tag button {
-  display: grid;
-  place-items: center;
-  width: 14px;
-  height: 14px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--faint);
-  cursor: pointer;
-}
-
-.cr-tag button .ico {
-  width: 11px;
-  height: 11px;
-}
