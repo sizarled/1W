@@ -15,6 +15,10 @@
  * Pass 4 — deep links: ?section=library&tab=documents opens there.
  * Pass 6/7 — ?creator=@handle, and a private hub behind its password.
  * Pass 8 — ?section=studio without a session still asks for a sign-in.
+ * Pass 9 — the Participants tab: a pending ask, approve, the two lists,
+ *          the ads, and removing one.
+ * Pass 10 — a member already let in writes a draft and puts an ad live.
+ * Pass 11 — asking to advertise: four formats, a message and a budget.
  */
 import { JSDOM } from "jsdom";
 import { readFileSync } from "node:fs";
@@ -50,6 +54,7 @@ function reply(data) {
 function hub(over = {}) {
   return {
     id: over.id || `hub-${over.kind || "channel"}`,
+    code: "IDST100001",
     kind: "channel",
     name: "Studio One",
     description: "Films and long talks",
@@ -340,8 +345,12 @@ function stubFetch(url, opts = {}) {
       locked: false,
       hub: {
         ...hub({ id: body.p_hub, kind: "channel", name: "Studio One", visibility: scenario.hubLocked ? "private" : "public" }),
+        code: scenario.hubCode || "IDST100001",
+        can: { publish: false, advertise: false, ...(scenario.can || {}) },
+        request: scenario.request || null,
+        ads: scenario.ads || [],
         ...(scenario.hubView || {}),
-        role: "visitor",
+        role: scenario.role || "visitor",
         subscribed: Boolean(scenario.subscribed),
         unlocked: false,
         owner: "ID100015",
@@ -353,6 +362,63 @@ function stubFetch(url, opts = {}) {
   if (href.includes("/rpc/creator_subscribe")) {
     scenario.subscribed = !scenario.subscribed;
     return reply({ ok: true, subscribed: scenario.subscribed, count: 121 });
+  }
+
+  if (href.includes("/rpc/creator_request_send")) {
+    if (scenario.requestError) return reply({ ok: false, error: scenario.requestError });
+    scenario.sentRequest = body;
+    return reply({ ok: true, request: { id: "req-new", role: body.p_role, format: body.p_format, status: "pending" } });
+  }
+
+  if (href.includes("/rpc/creator_request_decide")) {
+    if (scenario.decideError) return reply({ ok: false, error: scenario.decideError });
+    const row = (scenario.requests || []).find((entry) => entry.id === body.p_id);
+    if (row) row.status = body.p_decision === "approve" ? "approved" : "rejected";
+    scenario.decided = body;
+    return reply({ ok: true, status: row ? row.status : "approved", hub: { id: "hub-ch", code: "IDST100001" } });
+  }
+
+  if (href.includes("/rpc/creator_participants")) {
+    const rows = scenario.requests || [];
+    return reply({
+      ok: true,
+      hub: { id: "hub-ch", code: "IDST100001", kind: "channel", name: "Studio One" },
+      rows,
+      publishers: scenario.publishers || [],
+      advertisers: scenario.advertisers || [],
+      counts: {
+        pending: rows.filter((row) => row.status === "pending").length,
+        approved: rows.filter((row) => row.status === "approved").length,
+        rejected: rows.filter((row) => row.status === "rejected").length,
+      },
+    });
+  }
+
+  if (href.includes("/rpc/creator_ads")) {
+    return reply({
+      ok: true,
+      hub: { id: "hub-ch", code: "IDST100001", name: "Studio One" },
+      rows: scenario.ads || [],
+      counts: { live: (scenario.ads || []).filter((ad) => ad.status === "live").length, paused: 0 },
+      can: { manage: true, advertise: true },
+    });
+  }
+
+  if (href.includes("/rpc/creator_ad_save")) {
+    if (scenario.adError) return reply({ ok: false, error: scenario.adError });
+    scenario.savedAd = body;
+    return reply({ ok: true, ad: { id: "ad-new", format: body.p_format, title: body.p_title, status: "live" } });
+  }
+
+  if (href.includes("/rpc/creator_ad_delete")) {
+    scenario.deletedAd = body.p_id;
+    return reply({ ok: true, removed: true });
+  }
+
+  if (href.includes("/rpc/creator_submit_item")) {
+    if (scenario.draftError) return reply({ ok: false, error: scenario.draftError });
+    scenario.sentDraft = body;
+    return reply({ ok: true, id: "draft-new", status: "draft", kind: body.p_kind });
   }
 
   if (href.includes("/rpc/member_logout")) return reply({ ok: true });
@@ -504,6 +570,10 @@ async function main() {
       publicHub({ id: "pub-priv", kind: "gallery", name: "The Vault", visibility: "private", locked: true }),
     ],
     hubItems: [item({ id: "pub-it", title: "The first film", minutes: 42 })],
+    ads: [
+      { id: "ad-1", format: "banner", title: "Cameras for every night shoot", body: "", media_url: "https://example.com/banner.png", link_url: "https://example.com/shop", member: "Sara Bennani" },
+      { id: "ad-2", format: "paragraph", title: "A word from the crew", body: "Light, cameras and a crew of four, every week in Casablanca.", media_url: "", link_url: "", member: "Sara Bennani" },
+    ],
   };
   calls.length = 0;
   const anon = await boot(1, { token: false });
@@ -564,12 +634,22 @@ async function main() {
   expect("hub: the items are listed", /The first film/.test(anon.text(".crp-items")));
   expect("hub: an item counts its minutes", /42 min/.test(anon.text(".crp-item__meta")), anon.text(".crp-item__meta"));
   expect("hub: there is a subscribe button", Boolean(anon.qs("[data-crp-sub]")));
-  expect("hub: the address bar holds the hub", /hub=pub-ch/.test(anon.window.location.search), anon.window.location.search);
+  expect("hub: the address bar holds the hub by its code", /studio=IDST100001/.test(anon.window.location.search), anon.window.location.search);
   calls.length = 0;
   anon.click(anon.qs("[data-crp-sub]"));
   await anon.wait(300);
   expect("hub: a guest is asked to sign in first", !calls.some((c) => c.includes("creator_subscribe")), calls.join(" "));
   expect("hub: the refusal is spoken", /Sign in first/i.test(anon.text(".toast__title")), anon.text(".toast__title"));
+
+  // the two ways to work in somebody else's place
+  expect("hub: a guest is offered both doors", /Request to publish/i.test(anon.text("[data-cr-view]")) && /Request to advertise/i.test(anon.text("[data-cr-view]")), anon.text(".crp-join"));
+  calls.length = 0;
+  anon.click(anon.qs('[data-crp-join="publisher"]'));
+  await anon.wait(200);
+  expect("hub: a guest cannot ask without a session", !calls.some((c) => c.includes("creator_request_send")) && !anon.qs("[data-crp-join-form]"));
+  expect("hub: the ads of the hub are shown", anon.qsa(".crp-ad").length === 2, String(anon.qsa(".crp-ad").length));
+  expect("hub: a banner is a banner", Boolean(anon.qs('.crp-ad[data-format="banner"]')));
+  expect("hub: a paragraph is a paragraph", /Light, cameras and a crew/.test(anon.text('.crp-ad[data-format="paragraph"]')), anon.text('.crp-ad[data-format="paragraph"]').slice(0, 90));
   expect("hub: no errors", anon.errors.length === 0, anon.errors.join(" | "));
   anon.window.close();
 
@@ -873,6 +953,163 @@ async function main() {
   expect("studio link without a session: a way to browse", /Browse the creators/i.test(c8.text("[data-cr-state]")));
   expect("studio link without a session: no errors", c8.errors.length === 0, c8.errors.join(" | "));
   c8.window.close();
+
+  /* ---------------------------------------------------------------- */
+  /* pass 9 — the owner answers the two kinds of request              */
+  /* ---------------------------------------------------------------- */
+  scenario = {
+    hubs: [hub({ id: "hub-ch", kind: "channel", name: "Studio One" })],
+    items: [],
+    categories: [],
+    subscribers: [],
+    requests: [
+      {
+        id: "req-a",
+        role: "advertiser",
+        format: "banner",
+        message: "We sell cameras and lights; ten thousand impressions first.",
+        link: "https://example.com/portfolio",
+        budget: 500,
+        status: "pending",
+        created_at: new Date(NOW - 36e5).toISOString(),
+        decided_at: null,
+        member: { code: "ID100015", name: "Jhon mark", username: "@jhon007", avatar: "", country: "Morocco", level: 3 },
+      },
+      {
+        id: "req-b",
+        role: "publisher",
+        format: null,
+        message: "I write long film essays and would publish two a week.",
+        link: "",
+        budget: 0,
+        status: "approved",
+        created_at: new Date(NOW - 72e5).toISOString(),
+        decided_at: new Date(NOW - 36e5).toISOString(),
+        member: { code: "ID100019", name: "Jhon Markoni", username: "@ledsizar7", avatar: "", country: "Morocco", level: 2 },
+      },
+    ],
+    publishers: [{ code: "ID100019", name: "Jhon Markoni", username: "@ledsizar7", avatar: "", country: "Morocco" }],
+    advertisers: [{ code: "ID100015", name: "Jhon mark", username: "@jhon007", avatar: "", country: "Morocco", ads: 1 }],
+    ads: [
+      { id: "ad-9", format: "banner", title: "Cameras and lights", body: "", media_url: "https://example.com/b.png", link_url: "https://example.com", status: "live", impressions: 40, clicks: 3, member: { code: "ID100015", name: "Jhon mark" }, mine: false },
+    ],
+  };
+  calls.length = 0;
+  const c9 = await boot(9, { search: "?section=studio&tab=participants" });
+  expect("participants: the tab opens", /Participants/.test(c9.text(".cr-tab.is-on")), c9.text(".cr-tab.is-on"));
+  expect("participants: the calls go out", calls.some((c) => c.includes("creator_participants")) && calls.some((c) => c.includes("creator_ads")), calls.join(" "));
+  expect("participants: the counting line reads", /1 waiting/i.test(c9.text(".cr-bar__count")), c9.text(".cr-bar__count"));
+  expect("participants: the asker is named with the code", /Jhon mark[\s\S]*ID100015/.test(c9.text(".cr-req.is-pending")), c9.text(".cr-req.is-pending").slice(0, 160));
+  expect("participants: the role and the format are chips", /Advertiser/.test(c9.text(".cr-req.is-pending")) && /Banner/.test(c9.text(".cr-req.is-pending")));
+  expect("participants: the budget is read", /500 pts/.test(c9.text(".cr-req.is-pending")), c9.text(".cr-req__meta"));
+  expect("participants: the public link is offered", /creator\.html\?studio=IDST100001/.test(c9.text(".cr-part__link")), c9.text(".cr-part__link"));
+  expect("participants: the publisher list has the code", /ID100019/.test(c9.text(".cr-who-list")), c9.text(".cr-who-list"));
+  expect("participants: the ad table lists the ad", /Cameras and lights/.test(c9.text(".cr-adrow")), c9.text(".cr-adrow"));
+  expect("participants: the numbers of the ad are there", /40/.test(c9.text(".cr-adrow")) && /3/.test(c9.text(".cr-adrow")));
+
+  calls.length = 0;
+  c9.click(c9.qs('[data-cr-req="approve"]'));
+  await c9.wait(320);
+  expect("participants: approving is sent", calls.some((c) => c.includes("creator_request_decide")), calls.join(" "));
+  expect("participants: the answer was approve", scenario.decided && scenario.decided.p_decision === "approve", JSON.stringify(scenario.decided));
+  expect("participants: the row is re-read", calls.some((c) => c.includes("creator_participants")), calls.join(" "));
+
+  calls.length = 0;
+  c9.click(c9.qs("[data-cr-ad-del]"));
+  await c9.wait(300);
+  expect("participants: removing an ad is sent", calls.some((c) => c.includes("creator_ad_delete")), calls.join(" "));
+  expect("participants: it is the right ad", scenario.deletedAd === "ad-9", String(scenario.deletedAd));
+  expect("participants: no errors", c9.errors.length === 0, c9.errors.join(" | "));
+  c9.window.close();
+
+  /* ---------------------------------------------------------------- */
+  /* pass 10 — a member who is already let in writes and advertises   */
+  /* ---------------------------------------------------------------- */
+  scenario = {
+    hubs: [],
+    items: [],
+    creators: [creatorRow()],
+    hubCode: "IDST100001",
+    can: { publish: true, advertise: true },
+    role: "visitor",
+    ads: [
+      { id: "ad-1", format: "video", title: "A night shoot", body: "Two minutes on the roof.", media_url: "https://example.com/f.mp4", link_url: "", member: "Jhon mark" },
+    ],
+    hubItems: [item({ id: "pub-it", title: "The first film", minutes: 42 })],
+  };
+  const c10 = await boot(10, { search: "?studio=IDST100001" });
+  expect("joined: the hub opens by its code", /Studio One/.test(c10.text(".crp-hubhero__name")), c10.text(".crp-hubhero__name"));
+  expect("joined: the code is on the header", /IDST100001/.test(c10.text(".crp-hubhero__code")), c10.text(".crp-hubhero__code"));
+  expect("joined: the two standing chips are there", /You publish here/i.test(c10.text(".crp-join")) && /You advertise here/i.test(c10.text(".crp-join")), c10.text(".crp-join"));
+  expect("joined: no asking buttons once approved", !c10.qs("[data-crp-join]"), "a join button is still there");
+  expect("joined: a video ad renders as a video", Boolean(c10.qs('.crp-ad[data-format="video"] video')), c10.text('.crp-ad[data-format="video"]').slice(0, 80));
+
+  c10.click(c10.qs("[data-crp-write]"));
+  await c10.wait(200);
+  expect("write: the form opens", Boolean(c10.qs("[data-crp-write-form]")));
+  expect("write: the kinds are the hub's", c10.qsa("[data-write-kind] option").length === 3, String(c10.qsa("[data-write-kind] option").length));
+  c10.type(c10.qs("[data-write-title]"), "A short film about the port");
+  c10.type(c10.qs("[data-write-body]"), "We shot it over two nights.");
+  calls.length = 0;
+  c10.qs("[data-crp-write-form]").dispatchEvent(new c10.window.Event("submit", { bubbles: true, cancelable: true }));
+  await c10.wait(320);
+  expect("write: the draft is sent", calls.some((c) => c.includes("creator_submit_item")), calls.join(" "));
+  expect("write: it carries the hub and the kind", scenario.sentDraft && scenario.sentDraft.p_hub === "IDST100001" && scenario.sentDraft.p_kind === "video", JSON.stringify(scenario.sentDraft));
+
+  c10.click(c10.qs("[data-crp-ad]"));
+  await c10.wait(200);
+  expect("ad: the form opens", Boolean(c10.qs("[data-crp-ad-form]")));
+  c10.change(c10.qs("[data-ad-format]"), "paragraph");
+  c10.type(c10.qs("[data-ad-title]"), "A word from the crew");
+  c10.type(c10.qs("[data-ad-body]"), "short");
+  c10.qs("[data-crp-ad-form]").dispatchEvent(new c10.window.Event("submit", { bubbles: true, cancelable: true }));
+  await c10.wait(220);
+  expect("ad: a paragraph needs forty characters", /forty characters/i.test(c10.text(".crp-join") + c10.text("[data-ad-state]")), c10.text("[data-ad-state]"));
+  c10.type(c10.qs("[data-ad-body]"), "Light, cameras and a crew of four, every week in Casablanca.");
+  calls.length = 0;
+  c10.qs("[data-crp-ad-form]").dispatchEvent(new c10.window.Event("submit", { bubbles: true, cancelable: true }));
+  await c10.wait(320);
+  expect("ad: the ad is sent", calls.some((c) => c.includes("creator_ad_save")), calls.join(" "));
+  expect("ad: with its format", scenario.savedAd && scenario.savedAd.p_format === "paragraph", JSON.stringify(scenario.savedAd));
+  expect("ad: no errors", c10.errors.length === 0, c10.errors.join(" | "));
+  c10.window.close();
+
+  /* ---------------------------------------------------------------- */
+  /* pass 11 — asking to advertise: four formats, a message a budget  */
+  /* ---------------------------------------------------------------- */
+  scenario = {
+    hubs: [],
+    items: [],
+    creators: [creatorRow()],
+    hubCode: "IDST100001",
+    can: { publish: false, advertise: false },
+    request: null,
+    hubItems: [],
+  };
+  const c11 = await boot(11, { search: "?studio=IDST100001" });
+  expect("ask: both doors are offered", Boolean(c11.qs('[data-crp-join="publisher"]')) && Boolean(c11.qs('[data-crp-join="advertiser"]')));
+  c11.click(c11.qs('[data-crp-join="advertiser"]'));
+  await c11.wait(200);
+  expect("ask: the advertiser form opens", Boolean(c11.qs("[data-crp-join-form]")));
+  expect("ask: the four formats are offered", c11.qsa("[data-join-format] option").length === 4, String(c11.qsa("[data-join-format] option").length));
+  expect("ask: the format names are the four", /Banner[\s\S]*Video[\s\S]*Image[\s\S]*Paragraph/.test(c11.text("[data-join-format]")), c11.text("[data-join-format]"));
+  c11.type(c11.qs("[data-join-message]"), "short");
+  c11.qs("[data-crp-join-form]").dispatchEvent(new c11.window.Event("submit", { bubbles: true, cancelable: true }));
+  await c11.wait(200);
+  expect("ask: ten characters are asked for", /Ten characters/i.test(c11.text("[data-join-state]")), c11.text("[data-join-state]"));
+  calls.length = 0;
+  c11.change(c11.qs("[data-join-format]"), "video");
+  c11.type(c11.qs("[data-join-message]"), "We are two editors and we would show a one-minute reel of our work.");
+  c11.type(c11.qs("[data-join-link]"), "https://example.com/reel");
+  c11.type(c11.qs("[data-join-budget]"), "250");
+  c11.qs("[data-crp-join-form]").dispatchEvent(new c11.window.Event("submit", { bubbles: true, cancelable: true }));
+  await c11.wait(340);
+  expect("ask: the request is sent", calls.some((c) => c.includes("creator_request_send")), calls.join(" "));
+  expect("ask: as an advertiser with a video", scenario.sentRequest && scenario.sentRequest.p_role === "advertiser" && scenario.sentRequest.p_format === "video", JSON.stringify(scenario.sentRequest));
+  expect("ask: on the hub's code", scenario.sentRequest && scenario.sentRequest.p_hub === "IDST100001", JSON.stringify(scenario.sentRequest));
+  expect("ask: with the budget", scenario.sentRequest && scenario.sentRequest.p_budget === 250, JSON.stringify(scenario.sentRequest));
+  expect("ask: no errors", c11.errors.length === 0, c11.errors.join(" | "));
+  c11.window.close();
 }
 
 /* ------------------------------------------------------------------ */

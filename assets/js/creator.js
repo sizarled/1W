@@ -70,6 +70,7 @@ const SECTIONS = [
       { key: "videos", label: "Videos", type: "list", kind: "video", cols: ["item", "vis", "minutes", "likes", "dislikes", "comments", "shares", "reports", "act"], actions: ["edit", "link", "delete"] },
       { key: "podcasts", label: "Podcasts", type: "list", kind: "podcast", cols: ["item", "vis", "minutes", "likes", "dislikes", "comments", "shares", "reports", "act"], actions: ["edit", "link", "delete"] },
       { key: "playlists", label: "Playlists", type: "list", kind: "playlist", cols: ["item", "vis", "minutes", "likes", "dislikes", "comments", "shares", "reports", "act"], actions: ["edit", "link", "delete"] },
+      { key: "participants", label: "Participants", type: "participants" },
       { key: "settings", label: "Studio management", type: "settings" },
       { key: "subscribers", label: "Subscribers", type: "subscribers" },
     ],
@@ -90,6 +91,7 @@ const SECTIONS = [
       { key: "articles", label: "Articles", type: "list", kind: "article", status: "published", cols: ["item", "vis", "minutes", "likes", "dislikes", "comments", "reports", "act"], actions: ["preview", "edit", "link", "delete"] },
       { key: "drafts", label: "Drafts", type: "list", kind: "article", status: "draft", cols: ["item", "vis", "cat", "lines", "words", "chars", "act"], actions: ["publish", "preview", "delete"] },
       { key: "categories", label: "Categories", type: "categories" },
+      { key: "participants", label: "Participants", type: "participants" },
       { key: "settings", label: "Blog management", type: "settings" },
       { key: "subscribers", label: "Subscribers", type: "subscribers" },
     ],
@@ -110,6 +112,7 @@ const SECTIONS = [
       { key: "questions", label: "Questions", type: "list", kind: "question", cols: ["item", "space", "vis", "answers", "followers", "refollows", "act"], actions: ["edit", "close", "delete"] },
       { key: "answers", label: "Answers", type: "list", kind: "answer", cols: ["item", "parent", "vis", "likes", "dislikes", "replies", "reports", "act"], actions: ["open", "edit", "share", "delete"] },
       { key: "categories", label: "Categories", type: "categories" },
+      { key: "participants", label: "Participants", type: "participants" },
       { key: "settings", label: "Space management", type: "settings" },
       { key: "subscribers", label: "Subscribers", type: "subscribers" },
     ],
@@ -129,6 +132,7 @@ const SECTIONS = [
       { key: "books", label: "Books", type: "list", kind: "book", cols: ["item", "vis", "minutes", "downloads", "likes", "dislikes", "comments", "shares", "reports", "act"], actions: ["open", "edit", "link", "delete"] },
       { key: "documents", label: "Documents", type: "list", kind: "document", cols: ["item", "vis", "minutes", "downloads", "likes", "dislikes", "comments", "shares", "reports", "act"], actions: ["open", "edit", "link", "delete"] },
       { key: "categories", label: "Categories", type: "categories" },
+      { key: "participants", label: "Participants", type: "participants" },
       { key: "settings", label: "Library management", type: "settings" },
       { key: "subscribers", label: "Subscribers", type: "subscribers" },
     ],
@@ -148,6 +152,7 @@ const SECTIONS = [
     tabs: [
       { key: "images", label: "Images", type: "list", kind: "image", cols: ["item", "vis", "minutes", "likes", "dislikes", "comments", "shares", "reports", "act"], actions: ["open", "edit", "link", "delete"] },
       { key: "categories", label: "Categories", type: "categories" },
+      { key: "participants", label: "Participants", type: "participants" },
       { key: "settings", label: "Gallery management", type: "settings" },
       { key: "subscribers", label: "Subscribers", type: "subscribers" },
     ],
@@ -273,7 +278,10 @@ const state = {
   pageError: "",
   hubView: null,
   hubViewId: null,
+  hubRef: null,
   hubError: "",
+  participants: null,
+  ads: null,
   directory: { q: "", kind: "", country: "", sort: "subscribers", rows: [], countries: [], count: 0, loading: false, error: "" },
 };
 
@@ -536,6 +544,7 @@ function renderView() {
     return;
   }
 
+  if (tab.type === "participants") return renderParticipants(host, hub);
   if (tab.type === "settings") return renderSettings(host, hub);
   if (tab.type === "subscribers") return renderSubscribers(host, hub);
   if (tab.type === "categories") return renderCategories(host, hub);
@@ -1117,6 +1126,13 @@ async function loadTab() {
     }
     return;
   }
+  if (tab.type === "participants") {
+    const who = await rpc("creator_participants", { p_token: state.token, p_hub: hub.id });
+    state.participants = who && who.ok ? who : null;
+    const ads = await rpc("creator_ads", { p_token: state.token, p_hub: hub.id });
+    state.ads = ads && ads.ok ? ads.rows || [] : [];
+  }
+
   if (tab.type === "categories" || state.view === "editor") {
     const res = await rpc("creator_categories", { p_token: state.token, p_hub: hub.id });
     state.categories = res && res.ok ? res.rows || [] : [];
@@ -1187,7 +1203,7 @@ function syncUrl() {
     } else if (state.view === "creator") {
       params.set("creator", state.creatorRef || "");
     } else if (state.view === "hubview") {
-      params.set("hub", state.hubViewId || "");
+      params.set("studio", state.hubView?.hub?.code || state.hubRef || "");
       if (state.creatorRef) params.set("creator", state.creatorRef);
     } else {
       params.set("section", slugOf(sectionOf(state.section)));
@@ -1549,7 +1565,7 @@ function hubCard(hub) {
     : `<span aria-hidden="true">${esc(initials(hub.name))}</span>`;
   const privateHub = hub.visibility === "private";
   return `
-    <a class="crp-hubcard" href="creator.html?hub=${encodeURIComponent(hub.id)}" data-crp-hub="${esc(hub.id)}">
+    <a class="crp-hubcard" href="${esc(studioLink(hub.code || hub.id))}" data-crp-hub="${esc(hub.code || hub.id)}">
       <span class="crp-hubcard__logo">${logo}</span>
       <span class="crp-hubcard__body">
         <span class="crp-hubcard__kind"><i data-icon="${esc(info.icon)}"></i>${esc(info.label)}</span>
@@ -1648,14 +1664,15 @@ function renderHubPage(host) {
         <div class="crp-hubhero__bar">
           <span class="crp-hubhero__logo">${logo}</span>
           <div class="crp-hubhero__id">
-            <p class="crp-hubhero__kind"><i data-icon="${esc(info.icon)}"></i>${esc(info.label)}</p>
+            <p class="crp-hubhero__kind"><i data-icon="${esc(info.icon)}"></i>${esc(info.label)}<span class="crp-hubhero__code">${esc(hub.code || "")}</span></p>
             <h1 class="crp-hubhero__name">${esc(hub.name || "Hub")}</h1>
             <p class="crp-hubhero__owner">by <a href="creator.html?creator=${encodeURIComponent(hub.owner || "")}" data-crp-owner="${esc(hub.owner || "")}">${esc(ownerLabel)}</a>${hub.field ? ` · ${esc(hub.field)}` : ""}</p>
           </div>
           <div class="crp-hubhero__acts">
             ${
               role === "owner" || role === "staff"
-                ? `<a class="dsh-btn dsh-btn--sm" href="creator.html?section=${encodeURIComponent(manageSection)}&hub=${encodeURIComponent(hub.id)}"><i data-icon="settings"></i> Manage</a>`
+                ? `<a class="dsh-btn dsh-btn--sm" href="creator.html?section=${encodeURIComponent(manageSection)}&hub=${encodeURIComponent(hub.id)}"><i data-icon="settings"></i> Manage</a>
+                   <a class="dsh-btn dsh-btn--sm" href="creator.html?section=${encodeURIComponent(manageSection)}&hub=${encodeURIComponent(hub.id)}&tab=participants"><i data-icon="users"></i> Requests</a>`
                 : ""
             }
             <button class="dsh-btn dsh-btn--primary dsh-btn--sm" type="button" data-crp-sub="${esc(hub.id)}" data-on="${hub.subscribed ? "1" : "0"}">
@@ -1673,6 +1690,9 @@ function renderHubPage(host) {
         </div>
         ${hub.description ? `<p class="crp-hubhero__desc">${esc(hub.description)}</p>` : ""}
       </header>
+
+      ${view.locked ? "" : participationBlock(hub, view)}
+      ${view.locked ? "" : adsBlock(hub)}
 
       ${body}
     </div>`;
@@ -1707,15 +1727,16 @@ function itemCard(row) {
     </article>`;
 }
 
-async function loadHubPage(id, password = "") {
+async function loadHubPage(ref, password = "") {
   state.hubView = null;
   state.hubError = "";
-  state.hubViewId = id;
+  state.hubRef = ref;
   renderView();
   try {
-    const res = await rpc("creator_hub_view", { p_token: state.token || "", p_hub: id, p_password: password });
+    const res = await rpc("creator_hub_view", { p_token: state.token || "", p_hub: ref, p_password: password });
     if (res && res.ok) {
       state.hubView = res;
+      state.hubViewId = res.hub?.id || ref;
       state.hubError = "";
     } else {
       state.hubView = null;
@@ -1811,6 +1832,576 @@ async function openHub(id) {
   renderView();
   syncUrl();
   await loadHubPage(id);
+  syncUrl();
+}
+
+/* ================================================================== */
+/* who works in this hub — publishers, advertisers, requests          */
+/* ================================================================== */
+/*
+ * A hub is somebody's place. Two other people can be let in:
+ *
+ *   a publisher  writes content there (what they submit lands as a draft
+ *                the owner publishes from the tables)
+ *   an advertiser runs an ad there — a banner, a video, an image or a
+ *                paragraph of text, with an optional link
+ *
+ * They ask from the hub's public page (`creator_request_send`); the owner
+ * or the staff approve here (`creator_request_decide`). Approving writes
+ * the member's code into `creator_hubs.publishers` / `.advertisers`, which
+ * is what the server checks before it accepts an item or an ad.
+ */
+
+const ROLES = { publisher: "Publisher", advertiser: "Advertiser" };
+
+const AD_FORMATS = [
+  ["banner", "Banner"],
+  ["video", "Video"],
+  ["image", "Image"],
+  ["paragraph", "Paragraph"],
+];
+
+const AD_FORMAT_LABEL = Object.fromEntries(AD_FORMATS);
+
+const AD_FORMAT_ICON = { banner: "image", video: "film", image: "crop", paragraph: "article" };
+
+const requestStatusLabel = (status) =>
+  ({
+    pending: "Waiting",
+    approved: "Approved",
+    rejected: "Refused",
+    withdrawn: "Withdrawn",
+  })[status] || "Waiting";
+
+/** `creator.html?studio=IDST100001` — the link a place is known by. */
+const studioLink = (code) => `creator.html?studio=${encodeURIComponent(code || "")}`;
+
+function copyText(value, label = "Link") {
+  const text = String(value || "");
+  if (!text) return;
+  navigator.clipboard?.writeText?.(text).then(
+    () => toast({ title: `${label} copied`, message: text, iconName: "check" }),
+    () => toast({ title: `The ${label.toLowerCase()}`, message: text, tone: "error" })
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* the studio's Participants tab                                      */
+/* ------------------------------------------------------------------ */
+function renderParticipants(host, hub) {
+  const data = state.participants || {};
+  const rows = Array.isArray(data.rows) ? data.rows : [];
+  const pubs = Array.isArray(data.publishers) ? data.publishers : [];
+  const advs = Array.isArray(data.advertisers) ? data.advertisers : [];
+  const ads = Array.isArray(state.ads) ? state.ads : [];
+  const counts = data.counts || {};
+  const pending = rows.filter((row) => row.status === "pending");
+  const decided = rows.filter((row) => row.status !== "pending");
+
+  const requestCard = (row) => {
+    const member = row.member || {};
+    const role = ROLES[row.role] || row.role;
+    return `
+      <article class="cr-req ${row.status === "pending" ? "is-pending" : ""}" data-req="${esc(row.id)}">
+        <span class="cr-req__avatar">${avatarBlock(member.avatar, member.name, "crp-avatar crp-avatar--sm")}</span>
+        <div class="cr-req__body">
+          <p class="cr-req__head">
+            <span class="cr-req__name">${esc(member.name || "Member")}</span>
+            <span class="cr-req__code">${esc(member.code || "")}</span>
+            <span class="cr-chip" data-tone="${esc(row.role)}">${esc(role)}</span>
+            ${row.format ? `<span class="cr-chip" data-tone="format">${esc(AD_FORMAT_LABEL[row.format] || row.format)}</span>` : ""}
+            <span class="cr-chip" data-tone="${esc(row.status)}">${esc(requestStatusLabel(row.status))}</span>
+          </p>
+          <p class="cr-req__text">${esc(row.message || "")}</p>
+          <p class="cr-req__meta">
+            <span>${esc(member.username || "")}</span>
+            ${member.country ? `<span>${esc(member.country)}</span>` : ""}
+            ${row.budget ? `<span>${esc(num(Number(row.budget) || 0))} pts</span>` : ""}
+            ${row.link ? `<a href="${esc(row.link)}" target="_blank" rel="noopener noreferrer">The sample</a>` : ""}
+            <span>${esc(timeAgo(row.created_at))}</span>
+          </p>
+        </div>
+        <div class="cr-req__acts">
+          ${row.status === "pending"
+            ? `<button class="dsh-btn dsh-btn--primary dsh-btn--sm" type="button" data-cr-req="approve" data-id="${esc(row.id)}"><i data-icon="check"></i> Approve</button>
+               <button class="dsh-btn dsh-btn--sm" type="button" data-cr-req="reject" data-id="${esc(row.id)}"><i data-icon="close"></i> Refuse</button>`
+            : `<span class="cr-req__since">${row.decided_at ? esc(timeAgo(row.decided_at)) : ""}</span>`}
+        </div>
+      </article>`;
+  };
+
+  const listRow = (member, extra = "") => `
+    <li class="cr-who">
+      ${avatarBlock(member.avatar, member.name, "crp-avatar crp-avatar--sm")}
+      <span class="cr-who__name">${esc(member.name || "Member")}</span>
+      <span class="cr-who__code">${esc(member.code || "")}</span>
+      <span class="cr-who__handle">${esc(member.username || "")}</span>
+      ${extra}
+    </li>`;
+
+  const adRows = ads.length
+    ? ads
+        .map(
+          (ad) => `
+      <li class="cr-adrow">
+        <span class="cr-adrow__format"><i data-icon="${esc(AD_FORMAT_ICON[ad.format] || "image")}"></i>${esc(AD_FORMAT_LABEL[ad.format] || ad.format)}</span>
+        <span class="cr-adrow__title">${esc(ad.title)}</span>
+        <span class="cr-adrow__who">${esc(ad.member?.name || "")}</span>
+        <span class="cr-chip" data-tone="${ad.status === "live" ? "public" : "private"}">${esc(ad.status === "live" ? "Live" : "Paused")}</span>
+        <span class="cr-adrow__num">${esc(num(Number(ad.impressions) || 0))}</span>
+        <span class="cr-adrow__num">${esc(num(Number(ad.clicks) || 0))}</span>
+        <button class="dsh-btn dsh-btn--sm" type="button" data-cr-ad-del="${esc(ad.id)}" aria-label="Remove the ad"><i data-icon="trash"></i></button>
+      </li>`
+        )
+        .join("")
+    : `<li class="cr-empty__line">No ad yet.</li>`;
+
+  host.innerHTML = `
+    <div class="cr-part">
+      <div class="cr-bar">
+        <span class="cr-bar__count">${esc(num(Number(counts.pending) || 0))} waiting · ${esc(num(pubs.length))} publisher${pubs.length === 1 ? "" : "s"} · ${esc(num(advs.length))} advertiser${advs.length === 1 ? "" : "s"}</span>
+        <span class="cr-part__link">
+          <i data-icon="link"></i><code>${esc(studioLink(hub.code || hub.id))}</code>
+          <button class="dsh-btn dsh-btn--sm" type="button" data-cr-copy="${esc(studioLink(hub.code || hub.id))}">Copy</button>
+        </span>
+      </div>
+
+      <section class="cr-panel">
+        <h2 class="cr-panel__title"><i data-icon="users"></i> Waiting for an answer</h2>
+        ${pending.length ? pending.map(requestCard).join("") : `<p class="cr-empty__line">Nobody is waiting. Publishers and advertisers ask from the hub's own page.</p>`}
+      </section>
+
+      <section class="cr-panel">
+        <h2 class="cr-panel__title"><i data-icon="article"></i> Publishers <span class="cr-panel__n">${pubs.length}</span></h2>
+        ${pubs.length ? `<ul class="cr-who-list">${pubs.map((member) => listRow(member)).join("")}</ul>` : `<p class="cr-empty__line">No publisher yet — their drafts would arrive as drafts in this hub's tables.</p>`}
+      </section>
+
+      <section class="cr-panel">
+        <h2 class="cr-panel__title"><i data-icon="target"></i> Advertisers <span class="cr-panel__n">${advs.length}</span></h2>
+        ${advs.length ? `<ul class="cr-who-list">${advs.map((member) => listRow(member, `<span class="cr-who__extra">${esc(num(Number(member.ads) || 0))} ad${Number(member.ads) === 1 ? "" : "s"}</span>`)).join("")}</ul>` : `<p class="cr-empty__line">No advertiser yet — a banner, a video, an image or a paragraph, chosen by them.</p>`}
+      </section>
+
+      <section class="cr-panel">
+        <h2 class="cr-panel__title"><i data-icon="fire"></i> The ads in this hub <span class="cr-panel__n">${ads.length}</span></h2>
+        ${
+          ads.length
+            ? `<div class="cr-adtable">
+                 <div class="cr-adtable__head"><span>Format</span><span>Title</span><span>Advertiser</span><span>State</span><span>Views</span><span>Clicks</span><span></span></div>
+                 <ul class="cr-adlist">${adRows}</ul>
+               </div>`
+            : `<p class="cr-empty__line">No ad in this hub yet.</p>`
+        }
+      </section>
+
+      ${decided.length
+        ? `<section class="cr-panel">
+             <h2 class="cr-panel__title"><i data-icon="clock"></i> Already answered</h2>
+             ${decided.map(requestCard).join("")}
+           </section>`
+        : ""}
+    </div>`;
+  hydrateIcons(host);
+}
+
+async function decideRequest(id, decision) {
+  const stateNode = el(`[data-req="${id}"] .cr-req__acts`);
+  if (stateNode) stateNode.innerHTML = `<span class="cr-req__since">Working…</span>`;
+  try {
+    const res = await rpc("creator_request_decide", { p_token: state.token, p_id: id, p_decision: decision });
+    if (!res || !res.ok) {
+      toast({
+        title: "Not decided",
+        message:
+          { session: "The session ended.", decided: "Somebody already answered this one.", not_found: "That request is gone.", decision: "Unknown answer." }[
+            res?.error
+          ] || "The server refused the answer.",
+        tone: "error",
+      });
+      return loadTab().then(refresh);
+    }
+    toast({
+      title: decision === "approve" ? "Approved" : "Refused",
+      message:
+        decision === "approve"
+          ? "They can work in this hub now."
+          : "The request is closed; nothing was shared.",
+      iconName: decision === "approve" ? "check" : "close",
+    });
+    await loadHubs();
+    await loadTab();
+    await refresh();
+  } catch {
+    toast({ title: "Not decided", message: "The connection dropped.", tone: "error" });
+  }
+}
+
+async function removeAd(id) {
+  try {
+    const res = await rpc("creator_ad_delete", { p_token: state.token, p_id: id });
+    if (!res || !res.ok) {
+      toast({ title: "Not removed", message: "The server refused it.", tone: "error" });
+      return;
+    }
+    toast({ title: "Ad removed", message: "It is gone from the hub.", iconName: "trash" });
+    await loadTab();
+    await refresh();
+  } catch {
+    toast({ title: "Not removed", message: "The connection dropped.", tone: "error" });
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* the hub's page: asking to join, writing, advertising               */
+/* ------------------------------------------------------------------ */
+function participationBlock(hub, view) {
+  const request = view.request || null;
+  const can = hub.can || {};
+  const role = hub.role || "visitor";
+  const manageLink = `<a class="dsh-btn dsh-btn--sm" href="creator.html?section=${encodeURIComponent(hubInfo(hub.kind).slug)}&hub=${encodeURIComponent(hub.id)}&tab=participants"><i data-icon="users"></i> Requests</a>`;
+
+  if (role === "owner" || role === "staff") {
+    return `
+      <section class="crp-join">
+        <div class="crp-join__text">
+          <p class="crp-join__title"><i data-icon="users"></i> Who works here</p>
+          <p class="crp-join__note">Publishers write content in this place, advertisers run a banner, a video, an image or a paragraph. Approve or refuse them in the studio.</p>
+        </div>
+        <div class="crp-join__acts">${manageLink}</div>
+      </section>`;
+  }
+
+  const chips = [];
+  if (can.publish) chips.push(`<span class="cr-chip" data-tone="approved"><i data-icon="article"></i>You publish here</span>`);
+  if (can.advertise) chips.push(`<span class="cr-chip" data-tone="approved"><i data-icon="target"></i>You advertise here</span>`);
+  if (request) {
+    chips.push(
+      `<span class="cr-chip" data-tone="${esc(request.status)}">${esc(ROLES[request.role] || request.role)} · ${esc(requestStatusLabel(request.status))}</span>`
+    );
+  }
+
+  const acts = [];
+  if (can.publish) {
+    acts.push(`<button class="dsh-btn dsh-btn--sm" type="button" data-crp-write="${esc(hub.id)}"><i data-icon="plus"></i> Write in this hub</button>`);
+  } else if (!request || request.status !== "pending") {
+    acts.push(`<button class="dsh-btn dsh-btn--sm" type="button" data-crp-join="publisher"><i data-icon="article"></i> Request to publish</button>`);
+  }
+  if (can.advertise) {
+    acts.push(`<button class="dsh-btn dsh-btn--sm" type="button" data-crp-ad="${esc(hub.id)}"><i data-icon="target"></i> Place an ad</button>`);
+  } else if (!request || request.status !== "pending") {
+    acts.push(`<button class="dsh-btn dsh-btn--sm" type="button" data-crp-join="advertiser"><i data-icon="target"></i> Request to advertise</button>`);
+  }
+
+  return `
+    <section class="crp-join">
+      <div class="crp-join__text">
+        <p class="crp-join__title"><i data-icon="users"></i> Work in this place</p>
+        <p class="crp-join__note">Ask the owner to publish your content here, or to run your ad — a banner, a video, an image or a paragraph.</p>
+        ${chips.length ? `<p class="crp-join__chips">${chips.join("")}</p>` : ""}
+      </div>
+      <div class="crp-join__acts">${acts.join("")}</div>
+    </section>`;
+}
+
+function adsBlock(hub) {
+  const ads = Array.isArray(hub.ads) ? hub.ads : [];
+  if (!ads.length) return "";
+  return `
+    <section class="crp-ads" aria-label="Advertising in this hub">
+      <h2 class="crp-ads__title">Advertising in this hub</h2>
+      <div class="crp-ads__list">
+        ${ads
+          .map((ad) => {
+            const inner = `
+              ${ad.format === "banner" ? `<img class="crp-ad__media is-banner" src="${esc(ad.media_url)}" alt="" loading="lazy" />` : ""}
+              ${ad.format === "image" ? `<img class="crp-ad__media" src="${esc(ad.media_url)}" alt="" loading="lazy" />` : ""}
+              ${ad.format === "video" ? `<video class="crp-ad__media" src="${esc(ad.media_url)}" controls preload="none"></video>` : ""}
+              <span class="crp-ad__body">
+                <span class="crp-ad__tag"><i data-icon="${esc(AD_FORMAT_ICON[ad.format] || "target")}"></i>${esc(AD_FORMAT_LABEL[ad.format] || ad.format)} · ${esc(ad.member || "")}</span>
+                <span class="crp-ad__title">${esc(ad.title || "")}</span>
+                ${ad.body ? `<span class="crp-ad__text">${esc(ad.body)}</span>` : ""}
+                ${ad.link_url ? `<span class="crp-ad__link">${esc(ad.link_url.replace(/^https?:\/\//, "").slice(0, 40))}</span>` : ""}
+              </span>`;
+            return ad.link_url
+              ? `<a class="crp-ad" data-format="${esc(ad.format)}" href="${esc(ad.link_url)}" target="_blank" rel="noopener noreferrer sponsored">${inner}</a>`
+              : `<article class="crp-ad" data-format="${esc(ad.format)}">${inner}</article>`;
+          })
+          .join("")}
+      </div>
+    </section>`;
+}
+
+function openJoinRequest(role) {
+  const view = state.hubView || {};
+  const hub = view.hub || {};
+  if (!state.token) {
+    toast({ title: "Sign in first", message: "Asking to work in a place needs a member session.", tone: "error", iconName: "lock" });
+    return;
+  }
+  const isAd = role === "advertiser";
+  openModal(`
+    <h2 class="cr-modal__title">${isAd ? "Advertise in this hub" : "Publish in this hub"}</h2>
+    <p class="cr-modal__text">${
+      isAd
+        ? `${esc(hub.name || "This hub")} takes a banner, a video, an image or a paragraph. Tell the owner what you would show.`
+        : `${esc(hub.name || "This hub")} would carry your content. Tell the owner what you write, and where they can see it.`
+    }</p>
+    <form class="cr-form" data-crp-join-form data-role="${esc(role)}">
+      ${
+        isAd
+          ? `<label class="dsh-field">
+               <span class="dsh-field__label">The format</span>
+               <select class="dsh-select" data-join-format>
+                 ${AD_FORMATS.map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}
+               </select>
+             </label>`
+          : ""
+      }
+      <label class="dsh-field">
+        <span class="dsh-field__label">Your message</span>
+        <textarea class="dsh-input cr-textarea" rows="4" maxlength="600" placeholder="${isAd ? "What the ad says, and to whom." : "What you would publish, and how often."}" data-join-message></textarea>
+      </label>
+      <label class="dsh-field">
+        <span class="dsh-field__label">A sample or a portfolio (optional)</span>
+        <input class="dsh-input" type="url" placeholder="https://" data-join-link />
+      </label>
+      ${
+        isAd
+          ? `<label class="dsh-field">
+               <span class="dsh-field__label">A budget in points (optional)</span>
+               <input class="dsh-input" type="number" min="0" max="1000000" step="10" placeholder="0" data-join-budget />
+             </label>`
+          : ""
+      }
+      <p class="cr-form__state" data-join-state role="status"></p>
+      <div class="cr-modal__actions">
+        <button class="dsh-btn dsh-btn--sm" type="button" data-cr-modal-close>Cancel</button>
+        <button class="dsh-btn dsh-btn--primary dsh-btn--sm" type="submit"><i data-icon="send"></i> Send the request</button>
+      </div>
+    </form>`);
+}
+
+function openAdForm() {
+  const hub = (state.hubView || {}).hub || {};
+  openModal(`
+    <h2 class="cr-modal__title">A new ad</h2>
+    <p class="cr-modal__text">In ${esc(hub.name || "this hub")}. A banner and an image need a picture, a video needs its file, a paragraph needs its words.</p>
+    <form class="cr-form" data-crp-ad-form>
+      <label class="dsh-field">
+        <span class="dsh-field__label">The format</span>
+        <select class="dsh-select" data-ad-format>
+          ${AD_FORMATS.map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}
+        </select>
+      </label>
+      <label class="dsh-field">
+        <span class="dsh-field__label">The title</span>
+        <input class="dsh-input" type="text" maxlength="80" placeholder="Cameras for every night shoot" data-ad-title />
+      </label>
+      <label class="dsh-field">
+        <span class="dsh-field__label">The picture or the video link</span>
+        <input class="dsh-input" type="url" placeholder="https://" data-ad-media />
+      </label>
+      <label class="dsh-field">
+        <span class="dsh-field__label">The words (a paragraph needs 40 characters, the others may use it as a caption)</span>
+        <textarea class="dsh-input cr-textarea" rows="3" maxlength="2000" data-ad-body></textarea>
+      </label>
+      <label class="dsh-field">
+        <span class="dsh-field__label">Where a click goes (optional)</span>
+        <input class="dsh-input" type="url" placeholder="https://" data-ad-link />
+      </label>
+      <p class="cr-form__state" data-ad-state role="status"></p>
+      <div class="cr-modal__actions">
+        <button class="dsh-btn dsh-btn--sm" type="button" data-cr-modal-close>Cancel</button>
+        <button class="dsh-btn dsh-btn--primary dsh-btn--sm" type="submit"><i data-icon="check"></i> Put it live</button>
+      </div>
+    </form>`);
+}
+
+const SUBMIT_KINDS = {
+  channel: [["video", "Video"], ["podcast", "Podcast"], ["playlist", "Playlist"]],
+  server: [["video", "Video"], ["podcast", "Podcast"], ["playlist", "Playlist"]],
+  cinema: [["video", "Video"]],
+  blog: [["article", "Article"]],
+  space: [["question", "Question"], ["answer", "Answer"]],
+  library: [["book", "Book"], ["document", "Document"]],
+  gallery: [["image", "Image"]],
+};
+
+function openWriteForm() {
+  const hub = (state.hubView || {}).hub || {};
+  const kinds = SUBMIT_KINDS[hub.kind] || [["article", "Article"]];
+  openModal(`
+    <h2 class="cr-modal__title">Write in ${esc(hub.name || "this hub")}</h2>
+    <p class="cr-modal__text">It arrives as a draft: the owner reads it and publishes it from the studio.</p>
+    <form class="cr-form" data-crp-write-form>
+      <label class="dsh-field">
+        <span class="dsh-field__label">The kind</span>
+        <select class="dsh-select" data-write-kind>
+          ${kinds.map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}
+        </select>
+      </label>
+      <label class="dsh-field">
+        <span class="dsh-field__label">The title</span>
+        <input class="dsh-input" type="text" maxlength="140" placeholder="A title" data-write-title />
+      </label>
+      <label class="dsh-field">
+        <span class="dsh-field__label">A summary</span>
+        <input class="dsh-input" type="text" maxlength="320" placeholder="One line" data-write-summary />
+      </label>
+      <label class="dsh-field">
+        <span class="dsh-field__label">The body</span>
+        <textarea class="dsh-input cr-textarea" rows="4" data-write-body></textarea>
+      </label>
+      <label class="dsh-field">
+        <span class="dsh-field__label">The media link (a video, a podcast, a picture…)</span>
+        <input class="dsh-input" type="url" placeholder="https://" data-write-media />
+      </label>
+      <label class="dsh-field">
+        <span class="dsh-field__label">Visibility</span>
+        <select class="dsh-select" data-write-vis>
+          <option value="public">Public</option>
+          <option value="exclusive">Exclusive — subscribers</option>
+        </select>
+      </label>
+      <p class="cr-form__state" data-write-state role="status"></p>
+      <div class="cr-modal__actions">
+        <button class="dsh-btn dsh-btn--sm" type="button" data-cr-modal-close>Cancel</button>
+        <button class="dsh-btn dsh-btn--primary dsh-btn--sm" type="submit"><i data-icon="send"></i> Send the draft</button>
+      </div>
+    </form>`);
+}
+
+async function sendJoinRequest(form) {
+  const hub = (state.hubView || {}).hub || {};
+  const role = form.dataset.role || "publisher";
+  const stateNode = el("[data-join-state]", form);
+  const message = String(el("[data-join-message]", form)?.value || "").trim();
+  const link = String(el("[data-join-link]", form)?.value || "").trim();
+  const format = String(el("[data-join-format]", form)?.value || "");
+  const budget = Number(el("[data-join-budget]", form)?.value || 0);
+
+  if (message.length < 10) {
+    if (stateNode) stateNode.textContent = "Ten characters at least, so the owner knows what this is.";
+    return;
+  }
+  if (stateNode) stateNode.textContent = "Sending…";
+
+  try {
+    const res = await rpc("creator_request_send", {
+      p_token: state.token,
+      p_hub: hub.code || hub.id,
+      p_role: role,
+      p_format: role === "advertiser" ? format : null,
+      p_message: message,
+      p_link: link,
+      p_budget: role === "advertiser" ? budget : 0,
+    });
+    if (!res || !res.ok) {
+      const words = {
+        session: "The session ended — sign in again.",
+        self: "This hub is yours.",
+        role: "Unknown role.",
+        format: "Choose a format first.",
+        message: "Ten characters at least.",
+        link: "The link must start with http:// or https://.",
+        budget: "That budget is too large.",
+        member: "You already work here.",
+        exists: "Your request is already waiting for an answer.",
+      };
+      if (stateNode) stateNode.textContent = words[res?.error] || "The server refused the request.";
+      return;
+    }
+    closeModal();
+    toast({ title: "Request sent", message: "The owner has it; you will see the answer on this page.", iconName: "send" });
+    await loadHubPage(state.hubViewId);
+  } catch {
+    if (stateNode) stateNode.textContent = "The connection dropped. Try again.";
+  }
+}
+
+async function sendAd(form) {
+  const hub = (state.hubView || {}).hub || {};
+  const stateNode = el("[data-ad-state]", form);
+  const payload = {
+    p_token: state.token,
+    p_hub: hub.code || hub.id,
+    p_id: null,
+    p_format: String(el("[data-ad-format]", form)?.value || "banner"),
+    p_title: String(el("[data-ad-title]", form)?.value || "").trim(),
+    p_body: String(el("[data-ad-body]", form)?.value || "").trim(),
+    p_media_url: String(el("[data-ad-media]", form)?.value || "").trim(),
+    p_link_url: String(el("[data-ad-link]", form)?.value || "").trim(),
+    p_status: "live",
+  };
+  if (payload.p_title.length < 3) {
+    if (stateNode) stateNode.textContent = "A title of three characters at least.";
+    return;
+  }
+  if (payload.p_format === "paragraph" && payload.p_body.length < 40) {
+    if (stateNode) stateNode.textContent = "A paragraph needs forty characters of its own.";
+    return;
+  }
+  if (payload.p_format !== "paragraph" && !/^https?:\/\//i.test(payload.p_media_url)) {
+    if (stateNode) stateNode.textContent = "A banner, an image and a video need their link (https://…).";
+    return;
+  }
+  if (stateNode) stateNode.textContent = "Saving…";
+  try {
+    const res = await rpc("creator_ad_save", payload);
+    if (!res || !res.ok) {
+      const words = {
+        format: "Choose banner, video, image or paragraph.",
+        title: "A title of three characters at least.",
+        media: "A banner, an image and a video need a link.",
+        body: "A paragraph needs forty characters.",
+        link: "The link must start with http:// or https://.",
+        role: "You are not an advertiser here (yet).",
+      };
+      if (stateNode) stateNode.textContent = words[res?.error] || "The server refused the ad.";
+      return;
+    }
+    closeModal();
+    toast({ title: "Your ad is live", message: "It shows on the hub's page now.", iconName: "target" });
+    await loadHubPage(state.hubViewId);
+  } catch {
+    if (stateNode) stateNode.textContent = "The connection dropped. Try again.";
+  }
+}
+
+async function sendDraft(form) {
+  const hub = (state.hubView || {}).hub || {};
+  const stateNode = el("[data-write-state]", form);
+  const payload = {
+    p_token: state.token,
+    p_hub: hub.code || hub.id,
+    p_kind: String(el("[data-write-kind]", form)?.value || ""),
+    p_title: String(el("[data-write-title]", form)?.value || "").trim(),
+    p_summary: String(el("[data-write-summary]", form)?.value || "").trim(),
+    p_body: String(el("[data-write-body]", form)?.value || "").trim(),
+    p_media: String(el("[data-write-media]", form)?.value || "").trim(),
+    p_visibility: String(el("[data-write-vis]", form)?.value || "public"),
+  };
+  if (payload.p_title.length < 3) {
+    if (stateNode) stateNode.textContent = "A title of three characters at least.";
+    return;
+  }
+  if (stateNode) stateNode.textContent = "Sending…";
+  try {
+    const res = await rpc("creator_submit_item", payload);
+    if (!res || !res.ok) {
+      const words = {
+        kind: "That kind does not belong in this hub.",
+        title: "A title of three characters at least.",
+        media: "This kind needs its media link.",
+        role: "You are not a publisher here (yet).",
+      };
+      if (stateNode) stateNode.textContent = words[res?.error] || "The server refused the draft.";
+      return;
+    }
+    closeModal();
+    toast({ title: "Draft sent", message: "The owner publishes it from the studio.", iconName: "check" });
+  } catch {
+    if (stateNode) stateNode.textContent = "The connection dropped. Try again.";
+  }
 }
 
 /* ================================================================== */
@@ -2298,6 +2889,40 @@ document.addEventListener("click", (event) => {
     return loadDirectory();
   }
 
+  const joinButton = target.closest("[data-crp-join]");
+  if (joinButton) {
+    event.preventDefault();
+    return openJoinRequest(joinButton.dataset.crpJoin);
+  }
+
+  if (target.closest("[data-crp-write]")) {
+    event.preventDefault();
+    return openWriteForm();
+  }
+
+  if (target.closest("[data-crp-ad]")) {
+    event.preventDefault();
+    return openAdForm();
+  }
+
+  const decide = target.closest("[data-cr-req]");
+  if (decide) {
+    event.preventDefault();
+    return decideRequest(decide.dataset.id, decide.dataset.crReq);
+  }
+
+  const dropAd = target.closest("[data-cr-ad-del]");
+  if (dropAd) {
+    event.preventDefault();
+    return removeAd(dropAd.dataset.crAdDel);
+  }
+
+  const copyAny = target.closest("[data-cr-copy]");
+  if (copyAny) {
+    event.preventDefault();
+    return copyText(copyAny.dataset.crCopy, "Link");
+  }
+
   const copyButton = target.closest("[data-crp-copy]");
   if (copyButton) {
     event.preventDefault();
@@ -2546,6 +3171,21 @@ document.addEventListener("submit", async (event) => {
     return loadDirectory({ focus: true });
   }
 
+  if (form.matches("[data-crp-join-form]")) {
+    event.preventDefault();
+    return sendJoinRequest(form);
+  }
+
+  if (form.matches("[data-crp-ad-form]")) {
+    event.preventDefault();
+    return sendAd(form);
+  }
+
+  if (form.matches("[data-crp-write-form]")) {
+    event.preventDefault();
+    return sendDraft(form);
+  }
+
   if (form.matches("[data-crp-unlock-form]")) {
     event.preventDefault();
     const input = el("[data-crp-password]", form);
@@ -2559,7 +3199,7 @@ document.addEventListener("submit", async (event) => {
     try {
       const res = await rpc("creator_hub_view", {
         p_token: state.token || "",
-        p_hub: state.hubViewId,
+        p_hub: state.hubViewId || state.hubRef,
         p_password: password,
       });
       if (res && res.ok && !res.locked) {
@@ -2592,6 +3232,7 @@ async function boot() {
   const params = new URLSearchParams(location.search);
   const creatorParam = params.get("creator");
   const hubParam = params.get("hub");
+  const studioParam = params.get("studio");
   const wantedSection = sectionFromUrl(params.get("section"));
 
   /* the public side needs no session: a directory, a creator, a hub */
@@ -2606,10 +3247,10 @@ async function boot() {
     }
     if (creatorParam) {
       state.creatorRef = creatorParam;
-      if (hubParam) return openHub(hubParam);
+      if (studioParam || hubParam) return openHub(studioParam || hubParam);
       return openCreator(creatorParam);
     }
-    if (hubParam) return openHub(hubParam);
+    if (studioParam || hubParam) return openHub(studioParam || hubParam);
     return openDirectory();
   }
 

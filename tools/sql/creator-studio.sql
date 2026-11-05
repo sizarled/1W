@@ -159,9 +159,12 @@ language sql
 immutable
 set search_path to 'public', 'pg_temp'
 as $$
-  select p_hub.id is not null
-     and (p_hub.owner = p_member.id
-          or coalesce(p_member.member_id, '') = any(p_hub.staff));
+  /* a null member (a visitor with no session) is never a manager */
+  select coalesce(
+    p_hub.id is not null
+    and (p_hub.owner = p_member.id
+         or coalesce(p_member.member_id, '') = any(p_hub.staff)),
+    false);
 $$;
 
 /** What each kind of hub holds — a video cannot hang under a blog. */

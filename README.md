@@ -1162,8 +1162,12 @@ Studios, Blogs, Spaces, Libraries, Galleries, Servers, Cinemas. Each hub is a ca
 its field, its visibility and its three counters, and each card opens the hub itself:
 
 ```
-creator.html?hub=<hub uuid>
+creator.html?studio=IDST100001      (or ?hub=<hub uuid> — both resolve)
 ```
+
+Every hub carries a public code — `ID` + the kind's two letters + six digits (`IDST` studio,
+`IDBL` blog, `IDSP` space, `IDLB` library, `IDGL` gallery, `IDSV` server, `IDCN` cinema). It is
+generated on insert, unique, and it is what the studio's Participants tab copies out.
 
 #### One hub as a visitor
 
@@ -1199,14 +1203,56 @@ servers and cinemas is not built yet.
 | `creator_hub_view(token, hub, password)` | `{ok, locked, hub{}, items[]}` — the locked reply carries only the name, logo, cover and whether a password exists |
 | `creator_hub_subscribers(hub)` | the count, used by every total above |
 
+#### Working in somebody else's place — publishers and advertisers
+
+Every hub's page offers two doors to a visitor who is not its owner:
+
+| Door | What it asks | What an approval gives |
+| --- | --- | --- |
+| **Publisher** (ناشر) | a message (10–600 characters) and an optional portfolio link | the member writes in that hub: `creator_submit_item` lands their content as a **draft** the owner publishes from the tables |
+| **Advertiser** (معلن) | the format — **banner · video · image · paragraph** — a message, a sample, a budget in points | the member runs an ad there: `creator_ad_save`, and it shows on the hub's page |
+
+A request is one row in `creator_requests` (`pending` → `approved` / `rejected` / `withdrawn`), one
+open request per member per role per hub. The owner and the staff answer it in the studio's new
+**Participants** tab of every section, which shows who is waiting, the publishers, the advertisers
+with their ad counts, and the hub's ads with impressions and clicks (and a remove button).
+
+Approving writes the member's code into `creator_hubs.publishers` or `.advertisers` — two arrays the
+server checks before it accepts an item (`creator_submit_item`) or an ad (`creator_ad_save`); nothing
+is shared until the owner says yes, and a private hub's door still stands in front of all of it.
+
+An ad is a `creator_ads` row: `banner` (a wide picture), `video` (a file with controls), `image` (a
+picture) or `paragraph` (40 characters of text and nothing else), an optional link, `live` or
+`paused`, with impressions and clicks waiting for the reader. The hub page draws each format its own
+way, under "Advertising in this hub"; the public reply only ever carries the `live` ones.
+
+| Function | Answers |
+| --- | --- |
+| `creator_request_send(token, hub, role, format, message, link, budget)` | one ask; `self`, `exists`, `member`, `format`, `message`, `link` are refused |
+| `creator_participants(token, hub)` | the owner's view: every request, the two lists, the counts |
+| `creator_request_decide(token, request, approve\|reject)` | the answer, and the list it writes to |
+| `creator_request_withdraw(token, request)` | the asker takes it back while it is pending |
+| `creator_ad_save / creator_ad_delete / creator_ads` | the ad itself, for an approved advertiser and for the owner |
+| `creator_submit_item(token, hub, kind, …)` | a publisher's draft |
+
+DDL + functions: `tools/sql/creator-requests.sql` — **applied**, and exercised on the real database:
+a member asked to advertise (banner, 500 points) and to publish in a hub, the owner read both in
+`creator_participants`, approved both (the two arrays filled with their code), the advertiser put a
+banner live and it appeared in `creator_hub_view`'s `ads`, the publisher's draft landed as
+`status: draft`, a second ask was refused with `member`, and `creator_hub_view('', 'IDST100001', '')`
+answered `can:{publish:false,advertise:false}` for a guest. The test rows and sessions were removed
+afterwards.
+
 DDL + functions: `tools/sql/creator-public.sql` — **applied**, and exercised on the real database:
 the kind constraint widened to seven, `creator_kind_allowed` covering `server` and `cinema`, the
 directory answering with a real creator (`fields` free of empty strings), a creator page by
 `@handle` with its hubs, and a hub view answering `{role: visitor}` for a guest. `tools/creator-smoke.mjs`
-covers it in jsdom — **130 checks** over eight passes, including the directory with no session, typing
-that narrows the list, an empty filter that explains itself, a creator page grouped by kind, a hub as a
+covers it in jsdom — **175 checks** over eleven passes: the directory with no session, typing that
+narrows the list, an empty filter that explains itself, a creator page grouped by kind, a hub as a
 visitor, a member subscribing, a guest asked to sign in first, a private hub behind a wrong and then a
-right password, and `?section=studio` without a session still gated.
+right password, `?section=studio` without a session still gated, the Participants tab (a pending ask,
+approve, the two lists, the ad table, a removal), a member already let in writing a draft and putting
+an ad live, and asking to advertise with its four formats.
 
 ### The six OAuth apps — one checklist each
 
