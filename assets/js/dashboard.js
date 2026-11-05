@@ -1396,14 +1396,22 @@ function analyticsView() {
  * button still explains itself.
  */
 const SURFACE_KINDS = {
-  "e-Studio": "video",
-  "e-Server": "video",
-  "e-Blog": "article",
-  "e-Gallery": "image",
-  "e-Space": "post",
-  "e-Library": "document",
-  "e-Cinema": "video",
+  "e-Studio": "channel/videos",
+  "e-Server": "channel/videos",
+  "e-Blog": "blog/articles",
+  "e-Gallery": "gallery/images",
+  "e-Space": "space/questions",
+  "e-Library": "library/books",
+  "e-Cinema": "channel/videos",
 };
+
+/** The studio deep link for a surface: `creator.html?section=…&tab=…`. */
+function studioLink(surface) {
+  const path = SURFACE_KINDS[surface];
+  if (!path) return "";
+  const [section, tab] = path.split("/");
+  return `creator.html?section=${encodeURIComponent(section)}&tab=${encodeURIComponent(tab)}`;
+}
 
 function surfacesView(kind) {
   const rows =
@@ -1428,7 +1436,7 @@ function surfacesView(kind) {
 
   const editorDoor =
     kind === "creator"
-      ? `<a class="dsh-btn dsh-btn--sm" href="creator.html"><i data-icon="plus"></i>Open the content editor</a>`
+      ? `<a class="dsh-btn dsh-btn--sm" href="creator.html"><i data-icon="plus"></i>Open the studio</a>`
       : `<span class="dsh-chip">${rows.length} types</span>`;
 
   return `
@@ -1448,9 +1456,9 @@ function surfacesView(kind) {
         <thead><tr><th>Surface</th><th>For</th><th>Status</th><th></th></tr></thead>
         <tbody>${rows
           .map(([name, use]) => {
-            const contentKind = kind === "creator" ? SURFACE_KINDS[name] : "";
-            const action = contentKind
-              ? `<a class="dsh-btn dsh-btn--sm" href="creator.html?kind=${esc(contentKind)}"><i data-icon="plus"></i>Create</a>`
+            const href = kind === "creator" ? studioLink(name) : "";
+            const action = href
+              ? `<a class="dsh-btn dsh-btn--sm" href="${esc(href)}"><i data-icon="plus"></i>Create</a>`
               : `<button class="dsh-btn dsh-btn--sm" type="button" data-surface="${esc(name)}"><i data-icon="plus"></i>Create</button>`;
             return `<tr>
               <td><strong>${esc(name)}</strong></td><td>${esc(use)}</td>

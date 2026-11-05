@@ -1054,49 +1054,89 @@ platform refused, then delete leaving zero rows and `site_secret` still closed t
 `tools/dashboard-smoke.mjs` runs the panel end to end — the four-character cell, the full key
 nowhere in the DOM, replace keeping one row, remove, and a refusal that explains itself.
 
-### Creator — one editor for everything a member writes
+### Creator — the studio: five hubs, one working area
 
-**`creator.html`** is the content editor. A member opens it from the dashboard's Creator section
-(each surface's **Create** now carries the kind it holds: `creator.html?kind=article`), from their
-own profile, or directly. Six kinds share one form — `video`, `article`, `podcast`, `image`,
-`document`, `post` — and one table holds them all, because the differences between them are three
-fields, not three apps:
+**`creator.html`** is the creator studio. The rail on the left is the member (avatar, name,
+username, `ID…` code) and the five things they run; the working area changes with the section.
+Every one of the five is the same object on the server — a **hub** — because their settings are the
+same settings; what differs is what hangs underneath:
 
-| | needs to publish |
+| Section | Tabs | Items |
+| --- | --- | --- |
+| **Channel** | Videos · Podcasts · Playlists · Channel management · Subscribers | `video`, `podcast`, `playlist` |
+| **Blog** | Articles · Drafts · Categories · Blog management · Subscribers | `article` (published / draft) |
+| **Space** | Questions · Answers · Categories · Space management · Subscribers | `question`, `answer` (a child row) |
+| **Library** | Books · Documents · Categories · Library management · Subscribers | `book`, `document` |
+| **Gallery** | Images · Categories · Gallery management · Subscribers | `image` |
+
+The bar above the tabs is the two dropdowns the brief asks for: **Managing** (every hub of this
+kind, with its subscriber count, and `＋ Add a channel` at the end) and **Add content** (the kinds
+that belong in the open hub, then `New channel`).
+
+#### The hub — identity, access, staff, VIP
+
+| Field | Rule |
 | --- | --- |
-| `video`, `podcast`, `image`, `document` | a media link (`https://…`) |
-| `article`, `post` | a body of at least 12 words |
-| all of them | a title of 3–140 characters, and an **active** membership |
+| name | 2–80 characters, unique per member per kind |
+| logo / cover / links | `http(s)://…`, ten links at most, each with a label |
+| field | **one** — a blog cannot specialise in two |
+| niches | **five** at most, de-duplicated |
+| visibility | `public` · `exclusive` (subscribers) · `private` (password and/or VIP list) |
+| password | bcrypt hash (`extensions.crypt`), valid **1 hour to 1 month** (`1..720` hours), then it closes |
+| staff | member codes (`ID100015`); the hub then appears in their own studio, in that section's management tab |
+| VIP | member codes allowed in even while the hub is private |
+| how many | `creator_hub_limit(kind, level)`: channels 1→4, blogs **3**→5, space/library/gallery 2→4 as the level rises 1→10 |
 
-A draft is free, private and needs nothing at all: it saves itself 1.4 s after the typing stops,
-and the foot of the editor says what is still missing before publishing (`needs 8 more words, a
-title of 3 characters`). The list on the left filters by draft/published, searches titles, tags and
-summaries, and shows words, minutes (`ceil(words / 200)`, the same rule as watching), views and when
-the item last moved.
+`creator_hub_unlock(hub, password)` is the only door that reads the hash, it is callable without a
+session (a visitor on the public page), and it answers `expired` once the window has closed.
 
-Reading and publishing are separated on purpose: `member_content_list` returns no bodies — the list
-is cheap and the editor asks for one item at a time with `member_content_get`.
+#### The tables
+
+Every tab is `creator_items(token, hub, kind, status, search)` — one call, the counters included.
+The action menu on each row is a small popover: **edit / preview / open**, **copy link**, **publish**
+(drafts), **close** (questions), **share**, **delete** (with a confirmation). The numbers a public
+surface will later write are already columns: minutes watched, likes, dislikes, comments, shares,
+reports, downloads, plus answers / followers / re-asks (questions), replies (answers), and
+lines / words / characters (drafts).
+
+#### The item editor
+
+`creator_item_save` takes the hub, the kind, the title, summary, body, media link, thumbnail, tags,
+language, age, visibility, category, parent (an answer points at its question), field, niche,
+**micro** and **nano** niche. Publishing is guarded on the server: an active membership, a title of
+3–200 characters, the media link for the kinds that cannot exist without one, 12 words for an
+article and 6 for a question or an answer — and a kind can only live in a hub that takes it (a video
+cannot hang under a blog).
+
+#### Functions, all token-scoped
 
 | Function | Purpose |
 | --- | --- |
-| `member_content_list(token)` | every item the member owns (no body) plus `{all, draft, published, views, likes}` |
-| `member_content_get(token, id)` | one item with its body, `not_found` for anything that is not yours |
-| `member_content_save(token, id, kind, title, summary, body, media_url, cover_url, tags[], language, age, visibility, publish)` | create (`id` null) or update; the publish rules are enforced here |
-| `member_content_delete(token, id)` | removes a row and reports `removed: true/false` |
+| `creator_hubs_list(token)` | every hub the member owns or staffs, with its counters and the per-kind limits |
+| `creator_hub_get / _save / _delete` | one door each; delete is the owner's alone and cascades |
+| `creator_hub_staff / _vip(token, hub, add/remove, code)` | the two lists, resolved by member code |
+| `creator_hub_unlock(hub, password)` | the private hub's door, with its expiry |
+| `creator_subscribe / creator_subscribers` | subscribe, and the list with codes, countries and dates |
+| `creator_categories / _save / _delete` | main → second → last, three levels, refused at a fourth |
+| `creator_items` | one table per tab |
+| `creator_item_get / _save / _status / _delete` | the editor, publish/close, delete |
 
-`public.member_content` has RLS on and no policies; every function starts with
-`member_from_token()` and scopes by `member = v_member.id`, so a guessed uuid answers `not_found`
-exactly like a uuid that never existed. Tags are trimmed to 24 characters, de-duplicated (case-sensitively) and
-capped at 8; `word_count` and `minutes` are computed on the server, never trusted from the browser;
-a member may keep 200 items.
+`creator_hubs`, `creator_subscriptions`, `creator_categories` and the widened `member_content` all
+have RLS on with no policies: the functions are the only doors, every one starts with
+`member_from_token()` and then `creator_hub_manage()` (owner, or a member whose code is staff).
 
-DDL + functions: `tools/sql/creator.sql` — **applied**, and exercised on a real session afterwards:
-a draft saved and reopened, a 4-word publish refused (`body`), a video without a link refused
-(`media`), a 25-word publish accepted (`status: published`, 25 words, 1 minute), tags trimmed and
-de-duplicated while keeping their spelling, the row echoed without its `member` column, and delete
-answering `removed: true` then `false`. `tools/creator-smoke.mjs` runs the page end to end —
-66 checks over four passes: no session, an empty account that writes/autosaves/publishes/deletes, an
-account with work and an inactive membership, and the `?kind=` / `?id=` deep links.
+DDL + functions: `tools/sql/creator-studio.sql` — **applied**, and exercised on a real session:
+a channel created, a private blog created with a 48-hour password (`unlocked` for the right one,
+`denied` for a wrong one, `expired` after the window moved into the past), a draft video saved and
+published (and refused without a media link), an article refused in a channel hub (`kind`),
+categories three deep with the fourth refused (`deep`) and a duplicate refused, a third blog created
+then a fourth refused (`limit`, level 1), staff added by code and an unknown code refused
+(`member`), and the subscriber list reporting a real member with their country.
+`tools/creator-smoke.mjs` runs the studio end to end — **72 checks** over four passes: no session,
+an empty studio that creates, configures (private + password + staff), saves, refuses, and deletes a
+channel; a studio holding one of each hub (tables, columns, action menus, the editor saving a draft
+then publishing, blog articles vs drafts, categories, subscribers, library books); and the
+`?section=&tab=` deep links.
 
 ### The six OAuth apps — one checklist each
 

@@ -3,18 +3,19 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Creator — 1World Web</title>
-    <meta name="description" content="The creator editor: write a video, an article, a podcast, an image set, a document or a post, keep it as a draft, and publish it when it is ready." />
+    <title>Creator studio — 1World Web</title>
+    <meta name="description" content="The creator studio: manage a channel, a blog, a space, a library and a gallery — their content, categories, subscribers, staff, VIP list and access." />
     <meta name="theme-color" content="#060607" />
     <meta name="robots" content="noindex" />
     <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="assets/css/base.css?v=20261105a" />
-    <link rel="stylesheet" href="assets/css/layout.css?v=20261105a" />
-    <link rel="stylesheet" href="assets/css/components.css?v=20261105a" />
-    <link rel="stylesheet" href="assets/css/creator.css?v=20261105a" />
+    <link rel="stylesheet" href="assets/css/base.css?v=20261105b" />
+    <link rel="stylesheet" href="assets/css/layout.css?v=20261105b" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261105b" />
+    <link rel="stylesheet" href="assets/css/dashboard.css?v=20261105b" />
+    <link rel="stylesheet" href="assets/css/creator.css?v=20261105b" />
     <script>
       /* apply the saved theme (or the OS preference) before first paint */
       (function () {
@@ -32,83 +33,74 @@
         } catch (e) {}
       })();
     </script>
-    <script type="module" src="assets/js/app.js?v=20261105a"></script>
-    <script type="module" src="assets/js/creator.js?v=20261105a"></script>
+    <script type="module" src="assets/js/app.js?v=20261105b"></script>
+    <script type="module" src="assets/js/creator.js?v=20261105b"></script>
   </head>
-  <body data-page="creator" data-title="Creator">
+  <body data-page="creator" data-title="Creator studio" class="cr-body">
     <a class="skip-link" href="#main">Skip to content</a>
 
     <div data-site-header></div>
     <div data-site-sidebar></div>
 
     <main class="site-main cr" id="main">
-      <div class="wrap">
-        <!-- loading / error / sign-in --------------------------------- -->
-        <div class="cr__state" data-cr-state>
-          <div class="cr-skeleton" aria-hidden="true"></div>
-        </div>
+      <!-- loading / error / sign-in --------------------------------- -->
+      <div class="cr-state" data-cr-state>
+        <div class="cr-skeleton" aria-hidden="true"></div>
+      </div>
 
-        <div class="cr__shell" data-cr-root hidden>
-          <header class="cr-head">
-            <div class="cr-head__id">
-              <p class="eyebrow"><span class="eyebrow__dot"></span>Creator</p>
-              <h1 class="cr-head__title">Write your own content</h1>
-              <p class="cr-head__text">
-                A video, an article, a podcast episode, an image set, a document or a post — one editor for all
-                of them. Drafts save as you type; publishing needs an active membership.
-              </p>
+      <div class="cr-shell" data-cr-shell hidden>
+        <!-- ============================================================ -->
+        <!-- the member, and the five things they run                     -->
+        <!-- ============================================================ -->
+        <aside class="cr-side" aria-label="Creator sections">
+          <div class="cr-me">
+            <span class="cr-me__avatar" data-cr-avatar>
+              <img data-cr-avatar-img alt="" width="56" height="56" hidden />
+              <span data-cr-avatar-initial aria-hidden="true">1W</span>
+            </span>
+            <div class="cr-me__id">
+              <p class="cr-me__name" data-cr-name>—</p>
+              <p class="cr-me__handle" data-cr-username>@—</p>
+              <p class="cr-me__code" data-cr-code hidden></p>
             </div>
-            <div class="cr-head__actions">
-              <a class="btn btn--ghost btn--sm" href="profile.html"><i data-icon="user"></i> Your profile</a>
-              <button class="btn btn--primary btn--sm" type="button" data-cr-new><i data-icon="plus"></i> New content</button>
+          </div>
+
+          <nav class="cr-sections" data-cr-sections aria-label="Studio sections"></nav>
+
+          <div class="cr-side__foot">
+            <a class="cr-side__link" href="profile.html"><i data-icon="user"></i> Your profile</a>
+            <a class="cr-side__link" href="dashboard.html"><i data-icon="dashboard"></i> Dashboard</a>
+          </div>
+        </aside>
+
+        <!-- ============================================================ -->
+        <!-- the studio                                                   -->
+        <!-- ============================================================ -->
+        <section class="cr-main">
+          <header class="cr-top">
+            <div class="cr-pick">
+              <span class="cr-pick__label">Managing</span>
+              <div class="cr-pick__row">
+                <select class="dsh-select cr-pick__select" data-cr-hub aria-label="Select the channel, blog, space, library or gallery"></select>
+                <button class="dsh-btn dsh-btn--sm" type="button" data-cr-new-hub><i data-icon="plus"></i> Add</button>
+              </div>
+              <p class="cr-pick__hint" data-cr-hub-hint></p>
+            </div>
+
+            <div class="cr-add">
+              <button class="dsh-btn dsh-btn--primary dsh-btn--sm" type="button" data-cr-add-toggle aria-expanded="false" aria-controls="crAddMenu">
+                <i data-icon="plus"></i> Add content
+              </button>
+              <div class="cr-drop" id="crAddMenu" data-cr-add-menu hidden></div>
             </div>
           </header>
 
-          <dl class="cr-stats">
-            <div class="cr-stat">
-              <dt><i data-icon="file"></i> Items</dt>
-              <dd data-cr-count="all">0</dd>
-            </div>
-            <div class="cr-stat">
-              <dt><i data-icon="clock"></i> Drafts</dt>
-              <dd data-cr-count="draft">0</dd>
-            </div>
-            <div class="cr-stat">
-              <dt><i data-icon="check"></i> Published</dt>
-              <dd data-cr-count="published">0</dd>
-            </div>
-            <div class="cr-stat">
-              <dt><i data-icon="eye"></i> Views</dt>
-              <dd data-cr-count="views">0</dd>
-            </div>
-            <div class="cr-stat">
-              <dt><i data-icon="thumbUp"></i> Likes</dt>
-              <dd data-cr-count="likes">0</dd>
-            </div>
-          </dl>
+          <div class="cr-hubhead" data-cr-hubhead hidden></div>
 
-          <div class="cr__grid">
-            <!-- the list ---------------------------------------------- -->
-            <aside class="cr-list" aria-label="Your content">
-              <div class="cr-list__head">
-                <div class="cr-filters" data-cr-filters role="tablist" aria-label="Filter">
-                  <button class="cr-filter is-on" type="button" role="tab" aria-selected="true" data-cr-filter="all">All</button>
-                  <button class="cr-filter" type="button" role="tab" aria-selected="false" data-cr-filter="draft">Drafts</button>
-                  <button class="cr-filter" type="button" role="tab" aria-selected="false" data-cr-filter="published">Published</button>
-                </div>
-                <label class="cr-search">
-                  <i data-icon="search" aria-hidden="true"></i>
-                  <input class="input" type="search" placeholder="Search your titles" aria-label="Search your content" data-cr-search />
-                </label>
-              </div>
-              <div class="cr-list__body" data-cr-list></div>
-              <p class="cr-list__foot" data-cr-limits></p>
-            </aside>
+          <nav class="cr-tabs" data-cr-tabs aria-label="Tabs"></nav>
 
-            <!-- the editor -------------------------------------------- -->
-            <section class="cr-editor" data-cr-editor aria-live="polite"></section>
-          </div>
-        </div>
+          <div class="cr-view" data-cr-view aria-live="polite"></div>
+        </section>
       </div>
     </main>
 
