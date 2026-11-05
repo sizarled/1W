@@ -334,6 +334,7 @@ const MESSAGES = {
   duplicate: "That name already exists here.",
   deep: "Categories stop at the third level.",
   status: "That status is not allowed.",
+  video_editor: "A video is published from video-editor.html, not from this table.",
   parent: "Pick the question first.",
   staff: "One of those staff codes is not a member.",
   vip: "One of those VIP codes is not a member.",
@@ -2629,8 +2630,14 @@ function participationBlock(hub, view) {
   }
 
   const acts = [];
+  /* a cinema hands in nothing — its films are the owner's, and a video is
+     published from the video editor — so an approved publisher there gets no
+     "Write in this hub" button rather than an empty form. */
+  const submittable = (SUBMIT_KINDS[hub.kind] || []).length;
   if (can.publish) {
-    acts.push(`<button class="dsh-btn dsh-btn--sm" type="button" data-crp-write="${esc(hub.id)}"><i data-icon="plus"></i> Write in this hub</button>`);
+    if (submittable) {
+      acts.push(`<button class="dsh-btn dsh-btn--sm" type="button" data-crp-write="${esc(hub.id)}"><i data-icon="plus"></i> Write in this hub</button>`);
+    }
   } else if (!request || request.status !== "pending") {
     acts.push(`<button class="dsh-btn dsh-btn--sm" type="button" data-crp-join="publisher"><i data-icon="article"></i> Request to publish</button>`);
   }
@@ -2765,10 +2772,17 @@ function openAdForm() {
     </form>`);
 }
 
+/*
+ * What a member may hand in to a hub they do not run. A video is not on the
+ * list: it is published from video-editor.html — the player, the thumbnail the
+ * host gives, the audience, the schedule — by the owner or the staff. A cinema
+ * therefore takes no submissions at all, and says nothing rather than showing
+ * an empty form.
+ */
 const SUBMIT_KINDS = {
-  channel: [["video", "Video"], ["podcast", "Podcast"], ["playlist", "Playlist"]],
-  server: [["video", "Video"], ["podcast", "Podcast"], ["playlist", "Playlist"]],
-  cinema: [["video", "Video"]],
+  channel: [["podcast", "Podcast"], ["playlist", "Playlist"]],
+  server: [["podcast", "Podcast"], ["playlist", "Playlist"]],
+  cinema: [],
   blog: [["article", "Article"]],
   space: [["question", "Question"], ["answer", "Answer"]],
   library: [["book", "Book"], ["document", "Document"]],
@@ -2777,7 +2791,16 @@ const SUBMIT_KINDS = {
 
 function openWriteForm() {
   const hub = (state.hubView || {}).hub || {};
-  const kinds = SUBMIT_KINDS[hub.kind] || [["article", "Article"]];
+  const kinds = SUBMIT_KINDS[hub.kind] || [];
+  if (!kinds.length) {
+    toast({
+      title: "Nothing to hand in here",
+      message: `${hub.name || "This hub"} takes no submissions — its owner publishes its own.`,
+      tone: "info",
+      iconName: "info",
+    });
+    return;
+  }
   openModal(`
     <h2 class="cr-modal__title">Write in ${esc(hub.name || "this hub")}</h2>
     <p class="cr-modal__text">It arrives as a draft: the owner reads it and publishes it from the studio.</p>
@@ -2942,6 +2965,7 @@ async function sendDraft(form) {
         title: "A title of three characters at least.",
         media: "This kind needs its media link.",
         role: "You are not a publisher here (yet).",
+        video_editor: "A video is not handed in — the owner publishes it from the video editor.",
       };
       if (stateNode) stateNode.textContent = words[res?.error] || "The server refused the draft.";
       return;

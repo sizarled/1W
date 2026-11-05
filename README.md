@@ -1110,10 +1110,14 @@ have — carries **Publish a video** in its bar, and the same button in its empt
 says plainly that a video is written over there. `openEditor("video")` navigates instead of opening a
 form, so no path — old markup, a keyboard, a link — can bring the table form back.
 
-The one row that still opens the table editor is a video **somebody else submitted** to the hub:
-`creator_submit_item` writes a draft the owner reviews, fixes and publishes from the *Videos* tab.
-That is the form's remaining purpose — reviewing a publisher's draft — not writing a video of your
-own.
+The table editor keeps one job, and a video is not it either: **a video is published only from
+`video-editor.html`, by the owner or the staff.** The public hub page's *Write in this hub* form
+used to offer Video among the kinds a publisher could hand in; it does not any more. The list is
+podcast and playlist for a studio or a server, article for a blog, and **nothing for a cinema** —
+a cinema's films are its owner's, so an approved publisher there gets no button at all rather than
+an empty form. The server says the same thing: `creator_submit_item` answers
+`{ok:false, error:"video_editor"}` for `video`, and so does `creator_item_save` for a **new** video
+row (a row that already exists still opens, so nothing already in a hub is stranded).
 
 `creator_item_save` takes the hub, the kind, the title, summary, body, media link, thumbnail, tags,
 language, age, visibility, category, parent (an answer points at its question), field, niche,
@@ -1146,7 +1150,7 @@ published (and refused without a media link), an article refused in a studio hub
 categories three deep with the fourth refused (`deep`) and a duplicate refused, a third blog created
 then a fourth refused (`limit`, level 1), staff added by code and an unknown code refused
 (`member`), and the subscriber list reporting a real member with their country.
-`tools/creator-smoke.mjs` (275 checks) runs the studio end to end — an empty studio that creates, configures
+`tools/creator-smoke.mjs` (281 checks) runs the studio end to end — an empty studio that creates, configures
 (private + password + staff), saves, refuses, and deletes a studio; a studio page holding one of each
 hub (tables, columns, action menus, the editor saving a draft then publishing, blog articles vs
 drafts, categories, subscribers, library books); and the `?section=&tab=` deep links.
@@ -1223,7 +1227,7 @@ Every hub's page offers two doors to a visitor who is not its owner:
 
 | Door | What it asks | What an approval gives |
 | --- | --- | --- |
-| **Publisher** (ناشر) | a message (10–600 characters) and an optional portfolio link | the member writes in that hub: `creator_submit_item` lands their content as a **draft** the owner publishes from the tables |
+| **Publisher** (ناشر) | a message (10–600 characters) and an optional portfolio link | the member writes in that hub: `creator_submit_item` lands their content as a **draft** the owner publishes from the tables — a podcast or a playlist, or an article in a blog, never a video |
 | **Advertiser** (معلن) | the format — **banner · video · image · paragraph** — a message, a sample, a budget in points | the member runs an ad there: `creator_ad_save`, and it shows on the hub's page |
 
 A request is one row in `creator_requests` (`pending` → `approved` / `rejected` / `withdrawn`), one

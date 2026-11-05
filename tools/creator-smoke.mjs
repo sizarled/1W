@@ -1099,14 +1099,24 @@ async function main() {
   c10.click(c10.qs("[data-crp-write]"));
   await c10.wait(200);
   expect("write: the form opens", Boolean(c10.qs("[data-crp-write-form]")));
-  expect("write: the kinds are the hub's", c10.qsa("[data-write-kind] option").length === 3, String(c10.qsa("[data-write-kind] option").length));
+  const kindOpts = c10.qsa("[data-write-kind] option").map((o) => String(o.value || o.textContent || "").trim());
+  expect("write: the kinds are the hub's — podcast and playlist", kindOpts.join(",") === "podcast,playlist", kindOpts.join(","));
+  expect("write: a video is not offered", !kindOpts.includes("video"), kindOpts.join(","));
   c10.type(c10.qs("[data-write-title]"), "A short film about the port");
   c10.type(c10.qs("[data-write-body]"), "We shot it over two nights.");
   calls.length = 0;
   c10.qs("[data-crp-write-form]").dispatchEvent(new c10.window.Event("submit", { bubbles: true, cancelable: true }));
   await c10.wait(320);
   expect("write: the draft is sent", calls.some((c) => c.includes("creator_submit_item")), calls.join(" "));
-  expect("write: it carries the hub and the kind", scenario.sentDraft && scenario.sentDraft.p_hub === "IDST100001" && scenario.sentDraft.p_kind === "video", JSON.stringify(scenario.sentDraft));
+  expect("write: it carries the hub and the kind", scenario.sentDraft && scenario.sentDraft.p_hub === "IDST100001" && scenario.sentDraft.p_kind === "podcast", JSON.stringify(scenario.sentDraft));
+
+  /* nothing is written in the source that could bring the video back */
+  const source = readFileSync(join(root, "assets/js/creator.js"), "utf8");
+  const at = source.indexOf("const SUBMIT_KINDS");
+  const kindsBlock = source.slice(at, source.indexOf("};", at));
+  expect("video: the submit list has no video", at > 0 && !/\[\s*"video"/.test(kindsBlock), kindsBlock.replace(/\s+/g, " ").slice(0, 160));
+  expect("video: a cinema takes no submissions", /cinema:\s*\[\]/.test(kindsBlock), kindsBlock.replace(/\s+/g, " ").slice(0, 160));
+
 
   c10.click(c10.qs("[data-crp-ad]"));
   await c10.wait(200);
@@ -1125,6 +1135,19 @@ async function main() {
   expect("ad: with its format", scenario.savedAd && scenario.savedAd.p_format === "paragraph", JSON.stringify(scenario.savedAd));
   expect("ad: no errors", c10.errors.length === 0, c10.errors.join(" | "));
   c10.window.close();
+
+  /* an allowed publisher in a cinema has nothing to hand in — no empty form.
+     Booted last: boot() swaps the globals onto its own window. */
+  scenario.hubCode = "IDCN100006";
+  scenario.hubView = { kind: "cinema", name: "Cinema Seven" };
+  scenario.hubItems = [];
+  scenario.can = { publish: true, advertise: false };
+  const c10b = await boot(15, { search: "?studio=IDCN100006" });
+  await c10b.wait(300);
+  expect("cinema: the hub opens", /Cinema Seven/.test(c10b.text(".crp-hubhero__name")), c10b.text(".crp-hubhero__name"));
+  expect("cinema: an approved publisher gets no write button", !c10b.qs("[data-crp-write]"), c10b.text(".crp-hubhero"));
+  expect("cinema: no errors", c10b.errors.length === 0, c10b.errors.join(" | "));
+  c10b.window.close();
 
   /* ---------------------------------------------------------------- */
   /* pass 11 — asking to advertise: four formats, a message a budget  */
