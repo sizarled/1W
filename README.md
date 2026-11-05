@@ -1011,6 +1011,46 @@ the OAuth `access_token` / `refresh_token` / `token_expires_at` — none of whic
 DDL + functions: `tools/sql/account-settings.sql` (the table, the password, the two chat links)
 and `tools/sql/oauth-linking.sql` (the encoder, the six recipes, the callback writes).
 
+### Platforms — the API keys, sealed at rest
+
+**Platforms** is the one panel in the dashboard that stores a credential the member brings with
+them: a YouTube API key, a TikTok token, a Telegram bot token. The rule is strict, and it is the
+whole design:
+
+| | |
+| --- | --- |
+| at rest | `pgp_sym_encrypt(key, site_secret('api_key_key'))` — 32 random bytes, one row, sealed once |
+| in the page | `••••` + the last four characters (`key_tail`), and nothing else |
+| to use it | `api_key_secret(id)` — **service role only**, revoked from `anon` and `authenticated` |
+
+So the table can be listed by its owner and still never shows a key back: an XSS or a stolen
+session gets four characters and a label. Replacing a key overwrites the sealed copy and the tail;
+removing it deletes the row (`on delete cascade` with the member).
+
+The form is a select of the platforms the **server** accepts (`api_platforms()` — seventeen, from
+YouTube to Reddit), a label up to 40 characters, and the key itself. A key must be 8–512
+characters and carry no spaces, one platform holds one key per label (`unique (member, platform,
+lower(label))`), and a member may keep 40. Every refusal has its own sentence in `API_MESSAGES`, so
+"already stored under that label" is never mistaken for "the save failed".
+
+**Replace** pins the platform and asks only for the new secret; **Remove** confirms first, then
+deletes. The panel says the count — `3 / 40` — in the card head.
+
+`member_api_keys` has RLS on and no policies: the four functions are the only doors, and each one
+starts with `member_from_token()`.
+
+| Function | Purpose |
+| --- | --- |
+| `member_api_keys(token)` | the accepted platforms, the limit and the masked rows |
+| `member_api_key_save(token, id, platform, label, key)` | add (`id` null) or replace; validates platform, length, spaces, the label slot and the ceiling |
+| `member_api_key_delete(token, id)` | removes a row the caller owns |
+| `api_key_secret(id)` | the decrypted key, for the server alone |
+| `api_platforms()` / `api_platform_known(slug)` / `api_platform_label(slug)` | the list the select is built from |
+
+DDL + functions: `tools/sql/member-api-keys.sql`. `tools/dashboard-smoke.mjs` runs the panel end to
+end — the four-character cell, the full key nowhere in the DOM, replace keeping one row, remove,
+and a refusal that explains itself.
+
 ### The six OAuth apps — one checklist each
 
 The dashboard can hold eight networks. Two of them (Telegram, WhatsApp) link with a code we
@@ -1299,6 +1339,7 @@ it, `POST /rest/v1/rpc/oauth_config` with the anon key hands out the Google clie
 | `member_notify_read(token, id)` | marks one notification read |
 | `member_list_remove(token, list_id)` | drops a favorites / later / completed row |
 | `member_account(token)` | identity, security flags and the linked identities — the Account settings card |
+| `member_api_keys(token)` / `member_api_key_save(token, id, platform, label, key)` / `member_api_key_delete(token, id)` | the Platforms panel: the accepted list and the masked rows, then add/replace and remove. The key itself is never returned |
 | `member_change_password(token, current, password)` | the current password is required; every other session is revoked |
 | `member_identity_start(token, provider)` | mints the link: Telegram's deep link + code, WhatsApp's 6-character code, `oauth` for the six networks that need an app |
 | `member_identity_verify(token, provider, code)` | verifies the WhatsApp code; Telegram is verified by the bot, so it answers `use_bot` |

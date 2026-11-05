@@ -102,7 +102,7 @@ const VIEW_META = {
   "settings-site": ["Website settings", "Language, country and skin."],
   "settings-profile": ["Profile settings", "Name, bio, avatar, cover and privacy."],
   "settings-account": ["Account settings", "Email, password, phone, recovery and activation."],
-  "settings-platforms": ["Platforms", "Connect the services your account publishes to."],
+  "settings-platforms": ["Platforms", "The API keys your account publishes with — sealed on the server."],
 };
 
 /* Account settings — the networks a member can link, and what each one can do.
@@ -132,6 +132,12 @@ const state = {
   custom: { from: "", to: "" },
   busy: false,
   tmdb: new Map(),
+  /* the API keys panel: null until the first answer, so it can say "loading" */
+  apiKeys: null,
+  apiPlatforms: [],
+  apiError: "",
+  apiEdit: null,
+  apiBusy: false,
 };
 
 const token = sessionToken();
@@ -1446,8 +1452,6 @@ function advertiserView() {
 /* settings                                                          */
 /* ---------------------------------------------------------------- */
 const SKINS = ["Facebook", "Instagram", "YouTube", "TikTok", "WhatsApp", "Telegram", "iOS", "Android", "macOS", "Windows 10", "Windows 8", "Windows 7"];
-const PLATFORMS = ["YouTube", "Vimeo", "Dailymotion", "Facebook", "Instagram", "TikTok", "Twitch", "Spotify", "SoundCloud", "Podbean", "Medium", "Substack", "WordPress", "Vidshared"];
-
 function settingsSiteView() {
   let theme = "dark";
   let lang = "en";
@@ -1750,23 +1754,115 @@ function pendingPanel() {
 }
 
 function settingsPlatformsView() {
+  const platforms = Array.isArray(state.apiPlatforms) ? state.apiPlatforms : [];
+  const keys = Array.isArray(state.apiKeys) ? state.apiKeys : [];
+  const editing = state.apiEdit ? keys.find((row) => row.id === state.apiEdit) : null;
+  const limit = state.apiLimit || 40;
+
+  if (state.apiKeys === null) {
+    return `
+      <section class="dsh-card">
+        <div class="dsh-card__head"><h2 class="dsh-card__title">API keys</h2></div>
+        <p class="dsh-card__hint">${
+          state.apiError
+            ? `${esc(state.apiError)} <button class="dsh-btn dsh-btn--sm" type="button" data-key-retry>Try again</button>`
+            : "Reading your keys…"
+        }</p>
+      </section>`;
+  }
+
+  const rows = keys
+    .map((row) => {
+      const label = row.label || "—";
+      const added = row.updated_at || row.created_at;
+      return `<tr>
+        <td><strong>${esc(platformLabel(row.platform))}</strong><span class="dsh-cell__sub">${esc(row.platform)}</span></td>
+        <td>${esc(label)}</td>
+        <td><code class="dsh-key">••••${esc(row.tail || "····")}</code></td>
+        <td><span class="dsh-chip" data-tone="${row.status === "active" ? "on" : "off"}">${
+          row.status === "active" ? "Active" : "Revoked"
+        }</span></td>
+        <td>${esc(formatDate(added))}</td>
+        <td><div class="dsh-table__actions">
+          <button class="dsh-btn dsh-btn--sm" type="button" data-key-replace="${esc(row.id)}"><i data-icon="refresh"></i>Replace</button>
+          <button class="dsh-btn dsh-btn--sm" type="button" data-key-remove="${esc(row.id)}"><i data-icon="trash"></i>Remove</button>
+        </div></td>
+      </tr>`;
+    })
+    .join("");
+
   return `
     <div class="dsh-note"><i data-icon="shield"></i><span>
-      API codes are stored on the server and never returned to the browser. A green dot means connected,
-      grey means never connected, red means the last call failed.
+      A key is sealed before it is stored and <strong>never sent back</strong> — the table shows the last
+      four characters, so even a stolen session cannot read one. Replacing a key overwrites the stored
+      copy; removing it deletes the row.
     </span></div>
+
     <section class="dsh-card">
-      <div class="dsh-card__head"><h2 class="dsh-card__title">Publishing platforms</h2><span class="dsh-chip">${PLATFORMS.length}</span></div>
-      <div class="dsh-grid dsh-grid--2">
-        ${PLATFORMS.map(
-          (p) => `<div class="dsh-switch">
-            <span class="dsh-switch__text"><strong><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--faint);margin-right:.4rem"></span>${esc(p)}</strong><span>Not connected</span></span>
-            <button class="dsh-btn dsh-btn--sm" type="button" data-platform="${esc(p)}"><i data-icon="link"></i>Connect</button>
-          </div>`
-        ).join("")}
+      <div class="dsh-card__head">
+        <h2 class="dsh-card__title">${editing ? `Replace the ${esc(platformLabel(editing.platform))} key` : "Add a key"}</h2>
+        <span class="dsh-chip">${num(keys.length)} / ${num(limit)}</span>
       </div>
+      <form class="dsh-form" data-key-form>
+        <div class="dsh-field">
+          <label for="k-platform">Platform</label>
+          <select class="dsh-select" id="k-platform" name="platform" ${editing ? "disabled" : ""}>
+            ${platforms
+              .map(
+                (p) =>
+                  `<option value="${esc(p.slug)}" ${
+                    (editing ? editing.platform : state.apiLastPlatform) === p.slug ? "selected" : ""
+                  }>${esc(p.label)}</option>`
+              )
+              .join("")}
+          </select>
+        </div>
+        <div class="dsh-field">
+          <label for="k-label">Label</label>
+          <input class="dsh-input" id="k-label" name="label" maxlength="40" placeholder="Main channel" autocomplete="off" value="${esc(
+            editing ? editing.label : ""
+          )}" />
+        </div>
+        <div class="dsh-field dsh-field--wide">
+          <label for="k-key">API key</label>
+          <input class="dsh-input" id="k-key" name="key" type="password" autocomplete="off" spellcheck="false"
+                 placeholder="paste the key the platform gave you" />
+        </div>
+        <div class="dsh-form__actions">
+          <button class="dsh-btn dsh-btn--primary" type="submit" ${state.apiBusy ? "disabled" : ""}>
+            <i data-icon="${editing ? "refresh" : "plus"}"></i>${editing ? "Replace key" : "Store key"}
+          </button>
+          ${
+            editing
+              ? `<button class="dsh-btn" type="button" data-key-cancel>Cancel</button>`
+              : ""
+          }
+          <span class="dsh-form__hint">At least 8 characters, no spaces. Only you can replace or remove it.</span>
+        </div>
+      </form>
+    </section>
+
+    <section class="dsh-card">
+      <div class="dsh-card__head">
+        <h2 class="dsh-card__title">Stored keys</h2>
+        <span class="dsh-chip">${num(keys.length)}</span>
+      </div>
+      ${
+        keys.length
+          ? `<div class="dsh-table-wrap"><table class="dsh-table">
+              <thead><tr><th>Platform</th><th>Label</th><th>Key</th><th>Status</th><th>Updated</th><th></th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table></div>`
+          : `<p class="dsh-card__hint">No key yet. Pick a platform above and paste the key it issued you — the revoke-or-replace controls appear here once it is stored.</p>`
+      }
     </section>
   `;
+}
+
+/** A slug the server sent, or the slug itself when the list has not arrived. */
+function platformLabel(slug) {
+  const row = (state.apiPlatforms || []).find((p) => p.slug === slug);
+  return row ? row.label : String(slug || "");
 }
 
 /* ================================================================== */
@@ -2105,6 +2201,7 @@ function onChange(event) {
 
 function wireView(key, root) {
   if (key === "settings-account") wireAccount(root);
+  if (key === "settings-platforms") wirePlatforms(root);
 
   const form = qs("[data-code-form]", root);
   if (form) {
@@ -2419,6 +2516,167 @@ async function refreshAccount() {
     }
   }
   if (state.view === "settings-account") setView("settings-account", { silent: true });
+}
+
+/* ================================================================== */
+/* API keys — the Platforms panel                                      */
+/* ================================================================== */
+const API_MESSAGES = {
+  session: "Your session ended. Sign in again.",
+  platform: "Pick a platform from the list.",
+  short: "A key is at least 8 characters — that looks cut short.",
+  long: "That key is longer than 512 characters.",
+  space: "A key has no spaces: paste it as one word.",
+  label: "You already store a key for that platform under that label.",
+  limit: "Forty keys is the ceiling. Remove one first.",
+  not_found: "That row is gone. Reload the page.",
+  config: "The key vault is not configured on the server.",
+  default: "The key could not be saved.",
+};
+
+/** One call fills the panel: the accepted platforms, and the masked rows. */
+async function loadApiKeys() {
+  state.apiError = "";
+  const result = await rpc("member_api_keys", { p_token: token }).catch((error) => {
+    console.warn("[1World] api keys:", error.message);
+    return null;
+  });
+
+  if (!result || result.ok !== true) {
+    state.apiKeys = null;
+    state.apiError =
+      result && result.error === "session"
+        ? "Your session ended — sign in again."
+        : "The keys could not be loaded.";
+  } else {
+    state.apiPlatforms = Array.isArray(result.platforms) ? result.platforms : [];
+    state.apiLimit = Number(result.limit) || 40;
+    state.apiKeys = Array.isArray(result.keys) ? result.keys : [];
+  }
+
+  if (state.view === "settings-platforms") setView("settings-platforms", { silent: true });
+}
+
+async function saveApiKey(form) {
+  if (state.apiBusy) return;
+
+  const platform = String(qs('[name="platform"]', form)?.value || "").trim();
+  const label = String(qs('[name="label"]', form)?.value || "").trim().slice(0, 40);
+  const key = String(qs('[name="key"]', form)?.value || "").trim();
+
+  const why = !platform
+    ? "Pick a platform first."
+    : key.length < 8
+      ? API_MESSAGES.short
+      : /\s/.test(key)
+        ? API_MESSAGES.space
+        : key.length > 512
+          ? API_MESSAGES.long
+          : "";
+  if (why) {
+    toast({ tone: "error", title: "Key not saved", message: why });
+    return;
+  }
+
+  state.apiBusy = true;
+  const button = qs('[type="submit"]', form);
+  if (button) button.disabled = true;
+
+  const result = await rpc("member_api_key_save", {
+    p_token: token,
+    p_id: state.apiEdit || null,
+    p_platform: platform,
+    p_label: label,
+    p_key: key,
+  }).catch(() => null);
+
+  state.apiBusy = false;
+
+  if (!result || result.ok !== true) {
+    toast({
+      tone: "error",
+      title: "Key not saved",
+      message: API_MESSAGES[result && result.error] || API_MESSAGES.default,
+    });
+    if (button) button.disabled = false;
+    return;
+  }
+
+  const row = result.key || {};
+  const list = (Array.isArray(state.apiKeys) ? state.apiKeys : []).slice();
+  const at = list.findIndex((entry) => entry.id === row.id);
+  if (at >= 0) list[at] = row;
+  else list.unshift(row);
+  state.apiKeys = list;
+  state.apiEdit = null;
+  state.apiLastPlatform = row.platform;
+
+  toast({
+    tone: "success",
+    title: "Key stored",
+    message: `${platformLabel(row.platform)} — ••••${row.tail || "????"}. It stays sealed on the server.`,
+  });
+  setView("settings-platforms", { silent: true });
+}
+
+async function removeApiKey(id) {
+  const row = (state.apiKeys || []).find((entry) => entry.id === id);
+  if (!row || state.apiBusy) return;
+  if (!window.confirm(`Remove the ${platformLabel(row.platform)} key? Anything using it stops working.`)) return;
+
+  state.apiBusy = true;
+  const result = await rpc("member_api_key_delete", { p_token: token, p_id: id }).catch(() => null);
+  state.apiBusy = false;
+
+  if (!result || result.ok !== true) {
+    toast({ tone: "error", title: "Key not removed", message: "The row is still there — try again." });
+    return;
+  }
+
+  state.apiKeys = (state.apiKeys || []).filter((entry) => entry.id !== id);
+  if (state.apiEdit === id) state.apiEdit = null;
+  toast({ tone: "info", title: "Key removed", message: "The row and the sealed key are gone." });
+  setView("settings-platforms", { silent: true });
+}
+
+/** "Replace" loads the row into the form; the platform cannot be swapped. */
+function replaceApiKey(id) {
+  const row = (state.apiKeys || []).find((entry) => entry.id === id);
+  if (!row) return;
+  state.apiEdit = id;
+  setView("settings-platforms", { silent: true });
+  qs("#k-key")?.focus();
+}
+
+function wirePlatforms(root) {
+  if (state.apiKeys === null && !state.apiError) loadApiKeys();
+
+  const form = qs("[data-key-form]", root);
+  if (form) {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      saveApiKey(form);
+    });
+  }
+
+  qsa("[data-key-retry]", root).forEach((btn) =>
+    btn.addEventListener("click", () => {
+      state.apiError = "";
+      loadApiKeys();
+    })
+  );
+  qsa("[data-key-cancel]", root).forEach((btn) =>
+    btn.addEventListener("click", () => {
+      state.apiEdit = null;
+      setView("settings-platforms", { silent: true });
+    })
+  );
+  qsa("[data-key-replace]", root).forEach((btn) =>
+    btn.addEventListener("click", () => replaceApiKey(btn.dataset.keyReplace))
+  );
+  qsa("[data-key-remove]", root).forEach((btn) =>
+    btn.addEventListener("click", () => removeApiKey(btn.dataset.keyRemove))
+  );
 }
 
 /** Watches one link, for about a minute, then stops. */

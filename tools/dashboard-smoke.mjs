@@ -11,6 +11,8 @@
  * Pass 4 — banned account with the ban upheld: permanently closed, log out only.
  * Pass 5 — active account: rail, sidebar, overview, popover, notifications
  *          settings, codes, devices, tabs, log out.
+ * Pass 6 — the platforms panel: the accepted list, a key stored (only four
+ *          characters come back), replaced, removed, and a refusal explained.
  */
 import { JSDOM } from "jsdom";
 import { readFileSync } from "node:fs";
@@ -140,6 +142,17 @@ function accountPayload() {
   };
 }
 
+/* the Platforms panel — the server owns the list of accepted platforms */
+const API_PLATFORMS = [
+  { slug: "youtube", label: "YouTube" },
+  { slug: "tiktok", label: "TikTok" },
+  { slug: "x", label: "X" },
+];
+
+function apiKeysPayload() {
+  return { ok: true, platforms: API_PLATFORMS, keys: scenario.apiKeys || [], limit: 40 };
+}
+
 function stubFetch(url, opts = {}) {
   const href = String(url);
   calls.push(href);
@@ -206,11 +219,51 @@ function stubFetch(url, opts = {}) {
     if (scenario.unlockFails) return reply({ ok: false, error: "points", fee: 10000, balance: 10 });
     return reply({ ok: true, level: Number(body.p_level || 4), fee: 10000, balance: 190000 });
   }
+  if (href.includes("/rpc/member_api_key_save")) {
+    if (scenario.keySaveError) return reply({ ok: false, error: scenario.keySaveError });
+    const id = body.p_id || `key-${Math.random().toString(16).slice(2, 8)}`;
+    const row = {
+      id,
+      platform: body.p_platform,
+      label: body.p_label || "",
+      tail: String(body.p_key || "").slice(-4),
+      status: "active",
+      created_at: new Date(NOW).toISOString(),
+      updated_at: new Date(NOW).toISOString(),
+      last_used_at: null,
+    };
+    scenario.apiKeys = [row, ...(scenario.apiKeys || []).filter((entry) => entry.id !== id)];
+    return reply({ ok: true, key: row });
+  }
+  if (href.includes("/rpc/member_api_key_delete")) {
+    scenario.apiKeys = (scenario.apiKeys || []).filter((entry) => entry.id !== body.p_id);
+    return reply({ ok: true, removed: true });
+  }
+  if (href.includes("/rpc/member_api_keys")) return reply(apiKeysPayload());
   if (href.includes("/rpc/member_logout")) return reply({ ok: true });
   return reply([]);
 }
 
+/* dashboard.js polls (a pending link, a slow answer). Those timers are global,
+   so a page that is closed keeps writing into the next page's document — the
+   one thing a browser does for us at unload. Kill them at each boot. */
+const liveTimers = new Set();
+const nativeSetInterval = globalThis.setInterval;
+const nativeClearInterval = globalThis.clearInterval;
+globalThis.setInterval = (fn, ms, ...args) => {
+  const id = nativeSetInterval(fn, ms, ...args);
+  liveTimers.add(id);
+  return id;
+};
+globalThis.clearInterval = (id) => {
+  liveTimers.delete(id);
+  nativeClearInterval(id);
+};
+
 async function boot(pass) {
+  liveTimers.forEach((id) => nativeClearInterval(id));
+  liveTimers.clear();
+
   const dom = new JSDOM(html, { url: "http://localhost/dashboard.html", pretendToBeVisual: true });
   const { window } = dom;
   const errors = [];
@@ -257,6 +310,7 @@ async function boot(pass) {
   globalThis.fetch = stubFetch;
   window.scrollTo = () => {};
   window.open = () => null;
+  window.confirm = () => true;
 
   window.localStorage.clear();
   window.localStorage.setItem("1w.session", TOKEN);
@@ -735,6 +789,88 @@ function expect(name, condition, detail = "") {
   expect("oauth refused: no errors", bad.errors.length === 0, bad.errors.join(" | "));
   o.window.close();
   bad.window.close();
+}
+
+/* ------------------------------------------------------------------ */
+/* the platforms panel — stored API keys                              */
+/* ------------------------------------------------------------------ */
+{
+  scenario = { status: "active", identities: [], apiKeys: [] };
+  const k = await boot("platforms");
+  k.click(k.qs('[data-nav] [data-goto="settings-platforms"]'));
+  await k.wait(220);
+
+  const view = '[data-view="settings-platforms"]';
+  expect("keys: the panel renders", Boolean(k.qs(view)));
+  expect("keys: the key list is asked for", calls.some((c) => c.includes("member_api_keys")));
+  expect("keys: the form offers the server's platforms", k.qsa("#k-platform option").length === API_PLATFORMS.length);
+  expect("keys: an empty table says so", /No key yet/i.test(k.text(view)));
+  expect("keys: it promises the key is never returned", /never sent back/i.test(k.text(view)));
+
+  // a short key never reaches the server
+  const form = k.qs("[data-key-form]");
+  form.querySelector('[name="key"]').value = "abc";
+  calls.length = 0;
+  form.dispatchEvent(new k.window.Event("submit", { bubbles: true, cancelable: true }));
+  await k.wait(120);
+  expect("keys: a short key is caught here", !calls.some((c) => c.includes("member_api_key_save")));
+
+  // a real one is stored and the row shows four characters, never the key
+  const SECRET = "AIzaSyD-smoke-key-9012";
+  form.querySelector('[name="platform"]').value = "youtube";
+  form.querySelector('[name="label"]').value = "Main channel";
+  form.querySelector('[name="key"]').value = SECRET;
+  calls.length = 0;
+  form.dispatchEvent(new k.window.Event("submit", { bubbles: true, cancelable: true }));
+  await k.wait(260);
+
+  expect("keys: the save is sent", calls.some((c) => c.includes("member_api_key_save")));
+  const row = k.qs("[data-view='settings-platforms'] tbody tr");
+  expect("keys: a row appears", Boolean(row));
+  expect("keys: the platform is named", /YouTube/.test(row?.textContent || ""));
+  expect("keys: the label is kept", /Main channel/.test(row?.textContent || ""));
+  const keyCell = row?.querySelector("td:nth-child(3)")?.textContent.trim() || "";
+  expect("keys: only four characters are drawn", keyCell === "••••9012", keyCell);
+  expect("keys: the full key is nowhere on the page", !k.document.body.textContent.includes(SECRET));
+  expect("keys: the count follows", /1 \/ 40/.test(k.text(view)), k.text(view).slice(0, 120));
+
+  // replace keeps the row and asks for a new secret
+  calls.length = 0;
+  k.click(k.qs("[data-key-replace]"));
+  await k.wait(160);
+  const replaceForm = k.qs("[data-key-form]");
+  expect("keys: replace loads the row", replaceForm?.querySelector('[name="label"]').value === "Main channel");
+  expect("keys: replace pins the platform", replaceForm?.querySelector('[name="platform"]').disabled === true);
+  expect("keys: replace starts empty", replaceForm?.querySelector('[name="key"]').value === "");
+  replaceForm.querySelector('[name="key"]').value = "AIzaSyD-replaced-key-7788";
+  replaceForm.dispatchEvent(new k.window.Event("submit", { bubbles: true, cancelable: true }));
+  await k.wait(260);
+  expect("keys: the replace is sent", calls.some((c) => c.includes("member_api_key_save")));
+  expect("keys: the tail moved", /7788/.test(k.text(view)), k.text(view).slice(0, 200));
+  expect("keys: no second row was added", k.qsa("[data-view='settings-platforms'] tbody tr").length === 1);
+
+  // remove
+  calls.length = 0;
+  k.click(k.qs("[data-key-remove]"));
+  await k.wait(220);
+  expect("keys: the removal is sent", calls.some((c) => c.includes("member_api_key_delete")));
+  expect("keys: the table empties", /No key yet/i.test(k.text(view)));
+  expect("keys: no errors", k.errors.length === 0, k.errors.join(" | "));
+  k.window.close();
+
+  // a refused save is explained, not swallowed
+  scenario = { status: "active", identities: [], apiKeys: [], keySaveError: "label" };
+  const dup = await boot("platforms-duplicate");
+  dup.click(dup.qs('[data-nav] [data-goto="settings-platforms"]'));
+  await dup.wait(200);
+  const dupForm = dup.qs("[data-key-form]");
+  dupForm.querySelector('[name="platform"]').value = "x";
+  dupForm.querySelector('[name="key"]').value = "x-smoke-key-1234";
+  dupForm.dispatchEvent(new dup.window.Event("submit", { bubbles: true, cancelable: true }));
+  await dup.wait(240);
+  expect("keys refused: the reason is said", /already store a key/i.test(dup.document.body.textContent));
+  expect("keys refused: no errors", dup.errors.length === 0, dup.errors.join(" | "));
+  dup.window.close();
 }
 
 /* ------------------------------------------------------------------ */

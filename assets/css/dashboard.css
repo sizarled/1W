@@ -1348,6 +1348,22 @@
   color: var(--text-2);
 }
 
+/* the API-keys table: a masked key, and the slug under the platform name */
+.dsh-key {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.84rem;
+  letter-spacing: 0.08em;
+  color: var(--text);
+}
+
+.dsh-cell__sub {
+  display: block;
+  margin-top: 0.12rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+}
+
 /* empty state ------------------------------------------------------ */
 .dsh-empty {
   display: grid;
