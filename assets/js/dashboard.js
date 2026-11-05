@@ -1387,6 +1387,24 @@ function analyticsView() {
   `;
 }
 
+/**
+ * Creator and Publisher surfaces.
+ *
+ * A creator surface is a door into the editor: it carries the content kind
+ * the surface holds (`creator.html?kind=…`), so the button opens the right
+ * form instead of a dead toast. A publisher surface has no writer yet — its
+ * button still explains itself.
+ */
+const SURFACE_KINDS = {
+  "e-Studio": "video",
+  "e-Server": "video",
+  "e-Blog": "article",
+  "e-Gallery": "image",
+  "e-Space": "post",
+  "e-Library": "document",
+  "e-Cinema": "video",
+};
+
 function surfacesView(kind) {
   const rows =
     kind === "creator"
@@ -1408,23 +1426,38 @@ function surfacesView(kind) {
           ["Community", "Followers and members"],
         ];
 
+  const editorDoor =
+    kind === "creator"
+      ? `<a class="dsh-btn dsh-btn--sm" href="creator.html"><i data-icon="plus"></i>Open the content editor</a>`
+      : `<span class="dsh-chip">${rows.length} types</span>`;
+
   return `
     <div class="dsh-note"><i data-icon="info"></i><span>
-      Every ${kind} page is managed here: name, description, logo, cover, category and niche.
-      Publishing opens the public page at <b>${kind}.html?${kind}=ID</b>.
+      ${
+        kind === "creator"
+          ? `Every creator page is managed here — name, description, logo, cover, category and niche.
+             The editor writes the content itself: a draft is private and saves as you type, publishing
+             needs an active membership.`
+          : `Every ${kind} page is managed here: name, description, logo, cover, category and niche.
+             Publishing opens the public page at <b>${kind}.html?${kind}=ID</b>.`
+      }
     </span></div>
     <section class="dsh-card">
-      <div class="dsh-card__head"><h2 class="dsh-card__title">Your ${kind} pages</h2><span class="dsh-chip">${rows.length} types</span></div>
+      <div class="dsh-card__head"><h2 class="dsh-card__title">Your ${kind} pages</h2>${editorDoor}</div>
       <div class="dsh-table-wrap"><table class="dsh-table">
         <thead><tr><th>Surface</th><th>For</th><th>Status</th><th></th></tr></thead>
         <tbody>${rows
-          .map(
-            ([name, use]) => `<tr>
+          .map(([name, use]) => {
+            const contentKind = kind === "creator" ? SURFACE_KINDS[name] : "";
+            const action = contentKind
+              ? `<a class="dsh-btn dsh-btn--sm" href="creator.html?kind=${esc(contentKind)}"><i data-icon="plus"></i>Create</a>`
+              : `<button class="dsh-btn dsh-btn--sm" type="button" data-surface="${esc(name)}"><i data-icon="plus"></i>Create</button>`;
+            return `<tr>
               <td><strong>${esc(name)}</strong></td><td>${esc(use)}</td>
               <td><span class="dsh-chip" data-tone="off">Not created</span></td>
-              <td><div class="dsh-table__actions"><button class="dsh-btn dsh-btn--sm" type="button" data-surface="${esc(name)}"><i data-icon="plus"></i>Create</button></div></td>
-            </tr>`
-          )
+              <td><div class="dsh-table__actions">${action}</div></td>
+            </tr>`;
+          })
           .join("")}</tbody>
       </table></div>
     </section>

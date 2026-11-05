@@ -18,7 +18,7 @@ const BUILD = "20261031u"; // cache-bust for css/js
 
 /* Hand-written pages are NOT in this list: index.html, login.html, register.html,
    rest.html, watch.html, cast.html, dashboard.html, activated.html, court.html,
-   profile.html, privacy.html. */
+   profile.html, creator.html, privacy.html. */
 const PAGES = [
   ["search.html", "Search", "search", "Search across films, series, channels, articles, documents, answers and reviews.", "Reads ?q= from the URL."],
   ["movies.html", "Movies", "film", "The full film catalogue, with filters for genre, year, rating and quality.", ""],

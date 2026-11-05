@@ -1054,6 +1054,50 @@ platform refused, then delete leaving zero rows and `site_secret` still closed t
 `tools/dashboard-smoke.mjs` runs the panel end to end — the four-character cell, the full key
 nowhere in the DOM, replace keeping one row, remove, and a refusal that explains itself.
 
+### Creator — one editor for everything a member writes
+
+**`creator.html`** is the content editor. A member opens it from the dashboard's Creator section
+(each surface's **Create** now carries the kind it holds: `creator.html?kind=article`), from their
+own profile, or directly. Six kinds share one form — `video`, `article`, `podcast`, `image`,
+`document`, `post` — and one table holds them all, because the differences between them are three
+fields, not three apps:
+
+| | needs to publish |
+| --- | --- |
+| `video`, `podcast`, `image`, `document` | a media link (`https://…`) |
+| `article`, `post` | a body of at least 12 words |
+| all of them | a title of 3–140 characters, and an **active** membership |
+
+A draft is free, private and needs nothing at all: it saves itself 1.4 s after the typing stops,
+and the foot of the editor says what is still missing before publishing (`needs 8 more words, a
+title of 3 characters`). The list on the left filters by draft/published, searches titles, tags and
+summaries, and shows words, minutes (`ceil(words / 200)`, the same rule as watching), views and when
+the item last moved.
+
+Reading and publishing are separated on purpose: `member_content_list` returns no bodies — the list
+is cheap and the editor asks for one item at a time with `member_content_get`.
+
+| Function | Purpose |
+| --- | --- |
+| `member_content_list(token)` | every item the member owns (no body) plus `{all, draft, published, views, likes}` |
+| `member_content_get(token, id)` | one item with its body, `not_found` for anything that is not yours |
+| `member_content_save(token, id, kind, title, summary, body, media_url, cover_url, tags[], language, age, visibility, publish)` | create (`id` null) or update; the publish rules are enforced here |
+| `member_content_delete(token, id)` | removes a row and reports `removed: true/false` |
+
+`public.member_content` has RLS on and no policies; every function starts with
+`member_from_token()` and scopes by `member = v_member.id`, so a guessed uuid answers `not_found`
+exactly like a uuid that never existed. Tags are trimmed to 24 characters, de-duplicated (case-sensitively) and
+capped at 8; `word_count` and `minutes` are computed on the server, never trusted from the browser;
+a member may keep 200 items.
+
+DDL + functions: `tools/sql/creator.sql` — **applied**, and exercised on a real session afterwards:
+a draft saved and reopened, a 4-word publish refused (`body`), a video without a link refused
+(`media`), a 25-word publish accepted (`status: published`, 25 words, 1 minute), tags trimmed and
+de-duplicated while keeping their spelling, the row echoed without its `member` column, and delete
+answering `removed: true` then `false`. `tools/creator-smoke.mjs` runs the page end to end —
+66 checks over four passes: no session, an empty account that writes/autosaves/publishes/deletes, an
+account with work and an inactive membership, and the `?kind=` / `?id=` deep links.
+
 ### The six OAuth apps — one checklist each
 
 The dashboard can hold eight networks. Two of them (Telegram, WhatsApp) link with a code we

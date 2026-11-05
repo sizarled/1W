@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Creator — 1World Web</title>
+    <meta name="description" content="The creator editor: write a video, an article, a podcast, an image set, a document or a post, keep it as a draft, and publish it when it is ready." />
+    <meta name="theme-color" content="#060607" />
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="assets/css/base.css?v=20261105a" />
+    <link rel="stylesheet" href="assets/css/layout.css?v=20261105a" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261105a" />
+    <link rel="stylesheet" href="assets/css/creator.css?v=20261105a" />
+    <script>
+      /* apply the saved theme (or the OS preference) before first paint */
+      (function () {
+        try {
+          var saved = JSON.parse(localStorage.getItem("1w.theme") || "null");
+          var theme =
+            saved === "light" || saved === "dark"
+              ? saved
+              : window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
+                ? "light"
+                : "dark";
+          document.documentElement.dataset.theme = theme;
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute("content", theme === "light" ? "#f4f4f5" : "#060607");
+        } catch (e) {}
+      })();
+    </script>
+    <script type="module" src="assets/js/app.js?v=20261105a"></script>
+    <script type="module" src="assets/js/creator.js?v=20261105a"></script>
+  </head>
+  <body data-page="creator" data-title="Creator">
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <div data-site-header></div>
+    <div data-site-sidebar></div>
+
+    <main class="site-main cr" id="main">
+      <div class="wrap">
+        <!-- loading / error / sign-in --------------------------------- -->
+        <div class="cr__state" data-cr-state>
+          <div class="cr-skeleton" aria-hidden="true"></div>
+        </div>
+
+        <div class="cr__shell" data-cr-root hidden>
+          <header class="cr-head">
+            <div class="cr-head__id">
+              <p class="eyebrow"><span class="eyebrow__dot"></span>Creator</p>
+              <h1 class="cr-head__title">Write your own content</h1>
+              <p class="cr-head__text">
+                A video, an article, a podcast episode, an image set, a document or a post — one editor for all
+                of them. Drafts save as you type; publishing needs an active membership.
+              </p>
+            </div>
+            <div class="cr-head__actions">
+              <a class="btn btn--ghost btn--sm" href="profile.html"><i data-icon="user"></i> Your profile</a>
+              <button class="btn btn--primary btn--sm" type="button" data-cr-new><i data-icon="plus"></i> New content</button>
+            </div>
+          </header>
+
+          <dl class="cr-stats">
+            <div class="cr-stat">
+              <dt><i data-icon="file"></i> Items</dt>
+              <dd data-cr-count="all">0</dd>
+            </div>
+            <div class="cr-stat">
+              <dt><i data-icon="clock"></i> Drafts</dt>
+              <dd data-cr-count="draft">0</dd>
+            </div>
+            <div class="cr-stat">
+              <dt><i data-icon="check"></i> Published</dt>
+              <dd data-cr-count="published">0</dd>
+            </div>
+            <div class="cr-stat">
+              <dt><i data-icon="eye"></i> Views</dt>
+              <dd data-cr-count="views">0</dd>
+            </div>
+            <div class="cr-stat">
+              <dt><i data-icon="thumbUp"></i> Likes</dt>
+              <dd data-cr-count="likes">0</dd>
+            </div>
+          </dl>
+
+          <div class="cr__grid">
+            <!-- the list ---------------------------------------------- -->
+            <aside class="cr-list" aria-label="Your content">
+              <div class="cr-list__head">
+                <div class="cr-filters" data-cr-filters role="tablist" aria-label="Filter">
+                  <button class="cr-filter is-on" type="button" role="tab" aria-selected="true" data-cr-filter="all">All</button>
+                  <button class="cr-filter" type="button" role="tab" aria-selected="false" data-cr-filter="draft">Drafts</button>
+                  <button class="cr-filter" type="button" role="tab" aria-selected="false" data-cr-filter="published">Published</button>
+                </div>
+                <label class="cr-search">
+                  <i data-icon="search" aria-hidden="true"></i>
+                  <input class="input" type="search" placeholder="Search your titles" aria-label="Search your content" data-cr-search />
+                </label>
+              </div>
+              <div class="cr-list__body" data-cr-list></div>
+              <p class="cr-list__foot" data-cr-limits></p>
+            </aside>
+
+            <!-- the editor -------------------------------------------- -->
+            <section class="cr-editor" data-cr-editor aria-live="polite"></section>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <div data-site-footer></div>
+  </body>
+</html>
