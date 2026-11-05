@@ -416,7 +416,7 @@ async function editor(tag) {
   expect("editor: the payload is public", payload.visibility === "general", payload.visibility);
   expect("editor: the tags are the main keywords", Array.isArray(payload.tags) && payload.tags.join(",") === "animation,editing", JSON.stringify(payload.tags));
   expect("editor: a YouTube source is named", payload.meta?.source === "youtube", JSON.stringify(payload.meta));
-  expect("editor: no password on a public one", Array.isArray(payload.passwords) && payload.passwords.length === 0);
+  expect("editor: a public one sends no password key at all", payload.passwords === undefined, JSON.stringify(payload.passwords));
   expect("editor: no audience on a public one", Array.isArray(payload.audience) && payload.audience.length === 0);
 }
 

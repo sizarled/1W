@@ -1348,7 +1348,8 @@ The three doors keep their meaning, on the feed as well as on the door:
 Exclusive also accepts a named member (`kind = 'entity'`, the `@username` as the value), and a level
 *range* becomes one rule per level — that is the shape `post_visible_to` matches. Private and
 exclusive can both carry **join passwords**: the editor never sees them again (only `asks_password`),
-and a correct password opens that one visit for anyone, without granting a reaction.
+it sends a `passwords` list only when the member added one in that visit, and a correct password opens
+that one visit for anyone without granting a reaction.
 
 The feed searches titles and descriptions, filters by one field, and sorts four ways (`popular` by
 `rank_points`, `new`, `liked`, `discussed`). A card carries the thumbnail, the age badge, the door it

@@ -397,7 +397,7 @@ function payload(status) {
   if (S.vis === "limited") {
     people.forEach((who) => rules.push({ kind: "entity", value: who.startsWith("@") ? who : `@${who}`, mode: "include" }));
   }
-  return {
+  const body = {
     id: S.code || null,
     title: S.title.trim(),
     description: S.desc.trim() || null,
@@ -410,7 +410,6 @@ function payload(status) {
     tags: S.tags.slice(0, 12),
     audience: rules,
     profiles: people,
-    passwords: S.passes,
     meta: {
       age: S.age,
       download: Boolean(S.download),
@@ -418,6 +417,10 @@ function payload(status) {
       source: isFile(S.embed) ? "file" : findYouTube(S.embed) ? "youtube" : "embed",
     },
   };
+  /* the passwords we were never shown are the passwords we must not wipe:
+     the key rides along only when the member added one in this visit. */
+  if (S.passes.length) body.passwords = S.passes;
+  return body;
 }
 
 async function save(status) {
