@@ -125,7 +125,8 @@
   top: var(--header-h);
   align-self: start;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  /* me · discover · the sections · the foot */
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 0.9rem;
   height: calc(100vh - var(--header-h));
   padding: 1.1rem 0.9rem 1rem;
@@ -1132,4 +1133,879 @@
   justify-content: flex-end;
   gap: 0.45rem;
   flex-wrap: wrap;
+}
+
+/* ==================================================================
+   the public side — the directory, one creator, one hub
+   ------------------------------------------------------------------
+   Three views that live in the same working area as the studio but
+   belong to everybody: a search for creators, a creator's page with
+   every hub they run, and a hub as a visitor sees it.
+   ================================================================== */
+
+.cr-side__hint {
+  margin: 0;
+  padding: 0.7rem 0.6rem;
+  border: 1px dashed var(--line-2);
+  border-radius: var(--radius-sm);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.cr-section--discover {
+  margin-bottom: 0.15rem;
+}
+
+.cr-section--discover .cr-section__count {
+  font-size: 0.6rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.crp {
+  display: grid;
+  gap: 1.1rem;
+  align-content: start;
+}
+
+.crp-pill__word {
+  color: var(--muted);
+  margin-left: 0.2rem;
+}
+
+.crp-skeleton {
+  min-height: 260px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+  background: linear-gradient(
+      100deg,
+      transparent 20%,
+      color-mix(in srgb, var(--text) 6%, transparent) 38%,
+      transparent 56%
+    )
+    0 0 / 220% 100%,
+    var(--surface-2);
+  animation: cr-shimmer 1.6s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crp-skeleton {
+    animation: none;
+  }
+}
+
+/* the hero and its search ------------------------------------------- */
+.crp-hero {
+  display: grid;
+  gap: 0.7rem;
+  padding: clamp(1.2rem, 4vw, 2.2rem);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--text) 7%, transparent), transparent 60%),
+    var(--surface);
+}
+
+.crp-hero__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  font-size: 0.62rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.crp-hero__eyebrow .ico {
+  width: 13px;
+  height: 13px;
+}
+
+.crp-hero__title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-weight: 400;
+  font-size: clamp(2rem, 5vw, 3rem);
+  line-height: 1.02;
+  letter-spacing: -0.02em;
+}
+
+.crp-hero__text {
+  margin: 0;
+  max-width: 62ch;
+  color: var(--text-2);
+  font-size: 0.86rem;
+  line-height: 1.6;
+}
+
+.crp-search {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+.crp-search__box {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  height: 48px;
+  padding: 0 0.9rem;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--input-bg);
+}
+
+.crp-search__box:focus-within {
+  border-color: var(--line-3);
+  background: var(--input-bg-focus);
+}
+
+.crp-search__box .ico {
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+  flex: none;
+}
+
+.crp-search__input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+  outline: none;
+}
+
+.crp-search__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.crp-search__filters .dsh-select {
+  min-width: 150px;
+  max-width: 100%;
+}
+
+.crp-count {
+  margin: 0.15rem 0 0;
+  font-size: 0.74rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* the directory cards ----------------------------------------------- */
+.crp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 0.75rem;
+}
+
+.crp-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.8rem;
+  padding: 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  transition: border-color 0.16s ease, transform 0.16s ease;
+}
+
+.crp-card:hover {
+  border-color: var(--line-3);
+  transform: translateY(-1px);
+}
+
+.crp-avatar {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+  background: var(--surface-3);
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text-2);
+  flex: none;
+}
+
+.crp-avatar img,
+.crp-hubcard__logo img,
+.crp-hubhero__logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.crp-avatar--lg {
+  width: 88px;
+  height: 88px;
+  font-size: 1.3rem;
+}
+
+.crp-card__body {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.crp-card__name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+  text-decoration: none;
+  line-height: 1.25;
+}
+
+.crp-card__name:hover {
+  text-decoration: underline;
+}
+
+.crp-card__handle,
+.crp-card__where {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+  min-width: 0;
+}
+
+.crp-card__where .flag,
+.crp-profile__where .flag {
+  border-radius: 2px;
+}
+
+.crp-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0.25rem 0 0;
+}
+
+.crp-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  height: 21px;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  font-size: 0.64rem;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.crp-kind .ico {
+  width: 11px;
+  height: 11px;
+  color: var(--muted);
+}
+
+.crp-kind b {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.crp-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0.25rem 0 0;
+}
+
+.crp-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 0.45rem;
+  border-radius: 6px;
+  background: var(--surface-3);
+  font-size: 0.63rem;
+  letter-spacing: 0.02em;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.crp-card__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  margin: 0.3rem 0 0;
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+
+.crp-card__stats b {
+  color: var(--text);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.crp-card__open {
+  align-self: center;
+  white-space: nowrap;
+}
+
+/* a creator's page --------------------------------------------------- */
+.crp-back {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  font-size: 0.74rem;
+}
+
+.crp-back a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.crp-back a:hover {
+  color: var(--text);
+}
+
+.crp-back .ico {
+  width: 13px;
+  height: 13px;
+}
+
+.crp-profile {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: clamp(1rem, 3vw, 1.6rem);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.crp-profile__id {
+  display: grid;
+  gap: 0.25rem;
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.crp-profile__name {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-weight: 400;
+  font-size: clamp(1.6rem, 3.4vw, 2.2rem);
+  line-height: 1.05;
+}
+
+.crp-profile__handle {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--text-2);
+}
+
+.crp-code {
+  padding: 0.05rem 0.4rem;
+  border-radius: 6px;
+  border: 1px solid var(--line-2);
+  font-size: 0.66rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.crp-profile__where {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+.crp-profile__bio {
+  margin: 0.3rem 0 0;
+  max-width: 68ch;
+  font-size: 0.84rem;
+  line-height: 1.65;
+  color: var(--text-2);
+}
+
+.crp-profile__acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.crp-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(78px, 1fr));
+  gap: 0.4rem;
+  flex: 1 1 100%;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--line);
+}
+
+.crp-stat {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.crp-stat b {
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.crp-stat small {
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.crp-hubs {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.crp-hubs__title {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.crp-group {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.crp-group__head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.crp-group__head .ico {
+  width: 15px;
+  height: 15px;
+  color: var(--muted);
+}
+
+.crp-group__head span {
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--surface-3);
+  font-size: 0.64rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.crp-hubgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 0.6rem;
+}
+
+.crp-hubcard {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.7rem;
+  padding: 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 0.16s ease, transform 0.16s ease;
+}
+
+.crp-hubcard:hover {
+  border-color: var(--line-3);
+  transform: translateY(-1px);
+}
+
+.crp-hubcard__logo {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+  background: var(--surface-3);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-2);
+}
+
+.crp-hubcard__body {
+  display: grid;
+  gap: 0.18rem;
+  min-width: 0;
+}
+
+.crp-hubcard__kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.crp-hubcard__kind .ico {
+  width: 11px;
+  height: 11px;
+}
+
+.crp-hubcard__name {
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.crp-hubcard__desc {
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.crp-hubcard__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.25rem;
+}
+
+.crp-hubcard__go {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  align-self: center;
+}
+
+.crp-hubcard__go .ico {
+  width: 13px;
+  height: 13px;
+}
+
+/* one hub as a visitor ---------------------------------------------- */
+.crp-hubhero {
+  position: relative;
+  display: grid;
+  gap: 0.7rem;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.crp-hubhero__cover {
+  display: block;
+  width: 100%;
+  height: clamp(110px, 20vw, 190px);
+  object-fit: cover;
+}
+
+.crp-hubhero__cover.is-plain {
+  background:
+    radial-gradient(120% 160% at 0% 0%, color-mix(in srgb, var(--text) 10%, transparent), transparent 62%),
+    var(--surface-2);
+}
+
+.crp-hubhero__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0 clamp(0.9rem, 3vw, 1.5rem);
+  margin-top: -2.6rem;
+}
+
+.crp-hubhero__logo {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+  background: var(--surface-3);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-2);
+  flex: none;
+}
+
+.crp-hubhero__id {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.crp-hubhero__kind {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.6rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.crp-hubhero__kind .ico {
+  width: 12px;
+  height: 12px;
+}
+
+.crp-hubhero__name {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-weight: 400;
+  font-size: clamp(1.5rem, 3.6vw, 2.1rem);
+  line-height: 1.05;
+}
+
+.crp-hubhero__owner {
+  margin: 0;
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+.crp-hubhero__owner a {
+  color: var(--text-2);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.crp-hubhero__acts {
+  display: flex;
+  gap: 0.4rem;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.crp-hubhero__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0 clamp(0.9rem, 3vw, 1.5rem);
+}
+
+.crp-hubhero__desc {
+  margin: 0;
+  padding: 0 clamp(0.9rem, 3vw, 1.5rem) clamp(0.9rem, 3vw, 1.4rem);
+  max-width: 78ch;
+  font-size: 0.84rem;
+  line-height: 1.65;
+  color: var(--text-2);
+}
+
+.crp-items {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.crp-item {
+  display: grid;
+  grid-template-columns: 108px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+@media (max-width: 720px) {
+  .crp-item {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+
+  .crp-item__open {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}
+
+.crp-item__thumb {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface-3);
+  object-fit: cover;
+}
+
+.crp-item__thumb.is-plain .ico {
+  width: 20px;
+  height: 20px;
+  color: var(--muted);
+}
+
+.crp-item__body {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.crp-item__kind {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.crp-item__kind .ico {
+  width: 11px;
+  height: 11px;
+}
+
+.crp-item__title {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.crp-item__summary {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.crp-item__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  margin: 0.2rem 0 0;
+  font-size: 0.66rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.crp-item__meta span,
+.crp-item__meta i {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.22rem;
+}
+
+.crp-item__meta .ico {
+  width: 11px;
+  height: 11px;
+}
+
+.crp-item__open {
+  white-space: nowrap;
+}
+
+/* the private hub's door -------------------------------------------- */
+.crp-lock {
+  display: grid;
+  gap: 0.55rem;
+  justify-items: center;
+  text-align: center;
+  padding: clamp(1.6rem, 5vw, 3rem) clamp(1rem, 4vw, 2rem);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(120% 140% at 50% 0%, color-mix(in srgb, #d8b45a 9%, transparent), transparent 62%),
+    var(--surface);
+}
+
+.crp-lock__icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, #d8b45a 40%, var(--line-2));
+  color: #e6c980;
+}
+
+.crp-lock__icon .ico {
+  width: 20px;
+  height: 20px;
+}
+
+.crp-lock__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.crp-lock__text {
+  margin: 0;
+  max-width: 52ch;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.crp-lock__form {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem;
+  width: min(420px, 100%);
+  margin-top: 0.35rem;
+}
+
+.crp-lock__form .dsh-input {
+  flex: 1 1 180px;
+}
+
+.crp-lock__state {
+  margin: 0;
+  min-height: 1.1rem;
+  font-size: 0.72rem;
+  color: #e6c980;
 }

@@ -29,6 +29,7 @@ import { qs, qsa, esc, num, timeAgo } from "./utils.js";
 import { hydrateIcons } from "./icons.js";
 import { toast } from "./ui.js";
 import { sessionToken, getMember, avatarFor } from "./session.js";
+import { flagMarkup, countryByName } from "./countries.js";
 
 /* ================================================================== */
 /* what hangs under each section                                      */
@@ -266,6 +267,14 @@ const state = {
   editor: null,
   confirm: null,
   saveState: { tone: "", text: "" },
+  /* the public side */
+  creatorRef: null,
+  page: null,
+  pageError: "",
+  hubView: null,
+  hubViewId: null,
+  hubError: "",
+  directory: { q: "", kind: "", country: "", sort: "subscribers", rows: [], countries: [], count: 0, loading: false, error: "" },
 };
 
 const el = (sel, root = document) => qs(sel, root);
@@ -349,18 +358,54 @@ function renderRail() {
       initial.style.display = "none";
     }
   }
+  const signedIn = Boolean(state.token);
   const nameNode = el("[data-cr-name]");
-  if (nameNode) nameNode.textContent = name;
+  if (nameNode) nameNode.textContent = signedIn ? name : "Guest";
   const handle = el("[data-cr-username]");
-  if (handle) handle.textContent = member.username ? (String(member.username).startsWith("@") ? member.username : `@${member.username}`) : `@${member.member_id || "member"}`;
+  if (handle) {
+    handle.textContent = signedIn
+      ? member.username
+        ? String(member.username).startsWith("@")
+          ? member.username
+          : `@${member.username}`
+        : `@${member.member_id || "member"}`
+      : "not signed in";
+  }
   const code = el("[data-cr-code]");
   if (code) {
     code.textContent = member.member_id || "";
-    code.hidden = !member.member_id;
+    code.hidden = !signedIn || !member.member_id;
+  }
+
+  const discover = el("[data-cr-discover]");
+  if (discover) {
+    const on = isPublic();
+    discover.innerHTML = `
+      <button class="cr-section cr-section--discover ${on ? "is-on" : ""}" type="button" data-cr-nav-creators aria-current="${on ? "page" : "false"}">
+        <i data-icon="search"></i>
+        <span class="cr-section__name">Creators</span>
+        <span class="cr-section__count">find</span>
+      </button>`;
+    hydrateIcons(discover);
+  }
+
+  const foot = el("[data-cr-side-foot]");
+  if (foot) {
+    foot.innerHTML = signedIn
+      ? `<a class="cr-side__link" href="profile.html"><i data-icon="user"></i> Your profile</a>
+         <a class="cr-side__link" href="dashboard.html"><i data-icon="dashboard"></i> Dashboard</a>`
+      : `<a class="cr-side__link" href="login.html"><i data-icon="login"></i> Sign in</a>
+         <a class="cr-side__link" href="register.html"><i data-icon="user"></i> Create an account</a>`;
+    hydrateIcons(foot);
   }
 
   const nav = el("[data-cr-sections]");
   if (!nav) return;
+  if (!signedIn) {
+    nav.innerHTML = `
+      <p class="cr-side__hint">Sign in to manage the studios, blogs, spaces, libraries, galleries, servers and cinemas you run.</p>`;
+    return;
+  }
   nav.innerHTML = SECTIONS.map((section) => {
     const used = hubsOf(section.kind).length;
     const limit = Number(state.limits?.[section.kind]?.limit || 0);
@@ -471,6 +516,9 @@ function renderTabs() {
 function renderView() {
   const host = el("[data-cr-view]");
   if (!host) return;
+  if (state.view === "creators") return renderDirectory(host);
+  if (state.view === "creator") return renderCreatorPage(host);
+  if (state.view === "hubview") return renderHubPage(host);
   const section = sectionOf(state.section);
   const tab = section.tabs.find((t) => t.key === state.tab) || section.tabs[0];
 
@@ -1080,10 +1128,14 @@ async function loadTab() {
 }
 
 async function refresh() {
+  const pub = isPublic();
+  hideAdminChrome(pub);
   renderRail();
-  renderTop();
-  renderHubHead();
-  renderTabs();
+  if (!pub) {
+    renderTop();
+    renderHubHead();
+    renderTabs();
+  }
   renderView();
 }
 
@@ -1091,6 +1143,9 @@ async function switchSection(key) {
   if (!SECTIONS.some((section) => section.key === key)) return;
   state.section = key;
   state.view = "list";
+  state.page = null;
+  state.hubView = null;
+  hideAdminChrome(false);
   state.editor = null;
   const section = sectionOf(key);
   state.tab = section.tabs[0].key;
@@ -1126,15 +1181,636 @@ async function switchTab(key) {
 
 function syncUrl() {
   try {
-    const params = new URLSearchParams(location.search);
-    params.set("section", slugOf(sectionOf(state.section)));
-    if (state.hub) params.set("hub", state.hub);
-    else params.delete("hub");
-    params.set("tab", state.tab);
+    const params = new URLSearchParams();
+    if (state.view === "creators") {
+      params.set("section", "creators");
+    } else if (state.view === "creator") {
+      params.set("creator", state.creatorRef || "");
+    } else if (state.view === "hubview") {
+      params.set("hub", state.hubViewId || "");
+      if (state.creatorRef) params.set("creator", state.creatorRef);
+    } else {
+      params.set("section", slugOf(sectionOf(state.section)));
+      if (state.hub) params.set("hub", state.hub);
+      params.set("tab", state.tab);
+    }
     history.replaceState(null, "", `creator.html?${params.toString()}`);
   } catch {
     /* the address bar is not writable here */
   }
+}
+
+/* ================================================================== */
+/* the public side: creators, one creator, one hub                    */
+/* ================================================================== */
+/*
+ * Three views that need no token:
+ *
+ *   creators  ?section=creators        the directory — search + filters
+ *   creator   ?creator=ID100015        one creator and every hub they run
+ *   hubview   ?hub=<uuid>              a hub as a visitor: header, items,
+ *                                      subscribe, and the password door
+ *
+ * All three read the security-definer RPCs in tools/sql/creator-public.sql
+ * (`creators_search`, `creator_public`, `creator_hub_view`); the browser
+ * never sees a private hub it is not allowed to see.
+ */
+
+const PLURALS = {
+  channel: "Studios",
+  blog: "Blogs",
+  space: "Spaces",
+  library: "Libraries",
+  gallery: "Galleries",
+  server: "Servers",
+  cinema: "Cinemas",
+};
+
+const HUBS = [
+  ...SECTIONS.map((section) => ({
+    kind: section.kind,
+    label: section.label,
+    icon: section.icon,
+    slug: section.slug,
+    noun: section.noun,
+    plural: PLURALS[section.kind],
+  })),
+  { kind: "server", label: "Server", icon: "monitor", slug: "server", noun: "server", plural: PLURALS.server },
+  { kind: "cinema", label: "Cinema", icon: "film", slug: "cinema", noun: "cinema", plural: PLURALS.cinema },
+];
+
+const hubInfo = (kind) =>
+  HUBS.find((row) => row.kind === kind) || {
+    kind,
+    label: String(kind || "Hub"),
+    icon: "file",
+    slug: "",
+    noun: kind,
+    plural: `${String(kind || "hub")}s`,
+  };
+
+const SORTS = [
+  ["subscribers", "Most subscribers"],
+  ["items", "Most items"],
+  ["new", "Newest"],
+];
+
+const PUB_VIEWS = ["creators", "creator", "hubview"];
+const isPublic = () => PUB_VIEWS.includes(state.view);
+
+const initials = (name) =>
+  String(name || "?")
+    .trim()
+    .slice(0, 2)
+    .toUpperCase() || "?";
+
+const handleOf = (row) => {
+  const name = String(row?.username || "").trim();
+  if (!name) return row?.code ? `@${String(row.code).toLowerCase()}` : "";
+  return name.startsWith("@") ? name : `@${name}`;
+};
+
+function flagOf(country) {
+  const row = countryByName(country);
+  return row ? flagMarkup(row.code, { size: 18, label: row.name }) : "";
+}
+
+function dateOf(value) {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return "—";
+  try {
+    return date.toLocaleDateString("en-GB", { month: "short", year: "numeric" });
+  } catch {
+    return date.toISOString().slice(0, 7);
+  }
+}
+
+function avatarBlock(url, name, cls = "crp-avatar") {
+  const src = String(url || "").trim();
+  if (src) return `<span class="${cls}"><img src="${esc(src)}" alt="" width="64" height="64" loading="lazy" /></span>`;
+  return `<span class="${cls} is-initial" aria-hidden="true">${esc(initials(name))}</span>`;
+}
+
+function statPill(icon, value, label) {
+  return `<span class="cr-pill" title="${esc(label)}"><i data-icon="${esc(icon)}"></i>${esc(num(Number(value) || 0))}${label ? ` <span class="crp-pill__word">${esc(label)}</span>` : ""}</span>`;
+}
+
+/* ------------------------------------------------------------------ */
+/* the directory                                                      */
+/* ------------------------------------------------------------------ */
+function renderDirectory(host) {
+  const d = state.directory;
+  const countryOptions = [`<option value="">Every country</option>`]
+    .concat(
+      (d.countries || []).map(
+        (name) => `<option value="${esc(name)}" ${String(d.country).toLowerCase() === String(name).toLowerCase() ? "selected" : ""}>${esc(name)}</option>`
+      )
+    )
+    .join("");
+  const kindOptions = [`<option value="">Every kind</option>`]
+    .concat(
+      HUBS.map(
+        (row) => `<option value="${esc(row.kind)}" ${d.kind === row.kind ? "selected" : ""}>${esc(row.label)}</option>`
+      )
+    )
+    .join("");
+  const sortOptions = SORTS.map(
+    ([value, label]) => `<option value="${value}" ${d.sort === value ? "selected" : ""}>${esc(label)}</option>`
+  ).join("");
+
+  host.innerHTML = `
+    <div class="crp">
+      <header class="crp-hero">
+        <p class="crp-hero__eyebrow"><i data-icon="sparkle"></i> The directory</p>
+        <h1 class="crp-hero__title">Find a creator</h1>
+        <p class="crp-hero__text">Search by name, handle or member code, then walk into the studios, blogs, spaces, libraries, galleries, servers and cinemas they run.</p>
+        <form class="crp-search" data-crp-form role="search">
+          <label class="crp-search__box">
+            <i data-icon="search"></i>
+            <input class="crp-search__input" type="search" name="q" value="${esc(d.q)}" placeholder="Name, @handle or ID100015" aria-label="Search creators" data-crp-q autocomplete="off" />
+          </label>
+          <div class="crp-search__filters">
+            <select class="dsh-select" data-crp-kind aria-label="Filter by kind of hub">${kindOptions}</select>
+            <select class="dsh-select" data-crp-country aria-label="Filter by country">${countryOptions}</select>
+            <select class="dsh-select" data-crp-sort aria-label="Sort creators">${sortOptions}</select>
+            <button class="dsh-btn dsh-btn--primary" type="submit"><i data-icon="search"></i> Search</button>
+          </div>
+        </form>
+        <p class="crp-count" data-crp-count>${directoryLine()}</p>
+      </header>
+      <div class="crp-grid" data-crp-grid>${directoryCards()}</div>
+    </div>`;
+  hydrateIcons(host);
+}
+
+function directoryLine() {
+  const d = state.directory;
+  if (d.loading) return "Looking for creators…";
+  if (d.error) return d.error;
+  const count = Number(d.count || 0);
+  if (!count) return d.q || d.kind || d.country ? "No creator matches these filters." : "No creator has opened a hub yet.";
+  return `${num(count)} creator${count === 1 ? "" : "s"}${d.q ? ` for “${d.q}”` : ""}${d.kind ? ` with a ${hubInfo(d.kind).noun}` : ""}`;
+}
+
+function directoryCards() {
+  const d = state.directory;
+  if (d.loading && !d.rows.length) return `<div class="crp-skeleton" aria-hidden="true"></div>`;
+  if (!d.rows.length) {
+    return `
+      <div class="cr-empty">
+        <i data-icon="search"></i>
+        <p class="cr-empty__title">${d.error ? "The directory did not answer" : "Nothing here yet"}</p>
+        <p class="cr-empty__text">${d.error ? "Check the connection and try again." : "Try a shorter name, another country, or no filter at all."}</p>
+        ${d.q || d.kind || d.country ? `<button class="dsh-btn dsh-btn--sm" type="button" data-crp-clear><i data-icon="refresh"></i> Clear the filters</button>` : ""}
+      </div>`;
+  }
+  return d.rows
+    .map((row) => {
+      const counts = row.counts || {};
+      const kinds = HUBS.filter((hub) => Number(counts[hub.kind] || 0) > 0)
+        .map(
+          (hub) =>
+            `<span class="crp-kind"><i data-icon="${esc(hub.icon)}"></i>${esc(hub.label)}${Number(counts[hub.kind]) > 1 ? ` <b>${Number(counts[hub.kind])}</b>` : ""}</span>`
+        )
+        .join("");
+      const fields = (row.fields || [])
+        .filter(Boolean)
+        .slice(0, 3)
+        .map((field) => `<span class="crp-tag">${esc(field)}</span>`)
+        .join("");
+      return `
+        <article class="crp-card">
+          ${avatarBlock(row.avatar, row.name)}
+          <div class="crp-card__body">
+            <a class="crp-card__name" href="creator.html?creator=${encodeURIComponent(row.ref || row.code || "")}" data-crp-open="${esc(row.ref || row.code || "")}">${esc(row.name || "Member")}</a>
+            <p class="crp-card__handle">${esc(handleOf(row))} · ${esc(row.code || "")}</p>
+            <p class="crp-card__where">${flagOf(row.country)}<span>${esc(row.country || "No country")}</span></p>
+            ${kinds ? `<p class="crp-kinds">${kinds}</p>` : ""}
+            ${fields ? `<p class="crp-tags">${fields}</p>` : ""}
+            <p class="crp-card__stats">
+              <span><b>${esc(num(Number(row.hubs) || 0))}</b> hub${Number(row.hubs) === 1 ? "" : "s"}</span>
+              <span><b>${esc(num(Number(row.subscribers) || 0))}</b> subscribers</span>
+              <span><b>${esc(num(Number(row.items) || 0))}</b> items</span>
+            </p>
+          </div>
+          <a class="dsh-btn dsh-btn--sm crp-card__open" href="creator.html?creator=${encodeURIComponent(row.ref || row.code || "")}" data-crp-open="${esc(row.ref || row.code || "")}">Open<i data-icon="arrowRight"></i></a>
+        </article>`;
+    })
+    .join("");
+}
+
+function renderDirectoryResults() {
+  const count = el("[data-crp-count]");
+  if (count) count.textContent = directoryLine();
+  const grid = el("[data-crp-grid]");
+  if (grid) {
+    grid.innerHTML = directoryCards();
+    hydrateIcons(grid);
+  }
+  const selected = el("[data-crp-country]");
+  if (selected && (state.directory.countries || []).length) {
+    const current = state.directory.country;
+    selected.innerHTML =
+      `<option value="">Every country</option>` +
+      state.directory.countries
+        .map((name) => `<option value="${esc(name)}" ${String(current).toLowerCase() === String(name).toLowerCase() ? "selected" : ""}>${esc(name)}</option>`)
+        .join("");
+    selected.value = current;
+  }
+}
+
+async function loadDirectory({ focus = false } = {}) {
+  const d = state.directory;
+  d.loading = true;
+  renderDirectoryResults();
+  try {
+    const res = await rpc("creators_search", {
+      p_token: state.token || "",
+      p_query: d.q,
+      p_kind: d.kind,
+      p_country: d.country,
+      p_sort: d.sort,
+    });
+    if (res && res.ok) {
+      d.rows = Array.isArray(res.rows) ? res.rows : [];
+      d.countries = Array.isArray(res.countries) ? res.countries : d.countries;
+      d.count = Number(res.count || d.rows.length);
+      d.error = "";
+    } else {
+      d.rows = [];
+      d.error = "The directory did not answer.";
+    }
+  } catch {
+    d.rows = [];
+    d.error = "The directory did not answer. Check the connection.";
+  }
+  d.loading = false;
+  if (state.view !== "creators") return;
+  // the first answer also brings the country list, so a whole repaint is cheaper
+  if (!el("[data-crp-count]")) return renderView();
+  renderDirectoryResults();
+  if (focus) {
+    const box = el("[data-crp-q]");
+    if (box) {
+      box.focus?.();
+      const end = box.value.length;
+      box.setSelectionRange?.(end, end);
+    }
+  }
+}
+
+let directoryTimer = null;
+function queueDirectorySearch() {
+  clearTimeout(directoryTimer);
+  directoryTimer = setTimeout(() => {
+    if (state.view === "creators") loadDirectory({ focus: true });
+  }, 320);
+}
+
+/* ------------------------------------------------------------------ */
+/* one creator                                                        */
+/* ------------------------------------------------------------------ */
+function renderCreatorPage(host) {
+  const page = state.page;
+  if (!page) {
+    host.innerHTML = state.pageError
+      ? emptyBlock("user", "This creator was not found", "The code, handle or link does not belong to a member with a hub.")
+      : `<div class="crp"><div class="crp-skeleton" aria-hidden="true"></div></div>`;
+    hydrateIcons(host);
+    return;
+  }
+  const creator = page.creator || {};
+  const totals = page.totals || {};
+  const hubs = Array.isArray(page.hubs) ? page.hubs : [];
+  const groups = HUBS.map((info) => ({
+    info,
+    rows: hubs.filter((hub) => hub.kind === info.kind),
+  })).filter((group) => group.rows.length);
+
+  const fields = (creator.fields || [])
+    .filter(Boolean)
+    .map((field) => `<span class="crp-tag">${esc(field)}</span>`)
+    .join("");
+
+  host.innerHTML = `
+    <div class="crp">
+      <nav class="crp-back">
+        <a href="creator.html?section=creators" data-crp-back><i data-icon="arrowLeft"></i> All creators</a>
+      </nav>
+
+      <header class="crp-profile">
+        ${avatarBlock(creator.avatar, creator.name, "crp-avatar crp-avatar--lg")}
+        <div class="crp-profile__id">
+          <h1 class="crp-profile__name">${esc(creator.name || "Member")}</h1>
+          <p class="crp-profile__handle">${esc(handleOf(creator))} <span class="crp-code">${esc(creator.code || "")}</span></p>
+          <p class="crp-profile__where">${flagOf(creator.country)}<span>${esc(creator.country || "No country")}</span> · joined ${esc(dateOf(creator.joined))}</p>
+          ${fields ? `<p class="crp-tags">${fields}</p>` : ""}
+          ${creator.bio ? `<p class="crp-profile__bio">${esc(creator.bio)}</p>` : ""}
+          <div class="crp-profile__acts">
+            ${page.is_self ? `<a class="dsh-btn dsh-btn--primary dsh-btn--sm" href="creator.html?section=studio"><i data-icon="settings"></i> Manage your hubs</a>` : ""}
+            <button class="dsh-btn dsh-btn--sm" type="button" data-crp-copy="${esc(creator.code || "")}"><i data-icon="link"></i> Copy the code</button>
+          </div>
+        </div>
+        <div class="crp-stats">
+          <span class="crp-stat"><b>${esc(num(Number(totals.hubs) || 0))}</b><small>hubs</small></span>
+          <span class="crp-stat"><b>${esc(num(Number(totals.subscribers) || 0))}</b><small>subscribers</small></span>
+          <span class="crp-stat"><b>${esc(num(Number(totals.items) || 0))}</b><small>items</small></span>
+          <span class="crp-stat"><b>${esc(num(Number(totals.minutes) || 0))}</b><small>minutes</small></span>
+          <span class="crp-stat"><b>${esc(num(Number(totals.likes) || 0))}</b><small>likes</small></span>
+        </div>
+      </header>
+
+      <section class="crp-hubs" aria-label="The hubs of this creator">
+        <h2 class="crp-hubs__title">Everything ${esc((creator.name || "this creator").split(" ")[0])} runs</h2>
+        ${
+          groups.length
+            ? groups
+                .map(
+                  (group) => `
+          <div class="crp-group" data-crp-group="${esc(group.info.kind)}">
+            <h3 class="crp-group__head"><i data-icon="${esc(group.info.icon)}"></i>${esc(group.info.plural)} <span>${group.rows.length}</span></h3>
+            <div class="crp-hubgrid">
+              ${group.rows.map(hubCard).join("")}
+            </div>
+          </div>`
+                )
+                .join("")
+            : emptyBlock("info", "No hub in the open", "This creator has not opened a public studio, blog, space, library, gallery, server or cinema yet.")
+        }
+      </section>
+    </div>`;
+  hydrateIcons(host);
+}
+
+function hubCard(hub) {
+  const info = hubInfo(hub.kind);
+  const logo = hub.logo_url
+    ? `<img src="${esc(hub.logo_url)}" alt="" width="44" height="44" loading="lazy" />`
+    : `<span aria-hidden="true">${esc(initials(hub.name))}</span>`;
+  const privateHub = hub.visibility === "private";
+  return `
+    <a class="crp-hubcard" href="creator.html?hub=${encodeURIComponent(hub.id)}" data-crp-hub="${esc(hub.id)}">
+      <span class="crp-hubcard__logo">${logo}</span>
+      <span class="crp-hubcard__body">
+        <span class="crp-hubcard__kind"><i data-icon="${esc(info.icon)}"></i>${esc(info.label)}</span>
+        <span class="crp-hubcard__name">${esc(hub.name)}</span>
+        <span class="crp-hubcard__desc">${esc(hub.description || hub.field || "No description yet")}</span>
+        <span class="crp-hubcard__stats">
+          <span class="cr-pill" data-tone="${esc(hub.visibility || "public")}"><i data-icon="${privateHub ? "lock" : "shield"}"></i>${esc(visLabel(hub.visibility))}</span>
+          ${statPill("users", hub.subscribers, "")}
+          ${statPill("file", hub.items, "")}
+          ${statPill("clock", hub.minutes, "min")}
+        </span>
+      </span>
+      <span class="crp-hubcard__go"><i data-icon="arrowRight"></i></span>
+    </a>`;
+}
+
+async function loadCreatorPage(ref) {
+  state.page = null;
+  state.pageError = "";
+  renderView();
+  try {
+    const res = await rpc("creator_public", { p_token: state.token || "", p_ref: ref });
+    if (res && res.ok) state.page = res;
+    else state.pageError = (res && res.error) || "not_found";
+  } catch {
+    state.pageError = "network";
+  }
+  if (state.view !== "creator") return;
+  renderView();
+}
+
+/* ------------------------------------------------------------------ */
+/* one hub, as a visitor                                              */
+/* ------------------------------------------------------------------ */
+function renderHubPage(host) {
+  const view = state.hubView;
+  if (!view) {
+    host.innerHTML = state.hubError
+      ? emptyBlock("info", "This hub is not here", "The link may be old, or the hub was closed by its owner.")
+      : `<div class="crp"><div class="crp-skeleton" aria-hidden="true"></div></div>`;
+    hydrateIcons(host);
+    return;
+  }
+  const hub = view.hub || {};
+  const info = hubInfo(hub.kind);
+  const items = Array.isArray(view.items) ? view.items : [];
+  const owner = state.page && state.page.creator && state.page.creator.code === hub.owner ? state.page.creator : null;
+  const ownerLabel = owner ? owner.name : hub.owner || "the owner";
+  const cover = hub.cover_url
+    ? `<img class="crp-hubhero__cover" src="${esc(hub.cover_url)}" alt="" loading="lazy" />`
+    : `<span class="crp-hubhero__cover is-plain" aria-hidden="true"></span>`;
+  const logo = hub.logo_url
+    ? `<img src="${esc(hub.logo_url)}" alt="" width="72" height="72" />`
+    : `<span aria-hidden="true">${esc(initials(hub.name))}</span>`;
+  const role = hub.role || "visitor";
+  const manageSection = hubInfo(hub.kind).slug;
+
+  const body = view.locked
+    ? `
+      <div class="crp-lock" data-crp-lock>
+        <span class="crp-lock__icon"><i data-icon="lock"></i></span>
+        <h2 class="crp-lock__title">This hub is private</h2>
+        <p class="crp-lock__text">${
+          hub.has_password
+            ? hub.password_until
+              ? `Ask ${esc(ownerLabel)} for the password. The last one closed on ${esc(dateOf(hub.password_until))}.`
+              : `Ask ${esc(ownerLabel)} for the password to walk in.`
+            : `Ask ${esc(ownerLabel)} to add your member code to the VIP list.`
+        }</p>
+        ${
+          hub.has_password
+            ? `<form class="crp-lock__form" data-crp-unlock-form>
+                 <input class="dsh-input" type="password" name="password" placeholder="The password" aria-label="Hub password" data-crp-password autocomplete="off" />
+                 <button class="dsh-btn dsh-btn--primary" type="submit"><i data-icon="unlock"></i> Unlock</button>
+               </form>
+               <p class="crp-lock__state" data-crp-lock-state role="status"></p>`
+            : `<p class="crp-lock__state" data-crp-lock-state role="status">No password — the VIP list only.</p>`
+        }
+      </div>`
+    : `
+      ${
+        items.length
+          ? `<div class="crp-items">${items.map(itemCard).join("")}</div>`
+          : emptyBlock(info.icon, "Nothing published yet", `This ${esc(info.noun)} has no item in the open. Subscribe and come back.`)
+      }`;
+
+  host.innerHTML = `
+    <div class="crp">
+      <nav class="crp-back">
+        <a href="creator.html?creator=${encodeURIComponent(hub.owner || "")}" data-crp-owner="${esc(hub.owner || "")}"><i data-icon="arrowLeft"></i> ${esc(ownerLabel)}</a>
+        <a href="creator.html?section=creators" data-crp-back>All creators</a>
+      </nav>
+
+      <header class="crp-hubhero">
+        ${cover}
+        <div class="crp-hubhero__bar">
+          <span class="crp-hubhero__logo">${logo}</span>
+          <div class="crp-hubhero__id">
+            <p class="crp-hubhero__kind"><i data-icon="${esc(info.icon)}"></i>${esc(info.label)}</p>
+            <h1 class="crp-hubhero__name">${esc(hub.name || "Hub")}</h1>
+            <p class="crp-hubhero__owner">by <a href="creator.html?creator=${encodeURIComponent(hub.owner || "")}" data-crp-owner="${esc(hub.owner || "")}">${esc(ownerLabel)}</a>${hub.field ? ` · ${esc(hub.field)}` : ""}</p>
+          </div>
+          <div class="crp-hubhero__acts">
+            ${
+              role === "owner" || role === "staff"
+                ? `<a class="dsh-btn dsh-btn--sm" href="creator.html?section=${encodeURIComponent(manageSection)}&hub=${encodeURIComponent(hub.id)}"><i data-icon="settings"></i> Manage</a>`
+                : ""
+            }
+            <button class="dsh-btn dsh-btn--primary dsh-btn--sm" type="button" data-crp-sub="${esc(hub.id)}" data-on="${hub.subscribed ? "1" : "0"}">
+              <i data-icon="${hub.subscribed ? "check" : "users"}"></i> ${hub.subscribed ? "Subscribed" : "Subscribe"}
+            </button>
+          </div>
+        </div>
+        <div class="crp-hubhero__meta">
+          <span class="cr-pill" data-tone="${esc(hub.visibility || "public")}"><i data-icon="${hub.visibility === "private" ? "lock" : "shield"}"></i>${esc(visLabel(hub.visibility))}</span>
+          ${statPill("users", hub.subscribers, "subscribers")}
+          ${statPill("file", hub.items, "items")}
+          ${statPill("clock", hub.minutes, "min")}
+          ${statPill("thumbUp", hub.likes, "likes")}
+          ${hub.niches?.length ? `<span class="crp-tag">${esc(hub.niches.join(" · "))}</span>` : ""}
+        </div>
+        ${hub.description ? `<p class="crp-hubhero__desc">${esc(hub.description)}</p>` : ""}
+      </header>
+
+      ${body}
+    </div>`;
+  hydrateIcons(host);
+}
+
+function itemCard(row) {
+  const info = hubInfo(row.kind);
+  const thumb = row.thumbnail
+    ? `<img class="crp-item__thumb" src="${esc(row.thumbnail)}" alt="" loading="lazy" />`
+    : `<span class="crp-item__thumb is-plain" aria-hidden="true"><i data-icon="${esc(KIND_ICON[row.kind] || "file")}"></i></span>`;
+  const date = row.published_at ? dateOf(row.published_at) : "";
+  return `
+    <article class="crp-item" data-crp-item="${esc(row.id || "")}">
+      ${thumb}
+      <div class="crp-item__body">
+        <p class="crp-item__kind"><i data-icon="${esc(info.icon)}"></i>${esc(KIND_LABEL[row.kind] || info.label)}${row.visibility && row.visibility !== "public" ? ` · ${esc(visLabel(row.visibility))}` : ""}</p>
+        <h3 class="crp-item__title">${esc(row.title || "Untitled")}</h3>
+        ${row.summary ? `<p class="crp-item__summary">${esc(row.summary)}</p>` : ""}
+        <p class="crp-item__meta">
+          <span><i data-icon="clock"></i>${esc(num(Number(row.minutes) || 0))} min</span>
+          <span><i data-icon="thumbUp"></i>${esc(num(Number(row.likes) || 0))}</span>
+          <span><i data-icon="comment"></i>${esc(num(Number(row.comments) || 0))}</span>
+          ${date ? `<span>${esc(date)}</span>` : ""}
+        </p>
+      </div>
+      ${
+        row.media_url
+          ? `<a class="dsh-btn dsh-btn--sm crp-item__open" href="${esc(row.media_url)}" target="_blank" rel="noopener noreferrer"><i data-icon="play"></i> Open</a>`
+          : ""
+      }
+    </article>`;
+}
+
+async function loadHubPage(id, password = "") {
+  state.hubView = null;
+  state.hubError = "";
+  state.hubViewId = id;
+  renderView();
+  try {
+    const res = await rpc("creator_hub_view", { p_token: state.token || "", p_hub: id, p_password: password });
+    if (res && res.ok) {
+      state.hubView = res;
+      state.hubError = "";
+    } else {
+      state.hubView = null;
+      state.hubError = (res && res.error) || "not_found";
+    }
+  } catch {
+    state.hubView = null;
+    state.hubError = "network";
+  }
+  if (state.view !== "hubview") return;
+  renderView();
+  // the owner line needs the creator page; one extra call, once
+  if (state.hubView && !state.page && state.hubView.hub?.owner) {
+    const ref = state.hubView.hub.owner;
+    try {
+      const page = await rpc("creator_public", { p_token: state.token || "", p_ref: ref });
+      if (page && page.ok) {
+        state.page = page;
+        if (state.view === "hubview") renderView();
+      }
+    } catch {
+      /* the hub still reads without the owner's name */
+    }
+  }
+}
+
+async function subscribeToHub(id) {
+  if (!state.token) {
+    toast({ title: "Sign in first", message: "Subscribing to a hub needs a member session.", tone: "error", iconName: "lock" });
+    return;
+  }
+  try {
+    const res = await rpc("creator_subscribe", { p_token: state.token, p_hub: id });
+    if (!res || !res.ok) {
+      const error = (res && res.error) || "";
+      toast({ title: "Not subscribed", message: MESSAGES[error] || "The subscription did not go through.", tone: "error" });
+      return;
+    }
+    toast({ title: res.subscribed ? "Subscribed" : "Unsubscribed", message: res.subscribed ? "The exclusive items of this hub are open to you now." : "You can subscribe again at any time.", iconName: res.subscribed ? "check" : "info" });
+    await loadHubPage(id);
+  } catch {
+    toast({ title: "Not subscribed", message: "The connection dropped before the server answered.", tone: "error" });
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* moving between the three views                                     */
+/* ------------------------------------------------------------------ */
+function hideAdminChrome(hidden) {
+  ["[data-cr-top]", "[data-cr-hubhead]", "[data-cr-tabs]"].forEach((sel) => {
+    const node = el(sel);
+    if (!node) return;
+    node.hidden = hidden;
+    node.style.display = hidden ? "none" : "";
+  });
+}
+
+async function openDirectory() {
+  state.view = "creators";
+  state.page = null;
+  state.hubView = null;
+  state.rows = [];
+  hideAdminChrome(true);
+  renderRail();
+  renderView();
+  syncUrl();
+  await loadDirectory();
+}
+
+async function openCreator(ref) {
+  const wanted = String(ref || "").trim().replace(/^@/, "@");
+  if (!wanted) return;
+  state.view = "creator";
+  state.creatorRef = wanted;
+  state.page = null;
+  state.pageError = "";
+  state.hubView = null;
+  hideAdminChrome(true);
+  renderRail();
+  renderView();
+  syncUrl();
+  await loadCreatorPage(wanted);
+}
+
+async function openHub(id) {
+  if (!id) return;
+  state.view = "hubview";
+  state.hubView = null;
+  state.hubError = "";
+  state.hubViewId = id;
+  hideAdminChrome(true);
+  renderRail();
+  renderView();
+  syncUrl();
+  await loadHubPage(id);
 }
 
 /* ================================================================== */
@@ -1581,6 +2257,59 @@ async function deleteCategory(id) {
 document.addEventListener("click", (event) => {
   const target = event.target;
 
+  if (target.closest("[data-cr-nav-creators]")) {
+    event.preventDefault();
+    return openDirectory();
+  }
+
+  const openCr = target.closest("[data-crp-open]");
+  if (openCr) {
+    event.preventDefault();
+    return openCreator(openCr.dataset.crpOpen);
+  }
+
+  if (target.closest("[data-crp-back]")) {
+    event.preventDefault();
+    return openDirectory();
+  }
+
+  const ownerLink = target.closest("[data-crp-owner]");
+  if (ownerLink) {
+    event.preventDefault();
+    return openCreator(ownerLink.dataset.crpOwner);
+  }
+
+  const hubLink = target.closest("[data-crp-hub]");
+  if (hubLink) {
+    event.preventDefault();
+    return openHub(hubLink.dataset.crpHub);
+  }
+
+  const subButton = target.closest("[data-crp-sub]");
+  if (subButton) {
+    event.preventDefault();
+    return subscribeToHub(subButton.dataset.crpSub);
+  }
+
+  if (target.closest("[data-crp-clear]")) {
+    event.preventDefault();
+    state.directory = { ...state.directory, q: "", kind: "", country: "", sort: "subscribers" };
+    renderView();
+    return loadDirectory();
+  }
+
+  const copyButton = target.closest("[data-crp-copy]");
+  if (copyButton) {
+    event.preventDefault();
+    const code = copyButton.dataset.crpCopy;
+    if (!code) return;
+    navigator.clipboard?.writeText?.(code).then(
+      () => toast({ title: "Copied", message: `${code} is on your clipboard.`, iconName: "check" }),
+      () => toast({ title: "Not copied", message: code, tone: "error" })
+    );
+    return;
+  }
+
   const section = target.closest("[data-cr-section]");
   if (section) {
     event.preventDefault();
@@ -1749,6 +2478,18 @@ document.addEventListener("click", (event) => {
 
 document.addEventListener("change", (event) => {
   const select = event.target;
+  if (select.matches("[data-crp-kind]")) {
+    state.directory.kind = select.value || "";
+    return loadDirectory();
+  }
+  if (select.matches("[data-crp-country]")) {
+    state.directory.country = select.value || "";
+    return loadDirectory();
+  }
+  if (select.matches("[data-crp-sort]")) {
+    state.directory.sort = select.value || "subscribers";
+    return loadDirectory();
+  }
   if (select.matches("[data-cr-hub]")) {
     if (select.value === "__new") return openNewHub();
     if (select.value) switchHub(select.value);
@@ -1772,6 +2513,11 @@ document.addEventListener("change", (event) => {
 
 document.addEventListener("input", (event) => {
   const target = event.target;
+  if (target.matches("[data-crp-q]")) {
+    state.directory.q = target.value || "";
+    queueDirectorySearch();
+    return;
+  }
   if (target.matches("[data-cr-search]")) {
     state.search = target.value || "";
     renderView();
@@ -1789,6 +2535,53 @@ document.addEventListener("input", (event) => {
   }
 });
 
+document.addEventListener("submit", async (event) => {
+  const form = event.target;
+  if (!(form instanceof HTMLElement)) return;
+
+  if (form.matches("[data-crp-form]")) {
+    event.preventDefault();
+    const box = el("[data-crp-q]", form);
+    state.directory.q = String(box ? box.value : "").trim();
+    return loadDirectory({ focus: true });
+  }
+
+  if (form.matches("[data-crp-unlock-form]")) {
+    event.preventDefault();
+    const input = el("[data-crp-password]", form);
+    const stateNode = el("[data-crp-lock-state]");
+    const password = String(input ? input.value : "");
+    if (!password) {
+      if (stateNode) stateNode.textContent = "Type the password first.";
+      return;
+    }
+    if (stateNode) stateNode.textContent = "Knocking…";
+    try {
+      const res = await rpc("creator_hub_view", {
+        p_token: state.token || "",
+        p_hub: state.hubViewId,
+        p_password: password,
+      });
+      if (res && res.ok && !res.locked) {
+        state.hubView = res;
+        renderView();
+        toast({ title: "Unlocked", message: "The door is open for this visit.", iconName: "unlock" });
+        return;
+      }
+      if (stateNode) {
+        stateNode.textContent =
+          res && res.ok && res.locked
+            ? res.hub && res.hub.has_password
+              ? "Wrong password. Ask the owner again."
+              : "This hub has no password — the VIP list only."
+            : "Wrong password. Ask the owner again.";
+      }
+    } catch {
+      if (stateNode) stateNode.textContent = "The server did not answer. Try again.";
+    }
+  }
+});
+
 /* ================================================================== */
 /* boot                                                               */
 /* ================================================================== */
@@ -1796,13 +2589,38 @@ async function boot() {
   state.token = sessionToken() || "";
   state.member = getMember();
 
+  const params = new URLSearchParams(location.search);
+  const creatorParam = params.get("creator");
+  const hubParam = params.get("hub");
+  const wantedSection = sectionFromUrl(params.get("section"));
+
+  /* the public side needs no session: a directory, a creator, a hub */
+  if (!wantedSection || creatorParam) {
+    showShell();
+    hideAdminChrome(true);
+    /* the rail still lists a member's own hubs — one call, the view does not wait */
+    if (state.token) {
+      loadHubs()
+        .then(() => renderRail())
+        .catch(() => {});
+    }
+    if (creatorParam) {
+      state.creatorRef = creatorParam;
+      if (hubParam) return openHub(hubParam);
+      return openCreator(creatorParam);
+    }
+    if (hubParam) return openHub(hubParam);
+    return openDirectory();
+  }
+
   if (!state.token) {
     return showGate(
       "lock",
       "Sign in to the studio",
       "The creator studio needs a member session — your studios, blogs, spaces, libraries and galleries hang from your member.",
       `<a class="btn btn--primary btn--sm" href="login.html"><i data-icon="login"></i> Sign in</a>
-       <a class="btn btn--ghost btn--sm" href="register.html"><i data-icon="user"></i> Create an account</a>`
+       <a class="btn btn--ghost btn--sm" href="register.html"><i data-icon="user"></i> Create an account</a>
+       <a class="btn btn--ghost btn--sm" href="creator.html?section=creators"><i data-icon="search"></i> Browse the creators</a>`
     );
   }
 
@@ -1816,11 +2634,11 @@ async function boot() {
     );
   }
 
-  const params = new URLSearchParams(location.search);
-  const wantedSection = sectionFromUrl(params.get("section"));
-  if (wantedSection) state.section = wantedSection.key;
-  const wantedHub = params.get("hub");
-  if (wantedHub && state.hubs.some((hub) => hub.id === wantedHub)) state.hub = wantedHub;
+  state.view = "list";
+  state.page = null;
+  state.hubView = null;
+  state.section = wantedSection.key;
+  if (hubParam && state.hubs.some((hub) => hub.id === hubParam)) state.hub = hubParam;
 
   const section = sectionOf(state.section);
   const current = currentHub();
@@ -1832,8 +2650,10 @@ async function boot() {
   state.tab = section.tabs.some((tab) => tab.key === wantedTab) ? wantedTab : section.tabs[0].key;
 
   showShell();
+  hideAdminChrome(false);
   await loadTab();
   await refresh();
+  syncUrl();
 }
 
 if (document.readyState === "loading") {

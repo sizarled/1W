@@ -319,7 +319,7 @@ function renderSideActions() {
   if (rel.is_owner) {
     host.innerHTML = `
       <a class="btn btn--primary" href="dashboard.html" style="width: 100%"><i data-icon="dashboard"></i> Dashboard</a>
-      <a class="btn btn--ghost" href="creator.html" style="width: 100%"><i data-icon="sparkle"></i> Creator</a>`;
+      <a class="btn btn--ghost" href="creator.html?section=studio" style="width: 100%"><i data-icon="sparkle"></i> Creator</a>`;
     return;
   }
   const label = rel.following === "active" ? "Following" : rel.following === "pending" ? "Requested" : "Follow";

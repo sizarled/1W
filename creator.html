@@ -3,19 +3,18 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Creator studio — 1World Web</title>
-    <meta name="description" content="The creator studio: manage a studio, a blog, a space, a library and a gallery — their content, categories, subscribers, staff, VIP list and access." />
+    <title>Creators — 1World Web</title>
+    <meta name="description" content="Find content creators and walk into the studio, blog, space, library, gallery, server or cinema they run — or manage your own from the studio." />
     <meta name="theme-color" content="#060607" />
-    <meta name="robots" content="noindex" />
     <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="assets/css/base.css?v=20261105b" />
-    <link rel="stylesheet" href="assets/css/layout.css?v=20261105b" />
-    <link rel="stylesheet" href="assets/css/components.css?v=20261105b" />
-    <link rel="stylesheet" href="assets/css/dashboard.css?v=20261105b" />
-    <link rel="stylesheet" href="assets/css/creator.css?v=20261105b" />
+    <link rel="stylesheet" href="assets/css/base.css?v=20261105c" />
+    <link rel="stylesheet" href="assets/css/layout.css?v=20261105c" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261105c" />
+    <link rel="stylesheet" href="assets/css/dashboard.css?v=20261105c" />
+    <link rel="stylesheet" href="assets/css/creator.css?v=20261105c" />
     <script>
       /* apply the saved theme (or the OS preference) before first paint */
       (function () {
@@ -33,10 +32,10 @@
         } catch (e) {}
       })();
     </script>
-    <script type="module" src="assets/js/app.js?v=20261105b"></script>
-    <script type="module" src="assets/js/creator.js?v=20261105b"></script>
+    <script type="module" src="assets/js/app.js?v=20261105c"></script>
+    <script type="module" src="assets/js/creator.js?v=20261105c"></script>
   </head>
-  <body data-page="creator" data-title="Creator studio" class="cr-body">
+  <body data-page="creator" data-title="Creators" class="cr-body">
     <a class="skip-link" href="#main">Skip to content</a>
 
     <div data-site-header></div>
@@ -65,9 +64,11 @@
             </div>
           </div>
 
+          <nav class="cr-sections cr-sections--discover" data-cr-discover aria-label="Discover"></nav>
+
           <nav class="cr-sections" data-cr-sections aria-label="Studio sections"></nav>
 
-          <div class="cr-side__foot">
+          <div class="cr-side__foot" data-cr-side-foot>
             <a class="cr-side__link" href="profile.html"><i data-icon="user"></i> Your profile</a>
             <a class="cr-side__link" href="dashboard.html"><i data-icon="dashboard"></i> Dashboard</a>
           </div>
@@ -77,7 +78,7 @@
         <!-- the studio                                                   -->
         <!-- ============================================================ -->
         <section class="cr-main">
-          <header class="cr-top">
+          <header class="cr-top" data-cr-top>
             <div class="cr-pick">
               <span class="cr-pick__label">Managing</span>
               <div class="cr-pick__row">

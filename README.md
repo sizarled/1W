@@ -1054,7 +1054,7 @@ platform refused, then delete leaving zero rows and `site_secret` still closed t
 `tools/dashboard-smoke.mjs` runs the panel end to end — the four-character cell, the full key
 nowhere in the DOM, replace keeping one row, remove, and a refusal that explains itself.
 
-### Creator — the studio: five hubs, one working area
+### Creator — the studio: seven hub kinds, one working area
 
 **`creator.html`** is the creator studio. The rail on the left is the member (avatar, name,
 username, `ID…` code) and the five things they run; the working area changes with the section.
@@ -1132,11 +1132,75 @@ published (and refused without a media link), an article refused in a studio hub
 categories three deep with the fourth refused (`deep`) and a duplicate refused, a third blog created
 then a fourth refused (`limit`, level 1), staff added by code and an unknown code refused
 (`member`), and the subscriber list reporting a real member with their country.
-`tools/creator-smoke.mjs` runs the studio end to end — **72 checks** over four passes: no session,
-an empty studio that creates, configures (private + password + staff), saves, refuses, and deletes a
-studio; a studio page holding one of each hub (tables, columns, action menus, the editor saving a draft
-then publishing, blog articles vs drafts, categories, subscribers, library books); and the
-`?section=&tab=` deep links.
+`tools/creator-smoke.mjs` runs the studio end to end — an empty studio that creates, configures
+(private + password + staff), saves, refuses, and deletes a studio; a studio page holding one of each
+hub (tables, columns, action menus, the editor saving a draft then publishing, blog articles vs
+drafts, categories, subscribers, library books); and the `?section=&tab=` deep links.
+
+### Creator — the front door: find a creator, then walk into a hub
+
+`creator.html` with no `section` is the **directory**, and it needs no session. A search box over
+name, `@handle` and member code, three filters and a sort:
+
+| Control | Values |
+| --- | --- |
+| search | `name`, `@username`, `ID100015` — partial, case-insensitive |
+| kind | every kind, or only creators who run a studio, blog, space, library, gallery, server or cinema |
+| country | the countries that actually appear among creators (returned by the server) |
+| sort | most subscribers · most items · newest |
+
+Each card is a creator: avatar or initials, name, handle, code, flag and country, the seven kinds
+they run with their counts, their fields, and hubs / subscribers / items. One click opens their page:
+
+```
+creator.html?creator=ID100015      (or ?creator=@jhon007, or the member uuid)
+```
+
+That page is the member — name, handle, code, country, joined date, field chips, bio — the five
+totals (hubs, subscribers, items, minutes, likes), and **every hub they run, grouped by kind**:
+Studios, Blogs, Spaces, Libraries, Galleries, Servers, Cinemas. Each hub is a card with its logo,
+its field, its visibility and its three counters, and each card opens the hub itself:
+
+```
+creator.html?hub=<hub uuid>
+```
+
+#### One hub as a visitor
+
+The header (cover, logo, kind, name, owner link, field, visibility, subscribers, items, minutes,
+likes, niches, description), a **Subscribe** button, and the published items under it. No token is
+needed to look.
+
+Access is decided on the server, never by the page:
+
+| The hub | What a visitor gets |
+| --- | --- |
+| public | the header and every `public` item |
+| exclusive | the header and the `public` items; `exclusive` items only for a subscriber (and the owner, staff, VIP list) |
+| private, password open | the header and a password form; a right password opens **this visit** only |
+| private, window closed / VIP only | the header, "this hub is private", and nothing else — not one item |
+| private, and you are the owner / staff / VIP | everything, plus **Manage** back into the studio |
+
+A private hub is in nobody's directory card and nobody's creator page but the owner's, the staff's
+and the VIP list's.
+
+#### The four public functions
+
+| Function | Answers |
+| --- | --- |
+| `creators_search(token, query, kind, country, sort)` | `{ok, rows[], countries[], count}` — 60 at most; a member with no non-private hub never appears |
+| `creator_public(token, ref)` | `{ok, is_self, creator{}, totals{}, hubs[]}` — `ref` is a code, an `@handle` or a uuid; a private hub only for the owner, staff and VIP |
+| `creator_hub_view(token, hub, password)` | `{ok, locked, hub{}, items[]}` — the locked reply carries only the name, logo, cover and whether a password exists |
+| `creator_hub_subscribers(hub)` | the count, used by every total above |
+
+DDL + functions: `tools/sql/creator-public.sql` — **applied**, and exercised on the real database:
+the kind constraint widened to seven, `creator_kind_allowed` covering `server` and `cinema`, the
+directory answering with a real creator (`fields` free of empty strings), a creator page by
+`@handle` with its hubs, and a hub view answering `{role: visitor}` for a guest. `tools/creator-smoke.mjs`
+covers it in jsdom — **130 checks** over eight passes, including the directory with no session, typing
+that narrows the list, an empty filter that explains itself, a creator page grouped by kind, a hub as a
+visitor, a member subscribing, a guest asked to sign in first, a private hub behind a wrong and then a
+right password, and `?section=studio` without a session still gated.
 
 ### The six OAuth apps — one checklist each
 

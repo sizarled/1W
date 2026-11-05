@@ -56,7 +56,7 @@ create table if not exists public.creator_hubs (
   status         text not null default 'active',
   created_at     timestamptz not null default now(),
   updated_at     timestamptz not null default now(),
-  constraint creator_hubs_kind check (kind in ('channel', 'blog', 'space', 'library', 'gallery')),
+  constraint creator_hubs_kind check (kind in ('channel', 'blog', 'space', 'library', 'gallery', 'server', 'cinema')),
   constraint creator_hubs_visibility check (visibility in ('public', 'exclusive', 'private')),
   constraint creator_hubs_status check (status in ('active', 'hidden')),
   constraint creator_hubs_name check (char_length(name) <= 80),
@@ -173,6 +173,8 @@ set search_path to 'public', 'pg_temp'
 as $$
   select case p_hub_kind
            when 'channel' then p_kind in ('video', 'podcast', 'playlist')
+           when 'server'  then p_kind in ('video', 'podcast', 'playlist')
+           when 'cinema'  then p_kind in ('video')
            when 'blog'    then p_kind in ('article')
            when 'space'   then p_kind in ('question', 'answer')
            when 'library' then p_kind in ('book', 'document')
@@ -269,7 +271,7 @@ begin
            'used',  (select count(*) from public.creator_hubs h where h.owner = v_member.id and h.kind = k.kind),
            'limit', public.creator_hub_limit(k.kind, v_level)))
     into v_limits
-    from (values ('channel'), ('blog'), ('space'), ('library'), ('gallery')) as k(kind);
+    from (values ('channel'), ('blog'), ('space'), ('library'), ('gallery'), ('server'), ('cinema')) as k(kind);
 
   return jsonb_build_object('ok', true, 'level', v_level, 'hubs', v_hubs, 'limits', v_limits);
 end;

@@ -1436,7 +1436,7 @@ function surfacesView(kind) {
 
   const editorDoor =
     kind === "creator"
-      ? `<a class="dsh-btn dsh-btn--sm" href="creator.html"><i data-icon="plus"></i>Open the studio</a>`
+      ? `<a class="dsh-btn dsh-btn--sm" href="creator.html?section=studio"><i data-icon="plus"></i>Open the studio</a>`
       : `<span class="dsh-chip">${rows.length} types</span>`;
 
   return `

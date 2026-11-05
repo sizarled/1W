@@ -194,6 +194,7 @@ export const SIDEBAR_NAV = [
   {
     title: "Browse",
     items: [
+      { label: "Creators", href: "creator.html?section=creators", icon: "users" },
       { label: "Videos", href: "videos.html", icon: "video" },
       { label: "Podcast", href: "podcast.html", icon: "mic" },
       { label: "Pictures", href: "pictures.html", icon: "image" },
@@ -232,6 +233,7 @@ export const FOOTER_NAV = [
       { label: "Movies", href: "movies.html" },
       { label: "Series", href: "series.html" },
       { label: "IPTV", href: "iptv.html" },
+      { label: "Creators", href: "creator.html?section=creators" },
       { label: "Search", href: "search.html" },
     ],
   },

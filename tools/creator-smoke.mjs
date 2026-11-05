@@ -3,7 +3,8 @@
  *
  *   node tools/creator-smoke.mjs
  *
- * Pass 1 — no session: the studio asks for a sign-in and calls nothing.
+ * Pass 1 — no session: the directory is the front door — search, filters,
+ *          one creator's page, one hub as a visitor, subscribe.
  * Pass 2 — no hub yet: the rail, the switcher, the empty view, the "add
  *          studio" modal, the settings form (logo, cover, field, niches,
  *          private + password window, staff), save, and delete.
@@ -12,6 +13,8 @@
  *          blog tabs (articles vs drafts send different filters), a hub
  *          switch, categories, subscribers, and the Add-content dropdown.
  * Pass 4 — deep links: ?section=library&tab=documents opens there.
+ * Pass 6/7 — ?creator=@handle, and a private hub behind its password.
+ * Pass 8 — ?section=studio without a session still asks for a sign-in.
  */
 import { JSDOM } from "jsdom";
 import { readFileSync } from "node:fs";
@@ -113,6 +116,49 @@ function item(over = {}) {
     published_at: new Date(NOW - 864e5).toISOString(),
     created_at: new Date(NOW - 864e5).toISOString(),
     updated_at: new Date(NOW - 36e5).toISOString(),
+    ...over,
+  };
+}
+
+function creatorRow(over = {}) {
+  return {
+    ref: "ID100015",
+    code: "ID100015",
+    name: "Jhon Markoni",
+    username: "@jhon007",
+    avatar: "",
+    country: "Morocco",
+    bio: "Films, long talks and the odd essay.",
+    fields: ["Cinema", "Travel"],
+    hubs: 2,
+    subscribers: 120,
+    items: 4,
+    minutes: 88,
+    likes: 9,
+    joined: new Date(NOW - 40 * 864e5).toISOString(),
+    counts: { channel: 1, blog: 1 },
+    ...over,
+  };
+}
+
+function publicHub(over = {}) {
+  return {
+    id: "pub-ch",
+    kind: "channel",
+    name: "Studio One",
+    description: "Films and long talks",
+    logo_url: "",
+    cover_url: "",
+    field: "Cinema",
+    niches: ["Documentary"],
+    visibility: "public",
+    locked: false,
+    subscribers: 120,
+    items: 3,
+    minutes: 420,
+    likes: 90,
+    staff: false,
+    created_at: new Date(NOW - 20 * 864e5).toISOString(),
     ...over,
   };
 }
@@ -238,6 +284,75 @@ function stubFetch(url, opts = {}) {
       rows: scenario.subscribers || [],
       counts: { subscribers: (scenario.subscribers || []).length, vip: 0, staff: 0 },
     });
+  }
+
+  if (href.includes("/rpc/creators_search")) {
+    const query = String(body.p_query || "").toLowerCase();
+    const rows = (scenario.creators || []).filter(
+      (row) =>
+        (!query ||
+          String(row.name).toLowerCase().includes(query) ||
+          String(row.username).toLowerCase().includes(query) ||
+          String(row.code).toLowerCase().includes(query)) &&
+        (!body.p_kind || Number((row.counts || {})[body.p_kind] || 0) > 0) &&
+        (!body.p_country || row.country === body.p_country)
+    );
+    return reply({ ok: true, rows, countries: scenario.countries || ["Morocco"], count: rows.length });
+  }
+
+  if (href.includes("/rpc/creator_public")) {
+    if (scenario.creatorMissing) return reply({ ok: false, error: "not_found" });
+    return reply({
+      ok: true,
+      is_self: Boolean(scenario.isSelf),
+      creator: scenario.creator || creatorRow(),
+      totals: { hubs: 2, subscribers: 120, items: 4, minutes: 88, likes: 9 },
+      hubs: scenario.creatorHubs || [],
+    });
+  }
+
+  if (href.includes("/rpc/creator_hub_view")) {
+    if (scenario.hubMissing) return reply({ ok: false, error: "not_found" });
+    const wantsPassword = scenario.hubPassword && body.p_password !== scenario.hubPassword;
+    if (scenario.hubLocked && wantsPassword) {
+      return reply({
+        ok: true,
+        locked: true,
+        hub: {
+          id: body.p_hub,
+          kind: "channel",
+          name: "The Vault",
+          logo_url: "",
+          cover_url: "",
+          visibility: "private",
+          locked: true,
+          has_password: Boolean(scenario.hubPassword),
+          password_until: null,
+          staff: [],
+          vip: [],
+          owner: "ID100015",
+          subscribers: 3,
+        },
+      });
+    }
+    return reply({
+      ok: true,
+      locked: false,
+      hub: {
+        ...hub({ id: body.p_hub, kind: "channel", name: "Studio One", visibility: scenario.hubLocked ? "private" : "public" }),
+        ...(scenario.hubView || {}),
+        role: "visitor",
+        subscribed: Boolean(scenario.subscribed),
+        unlocked: false,
+        owner: "ID100015",
+      },
+      items: scenario.hubItems || [],
+    });
+  }
+
+  if (href.includes("/rpc/creator_subscribe")) {
+    scenario.subscribed = !scenario.subscribed;
+    return reply({ ok: true, subscribed: scenario.subscribed, count: 121 });
   }
 
   if (href.includes("/rpc/member_logout")) return reply({ ok: true });
@@ -373,15 +488,89 @@ function expect(name, ok, detail = "") {
 
 async function main() {
   /* ---------------------------------------------------------------- */
-  /* pass 1 — no session                                              */
+  /* pass 1 — no session: the directory is the front door             */
   /* ---------------------------------------------------------------- */
-  scenario = { hubs: [], items: [] };
+  scenario = {
+    hubs: [],
+    items: [],
+    creators: [
+      creatorRow(),
+      creatorRow({ ref: "ID100042", code: "ID100042", name: "Sara Bennani", username: "@sara", country: "Egypt", hubs: 1, subscribers: 40, counts: { gallery: 1 }, fields: ["Photography"] }),
+    ],
+    countries: ["Egypt", "Morocco"],
+    creatorHubs: [
+      publicHub({ id: "pub-ch", kind: "channel", name: "Studio One" }),
+      publicHub({ id: "pub-bl", kind: "blog", name: "Night Notes", description: "Essays about light" }),
+      publicHub({ id: "pub-priv", kind: "gallery", name: "The Vault", visibility: "private", locked: true }),
+    ],
+    hubItems: [item({ id: "pub-it", title: "The first film", minutes: 42 })],
+  };
   calls.length = 0;
   const anon = await boot(1, { token: false });
-  expect("no session: the studio asks for a sign-in", /Sign in to the studio/i.test(anon.text("[data-cr-state]")));
-  expect("no session: the shell stays hidden", anon.hidden("[data-cr-shell]"));
-  expect("no session: no rpc at all", !calls.some((c) => c.includes("/rpc/creator")), calls.join(" "));
-  expect("no session: no errors", anon.errors.length === 0, anon.errors.join(" | "));
+  expect("directory: the front door is the creator search", /Find a creator/i.test(anon.text("[data-cr-view]")), anon.text("[data-cr-view]").slice(0, 120));
+  expect("directory: it opens without a session", !anon.hidden("[data-cr-shell]"));
+  expect("directory: the admin chrome is gone", anon.hidden("[data-cr-top]") && anon.hidden("[data-cr-tabs]"));
+  expect("directory: the search reached the server", calls.some((c) => c.includes("creators_search")), calls.join(" "));
+  expect("directory: one card per creator", anon.qsa(".crp-card").length === 2, String(anon.qsa(".crp-card").length));
+  expect("directory: a card names the creator and the handle", /Jhon Markoni[\s\S]*@jhon007/.test(anon.text(".crp-card")), anon.text(".crp-card").slice(0, 140));
+  expect("directory: the kinds they run are on the card", anon.qsa(".crp-card .crp-kind").length >= 2, String(anon.qsa(".crp-card .crp-kind").length));
+  expect("directory: the kind filter offers seven kinds", anon.qsa("[data-crp-kind] option").length === 8, String(anon.qsa("[data-crp-kind] option").length));
+  expect("directory: the countries come from the server", anon.qsa("[data-crp-country] option").length === 3 && /Egypt/.test(anon.text("[data-crp-country]")), anon.text("[data-crp-country]"));
+  expect("directory: the count line reads", /2 creators/i.test(anon.text("[data-crp-count]")), anon.text("[data-crp-count]"));
+  expect("directory: the rail offers the way back", Boolean(anon.qs("[data-cr-nav-creators]")));
+  expect("directory: a guest is named a guest", /Guest/.test(anon.text("[data-cr-name]")), anon.text("[data-cr-name]"));
+  expect("directory: no errors", anon.errors.length === 0, anon.errors.join(" | "));
+
+  // typing filters through the server, after a short pause
+  anon.type(anon.qs("[data-crp-q]"), "sara");
+  await anon.wait(560);
+  expect("directory: typing narrows the list", anon.qsa(".crp-card").length === 1 && /Sara Bennani/.test(anon.text(".crp-card")), anon.text(".crp-card").slice(0, 100));
+  expect("directory: the box keeps the word", anon.qs("[data-crp-q]").value === "sara", anon.qs("[data-crp-q]").value);
+  expect("directory: the count follows", /1 creator for/i.test(anon.text("[data-crp-count]")), anon.text("[data-crp-count]"));
+
+  // a filter with nothing behind it explains itself
+  anon.change(anon.qs("[data-crp-kind]"), "space");
+  await anon.wait(260);
+  expect("directory: an empty filter says so", /No creator matches/i.test(anon.text("[data-crp-count]")), anon.text("[data-crp-count]"));
+  expect("directory: and offers to clear", Boolean(anon.qs("[data-crp-clear]")));
+  anon.click(anon.qs("[data-crp-clear]"));
+  await anon.wait(260);
+  expect("directory: clearing brings everybody back", anon.qsa(".crp-card").length === 2, String(anon.qsa(".crp-card").length));
+
+  // one creator
+  calls.length = 0;
+  anon.click(anon.qsa("[data-crp-open]")[0]);
+  await anon.wait(320);
+  expect("creator: the click asks for the creator", calls.some((c) => c.includes("creator_public")), calls.join(" "));
+  expect("creator: the name is the head of the page", /Jhon Markoni/i.test(anon.text(".crp-profile__name")), anon.text(".crp-profile__name"));
+  expect("creator: the code and the country are there", /ID100015/.test(anon.text(".crp-profile")) && /Morocco/.test(anon.text(".crp-profile")), anon.text(".crp-profile").slice(0, 160));
+  expect("creator: the bio is shown", /long talks and the odd essay/i.test(anon.text("[data-cr-view]")));
+  expect("creator: the totals count hubs, items and minutes", /2[\s\S]*hubs[\s\S]*120[\s\S]*subscribers[\s\S]*88[\s\S]*minutes/i.test(anon.text(".crp-stats")), anon.text(".crp-stats"));
+  expect("creator: the hubs are grouped by kind", anon.qsa(".crp-group").length === 3, String(anon.qsa(".crp-group").length));
+  expect("creator: the groups are named in the plural", /Studios[\s\S]*Blogs[\s\S]*Galleries/i.test(anon.text(".crp-hubs")), anon.text(".crp-hubs").slice(0, 200));
+  expect("creator: every hub is a card", anon.qsa("[data-crp-hub]").length === 3, String(anon.qsa("[data-crp-hub]").length));
+  expect("creator: a private hub is marked private", /Private/i.test(anon.text("[data-crp-hub=\"pub-priv\"]")), anon.text("[data-crp-hub=\"pub-priv\"]").slice(0, 120));
+  expect("creator: the address bar holds the creator", /creator=ID100015/.test(anon.window.location.search), anon.window.location.search);
+  expect("creator: no errors", anon.errors.length === 0, anon.errors.join(" | "));
+
+  // one hub, inside creator.html
+  calls.length = 0;
+  anon.click(anon.qs("[data-crp-hub=\"pub-ch\"]"));
+  await anon.wait(340);
+  expect("hub: the click asks the server for the hub", calls.some((c) => c.includes("creator_hub_view")), calls.join(" "));
+  expect("hub: the hub is named", /Studio One/.test(anon.text(".crp-hubhero__name")), anon.text(".crp-hubhero__name"));
+  expect("hub: the owner is a link back", Boolean(anon.qs("[data-crp-owner]")));
+  expect("hub: the description is shown", /Films and long talks/.test(anon.text("[data-cr-view]")));
+  expect("hub: the items are listed", /The first film/.test(anon.text(".crp-items")));
+  expect("hub: an item counts its minutes", /42 min/.test(anon.text(".crp-item__meta")), anon.text(".crp-item__meta"));
+  expect("hub: there is a subscribe button", Boolean(anon.qs("[data-crp-sub]")));
+  expect("hub: the address bar holds the hub", /hub=pub-ch/.test(anon.window.location.search), anon.window.location.search);
+  calls.length = 0;
+  anon.click(anon.qs("[data-crp-sub]"));
+  await anon.wait(300);
+  expect("hub: a guest is asked to sign in first", !calls.some((c) => c.includes("creator_subscribe")), calls.join(" "));
+  expect("hub: the refusal is spoken", /Sign in first/i.test(anon.text(".toast__title")), anon.text(".toast__title"));
+  expect("hub: no errors", anon.errors.length === 0, anon.errors.join(" | "));
   anon.window.close();
 
   /* ---------------------------------------------------------------- */
@@ -389,7 +578,7 @@ async function main() {
   /* ---------------------------------------------------------------- */
   scenario = { hubs: [], items: [], categories: [], subscribers: [] };
   calls.length = 0;
-  const p = await boot(2);
+  const p = await boot(2, { search: "?section=studio" });
   expect("empty: the shell is shown", !p.hidden("[data-cr-shell]"));
   expect("empty: five sections in the rail", p.qsa("[data-cr-sections] .cr-section").length === 5, String(p.qsa("[data-cr-sections] .cr-section").length));
   const railText = p.text("[data-cr-sections]");
@@ -483,7 +672,7 @@ async function main() {
     ],
   };
   calls.length = 0;
-  const s = await boot(3);
+  const s = await boot(3, { search: "?section=studio" });
   expect("studio: the studio is selected", /Studio One/.test(s.text("[data-cr-hub]")), s.text("[data-cr-hub]"));
   expect("studio: the hub head carries subscribers", /1200|1,200/.test(s.text("[data-cr-hubhead]")), s.text("[data-cr-hubhead]"));
   expect("studio: the tabs are the studio's", /Videos[\s\S]*Podcasts[\s\S]*Playlists[\s\S]*Studio management[\s\S]*Subscribers/.test(s.text("[data-cr-tabs]")), s.text("[data-cr-tabs]"));
@@ -613,6 +802,77 @@ async function main() {
   expect("deep link: the documents are listed", /Shooting script/.test(d2.text("[data-cr-view]")));
   expect("deep link: no errors", d2.errors.length === 0, d2.errors.join(" | "));
   d2.window.close();
+
+  /* ---------------------------------------------------------------- */
+  /* pass 6 — a creator deep link                                     */
+  /* ---------------------------------------------------------------- */
+  scenario = {
+    hubs: [],
+    items: [],
+    creators: [creatorRow()],
+    countries: ["Morocco"],
+    creatorHubs: [
+      publicHub({ id: "pub-ch", kind: "channel", name: "Studio One" }),
+      publicHub({ id: "pub-priv", kind: "library", name: "The Vault", visibility: "private", locked: true }),
+    ],
+    creator: creatorRow({ bio: "Films, long talks and the odd essay.", country: "Morocco" }),
+  };
+  const c6 = await boot(6, { search: "?creator=@jhon007" });
+  expect("creator link: a handle opens the page", /Jhon Markoni/.test(c6.text(".crp-profile__name")), c6.text(".crp-profile__name"));
+  expect("creator link: the handle is shown once", /@jhon007/.test(c6.text(".crp-profile__handle")), c6.text(".crp-profile__handle"));
+  expect("creator link: the library group is spelled right", /Libraries/.test(c6.text(".crp-hubs")), c6.text(".crp-hubs").slice(0, 160));
+  expect("creator link: a member sees no manage button on someone else's page", !/Manage your hubs/.test(c6.text("[data-cr-view]")));
+  expect("creator link: no errors", c6.errors.length === 0, c6.errors.join(" | "));
+
+  // a member subscribes from the hub page
+  calls.length = 0;
+  c6.click(c6.qs('[data-crp-hub="pub-ch"]'));
+  await c6.wait(340);
+  c6.click(c6.qs("[data-crp-sub]"));
+  await c6.wait(320);
+  expect("subscribe: the call is sent", calls.some((c) => c.includes("creator_subscribe")), calls.join(" "));
+  expect("subscribe: the button turns to subscribed", /Subscribed/.test(c6.text("[data-crp-sub]")), c6.text("[data-crp-sub]"));
+  expect("subscribe: no errors", c6.errors.length === 0, c6.errors.join(" | "));
+  c6.window.close();
+
+  /* ---------------------------------------------------------------- */
+  /* pass 7 — a private hub and its password                          */
+  /* ---------------------------------------------------------------- */
+  scenario = {
+    hubs: [],
+    items: [],
+    creators: [creatorRow()],
+    creatorHubs: [publicHub({ id: "hub-priv", kind: "channel", name: "The Vault", visibility: "private", locked: true })],
+    hubLocked: true,
+    hubPassword: "open-sesame",
+    hubItems: [item({ id: "vault-it", title: "The hidden film", visibility: "exclusive", minutes: 30 })],
+  };
+  const c7 = await boot(7, { search: "?hub=hub-priv", token: false });
+  expect("locked hub: the door is drawn", /This hub is private/i.test(c7.text("[data-crp-lock]")), c7.text("[data-cr-view]").slice(0, 140));
+  expect("locked hub: no item leaks out", !/The hidden film/.test(c7.text("[data-cr-view]")));
+  expect("locked hub: it asks for the password", Boolean(c7.qs("[data-crp-password]")));
+  c7.type(c7.qs("[data-crp-password]"), "wrong-one");
+  c7.qs("[data-crp-unlock-form]").dispatchEvent(new c7.window.Event("submit", { bubbles: true, cancelable: true }));
+  await c7.wait(300);
+  expect("locked hub: a wrong password is refused", /Wrong password/i.test(c7.text("[data-crp-lock-state]")), c7.text("[data-crp-lock-state]"));
+  expect("locked hub: still locked", /This hub is private/i.test(c7.text("[data-crp-lock]")));
+  c7.type(c7.qs("[data-crp-password]"), "open-sesame");
+  c7.qs("[data-crp-unlock-form]").dispatchEvent(new c7.window.Event("submit", { bubbles: true, cancelable: true }));
+  await c7.wait(340);
+  expect("locked hub: the password opens the hub", /The hidden film/.test(c7.text("[data-cr-view]")), c7.text("[data-cr-view]").slice(0, 160));
+  expect("locked hub: the exclusive item is marked", /Exclusive/i.test(c7.text(".crp-item__kind")), c7.text(".crp-item__kind"));
+  expect("locked hub: no errors", c7.errors.length === 0, c7.errors.join(" | "));
+  c7.window.close();
+
+  /* ---------------------------------------------------------------- */
+  /* pass 8 — a studio deep link still asks for a session             */
+  /* ---------------------------------------------------------------- */
+  scenario = { hubs: [], items: [] };
+  const c8 = await boot(8, { search: "?section=studio&tab=videos", token: false });
+  expect("studio link without a session: the gate", /Sign in to the studio/i.test(c8.text("[data-cr-state]")), c8.text("[data-cr-state]").slice(0, 120));
+  expect("studio link without a session: a way to browse", /Browse the creators/i.test(c8.text("[data-cr-state]")));
+  expect("studio link without a session: no errors", c8.errors.length === 0, c8.errors.join(" | "));
+  c8.window.close();
 }
 
 /* ------------------------------------------------------------------ */
