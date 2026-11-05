@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="assets/css/base.css?v=20261105e" />
     <link rel="stylesheet" href="assets/css/layout.css?v=20261105e" />
     <link rel="stylesheet" href="assets/css/components.css?v=20261105e" />
-    <link rel="stylesheet" href="assets/css/video.css?v=20261107c" />
+    <link rel="stylesheet" href="assets/css/video.css?v=20261108a" />
     <script>
       /* apply the saved theme (or the OS preference) before first paint */
       (function () {
@@ -33,7 +33,7 @@
       })();
     </script>
     <script type="module" src="assets/js/app.js?v=20261105e"></script>
-    <script type="module" src="assets/js/video-editor.js?v=20261107c"></script>
+    <script type="module" src="assets/js/video-editor.js?v=20261108a"></script>
   </head>
   <body data-page="videoEditor" data-title="Publish a video">
     <a class="skip-link" href="#main">Skip to content</a>
@@ -166,6 +166,27 @@
               <p class="vprev__title" data-ved-preview-title>No title yet</p>
               <p class="vprev__meta" data-ved-preview-meta>Public · English</p>
               <p class="vprev__meta" data-ved-preview-time>Publishing now</p>
+              <p class="vprev__meta vprev__studio" data-ved-preview-studio hidden></p>
+            </section>
+
+            <!-- which studio it goes into ------------------------------ -->
+            <section class="vcard-box" data-ved-hub-wrap>
+              <div class="vcard-box__head">
+                <h2 class="vcard-box__title">Where it goes</h2>
+                <span class="vcount" data-ved-hub-count></span>
+              </div>
+              <div class="vstack">
+                <label class="field">
+                  <span>Studio</span>
+                  <select class="select" data-ved-hub aria-describedby="vedHubNote">
+                    <option value="">My own feed — no studio</option>
+                  </select>
+                </label>
+                <p class="vhint" id="vedHubNote" data-ved-hub-note></p>
+                <a class="btn btn--quiet btn--sm" href="creator.html?section=studio" data-ved-hub-link hidden>
+                  <i data-icon="dashboard"></i> Open the studio
+                </a>
+              </div>
             </section>
 
             <!-- thumbnail ---------------------------------------------- -->

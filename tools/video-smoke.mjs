@@ -785,7 +785,161 @@ function S_postOf(document) {
 }
 
 /* ================================================================== */
-/* pass 12 — the old address and the stylesheet                       */
+/* pass 12 — the studio the video is published into                   */
+/* ================================================================== */
+const HUBS = {
+  ok: true,
+  level: 4,
+  limits: {},
+  hubs: [
+    { id: "h1", code: "IDST100001", kind: "channel", name: "Studio One", visibility: "public" },
+    { id: "h2", code: "IDSV100002", kind: "server", name: "IPTV", visibility: "public" },
+    { id: "h3", code: "IDCN100003", kind: "cinema", name: "My Cinema", visibility: "public" },
+    { id: "h4", code: "IDBL100004", kind: "blog", name: "My Blog", visibility: "public" },
+    { id: "h5", code: "IDSP100005", kind: "space", name: "A Space", visibility: "public" },
+  ],
+};
+
+async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveReply = { ok: true, code: "PST-001200", status: "published" }, storage = STORAGE } = {}) {
+  const ctx = boot("video-editor.html", {
+    url,
+    storage,
+    fetchImpl: (href) => {
+      const fn = fnName(href);
+      if (fn === "creator_hubs_list") return hubs === null ? Promise.reject(new Error("down")) : reply(hubs);
+      if (fn === "video_save") return reply(saveReply);
+      return reply([]);
+    },
+  });
+  await import(`file://${join(root, "assets/js/video-editor.js")}?${tag}`);
+  await wait(70);
+  return ctx;
+}
+
+{
+  const ctx = await editorWith("p12hub");
+  const { document, window, calls } = ctx;
+  const options = () => [...document.querySelectorAll("[data-ved-hub] option")];
+  const pick = async (code) => {
+    const select = document.querySelector("[data-ved-hub]");
+    select.value = code;
+    select.dispatchEvent(new window.Event("change", { bubbles: true }));
+    await wait(20);
+  };
+
+  expect("hub: the card is on the page", Boolean(document.querySelector("[data-ved-hub-wrap]")));
+  expect("hub: the first choice is the member's own feed", options()[0]?.value === "" && /my own feed/i.test(options()[0].textContent), options()[0]?.textContent);
+  expect("hub: only the hubs that can hold a video are listed", options().length === 4, options().map((o) => o.value).join(","));
+  expect("hub: a studio, a server and a cinema are there", ["IDST100001", "IDSV100002", "IDCN100003"].every((code) => options().some((o) => o.value === code)), options().map((o) => o.value).join(","));
+  expect("hub: a blog is not — it cannot hold a video", !options().some((o) => o.value === "IDBL100004"));
+  expect("hub: the option names the hub and its kind", /Studio One · studio · IDST100001/.test(options().find((o) => o.value === "IDST100001")?.textContent || ""), options().find((o) => o.value === "IDST100001")?.textContent);
+  expect("hub: the head counts them", document.querySelector("[data-ved-hub-count]")?.textContent === "3 studios", document.querySelector("[data-ved-hub-count]")?.textContent);
+  expect("hub: before choosing it says the video stays in the feed", document.querySelector("[data-ved-hub-note]")?.textContent.includes("stays in your own feed"), document.querySelector("[data-ved-hub-note]")?.textContent);
+  expect("hub: nothing about a studio is in the preview yet", document.querySelector("[data-ved-preview-studio]")?.hidden === true);
+  expect("hub: no studio to open yet", document.querySelector("[data-ved-hub-link]")?.hidden === true);
+
+  await pick("IDCN100003");
+  expect("hub: the note names the chosen studio", document.querySelector("[data-ved-hub-note]")?.textContent.includes("My Cinema · IDCN100003"), document.querySelector("[data-ved-hub-note]")?.textContent);
+  expect("hub: the note says where it will appear", document.querySelector("[data-ved-hub-note]")?.textContent.includes("Videos tab"), document.querySelector("[data-ved-hub-note]")?.textContent);
+  expect("hub: the preview card carries it", document.querySelector("[data-ved-preview-studio]")?.hidden === false && document.querySelector("[data-ved-preview-studio]")?.textContent.includes("My Cinema"), document.querySelector("[data-ved-preview-studio]")?.textContent);
+  expect("hub: the studio can be opened from here", document.querySelector("[data-ved-hub-link]")?.getAttribute("href") === "creator.html?studio=IDCN100003", document.querySelector("[data-ved-hub-link]")?.getAttribute("href"));
+
+  /* the draft on this device remembers it, before anything is published */
+  await wait(950);
+  const kept = JSON.parse(window.localStorage.getItem("1w.videos.draft") || "{}");
+  expect("hub: the draft keeps the studio", kept.hub === "IDCN100003", JSON.stringify(kept.hub));
+
+  /* a video with the link and the title is ready */
+  const embed = document.querySelector("[data-ved-embed]");
+  embed.value = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+  embed.dispatchEvent(new window.Event("input", { bubbles: true }));
+  const title = document.querySelector("[data-ved-title]");
+  title.value = "A film for the cinema";
+  title.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await wait(40);
+
+  calls.length = 0;
+  document.querySelector("[data-ved-publish]").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await wait(120);
+  const save = lastCall(calls, "video_save");
+  expect("hub: the save went out", Boolean(save), calls.map((c) => fnName(c.href)).join(","));
+  expect("hub: the payload carries the studio's code", save?.body?.p_payload?.hub === "IDCN100003", JSON.stringify(save?.body?.p_payload?.hub));
+
+  /* back to the member's own feed */
+  await pick("");
+  calls.length = 0;
+  document.querySelector("[data-ved-publish]").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await wait(120);
+  const cleared = lastCall(calls, "video_save");
+  expect("hub: «my own feed» sends a null, not the last studio", cleared?.body?.p_payload?.hub === null, JSON.stringify(cleared?.body?.p_payload?.hub));
+  expect("hub: nothing threw", ctx.errors.length === 0, ctx.errors.join(" | "));
+}
+
+{
+  /* a link from the studio opens the editor with the studio already chosen */
+  const ctx = await editorWith("p12param", { url: "video-editor.html?studio=idst100001" });
+  const { document, calls, window } = ctx;
+  expect("hub param: the select is already on that studio", document.querySelector("[data-ved-hub]")?.value === "IDST100001", document.querySelector("[data-ved-hub]")?.value);
+  expect("hub param: the note says so", document.querySelector("[data-ved-hub-note]")?.textContent.includes("Studio One"), document.querySelector("[data-ved-hub-note]")?.textContent);
+  expect("hub param: a lower-case code still matches", document.querySelector("[data-ved-preview-studio]")?.textContent.includes("Studio One"), document.querySelector("[data-ved-preview-studio]")?.textContent);
+
+  const embed = document.querySelector("[data-ved-embed]");
+  embed.value = "https://cdn.example.com/film.mp4";
+  embed.dispatchEvent(new window.Event("input", { bubbles: true }));
+  const title = document.querySelector("[data-ved-title]");
+  title.value = "Straight from the studio";
+  title.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await wait(30);
+  calls.length = 0;
+  document.querySelector("[data-ved-publish]").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await wait(120);
+  expect("hub param: publishing keeps it", lastCall(calls, "video_save")?.body?.p_payload?.hub === "IDST100001", JSON.stringify(lastCall(calls, "video_save")?.body?.p_payload?.hub));
+  expect("hub param: nothing threw", ctx.errors.length === 0, ctx.errors.join(" | "));
+}
+
+{
+  /* a member who runs no studio is told so, and given the way to make one */
+  const ctx = await editorWith("p12none", { hubs: { ok: true, level: 1, limits: {}, hubs: [] } });
+  const { document } = ctx;
+  expect("no studio: the select is not shown", document.querySelector("[data-ved-hub]")?.closest("label")?.hidden === true);
+  expect("no studio: the card says it plainly", document.querySelector("[data-ved-hub-note]")?.textContent.includes("You run no studio yet"), document.querySelector("[data-ved-hub-note]")?.textContent);
+  expect("no studio: and offers the way in", document.querySelector("[data-ved-hub-link]")?.getAttribute("href") === "creator.html?section=studio", document.querySelector("[data-ved-hub-link]")?.getAttribute("href"));
+  expect("no studio: the preview stays quiet", document.querySelector("[data-ved-preview-studio]")?.hidden === true);
+  expect("no studio: nothing threw", ctx.errors.length === 0, ctx.errors.join(" | "));
+}
+
+{
+  /* a studio that belongs to someone else: the server says so, and says why */
+  const ctx = await editorWith("p12refused", { saveReply: { ok: false, error: "hub_role" } });
+  const { document, window } = ctx;
+  const embed = document.querySelector("[data-ved-embed]");
+  embed.value = "https://cdn.example.com/film.mp4";
+  embed.dispatchEvent(new window.Event("input", { bubbles: true }));
+  const title = document.querySelector("[data-ved-title]");
+  title.value = "Not mine to publish";
+  title.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await wait(30);
+  document.querySelector("[data-ved-publish]").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await wait(150);
+  const msg = [...document.querySelectorAll(".toast__msg")].map((n) => n.textContent).join(" | ");
+  expect("refused: the sentence is about the studio, not a generic error", /belongs to someone else/.test(msg), msg);
+  expect("refused: nothing threw", ctx.errors.length === 0, ctx.errors.join(" | "));
+}
+
+{
+  /* the page itself carries the card, in the right column, before the picture */
+  const html = readFileSync(join(root, "video-editor.html"), "utf8");
+  const hubAt = html.indexOf("data-ved-hub-wrap");
+  const thumbAt = html.indexOf("data-ved-thumb-box");
+  const previewAt = html.indexOf("data-ved-preview-media");
+  expect("html: the studio card sits under the preview", previewAt > 0 && hubAt > previewAt, `${previewAt} / ${hubAt}`);
+  expect("html: and above the thumbnail", hubAt < thumbAt, `${hubAt} / ${thumbAt}`);
+  expect("html: the card has its own heading", /Where it goes/.test(html.slice(hubAt, hubAt + 900)));
+  expect("css: the studio line in the preview is styled", css.includes(".vprev__studio") || readFileSync(join(root, "assets/css/video.css"), "utf8").includes(".vprev__studio"));
+}
+
+/* ================================================================== */
+/* pass 13 — the old address and the stylesheet                       */
 /* ================================================================== */
 {
   const html = readFileSync(join(root, "video.html"), "utf8");

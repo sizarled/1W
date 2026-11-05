@@ -642,6 +642,16 @@ function renderRail() {
 /* ================================================================== */
 /* the top bar                                                        */
 /* ================================================================== */
+/**
+ * A link out of the studio (the video editor) says which hub the member is
+ * standing in, so the editor opens with that studio already chosen.
+ */
+function withHub(href) {
+  const hub = currentHub();
+  if (!href || !hub || !hub.code) return href;
+  return `${href}${href.includes("?") ? "&" : "?"}studio=${encodeURIComponent(hub.code)}`;
+}
+
 function renderTop() {
   const section = sectionOf(state.section);
   const hubs = hubsOf(section.kind);
@@ -674,7 +684,7 @@ function renderTop() {
           entry.category
             ? `<button class="cr-drop__item" type="button" data-cr-add="category"><i data-icon="filter"></i> Category</button>`
             : entry.href
-              ? `<a class="cr-drop__item" href="${esc(entry.href)}"><i data-icon="${esc(entry.icon || KIND_ICON[entry.kind] || "plus")}"></i> ${esc(entry.label)}</a>`
+              ? `<a class="cr-drop__item" href="${esc(withHub(entry.href))}"><i data-icon="${esc(entry.icon || KIND_ICON[entry.kind] || "plus")}"></i> ${esc(entry.label)}</a>`
               : `<button class="cr-drop__item" type="button" data-cr-add="${esc(entry.kind)}" data-draft="${entry.draft ? "1" : "0"}"><i data-icon="${esc(KIND_ICON[entry.kind] || "plus")}"></i> ${esc(entry.label)}</button>`
       ),
       `<span class="cr-drop__sep"></span>`,
@@ -786,7 +796,7 @@ function titleCell(row) {
       ${thumb}
       <span class="cr-title">
         <strong>${esc(row.title || "Untitled")}</strong>
-        <span class="cr-code">${esc(row.code || "")}</span>
+        <span class="cr-code">${esc(row.code || "")}${isEditorRow(row) ? " · video editor" : ""}</span>
       </span>
     </div>`;
 }
@@ -840,11 +850,18 @@ const ACTION_LABEL = {
   delete: ["Delete", "trash"],
 };
 
+/* a member video lives in the video editor; the table only lends it a row */
+function isEditorRow(row) {
+  return Boolean(row && row.source === "video-editor");
+}
+
 function actionMenu(row, tab) {
-  const items = (tab.actions || [])
+  const actions = isEditorRow(row) ? ["open", "link", "delete"] : tab.actions || [];
+  const items = actions
     .map((action) => {
       const [label, ico] = ACTION_LABEL[action] || [action, "dots"];
-      return `<button class="cr-act__item" type="button" data-cr-act="${esc(action)}" data-id="${esc(row.id)}" data-tone="${action === "delete" ? "danger" : ""}"><i data-icon="${esc(ico)}"></i> ${esc(label)}</button>`;
+      const text = action === "open" && isEditorRow(row) ? "Open in the editor" : label;
+      return `<button class="cr-act__item" type="button" data-cr-act="${esc(action)}" data-id="${esc(row.id)}" data-source="${esc(row.source || "")}" data-tone="${action === "delete" ? "danger" : ""}"><i data-icon="${esc(ico)}"></i> ${esc(text)}</button>`;
     })
     .join("");
   return `
@@ -1463,7 +1480,7 @@ function renderEditor(host) {
           <span class="cr-editor__kind"><i data-icon="${esc(KIND_ICON[draft.kind] || "file")}"></i> ${esc(KIND_LABEL[draft.kind] || draft.kind)} · ${draft.id ? esc(draft.status) : "new"}</span>
           ${
             draft.kind === "video"
-              ? `<a class="cr-editor__open" href="video-editor.html" data-cr-video-editor title="A member video is published from video-editor.html and appears in the videos feed — this table holds the hub's own library."><i data-icon="upload"></i> Open video-editor.html</a>`
+              ? `<a class="cr-editor__open" href="${esc(withHub("video-editor.html"))}" data-cr-video-editor title="A member video is published from video-editor.html and appears in the videos feed — this table holds the hub's own library."><i data-icon="upload"></i> Open video-editor.html</a>`
               : ""
           }
         </span>
@@ -3182,6 +3199,28 @@ async function deleteHub() {
   toast({ title: "Deleted", message: `${hub.name} is gone with everything under it.`, iconName: "trash" });
 }
 
+/**
+ * A video published into this hub from video-editor.html is a row in `posts`,
+ * so it is deleted through the posts door — not the hub's own.
+ */
+async function deletePostItem(ref) {
+  if (!ref) return closeModal();
+  let res = null;
+  try {
+    res = await rpc("post_delete", { p_token: state.token, p_ref: ref });
+  } catch {
+    res = null;
+  }
+  closeModal();
+  if (!res || res.ok !== true) {
+    toast({ title: "Not deleted", message: MESSAGES[res?.error] || "The server did not confirm.", tone: "error" });
+    return;
+  }
+  await loadTab();
+  await refresh();
+  toast({ title: "Deleted", message: "The video is gone from the studio and from the feed.", iconName: "trash" });
+}
+
 function openEditor(kind, row = null) {
   const hub = currentHub();
   if (!hub) return;
@@ -3573,8 +3612,18 @@ document.addEventListener("click", (event) => {
     const action = act.dataset.crAct;
     const row = [...state.rows, ...(state.questions || [])].find((entry) => entry.id === id);
     act.closest("details")?.removeAttribute("open");
+    const fromEditor = isEditorRow(row) || act.dataset.source === "video-editor";
     if (action === "delete") {
-      return openConfirm("Delete this item?", "It disappears from the studio and from the public page. This cannot be undone.", "item", id);
+      return openConfirm(
+        fromEditor ? "Delete this video?" : "Delete this item?",
+        "It disappears from the studio and from the public page. This cannot be undone.",
+        fromEditor ? "post" : "item",
+        fromEditor ? row?.code || id : id
+      );
+    }
+    if (fromEditor && (action === "open" || action === "edit")) {
+      location.href = `video-editor.html?id=${encodeURIComponent(row?.code || "")}`;
+      return;
     }
     if (action === "publish") return setItemStatus(id, "published");
     if (action === "close") return setItemStatus(id, "hidden");
@@ -3698,6 +3747,7 @@ document.addEventListener("click", (event) => {
     state.confirm = null;
     if (pending.action === "hub") return deleteHub();
     if (pending.action === "item") return deleteItem(pending.id);
+    if (pending.action === "post") return deletePostItem(pending.id);
     return closeModal();
   }
 

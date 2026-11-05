@@ -53,6 +53,9 @@ const S = {
   download: false,
   vertical: false,
   status: "draft",
+  hub: "",
+  hubName: "",
+  hubs: [],
   busy: false,
   ready: false,
 };
@@ -67,6 +70,11 @@ const LANGUAGES = [
   ["pt", "Portuguese"],
   ["tr", "Turkish"],
 ];
+
+/* which hubs can hold a member video — the server's own rule
+   (creator_kind_allowed): a studio, a server, a cinema. */
+const HUB_KINDS = ["channel", "server", "cinema"];
+const HUB_KIND_LABEL = { channel: "studio", server: "server", cinema: "cinema" };
 
 const VIS_HINT = {
   general: "Everyone, except the people you exclude. No account, no condition.",
@@ -86,6 +94,9 @@ const ERRORS = {
   profile: "Your member profile is missing — open your profile once, then come back.",
   role: "That video belongs to someone else.",
   not_found: "That video is gone.",
+  hub: "That studio is not one we know.",
+  hub_role: "That studio belongs to someone else — you are not its owner or staff.",
+  hub_kind: "That hub cannot hold a video.",
 };
 
 const $ = (sel) => qs(sel);
@@ -172,6 +183,16 @@ function paintPreview() {
       ? `Goes out ${date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}`
       : "Goes out the moment you publish";
   }
+  const studio = $("[data-ved-preview-studio]");
+  if (studio) {
+    const hub = S.hubs.find((h) => h.code === S.hub);
+    const name = hub ? hub.name : S.hub ? S.hubName || S.hub : "";
+    studio.hidden = !S.hub;
+    studio.innerHTML = S.hub
+      ? `${icon("tv")} <span>in ${esc(name)}</span>`
+      : "";
+  }
+
   const badge = $("[data-ved-preview-badge]");
   if (badge) badge.textContent = S.status === "published" && S.code ? "Published" : S.status === "scheduled" ? "Scheduled" : "Draft";
 
@@ -310,6 +331,67 @@ function paintWhen() {
   }
 }
 
+/**
+ * Which studio the video is published into. A member may run none, one or
+ * several (a studio, a server, a cinema) — the list comes from the same call
+ * the creator studio uses, and an empty answer is said plainly rather than
+ * left as an empty box.
+ */
+function paintHub() {
+  const select = $("[data-ved-hub]");
+  const note = $("[data-ved-hub-note]");
+  const link = $("[data-ved-hub-link]");
+  const count = $("[data-ved-hub-count]");
+  const list = S.hubs;
+  const hub = list.find((h) => h.code === S.hub);
+
+  if (select) {
+    const known = Boolean(hub);
+    select.innerHTML =
+      `<option value="">My own feed — no studio</option>` +
+      list
+        .map(
+          (h) =>
+            `<option value="${esc(h.code)}">${esc(h.name)} · ${esc(HUB_KIND_LABEL[h.kind] || "studio")}${h.code ? ` · ${esc(h.code)}` : ""}</option>`
+        )
+        .join("") +
+      (!known && S.hub
+        ? `<option value="${esc(S.hub)}">${esc(S.hubName || S.hub)}</option>`
+        : "");
+    select.value = S.hub || "";
+    const label = select.closest("label");
+    if (label) label.hidden = !list.length && !S.hub;
+  }
+
+  if (count) count.textContent = list.length ? `${list.length} studio${list.length === 1 ? "" : "s"}` : "";
+
+  if (note) {
+    if (hub) {
+      note.textContent = `${hub.name} · ${hub.code} — it appears in this studio's Videos tab, and in the feed.`;
+    } else if (S.hub) {
+      note.textContent = `${S.hubName || S.hub} · ${S.hub} — it appears in that studio's Videos tab, and in the feed.`;
+    } else if (!list.length) {
+      note.textContent = "You run no studio yet. Create one, and it appears here.";
+    } else {
+      note.textContent = "It stays in your own feed. Pick a studio and it appears in that studio too.";
+    }
+  }
+
+  if (link) {
+    if (hub) {
+      link.hidden = false;
+      link.href = `creator.html?studio=${encodeURIComponent(hub.code)}`;
+      link.innerHTML = `${icon("tv")} Open this studio`;
+    } else if (!list.length) {
+      link.hidden = false;
+      link.href = "creator.html?section=studio";
+      link.innerHTML = `${icon("plus")} Create a studio`;
+    } else {
+      link.hidden = true;
+    }
+  }
+}
+
 function paintAge() {
   qsa("[data-age]", el.shell).forEach((btn) => {
     btn.classList.toggle("is-on", btn.getAttribute("data-age") === S.age);
@@ -344,6 +426,7 @@ function paintAll() {
   paintCountries();
   paintVisibility();
   paintWhen();
+  paintHub();
   paintAge();
   paintStatus();
 }
@@ -402,6 +485,7 @@ function payload(status) {
   }
   const body = {
     id: S.code || null,
+    hub: S.hub || null,
     title: S.title.trim(),
     description: S.desc.trim() || null,
     thumbnail: (S.thumb || autoThumb(S.embed) || "").trim() || null,
@@ -530,6 +614,23 @@ function addTag(raw) {
   paintStatus();
 }
 
+/** The hubs this member may publish into — a studio, a server, a cinema. */
+async function loadHubs() {
+  let res = null;
+  try {
+    res = await rpc("creator_hubs_list", { p_token: S.token });
+  } catch (error) {
+    console.warn("[1World] studios:", error.message);
+  }
+  if (!res || res.ok !== true) {
+    S.hubs = [];
+    return;
+  }
+  S.hubs = (Array.isArray(res.hubs) ? res.hubs : []).filter(
+    (hub) => hub && hub.code && HUB_KINDS.includes(hub.kind)
+  );
+}
+
 async function loadExisting(code) {
   let res = null;
   try {
@@ -558,6 +659,13 @@ async function loadExisting(code) {
   S.hasPassword = Boolean(res.asks_password);
   S.tags = Array.isArray(v.keywords) ? v.keywords.filter((k) => k.role === "main").map((k) => k.keyword) : [];
   S.age = meta.age || "none";
+  if (v.video && v.video.hub) {
+    S.hub = v.video.hub.code || S.hub;
+    S.hubName = v.video.hub.name || S.hubName;
+  } else if (v.video) {
+    S.hub = "";
+    S.hubName = "";
+  }
   S.download = Boolean(meta.download);
   S.vertical = Boolean(meta.vertical);
   if (v.scheduled_at) {
@@ -843,6 +951,7 @@ function draftFields() {
     age: S.age,
     download: S.download,
     vertical: S.vertical,
+    hub: S.hub,
   };
 }
 
@@ -903,6 +1012,7 @@ function restoreDraft(draft) {
   S.age = draft.age || "none";
   S.download = Boolean(draft.download);
   S.vertical = Boolean(draft.vertical);
+  S.hub = draft.hub || S.hub;
 }
 
 function paintDraftNote() {
@@ -1277,6 +1387,16 @@ function bind() {
     paintPreview();
     paintStatus();
   });
+  $("[data-ved-hub]")?.addEventListener("change", (event) => {
+    S.hub = event.target.value || "";
+    const hub = S.hubs.find((h) => h.code === S.hub);
+    S.hubName = hub ? hub.name : "";
+    paintHub();
+    paintPreview();
+    paintStatus();
+    scheduleDraft();
+  });
+
   el.lang.addEventListener("change", () => {
     S.language = el.lang.value;
     paintPreview();
@@ -1309,6 +1429,12 @@ async function boot() {
   fillSelects();
   el.shell.hidden = false;
   el.foot.hidden = false;
+
+  /* a link from the studio (`video-editor.html?studio=IDST100001`) preselects it */
+  const wantedHub = (new URLSearchParams(location.search).get("studio") || "").trim().toUpperCase();
+  if (wantedHub) S.hub = wantedHub;
+
+  await loadHubs();
 
   const code = new URLSearchParams(location.search).get("id");
   if (code) {

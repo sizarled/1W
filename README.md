@@ -1141,7 +1141,7 @@ published (and refused without a media link), an article refused in a studio hub
 categories three deep with the fourth refused (`deep`) and a duplicate refused, a third blog created
 then a fourth refused (`limit`, level 1), staff added by code and an unknown code refused
 (`member`), and the subscriber list reporting a real member with their country.
-`tools/creator-smoke.mjs` (258 checks) runs the studio end to end — an empty studio that creates, configures
+`tools/creator-smoke.mjs` (272 checks) runs the studio end to end — an empty studio that creates, configures
 (private + password + staff), saves, refuses, and deletes a studio; a studio page holding one of each
 hub (tables, columns, action menus, the editor saving a draft then publishing, blog articles vs
 drafts, categories, subscribers, library books); and the `?section=&tab=` deep links.
@@ -1341,7 +1341,8 @@ row likes, comments, reports and reach already live on — plus one column of it
 
 `video_save` takes `title`, `description`, `thumbnail`, `embed`, `language`, `visibility`, `status`
 (`draft`/`published`/`scheduled`), `scheduled_at`, `tags` (main keywords, twelve at most),
-`audience[{kind, value}]`, `profiles[]`, `passwords[]` and `meta { age, download, vertical, source }`.
+`audience[{kind, value}]`, `profiles[]`, `passwords[]`, `meta { age, download, vertical, source }`
+and `hub` — the studio the video is published into, which is [its own section](#the-studio-a-video-goes-into).
 A key it is **not** given is a list it leaves alone — so a partial save can never wipe an audience, the
 nominated people, the passwords or the tags of the video it edits.
 
@@ -1375,10 +1376,9 @@ title and its thumbnail, never its source.
 `video.html?id=…` still answers its old address: it forwards to `videos.html#/v/<code>`, so the links
 `watch.js` and `cast.js` already write keep working.
 
-**One boundary to remember:** the Creator studio's *Videos* tab is `member_content` (`kind = 'video'`),
-the hub's own library, and it is unchanged by this page. A video published from `video-editor.html` is
-a `post`, so it appears in the feed and under *In your name* on `videos.html`, not in that tab. Joining
-the two — one list, one editor — is the next step if the studio should own publishing outright.
+**Two stores, one table:** the Creator studio's *Videos* tab reads `member_content` (`kind = 'video'`,
+the hub's own library) *and* the `posts` this page publishes into that hub — see
+[the studio a video goes into](#the-studio-a-video-goes-into).
 
 DDL + functions: `tools/sql/videos-page.sql` — **applied**, and exercised on the real database: a
 published video came back with its code (`PST-001005`), a guest saw it in the feed and its
@@ -1389,9 +1389,46 @@ present in `video_mine`; a like opened the composer and a comment landed; a save
 `passwords` key left the existing password in place. The test rows were removed afterwards (three demo
 videos from the Blender open movies remain in the feed).
 
-Test: `node tools/video-smoke.mjs` — **112/112** (feed, sort, search, watch, reaction→comment, a locked
+Test: `node tools/video-smoke.mjs` — **243/243** (feed, sort, search, watch, reaction→comment, a locked
 door and its password, a missing video, the editor signed out and in, the payload of a publish, of an
-exclusive rule set and of a private list, and the forwarding page).
+exclusive rule set and of a private list, the player and the sixteen host cases, the oEmbed stills, the
+studio picker, and the forwarding page).
+
+#### The studio a video goes into
+
+A member video used to belong to the member's own feed and to nothing else, while a studio's *Videos*
+tab read a different table entirely — so a creator with a studio could not say *this film belongs to
+my studio*. `video-editor.html` can say it now:
+
+| Where | What it looks like |
+| --- | --- |
+| the editor | a **Where it goes** card under the live preview: a select of the member's studios, servers and cinemas, then `My own feed — no studio`, and one plain sentence about what the choice does |
+| the preview card | `in <studio>` on the card itself, so the studio is visible while the video is being written |
+| the studio | `creator.html?section=studio` → *Videos*, where the video appears with its counters, its door and a `· video editor` mark on its code |
+| the link between them | the studio's `＋ Add content` menu and its *Video · new* screen both open `video-editor.html?studio=<code>`, so the studio is already chosen |
+
+`posts.hub_id` (uuid, `on delete set null`) is the whole schema. `video_save` accepts `hub` as a hub
+**code** (`IDST100001`) or its uuid; a payload **without** the key leaves the studio where it is, and
+`hub: null` sends the video back to the member's own feed. It is checked **before** anything is
+written, and refused three ways: `hub` (no such code), `hub_role` (not the owner and not on the staff
+list) and `hub_kind` (a blog cannot hold a video — `creator_kind_allowed` decides, so a studio, a server
+and a cinema are the three kinds offered). The save itself is still `member_post_save`'s; the wrapper
+sets the studio afterwards, so nothing about the video path forked.
+
+`video_card` now carries `video.hub { id, code, kind, name, visibility }`, so the editor reopens with
+the studio it was published into, and `creator_items` unions the two stores: a row from `posts` arrives
+with `source: 'video-editor'`, its post code (`PST-…`), its counters, and its visibility in the
+studio's own words (`general → public`, `limited`/`followers → exclusive`). That row's action menu is
+the editor's, not the table's — **Open in the editor** (to `video-editor.html?id=<code>`), copy link,
+**Delete** (through `post_delete`, with the confirmation saying *a video*). `creator_hub_json` counts
+those rows (`creator_hub_posts`), so the hub's header and its table agree.
+
+DDL + functions: `tools/sql/video-studio.sql` — **applied**, and exercised on the real database: a
+video published with `hub: 'IDST100001'` came back carrying that studio in `video.video.hub`, the
+studio's *Videos* table listed it as `source: video-editor` with `items`/`published` at 1, an edit
+**without** the key kept the studio, `hub: ''` cleared it (the column read null), and the three refusals
+answered `hub`, `hub_kind` (a blog) and `hub_role` (a studio owned by another member). The test rows,
+the temporary studio and the session were removed afterwards.
 
 ### Member articles — the index, the reader and the writing page
 

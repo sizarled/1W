@@ -842,7 +842,7 @@ async function main() {
   // the way out to the video editor
   s.click(s.qs("[data-cr-add-toggle]"));
   await s.wait(40);
-  const toEditor = s.qs('a.cr-drop__item[href="video-editor.html"]');
+  const toEditor = s.qs('a.cr-drop__item[href="video-editor.html?studio=IDST100001"]');
   expect("editor link: the studio menu opens it", Boolean(toEditor), s.text("[data-cr-add-menu]"));
   expect("editor link: and names it", /video in the editor/i.test(toEditor ? toEditor.textContent : ""), toEditor ? toEditor.textContent.trim() : "");
   expect("editor link: no dead data-cr-add on it", !(toEditor && toEditor.hasAttribute("data-cr-add")));
@@ -852,7 +852,11 @@ async function main() {
   expect("editor link: a new video still opens the table form", /Video/i.test(s.text(".cr-editor__kind")), s.text(".cr-editor__kind"));
   const openEditor = s.qs("[data-cr-video-editor]");
   expect("editor link: «Video · new» carries the button", Boolean(openEditor), s.text(".cr-editor__head"));
-  expect("editor link: it points at video-editor.html", openEditor && openEditor.getAttribute("href") === "video-editor.html", openEditor ? openEditor.getAttribute("href") : "");
+  expect(
+    "editor link: it points at video-editor.html with this studio",
+    openEditor && openEditor.getAttribute("href") === "video-editor.html?studio=IDST100001",
+    openEditor ? openEditor.getAttribute("href") : ""
+  );
   expect("editor link: it reads as a button", /open video-editor\.html/i.test(openEditor ? openEditor.textContent : ""), openEditor ? openEditor.textContent.trim() : "");
   expect("editor link: it is only on a video", s.qsa("[data-cr-video-editor]").length === 1, String(s.qsa("[data-cr-video-editor]").length));
   s.click(s.qs("[data-cr-editor-back]"));
@@ -1430,6 +1434,74 @@ async function passDoors() {
   expect("door: ads in the source are marked", /carries ads/.test(c.text(".crp-items")));
   expect("door: no errors", c.errors.length === 0, c.errors.join(" | "));
   c.window.close();
+}
+
+/* ================================================================== */
+/* a video published into the studio from the video editor            */
+/* ================================================================== */
+{
+  scenario = {
+    hubs: [hub({ id: "hub-ch", kind: "channel", name: "Studio One", items: 2 })],
+    items: [
+      item({ id: "it-1", kind: "video", title: "The first film", status: "published", visibility: "public" }),
+      {
+        ...item({ id: "post-1", kind: "video", title: "A film from the editor", status: "published", visibility: "public" }),
+        code: "PST-001200",
+        source: "video-editor",
+      },
+    ],
+    categories: [],
+    subscribers: [],
+  };
+  calls.length = 0;
+  const s = await boot(40, { search: "?section=studio" });
+
+  expect("editor rows: the table holds both stores", s.qsa("[data-cr-view] tbody tr").length === 2, String(s.qsa("[data-cr-view] tbody tr").length));
+  expect("editor rows: the row says which editor owns it", /PST-001200 · video editor/.test(s.text("[data-cr-view]")), s.text("[data-cr-view]").slice(0, 140));
+
+  const rows = s.qsa("[data-cr-view] tbody tr");
+  const mine = rows[rows.length - 1];
+  expect("editor rows: a member video offers the editor, not the table form", /Open in the editor/.test(mine.textContent), mine.textContent.replace(/\s+/g, " ").trim().slice(0, 140));
+  expect("editor rows: it has no edit action", !mine.querySelector('[data-cr-act="edit"]'));
+  expect("editor rows: but it can be deleted", Boolean(mine.querySelector('[data-cr-act="delete"]')));
+  expect("editor rows: and its link can be copied", Boolean(mine.querySelector('[data-cr-act="link"]')));
+
+  globalThis.location.href = "";
+  s.click(mine.querySelector('[data-cr-act="open"]'));
+  await s.wait(40);
+  expect("editor rows: it opens video-editor.html with the code", globalThis.location.href === "video-editor.html?id=PST-001200", globalThis.location.href);
+
+  calls.length = 0;
+  s.click(mine.querySelector('[data-cr-act="delete"]'));
+  await s.wait(60);
+  expect("editor rows: the confirmation says a video", /Delete this video\?/.test(s.text("[data-cr-modal]")), s.text("[data-cr-modal]"));
+  s.click(s.qs("[data-cr-confirm]"));
+  await s.wait(140);
+  expect("editor rows: deleted through the posts door", calls.some((c) => c.includes("post_delete")), calls.join(" | "));
+  expect("editor rows: not through the hub's own", !calls.some((c) => c.includes("creator_item_delete")));
+  expect("editor rows: nothing threw", s.errors.length === 0, s.errors.join(" | "));
+}
+
+{
+  /* the way out of the studio now carries the hub it is standing in */
+  scenario = {
+    hubs: [hub({ id: "hub-ch", kind: "channel", name: "Studio One" })],
+    items: [],
+    categories: [],
+    subscribers: [],
+  };
+  const s = await boot(41, { search: "?section=studio" });
+
+  s.click(s.qs("[data-cr-add-toggle]"));
+  await s.wait(40);
+  const link = s.qs('a.cr-drop__item[href="video-editor.html?studio=IDST100001"]');
+  expect("studio link: the menu passes the studio's code", Boolean(link), s.text("[data-cr-add-menu]"));
+  expect("studio link: it is still called Video in the editor", /Video in the editor/i.test(link ? link.textContent : ""), link ? link.textContent.trim() : "");
+
+  s.click(s.qs('[data-cr-add="video"]'));
+  await s.wait(80);
+  const head = s.qs("[data-cr-video-editor]");
+  expect("studio link: «Video · new» passes it too", head?.getAttribute("href") === "video-editor.html?studio=IDST100001", head?.getAttribute("href"));
 }
 
 /* ------------------------------------------------------------------ */
