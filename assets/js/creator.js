@@ -2054,7 +2054,7 @@ async function removeAd(id) {
 /* the hub's page: asking to join, writing, advertising               */
 /* ------------------------------------------------------------------ */
 function participationBlock(hub, view) {
-  const request = view.request || null;
+  const request = hub.request || view.request || null;
   const can = hub.can || {};
   const role = hub.role || "visitor";
   const manageLink = `<a class="dsh-btn dsh-btn--sm" href="creator.html?section=${encodeURIComponent(hubInfo(hub.kind).slug)}&hub=${encodeURIComponent(hub.id)}&tab=participants"><i data-icon="users"></i> Requests</a>`;
