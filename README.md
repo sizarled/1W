@@ -1182,7 +1182,13 @@ Access is decided on the server, never by the page:
 | private, and you are the owner / staff / VIP | everything, plus **Manage** back into the studio |
 
 A private hub is in nobody's directory card and nobody's creator page but the owner's, the staff's
-and the VIP list's.
+and the VIP list's. Banned members are in no directory and on no creator page.
+
+Servers and cinemas are already real hub kinds on the server (`creator_hubs.kind` allows `server`
+and `cinema`, and `creator_kind_allowed` gives a server videos / podcasts / playlists and a cinema
+videos), so a creator who owns one sees it in its own group on their page and can open it like any
+other hub. The studio's five sections are still the five listed above; a management section for
+servers and cinemas is not built yet.
 
 #### The four public functions
 

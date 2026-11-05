@@ -153,7 +153,8 @@ begin
                    where h.owner = mm.id and h.visibility <> 'private'
                      and nullif(btrim(h.field), '') is not null) as fields
             from public.members mm
-           where exists (select 1 from public.creator_hubs h
+           where mm.status <> 'banned'
+             and exists (select 1 from public.creator_hubs h
                           where h.owner = mm.id and h.visibility <> 'private')
         ) m
        where (v_query = ''
@@ -177,6 +178,7 @@ begin
     from (select distinct btrim(m.country) as code
             from public.members m
            where nullif(btrim(m.country), '') is not null
+             and m.status <> 'banned'
              and exists (select 1 from public.creator_hubs h
                           where h.owner = m.id and h.visibility <> 'private')) c;
 
@@ -230,9 +232,10 @@ begin
   else
     select * into v_owner
       from public.members m
-     where upper(m.member_id) = upper(replace(v_ref, '@', ''))
-        or lower(replace(m.username, '@', '')) = v_bare
-        or m.id::text = lower(v_ref)
+     where (m.status <> 'banned' or m.id = v_member.id)
+       and (upper(m.member_id) = upper(replace(v_ref, '@', ''))
+            or lower(replace(m.username, '@', '')) = v_bare
+            or m.id::text = lower(v_ref))
      limit 1;
   end if;
 
