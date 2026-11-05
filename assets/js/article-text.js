@@ -50,7 +50,17 @@ export function firstImage(html) {
 }
 
 export function sanitizeHtml(html) {
-  if (typeof DOMParser === "undefined") return String(html || "");
+  if (typeof DOMParser === "undefined") {
+    /* no parser to walk the tree with: refuse the dangerous shapes rather
+       than hand the html along untouched */
+    return String(html || "")
+      .replace(/<script\b[\s\S]*?<\/script>/gi, "")
+      .replace(/<style\b[\s\S]*?<\/style>/gi, "")
+      .replace(/<\s*(iframe|object|embed|form|link|meta)\b[^>]*>/gi, "")
+      .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+      .replace(/\s(srcdoc|srcset)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+      .replace(/\s(href|src)\s*=\s*("|')?\s*(javascript|data|vbscript):[^"'\s>]*("|')?/gi, "");
+  }
   const doc = new DOMParser().parseFromString(`<div id="r">${html || ""}</div>`, "text/html");
   const root = doc.getElementById("r");
   if (!root) return "";

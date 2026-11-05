@@ -874,6 +874,207 @@ async function startEmbedded(detail = {}) {
 }
 
 /* ================================================================== */
+/* importing HTML                                                     */
+/* ================================================================== */
+/*
+ * A piece often exists somewhere else first: an export, a newsletter, a page
+ * written by hand. Importing it should give an article, not a wall of tags.
+ *
+ * Two steps, and both are the page's own rules:
+ *
+ *   precleanHtml()  takes the outside world apart — the doctype, the head, the
+ *                   scripts, the styles, the comments, the <h1> (mapped to an
+ *                   <h2>, because that is the deepest heading an article has),
+ *                   and keeps the first heading or <title> as a candidate title
+ *   sanitizeHtml()  the allowlist the reader already trusts, unchanged
+ *
+ * The dialog offers both doors — paste it, or drop an .html file — and says
+ * what will land before anything lands: words, headings, pictures, and what was
+ * dropped. The first heading fills the title only when the title is empty and
+ * the member leaves that box ticked.
+ */
+const IMPORT_LIMIT = 2 * 1024 * 1024; /* 2 MB of HTML is a long article */
+let importClean = "";
+let importTitle = "";
+let importRaw = "";
+
+/** The outside world, taken apart — before the allowlist sees it. */
+function precleanHtml(raw) {
+  let html = String(raw || "");
+  const dropped = { scripts: 0, styles: 0, comments: 0, handlers: 0 };
+
+  dropped.comments = (html.match(/<!--[\s\S]*?-->/g) || []).length;
+  html = html.replace(/<!--[\s\S]*?-->/g, " ");
+
+  /* the import boundary takes the handlers off itself, before the allowlist
+     is even asked — belt, and braces */
+  dropped.handlers = (html.match(/\son[a-z]+\s*=/gi) || []).length;
+  html = html
+    .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/\s(srcdoc|srcset)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/\s(href|src)\s*=\s*("|')?\s*(javascript|data|vbscript):[^"'\s>]*("|')?/gi, "");
+
+  dropped.scripts = (html.match(/<script\b[\s\S]*?<\/script>/gi) || []).length;
+  html = html.replace(/<script\b[\s\S]*?<\/script>/gi, " ");
+
+  dropped.styles = (html.match(/<style\b[\s\S]*?<\/style>/gi) || []).length;
+  html = html.replace(/<style\b[\s\S]*?<\/style>/gi, " ");
+
+  html = html
+    .replace(/<!doctype[^>]*>/gi, " ")
+    .replace(/<\/?(noscript|template|iframe|object|embed|svg|canvas|form|input|button|select|textarea|link|meta)\b[^>]*>/gi, " ")
+    .replace(/<\/?(html|body|head)\b[^>]*>/gi, " ");
+
+  /* a page's <title> and its first <h1> are the only titles worth having */
+  const pageTitle = html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i);
+  const firstH1 = html.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i);
+  const heading = String((firstH1 && firstH1[1]) || (pageTitle && pageTitle[1]) || "")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  html = html
+    .replace(/<\/?title\b[^>]*>/gi, " ")
+    .replace(/<h1\b[^>]*>/gi, "<h2>")
+    .replace(/<\/h1>/gi, "</h2>")
+    /* a table has no place in an article: its cells become lines */
+    .replace(/<\/t[dh]>/gi, "</div> ")
+    .replace(/<\/?t(able|body|head|foot|r)\b[^>]*>/gi, " ");
+
+  return { html, title: heading.slice(0, 200), dropped };
+}
+
+/** What the import will actually do — said in the dialog, before it is done. */
+function previewImport() {
+  const body = $("[data-e-dlg-body]");
+  const text = body && body.querySelector("[data-imp-text]");
+  const say = body && body.querySelector("[data-imp-say]");
+  const ok = $("[data-e-dlg-ok]");
+  if (text) importRaw = text.value;
+
+  const result = precleanHtml(importRaw);
+  importClean = sanitizeHtml(result.html);
+  importTitle = result.title;
+
+  const words = wordsIn(importClean);
+  const images = (importClean.match(/<img\b/gi) || []).length;
+  const heads = (importClean.match(/<h[234]\b/gi) || []).length;
+  const lost = [];
+  if (result.dropped.scripts) lost.push(`${result.dropped.scripts} script${result.dropped.scripts === 1 ? "" : "s"}`);
+  if (result.dropped.styles) lost.push(`${result.dropped.styles} style block${result.dropped.styles === 1 ? "" : "s"}`);
+  if (result.dropped.comments) lost.push(`${result.dropped.comments} comment${result.dropped.comments === 1 ? "" : "s"}`);
+  if (result.dropped.handlers) lost.push(`${result.dropped.handlers} handler${result.dropped.handlers === 1 ? "" : "s"}`);
+
+  if (say) {
+    if (!importRaw.trim()) say.textContent = "Paste the HTML, or drop a .html file — nothing is imported until you say so.";
+    else if (!words) say.textContent = "That has no readable text in it. Try the page's body rather than its markup for scripts.";
+    else {
+      say.textContent =
+        `${words} word${words === 1 ? "" : "s"} · ${heads} heading${heads === 1 ? "" : "s"} · ${images} picture${images === 1 ? "" : "s"}` +
+        (lost.length ? ` — dropped ${lost.join(", ")}` : "") +
+        (importTitle ? ` · the title would be “${importTitle}”` : "");
+    }
+  }
+  if (ok) ok.disabled = !words;
+  return words;
+}
+
+/** A file the member dropped or picked: text, and nothing else. */
+function readHtmlFile(file) {
+  return new Promise((resolve) => {
+    if (!file) {
+      resolve("");
+      return;
+    }
+    if (file.size > IMPORT_LIMIT) {
+      toast({ title: "That file is too big", message: "2 MB of HTML at most.", tone: "error" });
+      resolve("");
+      return;
+    }
+    if (!/\.html?$/i.test(file.name || "") && file.type && !/text\/html/i.test(file.type)) {
+      toast({ title: "Not an HTML file", message: "A .html or .htm file, please.", tone: "error" });
+      resolve("");
+      return;
+    }
+    /* the browser has both; a test harness may only set one */
+    const Reader = typeof FileReader !== "undefined" ? FileReader : window.FileReader;
+    const reader = new Reader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => {
+      toast({ title: "That file would not open", message: "Try the paste box instead.", tone: "error" });
+      resolve("");
+    };
+    reader.readAsText(file);
+  });
+}
+
+/** The dialog's own wiring — it is rebuilt on every open. */
+function wireImport() {
+  const body = $("[data-e-dlg-body]");
+  if (!body) return;
+  importRaw = "";
+  importClean = "";
+  importTitle = "";
+
+  const text = body.querySelector("[data-imp-text]");
+  const file = body.querySelector("[data-imp-file]");
+  const pick = body.querySelector("[data-imp-pick]");
+  const drop = body.querySelector("[data-imp-drop]");
+
+  const takeFile = async (chosen) => {
+    const raw = await readHtmlFile(chosen);
+    if (!raw) return;
+    if (text) text.value = raw;
+    previewImport();
+  };
+
+  text?.addEventListener("input", () => previewImport());
+  pick?.addEventListener("click", () => file?.click());
+  file?.addEventListener("change", () => takeFile(file.files && file.files[0]));
+
+  if (drop) {
+    ["dragenter", "dragover"].forEach((type) =>
+      drop.addEventListener(type, (event) => {
+        event.preventDefault();
+        drop.classList.add("is-over");
+      })
+    );
+    ["dragleave", "dragend"].forEach((type) => drop.addEventListener(type, () => drop.classList.remove("is-over")));
+    drop.addEventListener("drop", (event) => {
+      event.preventDefault();
+      drop.classList.remove("is-over");
+      const files = event.dataTransfer && event.dataTransfer.files;
+      takeFile(files && files[0]);
+    });
+  }
+
+  previewImport();
+  text?.focus();
+}
+
+/** The door: a button in the piece's head, put there by this module so both
+ *  pages (article-editor.html and the studio's writing room) have it. */
+function mountHtmlImport() {
+  if ($("[data-e-import]")) return;
+  const count = $("[data-e-title-count]");
+  const head = count && count.parentElement;
+  if (!head) return;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "btn btn--quiet btn--sm aimp__open";
+  button.setAttribute("data-e-import", "");
+  button.innerHTML = `${icon("file")} Import HTML`;
+  button.addEventListener("click", () => openDialog("html"));
+  head.insertBefore(button, count);
+}
+
+/* ================================================================== */
 /* the dialogs                                                        */
 /* ================================================================== */
 let dialogMode = "";
@@ -888,6 +1089,9 @@ function openDialog(mode, target = "body") {
   const body = $("[data-e-dlg-body]");
   const ok = $("[data-e-dlg-ok]");
   if (!body || !ok) return;
+  /* the import disables the button until there is something to import; every
+     other mode starts enabled */
+  ok.disabled = false;
 
   if (mode === "link") {
     if (title) title.textContent = "Add a link";
@@ -909,6 +1113,26 @@ function openDialog(mode, target = "body") {
       <label class="adlg__row"><span class="alabel">Description (for screen readers)</span>
         <input class="input" data-dlg-alt placeholder="What is in the picture" /></label>
       <p class="adlg__note">PNG, JPEG, WEBP or GIF, up to 4 MB. An upload goes to the site's storage and the address is used here.</p>`;
+  } else if (mode === "html") {
+    if (title) title.textContent = "Import HTML";
+    if (ok) ok.textContent = "Import it";
+    body.innerHTML = `
+      <div class="aimp">
+        <p class="adlg__note">Paste the HTML of a page, or drop an <b>.html</b> file. Nothing lands as-is: the head,
+          the scripts, the styles and the comments go, a headline becomes a heading, and only the tags this editor
+          can write are kept — the same list the reader already trusts.</p>
+        <div class="aimp__drop" data-imp-drop>
+          <span class="aimp__mark">${icon("file")}</span>
+          <span>Drop an .html file here, or <button class="aimp__pick" type="button" data-imp-pick>choose one</button>.</span>
+          <input type="file" accept=".html,.htm,text/html" data-imp-file hidden />
+        </div>
+        <textarea class="input aimp__text" rows="9" data-imp-text spellcheck="false" aria-label="The HTML to import" placeholder="<h1>The title</h1><p>The first paragraph…</p>"></textarea>
+        <div class="aimp__row">
+          <label class="acheck"><input type="checkbox" data-imp-title checked /> <span>Take the first heading as the title, when it is still empty</span></label>
+          <label class="acheck"><input type="checkbox" data-imp-replace /> <span>Replace the body instead of adding to it</span></label>
+        </div>
+        <p class="aimp__say" data-imp-say></p>
+      </div>`;
   } else {
     if (title) title.textContent = "Add a video";
     if (ok) ok.textContent = "Insert the video";
@@ -923,6 +1147,10 @@ function openDialog(mode, target = "body") {
   const err = $("[data-e-dlg-err]");
   if (err) err.hidden = true;
   dlg.showModal?.();
+  if (mode === "html") {
+    wireImport();
+    return;
+  }
   body.querySelector("input")?.focus();
 }
 
@@ -945,6 +1173,52 @@ async function confirmDialog() {
   const body = $("[data-e-dlg-body]");
   const err = $("[data-e-dlg-err]");
   if (!body) return;
+
+  if (dialogMode === "html") {
+    rte?.restore();
+    const words = previewImport();
+    if (!words) {
+      if (err) {
+        err.hidden = false;
+        err.textContent = "There is no readable text in that. Paste the page's body, or drop an .html file.";
+      }
+      return;
+    }
+    const takeTitle = Boolean((body.querySelector("[data-imp-title]") || {}).checked);
+    const replace = Boolean((body.querySelector("[data-imp-replace]") || {}).checked);
+    const titleNode = $("[data-e-title]");
+    let titled = false;
+    if (takeTitle && titleNode && !titleNode.value.trim() && importTitle) {
+      titleNode.value = importTitle.slice(0, 200);
+      S.title = titleNode.value;
+      titled = true;
+    }
+
+    if (replace) {
+      if (rte) rte.setHtml(importClean);
+      else {
+        const host = $("[data-e-body]");
+        if (host) host.innerHTML = importClean;
+      }
+    } else {
+      insertHtml(importClean);
+    }
+
+    sync();
+    paintCounts();
+    paintChecks();
+    scheduleDraft();
+    const images = (importClean.match(/<img\b/gi) || []).length;
+    toast({
+      title: "Imported",
+      message: `${words} word${words === 1 ? "" : "s"}${images ? ` and ${images} picture${images === 1 ? "" : "s"}` : ""}${titled ? " · the title came from the page" : ""}.`,
+      tone: "success",
+      iconName: "check",
+    });
+    closeDialog();
+    return;
+  }
+
   rte?.restore();
   const value = (body.querySelector("[data-dlg-url]") || {}).value || "";
   const url = String(value).trim();
@@ -1552,6 +1826,9 @@ function bind() {
       scheduleDraft();
     });
   });
+
+  /* the import button is this module's own, so it exists on both pages */
+  mountHtmlImport();
 }
 
 /* ================================================================== */

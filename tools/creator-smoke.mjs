@@ -526,6 +526,7 @@ async function boot(pass, { search = "", token = true, articleEditor = false } =
 
   globalThis.window = window;
   globalThis.document = window.document;
+  globalThis.DOMParser = window.DOMParser;
   globalThis.HTMLElement = window.HTMLElement;
   globalThis.Element = window.Element;
   globalThis.Node = window.Node;
@@ -1620,6 +1621,24 @@ async function passDoors() {
   expect("writer: with the cover, the tags, the audience and the passwords", Boolean(w.qs("[data-e-cover-url]")) && Boolean(w.qs("[data-e-tag-input]")) && Boolean(w.qs("[data-e-vis]")) && Boolean(w.qs("[data-e-pass-add]")));
   expect("writer: the Content/Help choice is gone — a blog is not Help", w.hidden("[data-e-place]"));
   expect("writer: the destination names the blog", /My blog/.test(w.text("[data-e-place-label]")), w.text("[data-e-place-label]"));
+
+  /* a page written elsewhere comes in through the editor's own door */
+  expect("writer: the room carries Import HTML", Boolean(w.qs("[data-cr-writer] [data-e-import]")), w.text(".apanel__head").slice(0, 90));
+  w.click(w.qs("[data-e-import]"));
+  await w.wait(60);
+  expect("writer: the import dialog opens in the room", Boolean(w.qs("[data-imp-text]")), w.text("[data-e-dlg-body]").slice(0, 80));
+  const htmlBox = w.qs("[data-imp-text]");
+  htmlBox.value =
+    "<html><head><style>p { color: red }</style></head><body><h1>A page from elsewhere</h1><p onclick=\"steal()\">the port at four<script>beacon()</script></p></body></html>";
+  htmlBox.dispatchEvent(new w.window.Event("input", { bubbles: true }));
+  await w.wait(40);
+  w.click(w.qs("[data-e-dlg-ok]"));
+  await w.wait(70);
+  const roomBody = w.qs("[data-e-body]");
+  expect("writer: the imported words are in the piece", /the port at four/.test(roomBody.textContent), roomBody.innerHTML.slice(0, 90));
+  expect("writer: the script did not survive the import", !/script|onclick|<style/i.test(roomBody.innerHTML), roomBody.innerHTML.slice(0, 140));
+  expect("writer: the headline became the title", w.qs("[data-e-title]")?.value === "A page from elsewhere", w.qs("[data-e-title]")?.value);
+  expect("writer: and a heading in the piece", Boolean(roomBody.querySelector("h2")), roomBody.innerHTML.slice(0, 90));
 
   /* back to the table */
   w.click(w.qs("[data-cr-writer-back]"));

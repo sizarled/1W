@@ -1166,7 +1166,7 @@ published (and refused without a media link), an article refused in a studio hub
 categories three deep with the fourth refused (`deep`) and a duplicate refused, a third blog created
 then a fourth refused (`limit`, level 1), staff added by code and an unknown code refused
 (`member`), and the subscriber list reporting a real member with their country.
-`tools/creator-smoke.mjs` (313 checks) runs the studio end to end — an empty studio that creates, configures
+`tools/creator-smoke.mjs` (319 checks) runs the studio end to end — an empty studio that creates, configures
 (private + password + staff), saves, refuses, and deletes a studio; a studio page holding one of each
 hub (tables, columns, action menus, the editor saving a draft then publishing, blog articles vs
 drafts, categories, subscribers, library books); and the `?section=&tab=` deep links.
@@ -1559,15 +1559,35 @@ image picked in the body gets a floating bar (small / medium / full, left / cent
 *Reader preview* opens the piece with a simulated reader (country, language, level) and says whether
 that reader would see the piece or the door.
 
+**A piece that already exists somewhere else comes in through *Import HTML*.** The button sits in the
+piece's head, beside the title counter, and it is put there by `article-editor.js` itself — so the
+studio's writing room has it too, on the same code. The dialog takes the page either way: paste it, or
+drop an `.html` file (2 MB at most) — the file is read on the device and never uploaded. What lands is
+an article, not a wall of tags, because two things happen in that order:
+
+1. `precleanHtml()` takes the outside world apart — doctype, `<head>`, `<script>`, `<style>`,
+   comments, frames and forms, inline handlers, `srcdoc`/`srcset`, `javascript:` links, a table's cells
+   turned into lines — and keeps the first `<h1>` (or the `<title>`) as a candidate title. An `<h1>`
+   becomes an `<h2>`, because an article has no second title.
+2. `sanitizeHtml()` — the allowlist the reader already trusts, unchanged — decides what may stay.
+
+The dialog says what will happen before it happens: how many words, headings and pictures land, and
+what is being dropped (scripts, styles, comments, handlers). Two boxes refine it: *take the first
+heading as the title, when it is still empty* (ticked) and *replace the body instead of adding to it*.
+The button stays asleep while there is no readable text, so an empty paste cannot wipe a draft. The
+import is not a second renderer: what it inserts is exactly what the reader would have accepted.
+
 `articles.html` and `article.html` were placeholder pages from `tools/build-pages.mjs`; both were
 taken off that list so the generator cannot overwrite them.
 
 DDL + functions: `tools/sql/articles-page.sql` — **applied**. Test: `node tools/article-smoke.mjs` —
-**189/189** (the index, the empty index, the reader and its sanitizer, reaction→comment→vote, the
+**218/218** (the index, the empty index, the reader and its sanitizer, reaction→comment→vote, the
 exclusive gate with its steps and reminder, the private gate with a wrong and a right password, a
-missing piece, the editor signed out and in, every toolbar function on a real range, the draft on the
-device, Ctrl+Enter, a draft payload, an audience payload, a private payload with its member and
-password, Help going to review, and the shared word-count / reading-time rules).
+missing piece, the editor signed out and in, every toolbar function on a real range, importing an HTML
+page through the paste box and through a chosen file — scripts, styles and handlers gone, the headline
+kept as a heading and offered as the title, a replace that clears the body — the draft on the device,
+Ctrl+Enter, a draft payload, an audience payload, a private payload with its member and password, Help
+going to review, and the shared word-count / reading-time rules).
 
 Eleven pieces from @ledsizar, @jhon007 and @ledsizar7 remain on the index — nine public, one
 exclusive (`PST-001020`, open to LV5–LV10) and one private (`PST-001021`, the password is
@@ -1644,7 +1664,7 @@ the editors need**, each pinned to a name pattern and a set of extensions (`user
 | Gate | Result |
 | --- | --- |
 | `node tools/rte-smoke.mjs` | **45/45** (every command, links, insertion, history, paste, drop, keys, toolbar state) |
-| `node tools/article-smoke.mjs` | **189/189** |
+| `node tools/article-smoke.mjs` | **218/218** |
 | `node tools/video-smoke.mjs` | **208/208** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
 
 ### The six OAuth apps — one checklist each

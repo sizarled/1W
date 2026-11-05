@@ -20,7 +20,9 @@
  * Pass 8  — the editor's hands: every toolbar function on a real range.
  * Pass 9  — publishing: the audience rules, the private list and its
  *           passwords; a Help page goes to review, public and pending.
- * Pass 10 — the rules both pages share: word count, reading time, the
+ * Pass 10 — importing HTML: the paste box, the file that fills it, what
+ *           the sanitizer lets through, the title from the page, replace.
+ * Pass 11 — the rules both pages share: word count, reading time, the
  *           sanitizer; and the stylesheet carries every class worn.
  */
 import { JSDOM } from "jsdom";
@@ -916,7 +918,118 @@ const MEMBER = {
 }
 
 /* ================================================================== */
-/* pass 9 — the rules the two sides share, and the stylesheet         */
+/* pass 10 — importing HTML                                           */
+/* ================================================================== */
+{
+  const imp = boot("article-editor.html", {
+    url: "article-editor.html",
+    storage: MEMBER,
+    fetchImpl: (href) => {
+      const fn = fnName(href);
+      if (fn === "article_mine") return reply({ ok: true, rows: [] });
+      if (fn === "article_feed") return reply({ ok: true, rows: [], fields: [], rails: [], total: 0 });
+      return reply([]);
+    },
+  });
+  const D = imp.document;
+  const W = imp.window;
+  await import(`file://${join(root, "assets/js/article-editor.js")}?p10`);
+  await wait(70);
+
+  const click = (selector) => D.querySelector(selector).dispatchEvent(new W.MouseEvent("click", { bubbles: true, cancelable: true }));
+  const type = (selector, value) => {
+    const node = D.querySelector(selector);
+    node.value = value;
+    node.dispatchEvent(new W.Event("input", { bubbles: true }));
+  };
+  const body = D.querySelector("[data-e-body]");
+
+  /* the door ------------------------------------------------------- */
+  const open = D.querySelector("[data-e-import]");
+  expect("import: the button sits in the piece's head", Boolean(D.querySelector(".apanel__head [data-e-import]")), D.querySelector(".apanel__head")?.innerHTML.slice(0, 90));
+  expect("import: it says what it does", open?.textContent.includes("Import HTML"), open?.textContent);
+  expect("import: it carries no emoji", !/[\u{1F300}-\u{1FAFF}]/u.test(open?.textContent || ""), open?.textContent);
+
+  click("[data-e-import]");
+  await wait(40);
+  expect("import: the dialog opens", Boolean(D.querySelector("[data-imp-text]")), D.querySelector("[data-e-dlg-body]")?.innerHTML.slice(0, 80));
+  expect("import: with a file door beside the box", Boolean(D.querySelector("[data-imp-file]")), "");
+  expect("import: the import cannot be pressed yet", D.querySelector("[data-e-dlg-ok]")?.disabled === true);
+  expect("import: the button is named for it", D.querySelector("[data-e-dlg-ok]")?.textContent === "Import it", D.querySelector("[data-e-dlg-ok]")?.textContent);
+
+  /* what a page carries, and what an article may keep ---------------- */
+  D.querySelector("[data-e-title]").value = "";
+  body.innerHTML = "<p>the line that was already here</p>";
+
+  type(
+    "[data-imp-text]",
+    `<!doctype html><html><head><title>The long take is not a flex</title>
+      <style>.lead { color: red }</style>
+      <script src="https://ads.example/tracker.js"></script>
+     </head><body>
+      <h1>Inside the unbroken shot</h1>
+      <p onclick="steal()">A <strong>four-minute</strong> take is not four minutes of meaning.</p>
+      <ul><li>one</li><li>two</li></ul>
+      <img src="https://example.com/shot.jpg" onerror="beacon()" />
+      <iframe src="https://ads.example/frame"></iframe>
+      <!-- a note to whoever pasted this -->
+     </body></html>`
+  );
+  await wait(30);
+
+  const say = D.querySelector("[data-imp-say]")?.textContent || "";
+  expect("import: the dialog says how much will land", /word/.test(say) && /picture/.test(say), say);
+  expect("import: and what it throws away", /script/.test(say) && /style/.test(say) && /comment/.test(say), say);
+  expect("import: the button wakes", D.querySelector("[data-e-dlg-ok]")?.disabled === false);
+
+  click("[data-e-dlg-ok]");
+  await wait(50);
+
+  const landed = body.innerHTML;
+  expect("import: the words land", body.textContent.includes("four-minute"), landed);
+  expect("import: beside what was already written", body.textContent.includes("the line that was already here"), landed);
+  expect("import: the script does not", !/<script/i.test(landed), landed);
+  expect("import: nor an inline handler", !/onerror|onclick/i.test(landed), landed);
+  expect("import: nor the frame", !/<iframe/i.test(landed), landed);
+  expect("import: nor the <style>", !/<style/i.test(landed), landed);
+  expect("import: the headline is a heading, not a second title", Boolean(body.querySelector("h2")) && !body.querySelector("h1"), landed);
+  expect("import: the list is still a list", body.querySelectorAll("li").length === 2, landed);
+  expect("import: the picture is kept", body.querySelector("img")?.getAttribute("src") === "https://example.com/shot.jpg", landed);
+  expect("import: the title came from the page", D.querySelector("[data-e-title]")?.value === "Inside the unbroken shot", D.querySelector("[data-e-title]")?.value);
+  expect("import: the words are counted", (D.querySelector("[data-e-words]")?.textContent || "0") !== "0", D.querySelector("[data-e-words]")?.textContent);
+  expect("import: the dialog closed", D.querySelector("[data-e-dlg]")?.open !== true, D.querySelector("[data-e-dlg]")?.getAttribute("open"));
+
+  /* a file, read the same way --------------------------------------- */
+  click("[data-e-import]");
+  await wait(40);
+  expect("import: opening it again starts empty", D.querySelector("[data-imp-text]")?.value === "", D.querySelector("[data-imp-text]")?.value);
+  const file = new W.File(["<h1>From a file</h1><p>dropped in, not pasted</p>"], "page.html", { type: "text/html" });
+  const picker = D.querySelector("[data-imp-file]");
+  Object.defineProperty(picker, "files", { value: [file], configurable: true });
+  picker.dispatchEvent(new W.Event("change", { bubbles: true }));
+  await wait(90);
+  expect("import: a chosen file fills the box", D.querySelector("[data-imp-text]")?.value.includes("dropped in"), D.querySelector("[data-imp-text]")?.value);
+
+  /* markup with no words in it is not an article -------------------- */
+  type("[data-imp-text]", "<script>alert(1)</script><style>p{}</style>");
+  await wait(30);
+  expect("import: markup without words leaves the button asleep", D.querySelector("[data-e-dlg-ok]")?.disabled === true);
+  expect("import: and says so", /no readable text/i.test(D.querySelector("[data-imp-say]")?.textContent || ""), D.querySelector("[data-imp-say]")?.textContent);
+
+  /* replace, and the title left alone ------------------------------- */
+  type("[data-imp-text]", "<h1>Second thoughts</h1><p>only this one</p>");
+  D.querySelector("[data-imp-replace]").checked = true;
+  D.querySelector("[data-imp-title]").checked = false;
+  await wait(20);
+  click("[data-e-dlg-ok]");
+  await wait(50);
+  expect("import: replace clears what was there", !body.textContent.includes("four-minute") && body.textContent.includes("only this one"), body.innerHTML);
+  expect("import: the title is left alone when the box is unticked", D.querySelector("[data-e-title]")?.value === "Inside the unbroken shot", D.querySelector("[data-e-title]")?.value);
+  expect("import: nothing threw", imp.errors.length === 0, imp.errors.join(" | "));
+}
+
+/* ================================================================== */
+/* pass 11 — the rules the two sides share, and the stylesheet        */
 /* ================================================================== */
 {
   const text = await import(`file://${join(root, "assets/js/article-text.js")}?p9`);
