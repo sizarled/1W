@@ -93,16 +93,16 @@ const SECTIONS = [
     icon: "article",
     noun: "blog",
     tabs: [
-      { key: "articles", label: "Articles", type: "list", kind: "article", status: "published", cols: ["item", "vis", "minutes", "likes", "dislikes", "comments", "reports", "act"], actions: ["preview", "edit", "link", "delete"] },
-      { key: "drafts", label: "Drafts", type: "list", kind: "article", status: "draft", cols: ["item", "vis", "cat", "lines", "words", "chars", "act"], actions: ["publish", "preview", "delete"] },
+      { key: "articles", label: "Articles", type: "list", kind: "article", status: "published", cols: ["item", "vis", "minutes", "likes", "dislikes", "comments", "reports", "act"], actions: ["preview", "edit", "link", "delete"], cta: { label: "Write an article", icon: "pen", action: "article" } },
+      { key: "drafts", label: "Drafts", type: "list", kind: "article", status: "draft", cols: ["item", "vis", "cat", "lines", "words", "chars", "act"], actions: ["publish", "preview", "delete"], cta: { label: "Write an article", icon: "pen", action: "article" } },
       { key: "categories", label: "Categories", type: "categories" },
       { key: "participants", label: "Participants", type: "participants" },
       { key: "settings", label: "Blog management", type: "settings" },
       { key: "subscribers", label: "Subscribers", type: "subscribers" },
     ],
     add: [
-      { kind: "article", label: "Article" },
-      { kind: "article", label: "Draft", draft: true },
+      { kind: "article", label: "Article", note: "opens the article editor" },
+      { kind: "article", label: "Draft", draft: true, note: "opens the article editor" },
       { category: true, label: "Category" },
     ],
   },
@@ -682,7 +682,7 @@ function renderTop() {
             ? `<button class="cr-drop__item" type="button" data-cr-add="category"><i data-icon="filter"></i> Category</button>`
             : entry.href
               ? `<a class="cr-drop__item" href="${esc(withHub(entry.href))}"><i data-icon="${esc(entry.icon || KIND_ICON[entry.kind] || "plus")}"></i> ${esc(entry.label)}${entry.note ? ` <span class="cr-drop__note">${esc(entry.note)}</span>` : ""}</a>`
-              : `<button class="cr-drop__item" type="button" data-cr-add="${esc(entry.kind)}" data-draft="${entry.draft ? "1" : "0"}"><i data-icon="${esc(KIND_ICON[entry.kind] || "plus")}"></i> ${esc(entry.label)}</button>`
+              : `<button class="cr-drop__item" type="button" data-cr-add="${esc(entry.kind)}" data-draft="${entry.draft ? "1" : "0"}"><i data-icon="${esc(KIND_ICON[entry.kind] || "plus")}"></i> ${esc(entry.label)}${entry.note ? ` <span class="cr-drop__note">${esc(entry.note)}</span>` : ""}</button>`
       ),
       `<span class="cr-drop__sep"></span>`,
       `<button class="cr-drop__item" type="button" data-cr-add="hub"><i data-icon="plus"></i> New ${esc(section.noun)}</button>`,
@@ -847,9 +847,16 @@ const ACTION_LABEL = {
   delete: ["Delete", "trash"],
 };
 
-/* a member video lives in the video editor; the table only lends it a row */
+/* a member video lives in the video editor, a blog's article in the article
+   editor; the table only lends them a row */
+const EDITOR_SOURCES = { "video-editor": "video", "article-editor": "article" };
+
 function isEditorRow(row) {
-  return Boolean(row && row.source === "video-editor");
+  return Boolean(row && EDITOR_SOURCES[row.source]);
+}
+
+function editorKindOf(row) {
+  return (row && EDITOR_SOURCES[row.source]) || "";
 }
 
 function actionMenu(row, tab) {
@@ -884,9 +891,12 @@ function renderList(host, hub, tab) {
   const rows = rowsFiltered(state.rows);
   const counts = state.counts || {};
   /* some tabs are written somewhere else — the Videos tab is written in
-     video-editor.html, so it says so instead of offering an empty form */
+     video-editor.html, the Articles tab in the writing room below, so they say
+     so instead of offering an empty form */
   const cta = tab.cta
-    ? `<a class="dsh-btn dsh-btn--primary dsh-btn--sm" href="${esc(withHub(tab.cta.href))}" data-cr-video-new><i data-icon="${esc(tab.cta.icon || "upload")}"></i> ${esc(tab.cta.label)}</a>`
+    ? tab.cta.action
+      ? `<button class="dsh-btn dsh-btn--primary dsh-btn--sm" type="button" data-cr-article-new><i data-icon="${esc(tab.cta.icon || "pen")}"></i> ${esc(tab.cta.label)}</button>`
+      : `<a class="dsh-btn dsh-btn--primary dsh-btn--sm" href="${esc(withHub(tab.cta.href))}" data-cr-video-new><i data-icon="${esc(tab.cta.icon || "upload")}"></i> ${esc(tab.cta.label)}</a>`
     : "";
   const head = `
     <div class="cr-bar">
@@ -916,7 +926,9 @@ function renderList(host, hub, tab) {
         state.search
           ? "Clear the search, or add something new."
           : tab.cta
-            ? `A video is written in the video editor — the player, the thumbnail, the audience — and it lands here with its numbers as soon as it is published.`
+            ? tab.cta.action === "article"
+              ? "An article is written in the article editor — the rich text, the cover, the audience, the reader preview — and it lands here with its numbers as soon as it is published."
+              : "A video is written in the video editor — the player, the thumbnail, the audience — and it lands here with its numbers as soon as it is published."
             : `Add the first one from “Add content” — it appears here with its numbers as soon as it is saved.`,
         tab.cta && !state.search ? cta : ""
       );
@@ -3261,6 +3273,14 @@ function openEditor(kind, row = null) {
     location.href = withHub("video-editor.html");
     return;
   }
+  /* a blog's article is written in the writing room, which is
+     article-editor.html's own form standing in this page — the rich text, the
+     cover, the audience, the reader preview. A row that already exists in the
+     hub's own library is still the table's, so it keeps opening there. */
+  if (kind === "article" && (!row || row.source === "article-editor")) {
+    openWriter({ id: row ? row.code : "" });
+    return;
+  }
   state.editor = row ? { ...row } : blankItem(kind || "video", hub.id);
   state.view = "editor";
   if (row) state.editor.tags = row.tags || [];
@@ -3285,6 +3305,70 @@ function openEditor(kind, row = null) {
       .catch(() => {});
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* the writing room                                                   */
+/* ------------------------------------------------------------------ */
+/*
+ * article-editor.html's form, embedded in this page: `data-ae-embed` on the
+ * body, and an `ae:open` event that names the blog. The editor answers
+ * `ae:published` / `ae:drafted`; the table underneath is reloaded and the
+ * member is put back where they were.
+ */
+function openWriter({ id = "" } = {}) {
+  const hub = currentHub();
+  const writer = el("[data-cr-writer]");
+  if (!hub) return;
+  if (!writer) {
+    toast({ title: "No writing room", message: "This page did not carry the article editor.", tone: "error" });
+    return;
+  }
+  state.writer = { id: String(id || "") };
+  const shell = el("[data-cr-shell]");
+  if (shell) shell.hidden = true;
+  writer.hidden = false;
+  const where = el("[data-cr-writer-where]");
+  if (where) {
+    where.textContent = `${state.writer.id ? "Editing an article in" : "Writing in"} ${hub.name} · ${hub.code}`;
+  }
+  document.body.dataset.crWriter = "1";
+  document.dispatchEvent(
+    new CustomEvent("ae:open", {
+      detail: { id: state.writer.id, hub: hub.code, hubName: hub.name, field: hub.field || "" },
+    })
+  );
+  try {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  } catch {
+    /* a page that cannot scroll is still a page */
+  }
+}
+
+function closeWriter({ reload = true } = {}) {
+  const writer = el("[data-cr-writer]");
+  if (writer) writer.hidden = true;
+  const shell = el("[data-cr-shell]");
+  if (shell) shell.hidden = false;
+  const room = el("[data-e-shell]");
+  if (room) room.hidden = true;
+  document.body.dataset.crWriter = "";
+  state.writer = null;
+  state.view = "list";
+  if (reload) {
+    loadTab()
+      .then(() => refresh())
+      .catch(() => {});
+  }
+}
+
+/* the editor's two answers: a published piece closes the room and lands in the
+   table; a draft stays open — the member is still writing */
+document.addEventListener("ae:published", () => {
+  closeWriter({ reload: true });
+});
+document.addEventListener("ae:drafted", () => {
+  refresh().catch(() => {});
+});
 
 async function editItem(id) {
   const hub = currentHub();
@@ -3642,6 +3726,16 @@ document.addEventListener("click", (event) => {
     return openNewHub();
   }
 
+  if (target.closest("[data-cr-article-new]")) {
+    event.preventDefault();
+    return openWriter({});
+  }
+
+  if (target.closest("[data-cr-writer-back]")) {
+    event.preventDefault();
+    return closeWriter({ reload: false });
+  }
+
   const act = target.closest("[data-cr-act]");
   if (act) {
     event.preventDefault();
@@ -3649,16 +3743,21 @@ document.addEventListener("click", (event) => {
     const action = act.dataset.crAct;
     const row = [...state.rows, ...(state.questions || [])].find((entry) => entry.id === id);
     act.closest("details")?.removeAttribute("open");
-    const fromEditor = isEditorRow(row) || act.dataset.source === "video-editor";
+    const kind = editorKindOf(row) || (EDITOR_SOURCES[act.dataset.source] ? act.dataset.source.replace("-editor", "") : "");
+    const fromEditor = Boolean(kind);
     if (action === "delete") {
       return openConfirm(
-        fromEditor ? "Delete this video?" : "Delete this item?",
+        fromEditor ? (kind === "article" ? "Delete this article?" : "Delete this video?") : "Delete this item?",
         "It disappears from the studio and from the public page. This cannot be undone.",
         fromEditor ? "post" : "item",
         fromEditor ? row?.code || id : id
       );
     }
     if (fromEditor && (action === "open" || action === "edit")) {
+      if (kind === "article") {
+        openWriter({ id: row?.code || "" });
+        return;
+      }
       location.href = `video-editor.html?id=${encodeURIComponent(row?.code || "")}`;
       return;
     }

@@ -22,6 +22,21 @@
  * A piece that goes to a Help section is sent for review: the server
  * keeps it `pending`, the moderators decide, and it is always public —
  * a help page nobody can read is not a help page.
+ *
+ * ------------------------------------------------------------------
+ * Embedded in the studio
+ * ------------------------------------------------------------------
+ * creator.html does not keep a second, thinner article form: the blog's
+ * *Article · new* is **this** editor, in the page. `<body data-ae-embed="1">`
+ * says so, and the studio opens it with an event:
+ *
+ *   document.dispatchEvent(new CustomEvent("ae:open",
+ *     { detail: { hub: "IDBL100003", hubName, field, id? } }))
+ *
+ * In that mode the piece goes into that blog (`hub` rides in the payload, and
+ * `article_save` checks the member may write there), the Content/Help choice is
+ * gone — a blog is not the site's Help — and nothing navigates: the editor
+ * answers `ae:published` / `ae:drafted` and the studio takes it from there.
  */
 import { rpc } from "./data.js";
 import { qs, qsa, esc, compact, timeAgo } from "./utils.js";
@@ -33,7 +48,13 @@ import { wordsIn, readingTime, sanitizeHtml, firstImage } from "./article-text.j
 import { SUPABASE, storageUrl } from "./config.js";
 import { createRte } from "./rte.js";
 
+/* the studio embeds this editor: the flag is on <body data-ae-embed="1"> */
+const EMBED = document.body.dataset.aeEmbed === "1";
+
 const S = {
+  hub: "",
+  hubName: "",
+  hubField: "",
   token: "",
   code: "",
   title: "",
@@ -385,7 +406,12 @@ function paintPrivate() {
 
 function paintPlace() {
   const seg = $("[data-e-place]");
-  if (seg) {
+  if (seg && EMBED) {
+    /* in a blog there is nothing to choose: it goes into this blog, and the
+       site's Help is not the blog's business */
+    seg.hidden = true;
+  }
+  if (seg && !EMBED) {
     qsa("[data-place]", seg).forEach((btn) => {
       const on = btn.getAttribute("data-place") === S.place;
       btn.classList.toggle("is-active", on);
@@ -410,13 +436,14 @@ function paintPlace() {
   if (select) select.value = S.help;
   const hint = $("[data-e-place-hint]");
   if (hint) {
-    hint.textContent =
-      S.place === "help"
+    hint.textContent = EMBED
+      ? `It is published in ${S.hubName || "this hub"} — open to whoever your door below allows.`
+      : S.place === "help"
         ? "Help pages go to the moderators for review, and they are always public — a help page nobody can read helps nobody."
         : "Content goes straight to the index, in the field you named, open to whoever your door allows.";
   }
   const label = $("[data-e-place-label]");
-  if (label) label.textContent = S.place === "help" ? "Help · review" : "Content";
+  if (label) label.textContent = EMBED ? S.hubName || "This hub" : S.place === "help" ? "Help · review" : "Content";
 }
 
 function paintWhen() {
@@ -618,23 +645,26 @@ function audienceRules() {
 
 function payload(status) {
   sync();
+  const place = EMBED ? "content" : S.place;
   const meta = {
-    place: S.place,
-    field: S.place === "help" ? "" : S.field.trim(),
+    place,
+    field: place === "help" ? "" : S.field.trim(),
     category: S.category.trim(),
     niche: S.niche.trim(),
     micro: S.micro.trim(),
     nano: S.nano.trim(),
-    help: S.place === "help" ? S.help : "",
+    help: place === "help" ? S.help : "",
   };
   const body = {
     id: S.code || null,
+    /* the blog it belongs to: only ever set by the studio's embedded form */
+    hub: S.hub || null,
     title: S.title.trim(),
     description: S.desc.trim() || null,
     body: S.html,
     thumbnail: (S.thumb || firstImage(S.html) || "").trim() || null,
     language: S.language,
-    visibility: S.place === "help" ? "general" : S.vis,
+    visibility: place === "help" ? "general" : S.vis,
     status,
     scheduled_at: status === "scheduled" ? (whenDate() || new Date()).toISOString() : null,
     tags: S.tags.slice(0, 12),
@@ -709,6 +739,10 @@ async function save(status) {
 
   if (S.status === "draft") {
     toast({ title: "Draft saved", message: "It is under “In your name”, on this page and on the index.", tone: "success", iconName: "check" });
+    if (EMBED) {
+      document.dispatchEvent(new CustomEvent("ae:drafted", { detail: { code: S.code, title: S.title, hub: S.hub } }));
+      return;
+    }
     if (!location.search.includes("id=")) {
       history.replaceState(null, "", `?id=${encodeURIComponent(S.code)}`);
     }
@@ -731,13 +765,112 @@ async function save(status) {
   clearDraft();
   toast({
     title: S.status === "scheduled" ? "Scheduled" : "Published",
-    message: S.status === "scheduled" ? "It opens by itself at the moment you picked." : "It is on the index now.",
+    message: S.status === "scheduled" ? "It opens by itself at the moment you picked." : EMBED ? "It is in the blog's table now." : "It is on the index now.",
     tone: "success",
     iconName: "check",
   });
+
+  if (EMBED) {
+    /* the studio takes over from here: it closes the writer and refreshes the
+       blog's table, so the piece is where the member expects to see it */
+    document.dispatchEvent(
+      new CustomEvent("ae:published", { detail: { code: S.code, title: S.title, status: S.status, hub: S.hub } })
+    );
+    return;
+  }
+
   setTimeout(() => {
     location.href = `article.html?id=${encodeURIComponent(S.code)}`;
   }, 700);
+}
+
+/* ================================================================== */
+/* the studio's writing room                                          */
+/* ================================================================== */
+/** A blank page — the studio calls this before it opens a new piece. */
+function resetForm() {
+  S.code = "";
+  S.title = "";
+  S.desc = "";
+  S.html = "";
+  S.field = S.hubField || "";
+  S.category = "";
+  S.niche = "";
+  S.micro = "";
+  S.nano = "";
+  S.place = "content";
+  S.help = "";
+  S.tags = [];
+  S.thumb = "";
+  S.vis = "general";
+  S.countries = [];
+  S.langs = [];
+  S.lvMin = 1;
+  S.lvMax = 10;
+  S.people = [];
+  S.passes = [];
+  S.hasPassword = false;
+  S.when = "now";
+  S.whenAt = "";
+  S.status = "draft";
+  S.busy = false;
+
+  const set = (sel, value) => {
+    const node = $(sel);
+    if (node) node.value = value;
+  };
+  set("[data-e-title]", "");
+  set("[data-e-desc]", "");
+  set("[data-e-field]", S.field);
+  set("[data-e-category]", "");
+  set("[data-e-niche]", "");
+  set("[data-e-micro]", "");
+  set("[data-e-nano]", "");
+  set("[data-e-cover-url]", "");
+  if (rte) rte.setHtml("");
+  paintAll();
+}
+
+/**
+ * What the studio's `ae:open` carries: the blog, its field, and either nothing
+ * (a new piece) or the code of one to edit.
+ */
+async function startEmbedded(detail = {}) {
+  S.token = sessionToken() || "";
+  S.hub = String(detail.hub || "").trim().toUpperCase();
+  S.hubName = String(detail.hubName || "").trim();
+  S.hubField = String(detail.field || "").trim();
+
+  const state = $("[data-e-state]");
+  if (state) state.hidden = true;
+
+  if (!S.token) {
+    showState({
+      title: "Sign in to write",
+      text: "An article is published in your name, so it needs an account.",
+      iconName: "pen",
+      action: `<a class="btn btn--primary btn--sm" href="login.html?next=${encodeURIComponent("creator.html")}">${icon("login")} Sign in</a>`,
+    });
+    return;
+  }
+
+  resetForm();
+  const shell = $("[data-e-shell]");
+  if (shell) shell.hidden = false;
+
+  const id = String(detail.id || "").trim();
+  if (id) {
+    const ok = await loadExisting(id);
+    if (!ok) return;
+    if (!S.hub) S.hub = String(detail.hub || "").toUpperCase();
+  }
+
+  paintAll();
+  paintNicheChain();
+  loadFields();
+  loadMine();
+  document.dispatchEvent(new CustomEvent("ae:ready", { detail: { hub: S.hub, code: S.code } }));
+  $("[data-e-title]")?.focus();
 }
 
 /* ================================================================== */
@@ -1566,6 +1699,17 @@ async function boot() {
   S.token = sessionToken() || "";
   fillLanguages();
   bind();
+
+  if (EMBED) {
+    /* the studio owns the shell here: nothing is filled in until it says
+       which blog, and which piece (if any) it wants written */
+    document.addEventListener("ae:open", (event) => {
+      startEmbedded((event && event.detail) || {}).catch((error) => {
+        console.warn("[1World] writing room:", error && error.message);
+      });
+    });
+    return;
+  }
 
   if (!S.token) {
     showState({

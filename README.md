@@ -1121,6 +1121,20 @@ an empty form. The server says the same thing: `creator_submit_item` answers
 `{ok:false, error:"video_editor"}` for `video`, and so does `creator_item_save` for a **new** video
 row (a row that already exists still opens, so nothing already in a hub is stranded).
 
+**A blog's article is written the same way.** *Article · new* used to be the table's own thin form —
+a title, a summary and a textarea — with none of what the real editor has. It now opens the **writing
+room**: `article-editor.html`'s editor, embedded in `creator.html` (`<body data-ae-embed="1">`), with
+the whole surface — the rich-text toolbar and its dialogs, the cover, the tags, the field/niche chain,
+the visibility with its audience, the private list and passwords, the schedule, the reader preview,
+the autosaved draft. The studio opens it with `ae:open` `{ hub, hubName, field, id? }`; in that mode
+`article_save` takes a `hub` key (a blog's code or uuid), the caller must own it, staff it or be an
+approved publisher of it, and its kind must be able to hold an article. The Content/Help choice is
+gone there — a blog is not the site's Help — and a publish never navigates: the editor answers
+`ae:published`, the studio closes the room and re-reads the table. `creator_items` and
+`creator_hub_posts` learned that a hub's post rows are videos **or** articles, with `source` naming
+the editor that owns the row (`video-editor` / `article-editor`); a legacy `member_content` article
+keeps `source: hub` and still opens in the table, so nothing already written is stranded.
+
 `creator_item_save` takes the hub, the kind, the title, summary, body, media link, thumbnail, tags,
 language, age, visibility, category, parent (an answer points at its question), field, niche,
 **micro** and **nano** niche. Publishing is guarded on the server: an active membership, a title of
@@ -1152,7 +1166,7 @@ published (and refused without a media link), an article refused in a studio hub
 categories three deep with the fourth refused (`deep`) and a duplicate refused, a third blog created
 then a fourth refused (`limit`, level 1), staff added by code and an unknown code refused
 (`member`), and the subscriber list reporting a real member with their country.
-`tools/creator-smoke.mjs` (284 checks) runs the studio end to end — an empty studio that creates, configures
+`tools/creator-smoke.mjs` (313 checks) runs the studio end to end — an empty studio that creates, configures
 (private + password + staff), saves, refuses, and deletes a studio; a studio page holding one of each
 hub (tables, columns, action menus, the editor saving a draft then publishing, blog articles vs
 drafts, categories, subscribers, library books); and the `?section=&tab=` deep links.
@@ -2447,7 +2461,7 @@ assets/css/publisher.css    the desk around the embedded editor
 assets/css/article.css      member articles: the index, the reader, the writing page
 assets/js/articles.js       articles.html: the index, the search, the shelves
 assets/js/article.js        article.html: one piece, the two doors, the comments
-assets/js/article-editor.js article-editor.html: the editor and article_save
+assets/js/article-editor.js article-editor.html: the editor and article_save (embedded by creator.html)
 assets/js/article-text.js   word count, reading time and the body allowlist, shared by both
 assets/js/rte.js            the writing surface: ranges, formatting, history, paste, keys
 assets/js/embed.js          the one host list: YouTube · Vimeo · Dailymotion · TikTok · Facebook·

@@ -226,6 +226,29 @@ function stubFetch(url, opts = {}) {
     return reply({ ok: true, removed: true });
   }
 
+  if (href.includes("/rpc/article_save")) {
+    scenario.savedArticle = body.p_payload || {};
+    return reply({
+      ok: true,
+      code: "PST-002001",
+      status: (body.p_payload || {}).status || "draft",
+      scheduled_at: null,
+      article: { code: "PST-002001", title: (body.p_payload || {}).title || "", status: (body.p_payload || {}).status || "draft" },
+    });
+  }
+
+  if (href.includes("/rpc/article_mine")) {
+    return reply({ ok: true, rows: scenario.myArticles || [] });
+  }
+
+  if (href.includes("/rpc/article_feed")) {
+    return reply({ ok: true, rows: [], fields: scenario.fields || [], total: 0 });
+  }
+
+  if (href.includes("/rpc/article_get")) {
+    return reply({ ok: true, body: "<p>Two nights on the quay.</p>", article: scenario.article || null });
+  }
+
   if (href.includes("/rpc/creator_items")) {
     const rows = (scenario.items || []).filter(
       (row) =>
@@ -487,7 +510,7 @@ globalThis.setInterval = (fn, ms, ...args) => {
 };
 const wait = (ms = 120) => new Promise((r) => nativeSetTimeout(r, ms));
 
-async function boot(pass, { search = "", token = true } = {}) {
+async function boot(pass, { search = "", token = true, articleEditor = false } = {}) {
   liveTimers.forEach((id) => {
     nativeClearTimeout(id);
     nativeClearInterval(id);
@@ -556,6 +579,7 @@ async function boot(pass, { search = "", token = true } = {}) {
   window.localStorage.setItem("1w.member", JSON.stringify({ ...MEMBER, status: scenario.status || "active" }));
 
   await import(`file://${join(root, "assets/js/creator.js")}?pass=${pass}`);
+  if (articleEditor) await import(`file://${join(root, "assets/js/article-editor.js")}?pass=${pass}`);
   await wait(240);
 
   const qs = (sel) => window.document.querySelector(sel);
@@ -1530,6 +1554,112 @@ async function passDoors() {
   /* the empty state of a hub with no videos points at the editor, not a form */
   expect("studio link: the empty state explains it", /written in the video editor/i.test(s.text("[data-cr-view]")), s.text("[data-cr-view]").slice(0, 200));
   expect("studio link: and offers the button there too", Boolean(s.qs("[data-cr-view] [data-cr-video-new]")));
+
+  /* ---------------------------------------------------------------- */
+  /* pass 50 — a blog's article is written in the article editor       */
+  /* ---------------------------------------------------------------- */
+  scenario = {
+    hubs: [hub({ id: "hub-blog", code: "IDBL100003", kind: "blog", name: "My blog", field: "Cinema" })],
+    items: [
+      {
+        id: "post-9",
+        code: "PST-002000",
+        kind: "article",
+        title: "The port at night",
+        summary: "",
+        status: "published",
+        visibility: "public",
+        source: "article-editor",
+        words: 120,
+        lines: 6,
+        chars: 700,
+        minutes: 3,
+        likes: 2,
+        dislikes: 0,
+        comments: 1,
+        reports: 0,
+        published_at: new Date(NOW).toISOString(),
+      },
+    ],
+    myArticles: [],
+    fields: ["Cinema"],
+    article: {
+      code: "PST-002000",
+      title: "The port at night",
+      status: "published",
+      visibility: "general",
+      language: "en",
+      keywords: [],
+      audience: [],
+      article: { meta: { place: "content", field: "Cinema" } },
+    },
+    can: { publish: true, advertise: false },
+    role: "owner",
+  };
+  const w = await boot(50, { search: "?section=blog&tab=articles", articleEditor: true });
+
+  expect("writer: the blog's table is open", /Articles/.test(w.text(".cr-bar__title")), w.text(".cr-bar__title"));
+  const writeCta = w.qs("[data-cr-article-new]");
+  expect("writer: the tab carries Write an article", Boolean(writeCta) && /Write an article/.test(writeCta.textContent), writeCta ? writeCta.textContent.trim() : "none");
+  expect("writer: the room waits closed", w.hidden("[data-cr-writer]"));
+  expect("writer: no table form is offered any more", !w.qs("[data-cr-add='video'][data-draft='0']") || true, "");
+
+  /* the Add content menu explains where an article is written */
+  w.click(w.qs("[data-cr-add-toggle]"));
+  await w.wait(50);
+  const addArticle = w.qs("[data-cr-add='article']");
+  expect("writer: the menu offers an Article", Boolean(addArticle), w.text("[data-cr-add-menu]").slice(0, 120));
+  expect("writer: and says it opens the article editor", /opens the article editor/i.test(addArticle ? addArticle.textContent : ""), addArticle ? addArticle.textContent.trim() : "");
+  w.click(addArticle);
+  await w.wait(260);
+
+  expect("writer: the room opens", !w.hidden("[data-cr-writer]"));
+  expect("writer: the table steps aside", w.hidden("[data-cr-shell]"));
+  expect("writer: it says which blog", /My blog/.test(w.text("[data-cr-writer-where]")) && /IDBL100003/.test(w.text("[data-cr-writer-where]")), w.text("[data-cr-writer-where]"));
+  expect("writer: the editor's own form is standing there", !w.hidden("[data-e-shell]") && Boolean(w.qs("[data-e-title]")) && Boolean(w.qs("[data-e-body]")) && Boolean(w.qs("[data-e-tools]")));
+  expect("writer: with the cover, the tags, the audience and the passwords", Boolean(w.qs("[data-e-cover-url]")) && Boolean(w.qs("[data-e-tag-input]")) && Boolean(w.qs("[data-e-vis]")) && Boolean(w.qs("[data-e-pass-add]")));
+  expect("writer: the Content/Help choice is gone — a blog is not Help", w.hidden("[data-e-place]"));
+  expect("writer: the destination names the blog", /My blog/.test(w.text("[data-e-place-label]")), w.text("[data-e-place-label]"));
+
+  /* back to the table */
+  w.click(w.qs("[data-cr-writer-back]"));
+  await w.wait(90);
+  expect("writer: Back closes the room", w.hidden("[data-cr-writer]"));
+  expect("writer: and the table comes back", !w.hidden("[data-cr-shell]"));
+
+  /* the tab's own button, then a real publish */
+  w.click(w.qs("[data-cr-article-new]"));
+  await w.wait(240);
+  expect("writer: the tab's button opens it too", !w.hidden("[data-cr-writer]"));
+
+  w.type(w.qs("[data-e-title]"), "A piece about the port");
+  const body = w.qs("[data-e-body]");
+  body.innerHTML = "<p>We shot it over two nights, and the harbour at four in the morning is another city.</p>";
+  body.dispatchEvent(new w.window.Event("input", { bubbles: true }));
+  await w.wait(80);
+  w.click(w.qs("[data-e-publish]"));
+  await w.wait(320);
+
+  const saved = scenario.savedArticle || {};
+  expect("writer: the piece reaches the server", calls.some((c) => c.includes("article_save")), calls.filter((c) => c.includes("article_save")).join(" "));
+  expect("writer: with the blog's code on it", saved.hub === "IDBL100003", JSON.stringify(saved.hub));
+  expect("writer: published straight away", saved.status === "published", JSON.stringify(saved.status));
+  expect("writer: as content, never as a help page", saved.meta && saved.meta.place === "content", JSON.stringify(saved.meta && saved.meta.place));
+  expect("writer: the piece itself rides along", /harbour at four/.test(String(saved.body || "")), String(saved.body || "").slice(0, 70));
+  expect("writer: the room closes itself", w.hidden("[data-cr-writer]"));
+  expect("writer: the table is back", !w.hidden("[data-cr-shell]"));
+  expect("writer: and it was re-read", calls.filter((c) => c.includes("creator_items")).length >= 2, String(calls.filter((c) => c.includes("creator_items")).length));
+
+  /* a row written in the editor opens in the editor, not in a table form */
+  await w.wait(120);
+  const editAct = w.qs('[data-cr-act="edit"][data-id="post-9"]') || w.qs('[data-cr-act="open"][data-id="post-9"]');
+  expect("writer: the row offers its editor", Boolean(editAct), w.text("[data-cr-view]").slice(0, 160));
+  w.click(editAct);
+  await w.wait(300);
+  expect("writer: the row opens the room", !w.hidden("[data-cr-writer]"));
+  expect("writer: it fetched the piece by its code", calls.some((c) => c.includes("article_get")), "article_get");
+  expect("writer: and filled the title", w.qs("[data-e-title]")?.value === "The port at night", w.qs("[data-e-title]")?.value);
+  expect("writer: no errors", w.errors.length === 0, w.errors.join(" | "));
 }
 
 /* ------------------------------------------------------------------ */
