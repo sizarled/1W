@@ -13,7 +13,7 @@
  *     audience[],   { kind: country|language|level|entity, value, mode: include }
  *     profiles[],   the members a private piece opens to
  *     passwords[],  hashed by the server, never readable again
- *     meta{ place: content|help, field, category, niche, help }
+ *     meta{ place: content|help, field, category, main_keyword, sub_keywords, help }
  *   })
  *
  * ?id=PST-001015 edits an existing piece: the form is filled from
@@ -62,9 +62,9 @@ const S = {
   html: "",
   field: "",
   category: "",
-  niche: "",
-  micro: "",
-  nano: "",
+  keyword: "",
+  subs: [],
+  otherMeta: {},
   place: "content",
   help: "",
   tags: [],
@@ -178,9 +178,9 @@ function draftFields() {
     html: S.html,
     field: S.field,
     category: S.category,
-    niche: S.niche,
-    micro: S.micro,
-    nano: S.nano,
+    keyword: S.keyword,
+    subs: S.subs,
+    otherMeta: S.otherMeta,
     tags: S.tags,
     language: S.language,
     thumb: S.thumb,
@@ -238,9 +238,9 @@ function restoreDraft(draft) {
   S.html = draft.html || "";
   S.field = draft.field || "";
   S.category = draft.category || "";
-  S.niche = draft.niche || "";
-  S.micro = draft.micro || "";
-  S.nano = draft.nano || "";
+  S.keyword = draft.keyword || "";
+  S.subs = Array.isArray(draft.subs) ? draft.subs.slice(0, LONGTAIL_MAX) : [];
+  S.otherMeta = draft.otherMeta && typeof draft.otherMeta === "object" ? draft.otherMeta : {};
   S.tags = Array.isArray(draft.tags) ? draft.tags.slice(0, 12) : [];
   S.language = draft.language || "en";
   S.thumb = draft.thumb || "";
@@ -258,17 +258,14 @@ function sync() {
   const desc = $("[data-e-desc]");
   const field = $("[data-e-field]");
   const category = $("[data-e-category]");
-  const niche = $("[data-e-niche]");
-  const micro = $("[data-e-micro]");
-  const nano = $("[data-e-nano]");
+  const keyword = $("[data-e-keyword]");
   const lang = $("[data-e-lang]");
   if (title) S.title = title.value;
   if (desc) S.desc = desc.value;
   if (field) S.field = field.value;
   if (category) S.category = category.value;
-  if (niche) S.niche = niche.value;
-  if (micro) S.micro = micro.value;
-  if (nano) S.nano = nano.value;
+  if (keyword) S.keyword = keyword.value;
+  S.subs = qsa("[data-e-sub-keyword]").map((input) => input.value);
   if (lang) S.language = lang.value || "en";
   S.html = bodyHtml();
 }
@@ -473,24 +470,112 @@ function paintFields() {
   list.innerHTML = S.fields.map((row) => `<option value="${esc(row.name)}"></option>`).join("");
 }
 
-/**
- * Field → niche → micro → nano, the same ladder the studio uses: one cannot
- * be named before the thing above it exists.
+/* ================================================================== */
+/* the keywords                                                       */
+/* ================================================================== */
+/*
+ * A piece is found by the words people type, so the old ladder — niche, then
+ * micro, then nano — became two rungs that mean something:
+ *
+ *   main keyword   three words at most        الربح من الانترنت
+ *   long tails     five words at least, each  الربح من الانترنت من خلال بيع الصور
+ *                  carrying the main keyword
+ *
+ * Five long tails at most, and none can be named before there is a main
+ * keyword to hang it on — the same "one cannot be named before the thing
+ * above it exists" rule the old ladder had.
  */
-function paintNicheChain() {
-  const niche = $("[data-e-niche]");
-  const micro = $("[data-e-micro]");
-  const nano = $("[data-e-nano]");
-  const hasNiche = Boolean(niche && niche.value.trim());
-  if (micro) {
-    micro.disabled = !hasNiche;
-    if (!hasNiche) micro.value = "";
+const KEYWORD_WORDS = 3;
+const LONGTAIL_WORDS = 5;
+const LONGTAIL_MAX = 5;
+
+const wordsOf = (text) => String(text || "").trim().split(/\s+/).filter(Boolean);
+
+/** The words as words: punctuation on the edges taken off, case put down. */
+const flatOf = (text) =>
+  wordsOf(text)
+    .map((word) => word.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ""))
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+/** The head as a whole phrase inside the tail — not as a stray run of letters. */
+const carries = (head, tail) => ` ${flatOf(tail)} `.includes(` ${flatOf(head)} `);
+
+function mainKeywordState() {
+  const words = wordsOf(S.keyword);
+  if (!words.length) return { ok: false, empty: true, words: 0, why: "" };
+  if (words.length > KEYWORD_WORDS) {
+    return { ok: false, empty: false, words: words.length, why: `${words.length} words — three at most.` };
   }
-  const hasMicro = Boolean(hasNiche && micro && micro.value.trim());
-  if (nano) {
-    nano.disabled = !hasMicro;
-    if (!hasMicro) nano.value = "";
+  return { ok: true, empty: false, words: words.length, why: "" };
+}
+
+function subKeywordState(text) {
+  const words = wordsOf(text);
+  const head = mainKeywordState();
+  const name = wordsOf(S.keyword).join(" ");
+  if (!words.length) return { ok: false, empty: true, words: 0, why: "" };
+  if (!head.ok) return { ok: false, empty: false, words: words.length, why: "A main keyword first." };
+  if (!carries(S.keyword, text)) {
+    return { ok: false, empty: false, words: words.length, why: `It has to carry “${name}”.` };
   }
+  if (words.length < LONGTAIL_WORDS) {
+    return { ok: false, empty: false, words: words.length, why: `${words.length} words — five at least.` };
+  }
+  return { ok: true, empty: false, words: words.length, why: `${words.length} words, with “${name}” in it.` };
+}
+
+/** Both rungs, counted and judged as they are typed. */
+function paintKeywords() {
+  const head = mainKeywordState();
+  const count = $("[data-e-main-count]");
+  if (count) {
+    count.textContent = `${head.words} / ${KEYWORD_WORDS} words`;
+    count.classList.toggle("is-over", head.words > KEYWORD_WORDS);
+  }
+
+  const main = $("[data-e-keyword]");
+  if (main) main.classList.toggle("is-bad", !head.ok && !head.empty);
+
+  let good = 0;
+  qsa("[data-e-sub-keyword]").forEach((input) => {
+    input.disabled = !head.ok;
+    const state = subKeywordState(input.value);
+    if (state.ok) good += 1;
+    input.classList.toggle("is-bad", !state.ok && !state.empty);
+    const say = input.parentElement?.querySelector("[data-e-sub-say]");
+    if (say) {
+      say.textContent = state.why;
+      say.classList.toggle("is-ok", state.ok);
+      say.classList.toggle("is-bad", !state.ok && !state.empty);
+    }
+  });
+
+  const total = $("[data-e-sub-count]");
+  if (total) total.textContent = `${good} / ${LONGTAIL_MAX}`;
+}
+
+/** The state, put back into the five boxes and the one above them. */
+function fillKeywords() {
+  const main = $("[data-e-keyword]");
+  if (main) main.value = S.keyword;
+  qsa("[data-e-sub-keyword]").forEach((input, index) => {
+    input.value = S.subs[index] || "";
+  });
+  paintKeywords();
+}
+
+/** What the editor does not edit, it does not throw away. */
+const MANAGED_META = ["place", "field", "category", "help", "main_keyword", "sub_keywords"];
+
+function otherMetaOf(meta) {
+  const keep = {};
+  Object.keys(meta || {}).forEach((key) => {
+    const value = meta[key];
+    if (!MANAGED_META.includes(key) && value !== null && value !== undefined && value !== "") keep[key] = value;
+  });
+  return keep;
 }
 
 /* ================================================================== */
@@ -619,6 +704,7 @@ function paintAll() {
   paintPlace();
   paintWhen();
   paintFields();
+  paintKeywords();
   paintChecks();
   paintStatus();
   paintMine();
@@ -647,12 +733,15 @@ function payload(status) {
   sync();
   const place = EMBED ? "content" : S.place;
   const meta = {
+    ...S.otherMeta,
     place,
     field: place === "help" ? "" : S.field.trim(),
     category: S.category.trim(),
-    niche: S.niche.trim(),
-    micro: S.micro.trim(),
-    nano: S.nano.trim(),
+    main_keyword: S.keyword.trim(),
+    sub_keywords: S.subs
+      .map((word) => String(word || "").trim())
+      .filter(Boolean)
+      .slice(0, LONGTAIL_MAX),
     help: place === "help" ? S.help : "",
   };
   const body = {
@@ -795,9 +884,9 @@ function resetForm() {
   S.html = "";
   S.field = S.hubField || "";
   S.category = "";
-  S.niche = "";
-  S.micro = "";
-  S.nano = "";
+  S.keyword = "";
+  S.subs = [];
+  S.otherMeta = {};
   S.place = "content";
   S.help = "";
   S.tags = [];
@@ -823,9 +912,10 @@ function resetForm() {
   set("[data-e-desc]", "");
   set("[data-e-field]", S.field);
   set("[data-e-category]", "");
-  set("[data-e-niche]", "");
-  set("[data-e-micro]", "");
-  set("[data-e-nano]", "");
+  set("[data-e-keyword]", "");
+  qsa("[data-e-sub-keyword]").forEach((input) => {
+    input.value = "";
+  });
   set("[data-e-cover-url]", "");
   if (rte) rte.setHtml("");
   paintAll();
@@ -866,7 +956,7 @@ async function startEmbedded(detail = {}) {
   }
 
   paintAll();
-  paintNicheChain();
+  fillKeywords();
   loadFields();
   loadMine();
   document.dispatchEvent(new CustomEvent("ae:ready", { detail: { hub: S.hub, code: S.code } }));
@@ -1815,17 +1905,23 @@ function bind() {
   });
   $("[data-e-field]")?.addEventListener("change", () => {
     sync();
-    paintNicheChain();
+    paintKeywords();
     paintChecks();
     paintStatus();
     scheduleDraft();
   });
-  ["[data-e-niche]", "[data-e-micro]", "[data-e-nano]"].forEach((sel) => {
-    $(sel)?.addEventListener("input", () => {
-      paintNicheChain();
-      scheduleDraft();
-    });
+  $("[data-e-keyword]")?.addEventListener("input", () => {
+    sync();
+    paintKeywords();
+    scheduleDraft();
   });
+  qsa("[data-e-sub-keyword]").forEach((input) =>
+    input.addEventListener("input", () => {
+      sync();
+      paintKeywords();
+      scheduleDraft();
+    })
+  );
 
   /* the import button is this module's own, so it exists on both pages */
   mountHtmlImport();
@@ -1911,9 +2007,9 @@ async function loadExisting(code) {
   S.place = meta.place === "help" ? "help" : "content";
   S.field = meta.field || "";
   S.category = meta.category || "";
-  S.niche = meta.niche || "";
-  S.micro = meta.micro || "";
-  S.nano = meta.nano || "";
+  S.keyword = meta.main_keyword || "";
+  S.subs = Array.isArray(meta.sub_keywords) ? meta.sub_keywords.slice(0, LONGTAIL_MAX) : [];
+  S.otherMeta = otherMetaOf(meta);
   S.help = meta.help || "";
   S.tags = (Array.isArray(row.keywords) ? row.keywords : []).filter((tag) => tag.role === "main").map((tag) => tag.keyword);
   S.hasPassword = Boolean(row.asks_password);
@@ -1942,9 +2038,6 @@ async function loadExisting(code) {
   const body = $("[data-e-body]");
   const field = $("[data-e-field]");
   const category = $("[data-e-category]");
-  const niche = $("[data-e-niche]");
-  const micro = $("[data-e-micro]");
-  const nano = $("[data-e-nano]");
   const lang = $("[data-e-lang]");
   if (title) title.value = S.title;
   if (desc) desc.value = S.desc;
@@ -1954,11 +2047,8 @@ async function loadExisting(code) {
   }
   if (field) field.value = S.field;
   if (category) category.value = S.category;
-  if (niche) niche.value = S.niche;
-  if (micro) micro.value = S.micro;
-  if (nano) nano.value = S.nano;
+  fillKeywords();
   if (lang) lang.value = S.language;
-  paintNicheChain();
 
   const heading = $("[data-e-heading]");
   if (heading) heading.textContent = "Edit an article";
@@ -2017,7 +2107,7 @@ async function boot() {
     const desc = $("[data-e-desc]");
     if (desc) desc.value = S.desc;
     if (rte) rte.setHtml(S.html);
-    paintNicheChain();
+    fillKeywords();
     paintAll();
     toast({ title: "Draft restored", message: "The last thing you wrote here is back. Publish or discard it.", tone: "info", iconName: "file" });
   }

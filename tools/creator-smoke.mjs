@@ -1619,6 +1619,9 @@ async function passDoors() {
   expect("writer: it says which blog", /My blog/.test(w.text("[data-cr-writer-where]")) && /IDBL100003/.test(w.text("[data-cr-writer-where]")), w.text("[data-cr-writer-where]"));
   expect("writer: the editor's own form is standing there", !w.hidden("[data-e-shell]") && Boolean(w.qs("[data-e-title]")) && Boolean(w.qs("[data-e-body]")) && Boolean(w.qs("[data-e-tools]")));
   expect("writer: with the cover, the tags, the audience and the passwords", Boolean(w.qs("[data-e-cover-url]")) && Boolean(w.qs("[data-e-tag-input]")) && Boolean(w.qs("[data-e-vis]")) && Boolean(w.qs("[data-e-pass-add]")));
+  expect("writer: the keywords are a head term and five long tails", Boolean(w.qs("[data-e-keyword]")) && w.qsa("[data-e-sub-keyword]").length === 5, w.qsa("[data-e-sub-keyword]").length);
+  expect("writer: the long tails wait for the head", w.qsa("[data-e-sub-keyword]").every((node) => node.disabled), w.qsa("[data-e-sub-keyword]").map((n) => n.disabled).join(","));
+  expect("writer: the old niche ladder is gone from the room too", !w.qs("[data-e-niche]") && !w.qs("[data-e-micro]") && !w.qs("[data-e-nano]"), "");
   expect("writer: the Content/Help choice is gone — a blog is not Help", w.hidden("[data-e-place]"));
   expect("writer: the destination names the blog", /My blog/.test(w.text("[data-e-place-label]")), w.text("[data-e-place-label]"));
 

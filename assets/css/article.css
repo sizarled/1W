@@ -2055,6 +2055,83 @@
   line-height: 1.55;
 }
 
+/* the keywords ------------------------------------------------------ */
+.aken {
+  margin-top: 0.95rem;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.aken__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.aken__count {
+  font-size: 0.68rem;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.aken__hint {
+  margin: 0 0 0.15rem;
+  font-size: 0.7rem;
+  line-height: 1.55;
+  color: var(--faint);
+}
+
+.aken__rows {
+  display: grid;
+  gap: 0.42rem;
+}
+
+.aken__row {
+  display: grid;
+  grid-template-columns: 1.1rem minmax(0, 1fr) minmax(0, 15rem);
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.aken__n {
+  font-size: 0.68rem;
+  color: var(--faint);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.aken__say {
+  font-size: 0.66rem;
+  line-height: 1.45;
+  color: var(--faint);
+}
+
+.aken__say.is-ok {
+  color: var(--text-2);
+}
+
+.aken__say.is-bad,
+.aken__count.is-over,
+.input.is-bad {
+  color: var(--text);
+}
+
+.input.is-bad {
+  border-color: var(--text-2);
+}
+
+@media (max-width: 720px) {
+  .aken__row {
+    grid-template-columns: 1.1rem minmax(0, 1fr);
+  }
+
+  .aken__say {
+    grid-column: 2;
+    margin-top: -0.15rem;
+  }
+}
+
 /* importing HTML ---------------------------------------------------- */
 .aimp__open {
   margin-left: auto;

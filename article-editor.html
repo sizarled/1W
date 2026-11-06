@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="assets/css/base.css?v=20261105e" />
     <link rel="stylesheet" href="assets/css/layout.css?v=20261105e" />
     <link rel="stylesheet" href="assets/css/components.css?v=20261105e" />
-    <link rel="stylesheet" href="assets/css/article.css?v=20261112a" />
+    <link rel="stylesheet" href="assets/css/article.css?v=20261112b" />
     <script>
       /* apply the saved theme (or the OS preference) before first paint */
       (function () {
@@ -33,7 +33,7 @@
       })();
     </script>
     <script type="module" src="assets/js/app.js?v=20261106a"></script>
-    <script type="module" src="assets/js/article-editor.js?v=20261112a"></script>
+    <script type="module" src="assets/js/article-editor.js?v=20261112b"></script>
   </head>
   <body data-page="articleEditor" data-title="Write an article">
     <a class="skip-link" href="#main">Skip to content</a>
@@ -153,20 +153,45 @@
               <div class="aed__row" style="margin-top:0">
                 <label class="afield"><span class="alabel">Field</span>
                   <input class="input" data-e-field list="e-fields" placeholder="Film, Cinema, Series…" maxlength="60" /></label>
-                <label class="afield"><span class="alabel">Niche</span>
-                  <input class="input" data-e-niche placeholder="Long takes, Sound, Festivals…" maxlength="60" /></label>
                 <label class="afield"><span class="alabel">Category</span>
                   <input class="input" data-e-category placeholder="Craft, Industry, Notebook…" maxlength="60" /></label>
+                <label class="afield"><span class="alabel">Language</span>
+                  <select class="input" data-e-lang></select></label>
               </div>
               <datalist id="e-fields" data-e-fields></datalist>
 
-              <div class="aed__row" style="margin-top:.6rem">
-                <label class="afield"><span class="alabel">Micro niche</span>
-                  <input class="input" data-e-micro placeholder="Needs a niche above" maxlength="60" disabled /></label>
-                <label class="afield"><span class="alabel">Nano niche</span>
-                  <input class="input" data-e-nano placeholder="Needs a micro niche" maxlength="60" disabled /></label>
-                <label class="afield"><span class="alabel">Language</span>
-                  <select class="input" data-e-lang></select></label>
+              <!-- the keywords: one head term, and the long tails --- -->
+              <div class="aken" data-e-keys>
+                <div class="aken__head">
+                  <span class="alabel">Main keyword</span>
+                  <span class="aken__count" data-e-main-count>0 / 3 words</span>
+                </div>
+                <input class="input" data-e-keyword dir="auto" maxlength="60"
+                  placeholder="الربح من الانترنت — three words at most" />
+                <div class="aken__head">
+                  <span class="alabel">Long-tail keywords</span>
+                  <span class="aken__count" data-e-sub-count>0 / 5</span>
+                </div>
+                <p class="aken__hint">
+                  Five at most. Each one carries the main keyword and runs five words or more — the way a long tail does.
+                </p>
+                <div class="aken__rows">
+                  <label class="aken__row"><span class="aken__n">1</span>
+                    <input class="input" data-e-sub-keyword dir="auto" maxlength="90" disabled placeholder="A main keyword first" />
+                    <span class="aken__say" data-e-sub-say></span></label>
+                  <label class="aken__row"><span class="aken__n">2</span>
+                    <input class="input" data-e-sub-keyword dir="auto" maxlength="90" disabled placeholder="A main keyword first" />
+                    <span class="aken__say" data-e-sub-say></span></label>
+                  <label class="aken__row"><span class="aken__n">3</span>
+                    <input class="input" data-e-sub-keyword dir="auto" maxlength="90" disabled placeholder="A main keyword first" />
+                    <span class="aken__say" data-e-sub-say></span></label>
+                  <label class="aken__row"><span class="aken__n">4</span>
+                    <input class="input" data-e-sub-keyword dir="auto" maxlength="90" disabled placeholder="A main keyword first" />
+                    <span class="aken__say" data-e-sub-say></span></label>
+                  <label class="aken__row"><span class="aken__n">5</span>
+                    <input class="input" data-e-sub-keyword dir="auto" maxlength="90" disabled placeholder="A main keyword first" />
+                    <span class="aken__say" data-e-sub-say></span></label>
+                </div>
               </div>
 
               <div class="aed__row" style="margin-top:.7rem">
@@ -175,8 +200,8 @@
               </div>
               <div class="aed__chips" data-e-chips style="margin-top:.5rem"></div>
               <p class="apanel__hint">
-                The field builds the shelf on the index; the tags are the site's own keywords and decide what this piece
-                sits next to.
+                The field builds the shelf on the index, and the tags decide what this piece sits next to. The main
+                keyword is what a search asks for; the long tails are the ways people actually type it.
               </p>
             </section>
 

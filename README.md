@@ -1124,7 +1124,7 @@ row (a row that already exists still opens, so nothing already in a hub is stran
 **A blog's article is written the same way.** *Article · new* used to be the table's own thin form —
 a title, a summary and a textarea — with none of what the real editor has. It now opens the **writing
 room**: `article-editor.html`'s editor, embedded in `creator.html` (`<body data-ae-embed="1">`), with
-the whole surface — the rich-text toolbar and its dialogs, the cover, the tags, the field/niche chain,
+the whole surface — the rich-text toolbar and its dialogs, the cover, the tags, the field with its keywords,
 the visibility with its audience, the private list and passwords, the schedule, the reader preview,
 the autosaved draft. The studio opens it with `ae:open` `{ hub, hubName, field, id? }`; in that mode
 `article_save` takes a `hub` key (a blog's code or uuid), the caller must own it, staff it or be an
@@ -1166,7 +1166,7 @@ published (and refused without a media link), an article refused in a studio hub
 categories three deep with the fourth refused (`deep`) and a duplicate refused, a third blog created
 then a fourth refused (`limit`, level 1), staff added by code and an unknown code refused
 (`member`), and the subscriber list reporting a real member with their country.
-`tools/creator-smoke.mjs` (319 checks) runs the studio end to end — an empty studio that creates, configures
+`tools/creator-smoke.mjs` (322 checks) runs the studio end to end — an empty studio that creates, configures
 (private + password + staff), saves, refuses, and deletes a studio; a studio page holding one of each
 hub (tables, columns, action menus, the editor saving a draft then publishing, blog articles vs
 drafts, categories, subscribers, library books); and the `?section=&tab=` deep links.
@@ -1508,7 +1508,7 @@ publishing). The mocks' own theme system and palette were not carried over — o
 
 An article is a row of `posts` with `content_type = 'article'`, the same row likes, comments, reports
 and reach already live on. It needed one column of its own — `posts.article_meta` (`place`, `field`,
-`category`, `niche`, `help`) — and nothing else: the door's passwords table was **renamed**
+`category`, `main_keyword`, `sub_keywords`, `help`) — and nothing else: the door's passwords table was **renamed**
 `video_keys → post_keys`, so a video and an article share one kind of door, and `video_save` is now a
 thin wrapper around one general save.
 
@@ -1559,6 +1559,26 @@ image picked in the body gets a floating bar (small / medium / full, left / cent
 *Reader preview* opens the piece with a simulated reader (country, language, level) and says whether
 that reader would see the piece or the door.
 
+**The niche ladder became a keyword rule.** *Niche*, *Micro niche* and *Nano niche* asked a writer to
+name a tree; what a piece is found by is the words people type. So the three boxes became two rungs:
+
+| Rung | Rule | Example |
+| --- | --- | --- |
+| Main keyword | **three words at most**, one per piece | `الربح من الانترنت` |
+| Long-tail keywords | **five at most**, each one **five words or more** and each one **carrying the main keyword** | `الربح من الانترنت من خلال بيع الصور` |
+
+A long tail cannot be typed before there is a head to hang it on — the boxes stay shut until the main
+keyword is valid, the same "nothing is named before the thing above it exists" rule the ladder had.
+Both rungs judge as they are typed: `3 / 3 words` and `1 / 5` in the panel, over three words marked on
+the counter, and beside each line either *"7 words, with “الربح من الانترنت” in it."* or the reason it
+was refused (*"It has to carry “الربح من الانترنت”."*, *"3 words — five at least."*). The head is read as
+a phrase of whole words, so a comma after it does not break the tail, and a head hidden inside a longer
+word does not count. What the editor
+saves is `meta.main_keyword` and `meta.sub_keywords[]`; the old `niche / micro / nano` keys are no
+longer edited, but a piece that already carries them keeps them — the save carries back every meta key
+the form does not own, so a new field on this page can never quietly throw an old one away. The rule
+lives in `article-editor.js`, so the studio's writing room wears it too.
+
 **A piece that already exists somewhere else comes in through *Import HTML*.** The button sits in the
 piece's head, beside the title counter, and it is put there by `article-editor.js` itself — so the
 studio's writing room has it too, on the same code. The dialog takes the page either way: paste it, or
@@ -1581,9 +1601,11 @@ import is not a second renderer: what it inserts is exactly what the reader woul
 taken off that list so the generator cannot overwrite them.
 
 DDL + functions: `tools/sql/articles-page.sql` — **applied**. Test: `node tools/article-smoke.mjs` —
-**218/218** (the index, the empty index, the reader and its sanitizer, reaction→comment→vote, the
+**231/231** (the index, the empty index, the reader and its sanitizer, reaction→comment→vote, the
 exclusive gate with its steps and reminder, the private gate with a wrong and a right password, a
-missing piece, the editor signed out and in, every toolbar function on a real range, importing an HTML
+missing piece, the editor signed out and in, every toolbar function on a real range, the keyword rule —
+a head of three words waking the long tails, a tail refused without the head, a head refused past three
+words — importing an HTML
 page through the paste box and through a chosen file — scripts, styles and handlers gone, the headline
 kept as a heading and offered as the title, a replace that clears the body — the draft on the device,
 Ctrl+Enter, a draft payload, an audience payload, a private payload with its member and password, Help
@@ -1621,8 +1643,8 @@ the block select follows. `keepSelection` on the toolbar stops a click from taki
 and the engine remembers the range when a dialog opens, so a link or a picture lands where the member
 was writing rather than at the end.
 
-The article editor gained the rest of the mock while it was open: **micro and nano niche** under the
-niche (each waiting for the one above it), the **draft on this device** (written 900 ms after the last
+The article editor gained the rest of the mock while it was open: the **keyword rule** below, the
+**draft on this device** (written 900 ms after the last
 keystroke, restored on the next visit, cleared when the piece is published or sent to review, and
 dated in the status line), **Ctrl/Cmd+Enter** to publish, and a **follows-you** switch in the reader
 preview so the followers-only door can be tried as well.
@@ -1664,7 +1686,7 @@ the editors need**, each pinned to a name pattern and a set of extensions (`user
 | Gate | Result |
 | --- | --- |
 | `node tools/rte-smoke.mjs` | **45/45** (every command, links, insertion, history, paste, drop, keys, toolbar state) |
-| `node tools/article-smoke.mjs` | **218/218** |
+| `node tools/article-smoke.mjs` | **231/231** |
 | `node tools/video-smoke.mjs` | **208/208** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
 
 ### The six OAuth apps — one checklist each

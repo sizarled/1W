@@ -742,19 +742,61 @@ const MEMBER = {
   expect("hands: clear formatting strips the tags", !body.querySelector("strong") && !body.querySelector("em"), body.innerHTML);
   expect("hands: the words are still there", body.textContent.includes("thick") && body.textContent.includes("slanted"), body.textContent);
 
-  /* the niche ladder */
-  const micro = document.querySelector("[data-e-micro]");
-  const nano = document.querySelector("[data-e-nano]");
-  expect("hands: micro waits for a niche", micro?.disabled === true);
-  document.querySelector("[data-e-niche]").value = "Long takes";
-  document.querySelector("[data-e-niche]").dispatchEvent(new window.Event("input", { bubbles: true }));
+  /* the keywords: one head term of three words, five long tails under it */
+  const type = (node, value) => {
+    node.value = value;
+    node.dispatchEvent(new window.Event("input", { bubbles: true }));
+  };
+  const sayOf = (node) => node.parentElement.querySelector("[data-e-sub-say]");
+  const mainKeyword = document.querySelector("[data-e-keyword]");
+  const longs = [...document.querySelectorAll("[data-e-sub-keyword]")];
+  const HEAD = "الربح من الانترنت";
+  const TAIL = "الربح من الانترنت من خلال بيع الصور";
+
+  expect("keywords: five long-tail boxes", longs.length === 5, longs.length);
+  expect("keywords: the ladder it replaced is gone", !document.querySelector("[data-e-niche]") && !document.querySelector("[data-e-micro]") && !document.querySelector("[data-e-nano]"), "");
+  expect("keywords: the long tails wait for the head", longs.every((node) => node.disabled), longs.map((n) => n.disabled).join(","));
+
+  type(mainKeyword, HEAD);
   await wait(20);
-  expect("hands: a niche unlocks micro", micro?.disabled === false);
-  expect("hands: nano still waits", nano?.disabled === true);
-  micro.value = "Static camera";
-  micro.dispatchEvent(new window.Event("input", { bubbles: true }));
+  expect("keywords: three words wake the long tails", longs.every((node) => !node.disabled), longs.map((n) => n.disabled).join(","));
+  expect("keywords: the head is counted", document.querySelector("[data-e-main-count]")?.textContent === "3 / 3 words", document.querySelector("[data-e-main-count]")?.textContent);
+
+  type(longs[0], TAIL);
   await wait(20);
-  expect("hands: a micro unlocks nano", nano?.disabled === false);
+  expect("keywords: a long tail is accepted", sayOf(longs[0])?.classList.contains("is-ok"), sayOf(longs[0])?.textContent);
+  expect("keywords: and it is counted", document.querySelector("[data-e-sub-count]")?.textContent === "1 / 5", document.querySelector("[data-e-sub-count]")?.textContent);
+
+  type(longs[1], "بيع الصور على الانترنت في المغرب");
+  await wait(20);
+  expect("keywords: a tail without the head is refused", longs[1].classList.contains("is-bad"), sayOf(longs[1])?.textContent);
+  expect("keywords: the refusal names the head", (sayOf(longs[1])?.textContent || "").includes(HEAD), sayOf(longs[1])?.textContent);
+
+  type(longs[2], HEAD);
+  await wait(20);
+  expect("keywords: the head alone is no long tail", /five at least/.test(sayOf(longs[2])?.textContent || ""), sayOf(longs[2])?.textContent);
+
+  type(longs[3], `${HEAD}، من خلال بيع الصور`);
+  await wait(20);
+  expect("keywords: a comma after the head is still the head", sayOf(longs[3])?.classList.contains("is-ok"), sayOf(longs[3])?.textContent);
+
+  type(mainKeyword, "port");
+  type(longs[4], "airport views at night in the harbour");
+  await wait(20);
+  expect("keywords: a head hidden inside another word does not count", longs[4].classList.contains("is-bad"), sayOf(longs[4])?.textContent);
+  type(longs[4], "");
+  type(longs[3], "");
+
+  type(mainKeyword, "الربح من الانترنت عبر بيع الصور");
+  await wait(20);
+  expect("keywords: past three words the head is over", document.querySelector("[data-e-main-count]")?.classList.contains("is-over"), document.querySelector("[data-e-main-count]")?.textContent);
+  expect("keywords: and the long tails go back to waiting", longs.every((node) => node.disabled), longs.map((n) => n.disabled).join(","));
+
+  type(mainKeyword, HEAD);
+  type(longs[1], "");
+  type(longs[2], "");
+  await wait(20);
+  expect("keywords: the head comes back and one tail stands", document.querySelector("[data-e-sub-count]")?.textContent === "1 / 5", document.querySelector("[data-e-sub-count]")?.textContent);
 
   /* the draft on the device */
   document.querySelector("[data-e-title]").value = "Hands on the toolbar";
@@ -764,6 +806,7 @@ const MEMBER = {
   const kept = window.localStorage.getItem("1w.articles.draft");
   expect("hands: the draft is kept on the device", Boolean(kept), kept ? kept.slice(0, 60) : "nothing");
   expect("hands: with the body inside it", kept?.includes("thick") || kept?.includes("slanted"), kept ? kept.slice(0, 120) : "");
+  expect("hands: and the keywords", kept?.includes("الربح من الانترنت"), kept ? kept.slice(0, 160) : "");
   expect("hands: the status line says so", document.querySelector("[data-e-status]")?.textContent.includes("on this device"), document.querySelector("[data-e-status]")?.textContent);
 
   /* Ctrl+Enter publishes */
@@ -774,8 +817,9 @@ const MEMBER = {
   expect("hands: Ctrl+Enter publishes", sent.length === before + 1, String(sent.length));
   const last = sent[sent.length - 1];
   expect("hands: as a published piece", last?.body.p_payload.status === "published", last?.body.p_payload.status);
-  expect("hands: with the niche in meta", last?.body.p_payload.meta.niche === "Long takes", JSON.stringify(last?.body.p_payload.meta));
-  expect("hands: with micro and nano too", last?.body.p_payload.meta.micro === "Static camera" && last?.body.p_payload.meta.nano === "", JSON.stringify(last?.body.p_payload.meta));
+  expect("keywords: the head rides in meta", last?.body.p_payload.meta.main_keyword === HEAD, JSON.stringify(last?.body.p_payload.meta));
+  expect("keywords: the long tails ride beside it", JSON.stringify(last?.body.p_payload.meta.sub_keywords) === JSON.stringify([TAIL]), JSON.stringify(last?.body.p_payload.meta.sub_keywords));
+  expect("keywords: the old ladder is not sent", !("niche" in (last?.body.p_payload.meta || {})) && !("nano" in (last?.body.p_payload.meta || {})), JSON.stringify(last?.body.p_payload.meta));
   expect("hands: nothing threw", errors.length === 0, errors.join(" | "));
 }
 
