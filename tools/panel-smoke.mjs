@@ -379,6 +379,7 @@ function deskFetch(href) {
   expect("files: the status is a closed set", /check \(status in \('available', 'unavailable'\)\)/.test(sql));
   expect("files: the public door grants only the shelf", /grant execute on function public\.platform_public\(\) to anon, authenticated, service_role/.test(sql));
   expect("files: writes ask for staff", /if not public\.site_admin\(p_token\) then/.test(sql));
+  expect("files: the logo folder has storage policies", /source_platform_insert/.test(sql) && /users\/platform/.test(sql));
   expect("files: the build no longer generates the page", !/\["panel\.html"/.test(build));
   expect("files: the CSS dresses the head, the rows and the sheet", /\.pnl__head/.test(css) && /\.pfrow/.test(css) && /\.pfedit/.test(css));
 

@@ -2211,8 +2211,8 @@ first — no session (sign in), a session that is not staff (the desk is shut), 
 answer (try again) — then the rows: the logo, the name and its code, the handle, the host of the
 link, the status as a **switch** (one click writes `platform_save` with the other status) and a
 delete that asks once (`Remove?`) before the second click writes. The dialog holds every field,
-takes a logo by drop, file or link (the `source` bucket, `users/platform/…`, exactly like the
-editors) and validates before it calls the server. The stats strip counts all / available /
+takes a logo by drop, file or link (the `source` bucket, `users/platform/…`, with its own
+`storage.objects` policies in the same SQL file) and validates before it calls the server. The stats strip counts all / available /
 unavailable, the search reads name, handle, code and link, and the filter sits beside it.
 
 **The homepage.** `assets/js/platforms.js` is the only reader: `platform_public()` once, cached for
@@ -2256,7 +2256,7 @@ browser that already has the old file.
 ```bash
 node tools/dashboard-smoke.mjs   # 156 checks: the five gates, rail, popover, codes, sections, Unlock now, Account settings
 node tools/sidebar-smoke.mjs     # 93 checks: the edge, the pin, Escape, the mobile drawer, the dashboard menu
-node tools/panel-smoke.mjs       # 88 checks: the desk's three states, the rows, the switch, the dialog, the shelf
+node tools/panel-smoke.mjs       # 89 checks: the desk's three states, the rows, the switch, the dialog, the shelf
 node tools/court-smoke.mjs       # 115 checks: the four steps, uploads, both doors, the court room
 node tools/iptv-smoke.mjs        # 43 checks: the playlists, the groups, the page, the deep links
 node tools/activated-smoke.mjs   # 35 checks: hidden panels, image link, ad pause, code return

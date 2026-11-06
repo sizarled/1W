@@ -303,7 +303,48 @@ values
 on conflict do nothing;
 
 -- ------------------------------------------------------------------
--- 9. grants — the shelf is public, the rest checks the token
+-- 9. the logos — the `source` bucket's platform folder
+-- ------------------------------------------------------------------
+-- The editors upload to `users/<folder>/…` and a storage policy names every
+-- folder that may be written. A logo lives in `users/platform/`, so it needs
+-- the same three policies the posts folder has (insert, read, update); without
+-- them the upload is refused by RLS even for a signed-in staff member.
+drop policy if exists source_platform_insert on storage.objects;
+create policy source_platform_insert on storage.objects
+  for insert to anon, authenticated
+  with check (
+    bucket_id = 'source'
+    and (storage.foldername(name))[1] = 'users'
+    and (storage.foldername(name))[2] = 'platform'
+    and name ~ '^users/platform/[A-Za-z0-9_.-]{1,90}\.(jpg|jpeg|png|webp|gif|svg)$'
+  );
+
+drop policy if exists source_platform_read on storage.objects;
+create policy source_platform_read on storage.objects
+  for select to anon, authenticated
+  using (
+    bucket_id = 'source'
+    and (storage.foldername(name))[1] = 'users'
+    and (storage.foldername(name))[2] = 'platform'
+  );
+
+drop policy if exists source_platform_update on storage.objects;
+create policy source_platform_update on storage.objects
+  for update to anon, authenticated
+  using (
+    bucket_id = 'source'
+    and (storage.foldername(name))[1] = 'users'
+    and (storage.foldername(name))[2] = 'platform'
+  )
+  with check (
+    bucket_id = 'source'
+    and (storage.foldername(name))[1] = 'users'
+    and (storage.foldername(name))[2] = 'platform'
+    and name ~ '^users/platform/[A-Za-z0-9_.-]{1,90}\.(jpg|jpeg|png|webp|gif|svg)$'
+  );
+
+-- ------------------------------------------------------------------
+-- 10. grants — the shelf is public, the rest checks the token
 -- ------------------------------------------------------------------
 revoke all on public.platform from public, anon, authenticated;
 revoke all on public.site_staff from public, anon, authenticated;
