@@ -207,6 +207,9 @@ function renderHero(page) {
   const hub = page.hub || {};
   const stats = page.stats || {};
 
+  const hero = $(".bhero");
+  if (hero) hero.classList.toggle("is-plain", !hub.cover_url);
+
   const cover = $("[data-b-cover]");
   if (cover) {
     cover.src = hub.cover_url || "";
@@ -310,7 +313,7 @@ async function paintHome() {
   const top = await feed({ sort: "popular", limit: 10 });
   if (rail && top) {
     rail.innerHTML = gridMarkup(top.rows);
-    if (popular) popular.hidden = top.rows.length < 2;
+    if (popular) popular.hidden = top.rows.length < 1;
   }
 
   if (rows) rows.innerHTML = "";
@@ -342,13 +345,22 @@ async function paintHome() {
       .join("");
   }
 
+  const nothing = $("[data-b-nothing]");
+  if (nothing) {
+    const any = Boolean(top && top.rows.length) || sections.length > 0;
+    nothing.hidden = any;
+  }
+
   if (grid && sections.length) {
     grid.innerHTML = sections
       .map(
         (section) => `
         <a class="bsection" href="?studio=${encodeURIComponent(state.ref)}&section=${encodeURIComponent(section.name)}&by=${encodeURIComponent(section.by || "category")}" data-b-sec="${esc(section.name)}">
-          <b>${esc(section.name)}</b>
-          <span>${esc(num(section.count || 0))} ${Number(section.count || 0) === 1 ? "piece" : "pieces"}</span>
+          <span class="bsection__id">
+            <b>${esc(section.name)}</b>
+            <span>${esc(num(section.count || 0))} ${Number(section.count || 0) === 1 ? "piece" : "pieces"}</span>
+          </span>
+          <span class="bsection__go" aria-hidden="true">${icon("arrowRight")}</span>
         </a>`
       )
       .join("");

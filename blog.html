@@ -21,7 +21,7 @@
     <link rel="stylesheet" href="assets/css/layout.css?v=20261105e" />
     <link rel="stylesheet" href="assets/css/components.css?v=20261113a" />
     <link rel="stylesheet" href="assets/css/article.css?v=20261114a" />
-    <link rel="stylesheet" href="assets/css/blog.css?v=20261115a" />
+    <link rel="stylesheet" href="assets/css/blog.css?v=20261115b" />
     <script>
       /* apply the saved theme (or the OS preference) before first paint */
       (function () {
@@ -40,7 +40,7 @@
       })();
     </script>
     <script type="module" src="assets/js/app.js?v=20261106a"></script>
-    <script type="module" src="assets/js/blog.js?v=20261115a"></script>
+    <script type="module" src="assets/js/blog.js?v=20261115b"></script>
   </head>
   <body data-page="blog" data-title="Blog">
     <a class="skip-link" href="#main">Skip to content</a>
@@ -50,7 +50,7 @@
     <main class="site-main blogp" id="main">
       <div class="wrap">
         <!-- what the page says while it is not the blog yet -->
-        <div data-b-state hidden></div>
+        <div data-b-state role="status" aria-live="polite" hidden></div>
 
         <div data-b-shell hidden>
           <!-- ========================================================== -->
@@ -60,15 +60,18 @@
             <div class="bhero__cover">
               <img data-b-cover alt="" loading="eager" />
               <span class="bhero__veil" aria-hidden="true"></span>
-              <span class="bhero__mark" data-b-logo aria-hidden="true"></span>
             </div>
 
-            <div class="bhero__id">
-              <p class="bhero__kind" data-b-kind></p>
-              <h1 class="bhero__name" data-b-name></h1>
-              <p class="bhero__desc" data-b-desc></p>
-              <div class="bhero__tags" data-b-tags></div>
-              <p class="bhero__by" data-b-owner></p>
+            <div class="bhero__body">
+              <span class="bhero__mark" data-b-logo aria-hidden="true"></span>
+
+              <div class="bhero__id">
+                <p class="bhero__kind" data-b-kind></p>
+                <h1 class="bhero__name" data-b-name></h1>
+                <p class="bhero__desc" data-b-desc></p>
+                <div class="bhero__tags" data-b-tags></div>
+                <p class="bhero__by" data-b-owner></p>
+              </div>
             </div>
 
             <div class="bhero__acts">
@@ -107,10 +110,10 @@
                 <h2 class="bsec__title" data-b-section-name></h2>
                 <span class="bsec__count" data-b-section-count></span>
               </div>
-              <div class="segmented" data-b-sort role="tablist" aria-label="Sort this section">
-                <button type="button" data-sort="popular" class="is-active" role="tab" aria-selected="true">Most read</button>
-                <button type="button" data-sort="new" role="tab" aria-selected="false">Newest</button>
-                <button type="button" data-sort="liked" role="tab" aria-selected="false">Liked</button>
+              <div class="segmented bseg" data-b-sort role="tablist" aria-label="Sort this section">
+                <button class="segmented__btn is-active" type="button" role="tab" aria-selected="true" data-sort="popular">Most read</button>
+                <button class="segmented__btn" type="button" role="tab" aria-selected="false" data-sort="new">Newest</button>
+                <button class="segmented__btn" type="button" role="tab" aria-selected="false" data-sort="liked">Liked</button>
               </div>
             </div>
             <div class="bgrid" data-b-grid></div>
@@ -121,7 +124,7 @@
           <!-- the blog's own home                                         -->
           <!-- ========================================================== -->
           <div data-b-home>
-            <section class="brow" data-b-popular hidden>
+            <section class="brow brow--lead" data-b-popular hidden>
               <div class="brow__head">
                 <div class="brow__id">
                   <h2 class="brow__title">Most read</h2>
@@ -136,11 +139,17 @@
                   </button>
                 </div>
               </div>
-              <div class="brow__rail" data-b-popular-rail></div>
+              <div class="brow__rail" data-b-popular-rail role="list" aria-label="Most read"></div>
             </section>
 
             <!-- one row per section -->
             <div data-b-rows></div>
+
+            <!-- a blog that has not published yet -->
+            <div class="bempty" data-b-nothing hidden>
+              <p class="bempty__title">Not a piece published yet</p>
+              <p class="bempty__text">This blog is still being written. Its first article appears here the moment the studio publishes it.</p>
+            </div>
 
             <!-- and every section, to walk into -->
             <section class="bsecs" data-b-secs hidden>
@@ -161,7 +170,7 @@
             <div class="bsec__head">
               <div class="bsec__id">
                 <h2 class="bsec__title" data-b-found-title></h2>
-                <span class="bsec__count" data-b-found-count></span>
+                <span class="bsec__count" data-b-found-count role="status" aria-live="polite"></span>
               </div>
               <button class="bback" type="button" data-b-found-close><i data-icon="arrowLeft"></i> The blog</button>
             </div>

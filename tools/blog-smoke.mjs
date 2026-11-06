@@ -247,6 +247,8 @@ const importPage = async () => import(`file://${join(root, "assets/js/blog.js")}
   );
   expect("blog: the numbers are spoken", document.querySelectorAll(".bstat").length === 4, document.querySelectorAll(".bstat").length);
   expect("blog: the articles are counted", /6/.test(document.querySelector("[data-b-stats]")?.textContent || ""), document.querySelector("[data-b-stats]")?.textContent);
+  expect("blog: the identity sits in the cover's own block", Boolean(document.querySelector(".bhero__body .bhero__id")));
+  expect("blog: a covered blog is not the plain cloth", document.querySelector(".bhero")?.classList.contains("is-plain") === false);
   expect("blog: the page is titled after the blog", document.title === "Cine Aura — 1World Web", document.title);
   expect("blog: the studio link points at the hub", document.querySelector("[data-b-studio]")?.getAttribute("href") === "creator.html?studio=IDBL100003", document.querySelector("[data-b-studio]")?.getAttribute("href"));
   expect("blog: the first call names the blog", lastCall(calls, "blog_page")?.body?.p_ref === "IDBL100003");
@@ -271,6 +273,8 @@ const importPage = async () => import(`file://${join(root, "assets/js/blog.js")}
   await wait(260);
 
   expect("home: most read is shown", document.querySelector("[data-b-popular]")?.hidden === false);
+  expect("home: and set as the lead row", document.querySelector("[data-b-popular]")?.classList.contains("brow--lead"));
+  expect("home: a section card carries its arrow", Boolean(document.querySelector("[data-b-sec] .bsection__go")));
   expect("home: its rail carries cards", document.querySelectorAll("[data-b-popular-rail] .acard").length === 3, document.querySelectorAll("[data-b-popular-rail] .acard").length);
   expect("home: a row per section", document.querySelectorAll("[data-b-row]").length === 3, document.querySelectorAll("[data-b-row]").length);
   expect("home: a row is named after its section", /Cinema/.test(document.querySelector("[data-b-row]")?.textContent || ""), document.querySelector("[data-b-row]")?.textContent);
@@ -316,6 +320,7 @@ const importPage = async () => import(`file://${join(root, "assets/js/blog.js")}
   const sorted = calls.filter((c) => fnName(c.href) === "blog_feed").pop();
   expect("section: the sort reaches the server", sorted?.body.p_sort === "new", sorted?.body.p_sort);
   expect("section: the pressed sort is marked", document.querySelector('[data-b-sort] [data-sort="new"]')?.classList.contains("is-active"));
+  expect("section: the sort wears the site's buttons", document.querySelector('[data-b-sort] [data-sort="new"]')?.classList.contains("segmented__btn"));
 
   /* More */
   const before = document.querySelectorAll("[data-b-grid] .acard").length;
@@ -377,6 +382,33 @@ const importPage = async () => import(`file://${join(root, "assets/js/blog.js")}
   expect("search: and the box is empty", document.querySelector("[data-b-q]")?.value === "");
   expect("search: the address is clean", !/q=/.test(String(globalThis.location.search)), String(globalThis.location.search));
   expect("search: nothing threw", w.errors.length === 0, w.errors.join(" | "));
+}
+
+/* ================================================================== */
+/* pass 5b — a blog with no cover, and a blog with nothing in it       */
+/* ================================================================== */
+{
+  const w = boot({
+    search: "?studio=IDBL100003",
+    fetchImpl: (href) => {
+      const fn = fnName(href);
+      if (fn === "blog_page")
+        return reply({ ok: true, locked: false, hub: { ...HUB, cover_url: "", logo_url: "" }, sections: [], stats: { articles: 0, writers: 0, reads: 0, comments: 0 } });
+      if (fn === "blog_feed") return reply({ ok: true, rows: [], total: 0 });
+      return reply([]);
+    },
+  });
+  const { document, errors } = w;
+  await importPage();
+  await wait(240);
+
+  expect("plain: a blog with no cover gets the page's own cloth", document.querySelector(".bhero")?.classList.contains("is-plain") === true);
+  expect("plain: the mark falls back to the blog's initials", /^[A-Z]{1,2}$/.test((document.querySelector("[data-b-logo]")?.textContent || "").trim()), document.querySelector("[data-b-logo]")?.textContent);
+  expect("plain: the name is still the name", document.querySelector("[data-b-name]")?.textContent === "Cine Aura", document.querySelector("[data-b-name]")?.textContent);
+  expect("plain: most read steps aside", document.querySelector("[data-b-popular]")?.hidden === true);
+  expect("plain: no section cards are drawn", document.querySelectorAll("[data-b-sec]").length === 0, document.querySelectorAll("[data-b-sec]").length);
+  expect("plain: an empty blog says so", document.querySelector("[data-b-nothing]")?.hidden === false);
+  expect("plain: nothing threw", errors.length === 0, errors.join(" | "));
 }
 
 /* ================================================================== */

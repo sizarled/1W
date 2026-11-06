@@ -1690,6 +1690,13 @@ password and exclusivity are decided in one place — and every card is filtered
 top of it, so an exclusive piece keeps its audience even inside a public blog. A private blog shows its
 name and asks for the password (`?key=…`); a wrong one says so and stays shut.
 
+The page is set like a magazine: the cover is a **poster** — its words stay light in both themes,
+whether the blog has a picture or the page's own cloth — one **lead piece** opens the most-read rail
+(wide, in the serif), the rails fade at the edge instead of showing a scrollbar, the numbers under the
+name are one hairline-divided strip, every row head carries a rule and an accent bar, and a section
+card turns into a walk-in with its arrow. Reduced motion is respected; a blog with no cover, no logo
+and nothing published still has a page that looks deliberate.
+
 The page has two doors into it: **Open the blog**, beside *Write an article* on the studio's Articles
 tab, and **Read the blog** on the hub page a visitor reaches with `creator.html?studio=<code>`.
 
@@ -1765,7 +1772,7 @@ the editors need**, each pinned to a name pattern and a set of extensions (`user
 | --- | --- |
 | `node tools/rte-smoke.mjs` | **45/45** (every command, links, insertion, history, paste, drop, keys, toolbar state) |
 | `node tools/article-smoke.mjs` | **281/281** |
-| `node tools/blog-smoke.mjs` | **70/70** (the address, the closed door, the hero, the home, a section, the search) |
+| `node tools/blog-smoke.mjs` | **82/82** (the address, the closed door, the hero, the home, a section, the search, the plain cover) |
 | `node tools/video-smoke.mjs` | **254/254** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
 
 ### The six OAuth apps — one checklist each
