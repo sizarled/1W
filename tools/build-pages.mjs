@@ -19,7 +19,8 @@ const BUILD = "20261031u"; // cache-bust for css/js
 /* Hand-written pages are NOT in this list: index.html, login.html, register.html,
    rest.html, watch.html, cast.html, dashboard.html, activated.html, court.html,
    profile.html, creator.html, privacy.html, videos.html, video.html,
-   video-editor.html. */
+   video-editor.html, panel.html, blog.html, articles.html, publisher.html,
+   article-editor.html. */
 const PAGES = [
   ["search.html", "Search", "search", "Search across films, series, channels, articles, documents, answers and reviews.", "Reads ?q= from the URL."],
   ["movies.html", "Movies", "film", "The full film catalogue, with filters for genre, year, rating and quality.", ""],
@@ -46,7 +47,6 @@ const PAGES = [
   ["help.html", "Help", "lifebuoy", "Guides for accounts, playback, publishing and points.", ""],
   ["notifications.html", "Notifications", "bell", "Every notification, filtered by month, year, exact date or all time.", ""],
   ["actevite.html", "Activate membership", "crown", "Upgrade to Silver, Gold or Diamond and activate viewing codes.", ""],
-  ["panel.html", "Control panel", "settings", "Admin and moderator console for features, apps, channels and members.", ""],
 ];
 
 const QUICK_LINKS = [

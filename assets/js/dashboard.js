@@ -32,7 +32,7 @@ import {
 import { hydrateIcons, icon } from "./icons.js";
 import { toast } from "./ui.js";
 import { setMember, signOut, sessionToken, clearSessionToken } from "./session.js";
-import { createEdgeRail } from "./edge.js";
+import { createEdgeRail } from "./edge.js?v=20261116b";
 import { brand } from "./brands.js";
 
 /* ================================================================== */
@@ -177,6 +177,19 @@ export async function initDashboard() {
   paintIdentity();
   paintSideState();
   paintGate();
+  revealAdminDesk();
+}
+
+/**
+ * The control panel (`panel.html`) is reached from the Administration group.
+ * Whether that group is real is the table's answer, not a guess from the
+ * member's level: `site_admin()` is the same door the panel asks.
+ */
+async function revealAdminDesk() {
+  const group = qs("[data-admin-group]");
+  if (!group || !group.hidden || !token) return;
+  const staff = await rpc("site_admin", { p_token: token }).catch(() => false);
+  if (staff === true) group.hidden = false;
 }
 
 function goToLogin() {
@@ -197,6 +210,7 @@ async function reload() {
   state.account = await loadAccount();
   paintIdentity();
   paintGate();
+  revealAdminDesk();
 }
 
 /** The account card: identity, security and the linked recovery accounts. */

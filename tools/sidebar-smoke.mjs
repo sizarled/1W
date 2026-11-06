@@ -137,9 +137,9 @@ async function boot(file, { desktop = true, stored = {}, dashboard = false } = {
   window.localStorage.clear();
   for (const [key, value] of Object.entries(stored)) window.localStorage.setItem(key, JSON.stringify(value));
   // a saved pin is only trusted with the current version stamp (edge.js)
-  if ("1w.sidebar.pin" in stored) window.localStorage.setItem("1w.sidebar.pin.v", JSON.stringify("2"));
+  if ("1w.sidebar.pin" in stored) window.localStorage.setItem("1w.sidebar.pin.v", JSON.stringify("3"));
   // a legacy `1w.sidebar` must never decide the pin
-  if ("1w.sidebar" in stored && !("1w.sidebar.pin" in stored)) window.localStorage.setItem("1w.sidebar.pin.v", JSON.stringify("2"));
+  if ("1w.sidebar" in stored && !("1w.sidebar.pin" in stored)) window.localStorage.setItem("1w.sidebar.pin.v", JSON.stringify("3"));
   if (dashboard) window.localStorage.setItem("1w.session", "b".repeat(64));
 
   const entry = dashboard ? "assets/js/dashboard.js" : "assets/js/shell.js";
@@ -322,12 +322,18 @@ async function boot(file, { desktop = true, stored = {}, dashboard = false } = {
   const stale = await boot("watch.html", { stored: { "1w.sidebar": false } });
   expect("watch: an old 1w.sidebar flag cannot hide the menu", stale.body.classList.contains("sb-rail"));
 
+  // the homepage starts with the panel *away*: the page keeps its whole width
   const home = await boot("index.html");
-  expect("home: the homepage starts pinned", home.body.classList.contains("sb-pinned"));
-  expect("home: so its panel is out", home.body.classList.contains("sb-open"));
+  expect("home: the homepage starts on the edge", home.body.classList.contains("sb-rail"));
+  expect("home: so its panel stays in", !home.body.classList.contains("sb-open"));
+  await home.touchEdge(1);
+  expect("home: and the edge still brings it in", home.body.classList.contains("sb-open"));
 
-  const homeRail = await boot("index.html", { stored: { "1w.sidebar.pin": "2" } });
-  expect("home: a stale value falls back to the homepage default", homeRail.body.classList.contains("sb-pinned"));
+  const homePin = await boot("index.html", { stored: { "1w.sidebar.pin": "1" } });
+  expect("home: a saved pin still opens it", homePin.body.classList.contains("sb-pinned"));
+
+  const homeRail = await boot("index.html", { stored: { "1w.sidebar.pin": "0" } });
+  expect("home: an unpinned choice waits on the edge", homeRail.body.classList.contains("sb-rail"));
 
   const unpinnedHome = await boot("index.html", { stored: { "1w.sidebar.pin": "0" } });
   expect("home: unpinned it waits on the edge", unpinnedHome.body.classList.contains("sb-rail"));

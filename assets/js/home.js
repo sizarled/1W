@@ -2,7 +2,8 @@
  * Homepage controller: hero slideshow, feature grid, search, trending rails,
  * IPTV channels, membership plans, apps, support form and platforms.
  */
-import { PLANS, APP_TARGETS, PLATFORMS, POINTS_PER_USD } from "./config.js";
+import { PLANS, APP_TARGETS, POINTS_PER_USD } from "./config.js";
+import { loadPlatforms, paintPlatforms, platformHeading, platformsNow } from "./platforms.js?v=20261116b";
 import { loadHomeData, loadApps, submitMessage } from "./data.js";
 import { icon } from "./icons.js";
 import { brand } from "./brands.js";
@@ -683,23 +684,31 @@ function initSupport() {
 /* ------------------------------------------------------------------ */
 /* platforms                                                          */
 /* ------------------------------------------------------------------ */
-function renderPlatforms() {
+/**
+ * Section 09 reads `public.platform` (see `platforms.js`). The shipped list is
+ * painted first so the rail is never empty, then the table's answer replaces
+ * it — and the heading counts whatever the table gave us. When the table is
+ * reachable and empty the section steps aside instead of showing a blank rail.
+ */
+async function renderPlatforms() {
   const track = qs("[data-platforms]");
   if (!track) return;
-  setHTML(
-    track,
-    PLATFORMS.map(
-      (p) => `
-      <a class="platform-card" href="${p.url}" target="_blank" rel="noopener noreferrer">
-        <span class="platform-card__icon">${brand(p.key)}</span>
-        <span class="platform-card__meta">
-          <span class="platform-card__name">${esc(p.label)}</span>
-          <span class="platform-card__handle">${esc(p.handle)}</span>
-        </span>
-        <span class="platform-card__arrow">${icon("arrowUpRight")}</span>
-      </a>`
-    ).join("")
-  );
+
+  const section = track.closest("section") || track.closest(".section");
+  const heading = qs("[data-platform-title]");
+
+  const paint = (list) => {
+    paintPlatforms(track, list);
+    if (heading) heading.textContent = platformHeading(list.length);
+    if (section) section.hidden = list.length === 0;
+    // the arrows were measured before these cards existed
+    if (section) updateRailButtons(section);
+  };
+
+  paint(platformsNow());
+
+  const { rows } = await loadPlatforms();
+  paint(rows);
 }
 
 /* ------------------------------------------------------------------ */

@@ -109,29 +109,38 @@ async function boot(file, { stored = null, member = null, desktop = true } = {})
   expect("home: sidebar mounted", Boolean(p.qs(".sidebar#siteSidebar")));
   expect("home: menu button in the header", Boolean(p.qs('[data-action="toggle-sidebar"]')));
   expect("home: menu button points at the aside", p.qs('[data-action="toggle-sidebar"]')?.getAttribute("aria-controls") === "siteSidebar");
-  expect("home: sidebar opens from the stored preference", p.document.body.classList.contains("sb-open"));
-  expect("home: sidebar marked open", p.qs(".sidebar")?.classList.contains("is-open") === true);
+  // the homepage starts with the panel away — hidden by default
+  expect("home: the panel starts hidden", !p.document.body.classList.contains("sb-open"));
+  expect("home: hidden, it waits on the edge", p.document.body.classList.contains("sb-rail"));
+  expect("home: the aside is marked closed", p.qs(".sidebar")?.classList.contains("is-open") === false);
+  expect("home: the pin reads unpressed", p.qs("[data-sidebar-pin]")?.getAttribute("aria-pressed") === "false");
   expect("home: no icons left unhydrated", p.qsa("[data-icon]").length === 0, `${p.qsa("[data-icon]").length} left`);
 
+  // the header button pins it out on a desktop
   p.click(p.qs('[data-action="toggle-sidebar"]'));
   await p.wait(80);
-  expect("home: toggle closes it", !p.document.body.classList.contains("sb-open"));
-  expect("home: aria-expanded follows", p.qs('[data-action="toggle-sidebar"]')?.getAttribute("aria-expanded") === "false");
-
-  p.click(p.qs('[data-action="toggle-sidebar"]'));
-  await p.wait(80);
-  expect("home: toggle opens it again", p.document.body.classList.contains("sb-open"));
+  expect("home: the header button pins the panel out", p.document.body.classList.contains("sb-open"));
+  expect("home: and says it is pinned", p.document.body.classList.contains("sb-pinned"));
+  expect("home: the menu button reports open", p.qs('[data-action="toggle-sidebar"]')?.getAttribute("aria-expanded") === "true");
 
   // pinned, the panel is not something Escape should take away
   p.document.dispatchEvent(new p.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
   await p.wait(80);
   expect("home: Escape leaves a pinned panel alone", p.document.body.classList.contains("sb-open"));
-  expect("home: escaping keeps it pinned", p.document.body.classList.contains("sb-pinned"));
 
-  // the pin lives in the panel and in the header button
-  expect("home: the panel carries a pin", Boolean(p.qs("[data-sidebar-pin]")));
-  expect("home: the pin reads pressed", p.qs("[data-sidebar-pin]")?.getAttribute("aria-pressed") === "true");
-  expect("home: the edge tab exists but stays hidden while pinned", Boolean(p.qs("[data-sidebar-edge]")));
+  // unpin: it goes back to the edge
+  p.click(p.qs('[data-action="toggle-sidebar"]'));
+  await p.wait(80);
+  expect("home: unpinning sends it back to the edge", !p.document.body.classList.contains("sb-open"));
+  expect("home: and clears the pin", !p.document.body.classList.contains("sb-pinned"));
+
+  // the edge tab is the way back in
+  p.click(p.qs("[data-sidebar-edge]"));
+  await p.wait(80);
+  expect("home: the edge tab brings it in", p.document.body.classList.contains("sb-open"));
+  p.document.dispatchEvent(new p.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  await p.wait(80);
+  expect("home: Escape sends an unpinned panel away", !p.document.body.classList.contains("sb-open"));
 
   expect("home: the header is fixed", p.window.getComputedStyle(p.qs(".site-header")).position === "fixed");
   expect("home: no page errors", p.errors.length === 0, p.errors.join(" | "));

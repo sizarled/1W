@@ -34,7 +34,9 @@ export const PIN_KEY = "1w.sidebar.pin";
    closed), and an early build of the pin let a "0" hide the dashboard menu for
    good. One stale value must never be the reason a menu is missing. */
 const PIN_VERSION_KEY = "1w.sidebar.pin.v";
-const PIN_VERSION = "2";
+/* v3 — the homepage starts unpinned (it was pinned in v2), so a stored "pinned"
+   from that build must not keep the menu out in front of the content. */
+const PIN_VERSION = "3";
 
 /** The edge only exists on a desktop pointer. */
 export function isDesktop() {
@@ -43,8 +45,9 @@ export function isDesktop() {
 }
 
 /**
- * The saved pin, or the page's own default: the homepage, the profile and the
- * dashboard start pinned, the player starts on the edge. The legacy
+ * The saved pin, or the page's own default: the dashboard and the profile start
+ * pinned, the homepage and every other page that mounts the shell menu start
+ * hidden on the edge. The legacy
  * `1w.sidebar` flag is deliberately ignored — it was written by the old menu
  * button when a panel was *closed*, so reading it hid every menu at once.
  */

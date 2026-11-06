@@ -920,7 +920,18 @@ Avatar, `@username`, `IDXXXXXX` and the account status chip, then the groups:
 | Administration | Panel → `panel.html`, **only** for admins and moderators |
 
 `Administration` is hidden for everybody else, and the panel enforces the same rule
-server-side — hiding the link is a courtesy, not the permission.
+server-side — hiding the link is a courtesy, not the permission. The rule has one source:
+`public.site_admin(token)`, which answers true when the member's code is in `public.site_staff`
+(the owners seeded there), when their `account_status` is admin / owner / moderator, or when
+their level is 8 or above. `panel.html` asks it before it reads a row, and the dashboard asks it
+before it reveals the group, so the two never disagree.
+
+The site menu is **hidden by default** on the homepage: the page keeps its whole width and the
+sidebar waits on the left edge (`watch.html` and the member-video pages behave the same). The
+header's menu button pins it out on a desktop, the pin in the sidebar tools does the same, and a
+click on the edge tab or a pointer resting on the very edge brings it in over the content. The
+choice is remembered (`1w.sidebar.pin`, version 3 — the older builds pinned the homepage, and that
+stored value is deliberately not read).
 
 ### Sections in this build
 
@@ -2166,6 +2177,53 @@ plaintiff, reason, status, the absence warning and the verdict with the court no
 that belongs to somebody else shows “Case not found”, because `member_court_history()` only
 returns the caller's cases.
 
+### The platform shelf — `panel.html` and section 09
+
+Section 09 on the homepage (`#platform`, *Fourteen places to follow the project*) is no longer a
+list in `config.js`. It reads a table:
+
+**`public.platform`** — one row per place.
+
+| Column | What it holds |
+| --- | --- |
+| `id` / `code` | uuid, and a readable code (`PLT100015`) minted from `public.platform_code_seq` |
+| `name` | the platform's name, 1–60 characters |
+| `username` | the handle you follow (`@CineauraV2`, `r/Cineaura2`, `c-7972430`) |
+| `url` | the link the card opens, `http(s)://` only |
+| `logo_url` | an uploaded logo or a pasted picture link; empty falls back to the brand glyph |
+| `icon` | the fallback glyph's key, from `brands.js` (youtube, telegram, tumblr …) |
+| `status` | `available` — it is on the homepage — or `unavailable` — kept here, invisible there |
+| `sort_order` | low numbers first |
+
+The name + handle pair is unique, so the same platform can appear twice with two handles but never
+the same one twice. Row level security is on with no policies: the table is reached through two
+functions and nothing else.
+
+| Function | Who | What it answers |
+| --- | --- | --- |
+| `platform_public()` | anyone, no session | the **available** rows in order — the only door a visitor has |
+| `platform_admin_list(token)` | staff | every row, available or not, with `{ok, admin, rows}` |
+| `platform_save(token, id, name, username, url, logo, icon, status, sort)` | staff | insert (`id` null) or update, with `duplicate` / `url` / `name` refusals |
+| `platform_delete(token, id)` | staff | removes one row |
+
+**The page.** `panel.html` is the control panel's first desk. It shows the three honest states
+first — no session (sign in), a session that is not staff (the desk is shut), a table that did not
+answer (try again) — then the rows: the logo, the name and its code, the handle, the host of the
+link, the status as a **switch** (one click writes `platform_save` with the other status) and a
+delete that asks once (`Remove?`) before the second click writes. The dialog holds every field,
+takes a logo by drop, file or link (the `source` bucket, `users/platform/…`, exactly like the
+editors) and validates before it calls the server. The stats strip counts all / available /
+unavailable, the search reads name, handle, code and link, and the filter sits beside it.
+
+**The homepage.** `assets/js/platforms.js` is the only reader: `platform_public()` once, cached for
+the page, drawn by the homepage rail (`#platform`) and by the footer's social dots — so switching a
+platform off takes it off both. The card shows the uploaded logo when there is one and the brand
+glyph when there is not. The heading counts what the table gave (`Fourteen places…`, `One place…`),
+and a table that is reachable but empty hides the section instead of showing a blank rail. If the
+call fails — offline, or a deploy that has not run `tools/sql/platforms-page.sql` — the shelf falls
+back to the list the build ships with, so the homepage is never empty. The shipped fourteen rows are
+seeded by the SQL file, so nothing changed on the page the day the table arrived.
+
 ### The look — one system for every page
 
 Every page reads from three shared sheets — `base.css` (tokens, type, buttons, form, skeleton),
@@ -2197,7 +2255,8 @@ browser that already has the old file.
 
 ```bash
 node tools/dashboard-smoke.mjs   # 156 checks: the five gates, rail, popover, codes, sections, Unlock now, Account settings
-node tools/sidebar-smoke.mjs     # 91 checks: the edge, the pin, Escape, the mobile drawer, the dashboard menu
+node tools/sidebar-smoke.mjs     # 93 checks: the edge, the pin, Escape, the mobile drawer, the dashboard menu
+node tools/panel-smoke.mjs       # 88 checks: the desk's three states, the rows, the switch, the dialog, the shelf
 node tools/court-smoke.mjs       # 115 checks: the four steps, uploads, both doors, the court room
 node tools/iptv-smoke.mjs        # 43 checks: the playlists, the groups, the page, the deep links
 node tools/activated-smoke.mjs   # 35 checks: hidden panels, image link, ad pause, code return

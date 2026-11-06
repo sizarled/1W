@@ -4,16 +4,20 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Control panel — 1World Web</title>
-    <meta name="description" content="Admin and moderator console for features, apps, channels and members." />
+    <meta name="description" content="The site's control panel: the platforms the homepage shows, their logos, names, handles and links." />
     <meta name="theme-color" content="#060607" />
     <meta name="robots" content="noindex" />
     <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="assets/css/base.css?v=20261116a" />
     <link rel="stylesheet" href="assets/css/layout.css?v=20261116a" />
-    <link rel="stylesheet" href="assets/css/components.css?v=20261116a" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261116b" />
+    <link rel="stylesheet" href="assets/css/panel.css?v=20261116b" />
     <script>
       /* apply the saved theme (or the OS preference) before first paint */
       (function () {
@@ -31,43 +35,228 @@
         } catch (e) {}
       })();
     </script>
-    <script type="module" src="assets/js/app.js?v=20261101k"></script>
+    <script type="module" src="assets/js/app.js?v=20261116b"></script>
   </head>
+
   <body data-page="panel" data-title="Control panel">
     <a class="skip-link" href="#main">Skip to content</a>
     <div data-site-header></div>
     <div data-site-sidebar></div>
 
-    <main class="site-main" id="main">
-      <section class="soon">
-        <div class="soon__inner">
-          <span class="soon__icon"><i data-icon="settings"></i></span>
-          <p class="eyebrow"><span class="eyebrow__dot"></span>Page in build</p>
-          <h1 class="soon__title">Control panel</h1>
-          <p class="soon__text">Admin and moderator console for features, apps, channels and members.</p>
-
-          <div class="soon__meta">
-            <span class="badge badge--solid">panel.html</span>
-            <span class="badge">Next release</span>
-            <span class="badge">1World Web</span>
+    <main class="site-main pnl" id="main" data-panel data-state="loading">
+      <div class="wrap">
+        <!-- ============================================================ -->
+        <!-- the head                                                     -->
+        <!-- ============================================================ -->
+        <header class="pnl__head">
+          <div class="pnl__intro">
+            <p class="eyebrow"><span class="eyebrow__dot"></span>Control panel · 01</p>
+            <h1 class="pnl__title">Platforms</h1>
+            <p class="pnl__sub">
+              The shelf at the foot of the homepage — <b>09 — Platform</b> — and the dots in the footer, both read from
+              <code>public.platform</code>. One row is one place: its logo, its name, the handle you follow, the link it
+              opens, and whether it is <b>available</b> (on the page) or <b>unavailable</b> (kept here, hidden there).
+            </p>
           </div>
-
-          <div class="soon__actions">
-            <a class="btn btn--primary" href="index.html"><i data-icon="arrowLeft"></i> Back to homepage</a>
-            <a class="btn btn--ghost" href="index.html#membership"><i data-icon="crown"></i> Membership</a>
+          <div class="pnl__acts">
+            <a class="btn btn--ghost btn--sm" href="index.html#platform">
+              <i data-icon="external"></i> See the shelf
+            </a>
+            <button class="btn btn--primary" type="button" data-p-add>
+              <i data-icon="plus"></i> Add platform
+            </button>
           </div>
+        </header>
 
-          <div class="soon__links">
-            <a class="soon__link" href="index.html"><i data-icon="home"></i>Home</a>
-            <a class="soon__link" href="search.html"><i data-icon="search"></i>Search</a>
-            <a class="soon__link" href="movies.html"><i data-icon="film"></i>Movies</a>
-            <a class="soon__link" href="series.html"><i data-icon="tv"></i>Series</a>
-            <a class="soon__link" href="iptv.html"><i data-icon="broadcast"></i>IPTV</a>
-            <a class="soon__link" href="help.html"><i data-icon="lifebuoy"></i>Help</a>
+        <!-- ============================================================ -->
+        <!-- the toolbar                                                  -->
+        <!-- ============================================================ -->
+        <div class="pnl__bar" data-p-bar hidden>
+          <label class="pnl__search">
+            <i data-icon="search"></i>
+            <input class="input" type="search" data-p-search placeholder="Search a name, a handle or a code" aria-label="Search platforms" />
+          </label>
+
+          <div class="segmented" role="group" aria-label="Filter by status" data-p-filter>
+            <button class="segmented__btn is-active" type="button" data-p-status="all" aria-pressed="true">
+              All <span class="pnl__tally" data-p-count="all">0</span>
+            </button>
+            <button class="segmented__btn" type="button" data-p-status="available" aria-pressed="false">
+              Available <span class="pnl__tally" data-p-count="available">0</span>
+            </button>
+            <button class="segmented__btn" type="button" data-p-status="unavailable" aria-pressed="false">
+              Unavailable <span class="pnl__tally" data-p-count="unavailable">0</span>
+            </button>
           </div>
         </div>
-      </section>
+
+        <!-- ============================================================ -->
+        <!-- states                                                       -->
+        <!-- ============================================================ -->
+        <div class="pnl__note" data-p-note hidden role="status" aria-live="polite"></div>
+
+        <div class="pnl__state" data-p-state="loading">
+          <div class="pnl__skeleton" aria-hidden="true">
+            <span class="sk"></span>
+            <span class="sk"></span>
+            <span class="sk"></span>
+            <span class="sk"></span>
+          </div>
+          <p class="faint">Reading the table…</p>
+        </div>
+
+        <section class="pnl__lock" data-p-state="signedout" hidden>
+          <span class="pnl__lock-icon"><i data-icon="lock"></i></span>
+          <h2 class="pnl__lock-title">Sign in first</h2>
+          <p class="pnl__lock-text">
+            The control panel reads a member's session before it reads the table. Sign in with the account that runs
+            the site, then come back to this page.
+          </p>
+          <div class="pnl__lock-acts">
+            <a class="btn btn--primary" href="login.html?next=panel.html"><i data-icon="login"></i> Sign in</a>
+            <a class="btn btn--ghost" href="index.html"><i data-icon="arrowLeft"></i> Back to the site</a>
+          </div>
+        </section>
+
+        <section class="pnl__lock" data-p-state="error" hidden>
+          <span class="pnl__lock-icon"><i data-icon="database"></i></span>
+          <h2 class="pnl__lock-title">The table did not answer</h2>
+          <p class="pnl__lock-text">
+            The page could not read <code>public.platform</code> — a connection problem, or a deploy that has not run
+            the SQL yet. Nothing was changed. Try again, then reload the homepage.
+          </p>
+          <div class="pnl__lock-acts">
+            <button class="btn btn--primary" type="button" data-p-retry><i data-icon="refresh"></i> Try again</button>
+            <a class="btn btn--ghost" href="index.html"><i data-icon="arrowLeft"></i> Back to the site</a>
+          </div>
+        </section>
+
+        <section class="pnl__lock" data-p-state="locked" hidden>
+          <span class="pnl__lock-icon"><i data-icon="shield"></i></span>
+          <h2 class="pnl__lock-title">This desk is for the site's staff</h2>
+          <p class="pnl__lock-text">
+            Your session is valid, but it is not on the staff list, so the table stays shut. Ask an owner to add your
+            member code to <code>site_staff</code>, or open the shelf as a visitor instead.
+          </p>
+          <div class="pnl__lock-acts">
+            <a class="btn btn--primary" href="index.html#platform"><i data-icon="external"></i> Open the shelf</a>
+            <a class="btn btn--ghost" href="dashboard.html"><i data-icon="dashboard"></i> Your dashboard</a>
+          </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- the rows                                                     -->
+        <!-- ============================================================ -->
+        <div class="pnl__table" data-p-table hidden>
+          <div class="pnl__thead" aria-hidden="true">
+            <span>Place</span>
+            <span>Handle</span>
+            <span>Link</span>
+            <span>Status</span>
+            <span></span>
+          </div>
+          <div class="pnl__list" data-p-list></div>
+        </div>
+
+        <section class="pnl__empty" data-p-empty hidden>
+          <span class="pnl__lock-icon"><i data-icon="globe"></i></span>
+          <h2 class="pnl__lock-title" data-p-empty-title>Nothing here yet</h2>
+          <p class="pnl__lock-text" data-p-empty-text>
+            Add the first place — a name, the handle you follow and the link it opens. It appears on the homepage the
+            moment it is saved.
+          </p>
+          <div class="pnl__lock-acts">
+            <button class="btn btn--primary" type="button" data-p-add><i data-icon="plus"></i> Add platform</button>
+          </div>
+        </section>
+      </div>
     </main>
+
+    <!-- ============================================================== -->
+    <!-- the editor                                                     -->
+    <!-- ============================================================== -->
+    <dialog class="pfedit" data-p-dialog aria-labelledby="pfeditTitle">
+      <form class="pfedit__form" method="dialog" data-p-form novalidate>
+        <header class="pfedit__head">
+          <div>
+            <p class="eyebrow"><span class="eyebrow__dot"></span>Platform</p>
+            <h2 class="pfedit__title" id="pfeditTitle" data-p-form-title>Add a platform</h2>
+          </div>
+          <button class="icon-btn" type="button" data-p-close aria-label="Close"><i data-icon="close"></i></button>
+        </header>
+
+        <div class="pfedit__body">
+          <!-- logo -->
+          <div class="pfedit__logo">
+            <span class="pfedit__mark" data-p-preview><i data-icon="image"></i></span>
+            <div class="pfedit__logofields">
+              <label class="pfedit__drop" data-p-drop>
+                <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif" data-p-file hidden />
+                <i data-icon="upload"></i>
+                <span data-p-drop-text>Drop a logo, or choose a file</span>
+              </label>
+              <div class="field">
+                <label for="pfLogo">Logo link</label>
+                <input class="input" id="pfLogo" name="logo_url" type="url" data-p-logo placeholder="https://…/logo.png" />
+              </div>
+              <p class="pfedit__hint">Square images look best. A logo replaces the brand glyph on both surfaces.</p>
+            </div>
+          </div>
+
+          <div class="pfedit__grid">
+            <div class="field">
+              <label for="pfName">Platform name</label>
+              <input class="input" id="pfName" name="name" type="text" maxlength="60" required data-p-name placeholder="YouTube" autocomplete="off" />
+              <p class="field__error" data-p-error="name" hidden>Give the platform a name.</p>
+            </div>
+
+            <div class="field">
+              <label for="pfUser">Username</label>
+              <input class="input" id="pfUser" name="username" type="text" maxlength="80" data-p-user placeholder="@CineauraV2" autocomplete="off" />
+            </div>
+
+            <div class="field pfedit__wide">
+              <label for="pfUrl">Platform link</label>
+              <input class="input" id="pfUrl" name="url" type="url" maxlength="400" required data-p-url placeholder="https://www.youtube.com/@CineauraV2" autocomplete="off" />
+              <p class="field__error" data-p-error="url" hidden>Paste a full link — it must start with http:// or https://.</p>
+            </div>
+
+            <div class="field">
+              <label for="pfIcon">Brand glyph</label>
+              <select class="select" id="pfIcon" data-p-icon></select>
+              <p class="pfedit__hint">Drawn when there is no logo.</p>
+            </div>
+
+            <div class="field">
+              <label for="pfSort">Order</label>
+              <input class="input" id="pfSort" name="sort_order" type="number" min="0" max="9999" step="10" value="100" data-p-sort />
+              <p class="pfedit__hint">Low numbers come first.</p>
+            </div>
+
+            <div class="field pfedit__wide">
+              <label>Status</label>
+              <div class="segmented" role="group" aria-label="Platform status" data-p-status-group>
+                <button class="segmented__btn is-active" type="button" data-p-form-status="available" aria-pressed="true">
+                  Available — on the homepage
+                </button>
+                <button class="segmented__btn" type="button" data-p-form-status="unavailable" aria-pressed="false">
+                  Unavailable — hidden
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <p class="pfedit__error" data-p-form-error hidden role="alert"></p>
+        </div>
+
+        <footer class="pfedit__foot">
+          <button class="btn btn--ghost btn--sm" type="button" data-p-reset hidden><i data-icon="refresh"></i> New</button>
+          <span class="pfedit__spacer"></span>
+          <button class="btn btn--ghost" type="button" data-p-close>Cancel</button>
+          <button class="btn btn--primary" type="submit" data-p-save><i data-icon="check"></i> Save platform</button>
+        </footer>
+      </form>
+    </dialog>
 
     <div data-site-footer></div>
   </body>

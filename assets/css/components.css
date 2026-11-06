@@ -1544,6 +1544,15 @@ html[data-theme="light"] .plan--featured {
   height: 17px;
 }
 
+/* an uploaded logo takes the slot the brand glyph would have had */
+.platform-card__logo {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  object-fit: cover;
+  background: var(--surface-2);
+}
+
 .platform-card__meta {
   min-width: 0;
   display: grid;

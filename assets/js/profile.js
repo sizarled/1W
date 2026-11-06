@@ -30,7 +30,7 @@ import { toast } from "./ui.js";
 import { sessionToken, getMember } from "./session.js";
 
 import { levelInfo } from "./levels.js";
-import { createEdgeRail } from "./edge.js";
+import { createEdgeRail } from "./edge.js?v=20261116b";
 
 const PLATFORMS = [
   ["facebook", "Facebook"],

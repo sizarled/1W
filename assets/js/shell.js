@@ -7,12 +7,14 @@
  * exact position and the content is what moves. Everywhere else the header
  * simply renders without its menu button.
  *
- * The panel is pinned by default: it stays out and the page keeps room for it.
- * Unpin it (the pin in the sidebar tools) and it leaves the screen — the page
- * then uses the whole width and the panel slides back in over the content
- * whenever the pointer reaches the left edge. See `edge.js`.
+ * The panel starts *hidden* on every page that mounts it — the homepage
+ * included — so the page uses the whole width and the panel only slides in
+ * over the content when the pointer reaches the left edge (or the edge tab, or
+ * the header's menu button, is used). Pin it from the sidebar tools and it
+ * stays out with room kept for it. See `edge.js`.
  */
 import { PRIMARY_NAV, SIDEBAR_NAV, FOOTER_NAV, PLATFORMS, SITE } from "./config.js";
+import { loadPlatforms, paintFooterDots } from "./platforms.js?v=20261116b";
 import { brand } from "./brands.js";
 import { icon } from "./icons.js";
 import { store, esc } from "./utils.js";
@@ -30,7 +32,7 @@ import { initNotifications } from "./notifications.js";
 import { toast } from "./ui.js";
 import { hydrateIcons } from "./icons.js";
 import { initTheme, toggleTheme, currentTheme, flashTransition } from "./theme.js";
-import { createEdgeRail, isDesktop } from "./edge.js";
+import { createEdgeRail, isDesktop } from "./edge.js?v=20261116b";
 
 /**
  * Pages that mount the site navigation panel. The profile is not one of them:
@@ -235,7 +237,7 @@ function footerTemplate() {
             <span class="brand__word">${SITE.name}<span class="brand__suffix">Web</span></span>
           </a>
           <p class="site-footer__desc">${esc(SITE.description)}</p>
-          <div class="site-footer__social">
+          <div class="site-footer__social" data-footer-social>
             ${PLATFORMS.slice(0, 8)
               .map(
                 (p) =>
@@ -381,7 +383,7 @@ function initSidebar() {
     panel,
     tab,
     pinSelector: "[data-sidebar-pin]",
-    defaultPinned: pageFile() === "index.html" || document.body?.dataset.page === "home",
+    defaultPinned: false,
     onOpen: paint,
     onClose: paint,
   });
@@ -520,4 +522,17 @@ export function mountShell() {
   bindActions();
   initNotifications();
   hydrateIcons();
+  refreshFooterPlatforms();
+}
+
+/**
+ * The footer's social dots are the same content as the homepage shelf, so they
+ * are read from the same table (`platforms.js`). The markup ships with the
+ * build's own list; this swaps in the table's answer when it arrives.
+ */
+async function refreshFooterPlatforms() {
+  const host = document.querySelector("[data-footer-social]");
+  if (!host) return;
+  const { rows, source } = await loadPlatforms();
+  if (source === "db" && rows.length) paintFooterDots(host, rows);
 }

@@ -3,7 +3,7 @@
  * Mounts the shell, restores the session and, on the homepage, boots the
  * section controllers.
  */
-import { mountShell } from "./shell.js";
+import { mountShell } from "./shell.js?v=20261116b";
 import { getMember, refreshMember, setMember, signOut, noteSeen } from "./session.js";
 import { awardPoints, renderWallet, startWalletPolling, syncFromMember } from "./wallet.js";
 import { toast } from "./ui.js";
@@ -20,7 +20,7 @@ async function boot() {
   startVisitTracking().catch((error) => console.warn("[1World] visits:", error.message));
 
   if (document.body.dataset.page === "home") {
-    const { initHome } = await import("./home.js");
+    const { initHome } = await import("./home.js?v=20261116b");
     initHome().catch((error) => console.warn("[1World] homepage data:", error));
   }
 
@@ -42,6 +42,11 @@ async function boot() {
   if (document.body.dataset.page === "iptv") {
     const { initIptv } = await import("./iptv.js");
     initIptv();
+  }
+
+  if (document.body.dataset.page === "panel") {
+    const { initPanel } = await import("./panel.js?v=20261116b");
+    initPanel().catch((error) => console.warn("[1World] control panel:", error));
   }
 
   if (document.body.dataset.page === "rest") {
