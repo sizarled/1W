@@ -69,7 +69,16 @@
 }
 
 .section--line {
-  border-top: 1px solid var(--line);
+  border-top: 0;
+}
+
+.section--line::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  inset-block-start: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--line-2) 16%, var(--line-2) 84%, transparent);
 }
 
 .sec-head {
@@ -128,7 +137,9 @@
 }
 
 .section--alt {
-  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--surface) 45%, transparent) 18%,
+  background:
+    radial-gradient(80% 60% at 50% 0%, color-mix(in srgb, var(--text) 3%, transparent), transparent 70%),
+    linear-gradient(180deg, transparent, color-mix(in srgb, var(--surface) 45%, transparent) 18%,
       color-mix(in srgb, var(--surface) 45%, transparent) 82%, transparent);
 }
 
@@ -174,6 +185,15 @@
   inset: 0;
   background: var(--scrim);
   z-index: -1;
+}
+
+.hero__scrim::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  height: 22%;
+  background: linear-gradient(180deg, transparent, var(--bg) 94%);
 }
 
 .hero__inner {
@@ -239,9 +259,15 @@
   transition: all 0.25s var(--ease);
 }
 
+.segmented__btn:not(.is-active):hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+}
+
 .segmented__btn.is-active {
   background: var(--text);
   color: var(--bg);
+  box-shadow: 0 6px 16px -10px rgba(0, 0, 0, 0.8);
 }
 
 /* hero content */
@@ -481,9 +507,12 @@ html.is-grabbing * {
   height: 34px;
   border-radius: 50%;
   border: 1px solid var(--line-2);
+  background: color-mix(in srgb, var(--bg) 62%, transparent);
   color: var(--text-2);
+  backdrop-filter: blur(12px) saturate(140%);
   transition: all 0.2s var(--ease);
 }
+
 
 .rail__btn:hover:not(:disabled) {
   background: var(--text);
@@ -535,10 +564,29 @@ html.is-grabbing * {
   opacity: 1;
 }
 
+.pcard__media::after {
+  content: "";
+  position: absolute;
+  inset: -40% -70%;
+  z-index: 3;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 44%, rgba(255, 255, 255, 0.18) 50%, transparent 56%);
+  opacity: 0;
+  transform: translateX(-55%);
+  transition: opacity 0.35s var(--ease), transform 0.9s var(--ease);
+}
+
 .pcard:hover .pcard__media {
   transform: translateY(-5px);
   border-color: var(--line-3);
-  box-shadow: 0 26px 50px -26px rgba(0, 0, 0, 0.85);
+  box-shadow:
+    0 26px 50px -26px rgba(0, 0, 0, 0.85),
+    0 0 0 1px color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+.pcard:hover .pcard__media::after {
+  opacity: 1;
+  transform: translateX(55%);
 }
 
 .pcard:hover .pcard__img {

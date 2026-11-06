@@ -2166,6 +2166,33 @@ plaintiff, reason, status, the absence warning and the verdict with the court no
 that belongs to somebody else shows “Case not found”, because `member_court_history()` only
 returns the caller's cases.
 
+### The look — one system for every page
+
+Every page reads from three shared sheets — `base.css` (tokens, type, buttons, form, skeleton),
+`layout.css` (header, rail, sidebar, footer) and `components.css` (sections, rails, posters, chips) —
+so the site is dressed in one place. The pass that made the pages more attractive added light and
+depth, never a new shape, a colour or a library: the same monochrome identity, a little more air.
+
+- **Ambient light.** `body` carries two fixed radial washes — one from the top centre, one faint from
+  the bottom-right — under the film grain, with a dark twin for `html[data-theme="light"]`. Nothing
+  else paints a page background, so the light is continuous from page to page.
+- **Fading hairlines** instead of hard rules: `.section--line`, `.site-footer` and the browse-page
+  mastheads each draw a 1px rule that fades at both ends, so a divider never looks like a cut.
+- **Glass** where something floats over content: the rail arrows (`.rail__btn`) and the sticky filter
+  bars (`.abar` on `articles.html`, `.vbar` on `videos.html`) are `color-mix` backgrounds with
+  `backdrop-filter: blur() saturate()`, so text scrolling under them stays readable.
+- **A beveled primary button.** `.btn--primary` is a three-stop gradient with an inset top highlight
+  and a bottom shadow; primary, ghost and icon buttons all lift 1px on hover, and `:focus-visible`
+  paints a soft halo outside the outline so the keyboard ring reads on light and dark alike.
+- **Posters answer the pointer.** `.pcard__media` takes a diagonal sheen sweep and the hovered card a
+  1px inset ring; the hero scrim fades into the page at its foot instead of ending on a line.
+- **Editorial type.** The browse pages carry their title in `--font-serif` at a larger optical size
+  (`.arts__title`, `.vids__title`), matching the blog's magazine masthead, while the app pages stay
+  in the sans for density. Reduced motion turns off the sheen, the lift and the ticker.
+
+Cache stamps on those three sheets travel with the pages, so a change to `components.css` reaches a
+browser that already has the old file.
+
 ### Tests
 
 ```bash

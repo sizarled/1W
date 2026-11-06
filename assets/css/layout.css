@@ -31,6 +31,7 @@ html[data-theme="light"] .site-header::before {
   background: color-mix(in srgb, var(--bg) 82%, transparent);
   backdrop-filter: blur(18px) saturate(1.2);
   border-bottom-color: var(--line);
+  box-shadow: 0 20px 44px -34px rgba(0, 0, 0, 0.95);
 }
 
 .site-header.is-stuck::before {
@@ -916,9 +917,18 @@ html[data-theme="light"] .site-header::before {
 .site-footer {
   position: relative;
   margin-top: clamp(3rem, 7vw, 6rem);
-  border-top: 1px solid var(--line);
+  border-top: 0;
   background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--surface) 55%, transparent));
   transition: padding-left 0.42s var(--ease-out);
+}
+
+.site-footer::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  inset-block-start: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--line-2) 12%, var(--line-2) 88%, transparent);
 }
 
 .site-footer__top {

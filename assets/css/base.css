@@ -147,7 +147,11 @@ html {
 
 body {
   min-height: 100vh;
-  background: var(--bg);
+  /* two soft lights, fixed behind the page: the shell is black, not flat */
+  background:
+    radial-gradient(92% 52% at 50% -14%, rgba(255, 255, 255, 0.07), transparent 68%) no-repeat fixed,
+    radial-gradient(64% 46% at 96% 104%, rgba(255, 255, 255, 0.035), transparent 70%) no-repeat fixed,
+    var(--bg);
   color: var(--text);
   font-family: var(--font-sans);
   font-size: 16px;
@@ -168,6 +172,13 @@ body::before {
   opacity: 0.035;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)'/%3E%3C/svg%3E");
   mix-blend-mode: overlay;
+}
+
+html[data-theme="light"] body {
+  background:
+    radial-gradient(92% 52% at 50% -14%, rgba(10, 10, 14, 0.05), transparent 68%) no-repeat fixed,
+    radial-gradient(64% 46% at 96% 104%, rgba(10, 10, 14, 0.035), transparent 70%) no-repeat fixed,
+    var(--bg);
 }
 
 html[data-theme="light"] body::before {
@@ -226,7 +237,7 @@ h4 {
 }
 
 ::selection {
-  background: var(--text);
+  background: color-mix(in srgb, var(--text) 92%, transparent);
   color: var(--bg);
 }
 
@@ -234,6 +245,7 @@ h4 {
   outline: 2px solid var(--text);
   outline-offset: 3px;
   border-radius: 4px;
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--text) 9%, transparent);
 }
 
 /* ------------------------------------------------------------------ */
@@ -403,14 +415,30 @@ h4 {
 }
 
 .btn--primary {
-  background: var(--accent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 88%, var(--text)) 0%,
+    var(--accent) 58%,
+    color-mix(in srgb, var(--accent) 94%, var(--bg)) 100%
+  );
   color: var(--accent-ink);
-  box-shadow: 0 10px 30px -14px rgba(255, 255, 255, 0.35);
+  box-shadow:
+    0 10px 30px -14px rgba(255, 255, 255, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.14);
 }
 
 .btn--primary:hover {
-  background: color-mix(in srgb, var(--accent) 86%, var(--text));
-  box-shadow: 0 16px 40px -16px rgba(255, 255, 255, 0.4);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 80%, var(--text)) 0%,
+    color-mix(in srgb, var(--accent) 96%, var(--text)) 58%,
+    color-mix(in srgb, var(--accent) 92%, var(--bg)) 100%
+  );
+  box-shadow:
+    0 18px 42px -16px rgba(255, 255, 255, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.34);
+  transform: translateY(-1px);
 }
 
 html[data-theme="light"] .btn--primary {
@@ -427,6 +455,8 @@ html[data-theme="light"] .btn--primary {
 .btn--ghost:hover {
   border-color: var(--line-3);
   background: var(--surface-2);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
 }
 
 .btn--quiet {
@@ -482,6 +512,8 @@ html[data-theme="light"] .btn--primary {
   color: var(--text);
   background: var(--surface-2);
   border-color: var(--line);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
 }
 
 .icon-btn--bordered {

@@ -13,12 +13,32 @@
 }
 
 .vids__head {
+  position: relative;
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
   gap: 1.4rem 2rem;
   flex-wrap: wrap;
-  padding-block: clamp(1.6rem, 3.4vw, 2.6rem) clamp(1.1rem, 2.2vw, 1.6rem);
+  padding-block: clamp(1.9rem, 3.8vw, 3rem) clamp(1.2rem, 2.4vw, 1.8rem);
+}
+
+.vids__head::before {
+  content: "";
+  position: absolute;
+  inset-inline: calc(var(--gutter) * -1);
+  inset-block: -1px 0;
+  z-index: -1;
+  background: radial-gradient(72% 120% at 12% 0%, color-mix(in srgb, var(--text) 5%, transparent), transparent 72%);
+  pointer-events: none;
+}
+
+.vids__head::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--line-2), transparent 72%);
 }
 
 .vids__intro {
@@ -27,9 +47,11 @@
 
 .vids__title {
   margin-top: 0.55rem;
-  font-size: clamp(1.9rem, 4vw, 3.1rem);
-  line-height: 1.02;
-  letter-spacing: -0.04em;
+  font-family: var(--font-serif);
+  font-weight: 400;
+  font-size: clamp(2.4rem, 5.4vw, 4rem);
+  line-height: 0.96;
+  letter-spacing: -0.012em;
 }
 
 .vids__sub {
@@ -51,12 +73,23 @@
 /* filter bar                                                         */
 /* ------------------------------------------------------------------ */
 .vbar {
+  position: sticky;
+  top: calc(var(--header-h) + 0.6rem);
+  z-index: 6;
   display: grid;
   gap: 0.9rem;
   padding: 0.9rem 1rem;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(18px) saturate(140%);
+  transition: border-color 0.22s var(--ease), box-shadow 0.22s var(--ease);
+}
+
+.vbar:focus-within {
+  border-color: var(--line-2);
+  box-shadow: var(--shadow);
 }
 
 .vbar__row {
