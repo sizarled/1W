@@ -55,7 +55,9 @@ const state = {
   activeLink: null,
   location: "",
   needsCode: false,
-  adVerified: false,
+  adVerified: false, // the sponsor countdown finished on this tab
+  adCleared: false, // … and therefore the player may count minutes
+  adDeadline: 0, // when the countdown reaches zero (epoch ms)
   codeVerified: false,
   playbackStarted: false,
   adBlocked: false,
@@ -161,6 +163,7 @@ export async function initWatch() {
   await Promise.all([loadTitle(), loadCommunity()]);
   await loadEpisodeRuntime();
   wireActions();
+  restoreAdGate();
   wirePlayer();
   wireWatchTimeGuards();
   wireExitIntent();
@@ -742,7 +745,11 @@ function preparePlayer(detail) {
 
 function wirePlayer() {
   qs("[data-w-play]")?.addEventListener("click", beginPlayback);
-  qs("[data-w-ad-link]")?.addEventListener("click", startAdCountdown);
+  const adLink = qs("[data-w-ad-link]");
+  if (adLink) {
+    adLink.href = AD_URL; // live even if the details never arrive
+    adLink.addEventListener("click", startAdCountdown);
+  }
   qs("[data-w-unlock]")?.addEventListener("click", () => {
     const form = qs("[data-w-code-form]");
     if (form) form.hidden = false;
@@ -770,42 +777,159 @@ function wirePlayer() {
 
 async function beginPlayback() {
   const idle = qs("[data-w-idle]");
-  if (state.adVerified) return startPlayer();
+  if (state.adCleared) return startPlayer();
   if (idle) idle.hidden = true;
   const gate = qs("[data-w-ad]");
   if (gate) gate.hidden = false;
+
+  // a countdown that is already running on this tab (the page was reloaded
+  // while the sponsor link was open) continues where it was, it never restarts
+  const left = adRemaining();
+  if (state.adDeadline > Date.now()) {
+    setText("[data-w-ad-count]", String(left));
+    resetRing(AD_SECONDS);
+    updateRing(left);
+    resumeAdCountdown();
+    return;
+  }
   setText("[data-w-ad-count]", String(AD_SECONDS));
   resetRing(AD_SECONDS);
 }
 
+/* ------------------------------------------------------------------ */
+/* the sponsor countdown                                              */
+/* ------------------------------------------------------------------ */
+/**
+ * The count is a *deadline*, not a tally of ticks.
+ *
+ * A timer that adds one second per tick stops the moment the tab is throttled,
+ * suspended or sent to the background — which is exactly what happens when the
+ * sponsor link opens in a second tab, and what the ad network's own redirects
+ * do to the first one. So the page stores the instant the countdown ends
+ * (`Date.now() + 30s`) and every tick *reads* it: a tab that comes back after
+ * two minutes finishes the countdown at once instead of starting a new one.
+ *
+ * The deadline lives in `sessionStorage`, so a reload resumes it and a closed
+ * tab forgets it — the count runs for as long as the window is open, and ends
+ * with it. Nothing on the page stops it: not a second tab, not a redirect in
+ * the sponsor page, not `pagehide`.
+ */
+const AD_KEY = "1w.ad.gate";
 let adTimer = null;
-let adLeft = AD_SECONDS;
 
-function startAdCountdown(event) {
-  // the link opens in a new tab; the timer only runs while this page is visible
-  adLeft = AD_SECONDS;
-  setText("[data-w-ad-note]", "Keep the sponsor tab open — closing this page stops the countdown.");
-  if (adTimer) return;
-  adTimer = setInterval(() => {
-    adLeft -= 1;
-    setText("[data-w-ad-count]", String(Math.max(adLeft, 0)));
-    updateRing(adLeft);
-    if (adLeft <= 0) {
-      clearInterval(adTimer);
-      adTimer = null;
-      state.adVerified = true;
-      const gate = qs("[data-w-ad]");
-      if (gate) gate.hidden = true;
-      startPlayer();
-    }
-  }, 1000);
+/** Which title this countdown belongs to — one ticket per film / episode. */
+function adTicketId() {
+  return state.kind === "movie" ? `movie:${state.id}` : `tv:${state.id}:s${state.season}:e${state.episode}`;
 }
 
-window.addEventListener("pagehide", () => {
-  if (adTimer) {
-    clearInterval(adTimer);
-    adTimer = null;
+function readAdTicket() {
+  try {
+    const raw = JSON.parse(sessionStorage.getItem(AD_KEY) || "null");
+    if (!raw || raw.id !== adTicketId()) return null;
+    const deadline = Number(raw.deadline);
+    return Number.isFinite(deadline) ? { id: raw.id, deadline } : null;
+  } catch {
+    return null;
   }
+}
+
+function writeAdTicket(deadline) {
+  try {
+    sessionStorage.setItem(AD_KEY, JSON.stringify({ id: adTicketId(), deadline }));
+  } catch {
+    /* private mode — the countdown simply restarts with the page */
+  }
+}
+
+function dropAdTicket() {
+  try {
+    sessionStorage.removeItem(AD_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Reads the ticket this tab left behind: an expired one means the countdown
+ * already finished here (a reload must not ask for it twice), a live one is
+ * picked up by the next Play.
+ */
+function restoreAdGate() {
+  const ticket = readAdTicket();
+  if (!ticket) return false;
+  if (Date.now() >= ticket.deadline) {
+    markAdCleared();
+    dropAdTicket();
+    return true;
+  }
+  state.adDeadline = ticket.deadline;
+  return false;
+}
+
+function markAdCleared() {
+  state.adVerified = true;
+  state.adCleared = true;
+}
+
+/** Seconds left, read from the deadline — never from a counter of ticks. */
+function adRemaining() {
+  return Math.max(0, Math.ceil((state.adDeadline - Date.now()) / 1000));
+}
+
+function startAdCountdown() {
+  if (state.adCleared) return startPlayer();
+  state.adDeadline = Date.now() + AD_SECONDS * 1000;
+  writeAdTicket(state.adDeadline);
+  resetRing(AD_SECONDS);
+  setText(
+    "[data-w-ad-note]",
+    "The count keeps running while this window is open — if the sponsor tab redirects elsewhere, the clock here is not affected."
+  );
+  resumeAdCountdown();
+}
+
+function resumeAdCountdown() {
+  tickAd();
+  if (adTimer || state.adCleared) return;
+  // a 250ms beat: the number comes from the deadline, so a slept tab is not a
+  // lost second — the next beat finishes a countdown that has already elapsed
+  adTimer = setInterval(tickAd, 250);
+}
+
+function stopAdTimer() {
+  if (!adTimer) return;
+  clearInterval(adTimer);
+  adTimer = null;
+}
+
+function tickAd() {
+  if (state.adCleared || !state.adDeadline) return;
+  const left = adRemaining();
+  setText("[data-w-ad-count]", String(left));
+  updateRing(left);
+  if (left <= 0) finishAdCountdown();
+}
+
+function finishAdCountdown() {
+  stopAdTimer();
+  if (state.adCleared) return;
+  markAdCleared();
+  state.adDeadline = 0;
+  dropAdTicket();
+  const gate = qs("[data-w-ad]");
+  if (gate) gate.hidden = true;
+  startPlayer();
+}
+
+// the tab coming back, the window getting focus, a bfcache restore: all of them
+// just re-read the clock instead of waiting for the next beat
+["visibilitychange", "focus", "pageshow", "online"].forEach((type) => {
+  window.addEventListener(type, () => {
+    if (state.adDeadline && !state.adCleared) tickAd();
+  });
+  document.addEventListener(type, () => {
+    if (state.adDeadline && !state.adCleared) tickAd();
+  });
 });
 
 function ringLength() {
@@ -833,6 +957,8 @@ function updateRing(left) {
 }
 
 function startPlayer() {
+  // the sponsor countdown owns the door: no path may start the player early
+  if (!state.adCleared) return;
   const frame = qs("[data-w-frame]");
   const idle = qs("[data-w-idle]");
   if (!frame) return;
@@ -1033,6 +1159,7 @@ function codeLockOpen() {
 }
 
 function isCounting() {
+  if (!state.adCleared) return false; // the sponsor countdown still owns the clock
   if (!state.playbackStarted) return false;
   if (state.capReached) return false;
   if (document.hidden) return false;
@@ -1112,6 +1239,7 @@ function renderLimitNote() {
   const tally = `${used} of ${cap} min`;
   let text;
   if (state.capReached) text = `Limit reached — all ${cap} min of this title are counted.`;
+  else if (!state.adCleared) text = `Watch time starts when the sponsor countdown ends · this title counts up to ${cap} min.`;
   else if (!state.playbackStarted) text = `Watch time starts when you press Play · this title counts up to ${cap} min.`;
   else if (codeLockOpen()) text = `Paused — enter your viewing code · ${tally}.`;
   else if (document.hidden) text = `Paused — this tab is in the background · ${tally}.`;
@@ -1943,6 +2071,12 @@ export default initWatch;
 export const __debug = {
   state,
   tracker,
+  adRemaining,
+  adTicketId,
+  restoreAdGate,
+  startAdCountdown,
+  tickAd,
+  finishAdCountdown,
   flushTracker,
   startTracker,
   stepTracker,

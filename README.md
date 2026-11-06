@@ -74,7 +74,7 @@ watch.html?movie=550&link=link000004      start on a specific member source
 | --- | --- |
 | Title header | Poster, display + original title, tagline, synopsis, certification, status, genres and every TMDB fact (runtime, seasons, rating, director, writers, studios, countries, language). |
 | Actions | Like / dislike (one vote per member, changeable), comments toggle, total minutes, watch later, download, share, report. |
-| Player | Poster + play button + duration. Play opens the **30-second sponsor gate**: the countdown only starts once the sponsor link is opened, and it stops when the page is closed. Then `vidsrc.sh/embed/…` loads. |
+| Player | Poster + play button + duration. Play opens the **30-second sponsor gate**: the countdown starts when the sponsor link is opened, runs on a stored deadline (so a background tab, a throttled timer or a redirect inside the sponsor page cannot stop it), resumes after a reload and ends only when the window is closed. When it reaches zero `vidsrc.sh/embed/…` loads and the ledger starts. |
 | Viewing code | Five minutes after playback starts — for titles rated **≥ 50 % on TMDB or age-restricted** — the film stops, fullscreen exits and the lock panel asks for a six-digit code. Codes are checked through `verify_watch_code()` against `viewing_codes`; "remember this device" binds the code to a random device id. |
 | Seasons | Season + episode pickers for series; changing either restarts the player and the ledger. |
 | Watch links | The platform source is always first (logo only, URL hidden). Member links show favicon, site name, quality (SD → 8K), audio, subtitles and ads. Picking one loads it in the same player and prints its details underneath. |
@@ -91,7 +91,7 @@ watch.html?movie=550&link=link000004      start on a specific member source
 
 | Condition | What pauses the clock |
 | --- | --- |
-| Play was pressed (the ad gate and the code gate are done) | nothing is counted on a page that was merely opened |
+| Play was pressed **and the sponsor countdown has finished** (`state.adCleared`) | the gate, the countdown, a reload mid-countdown — the player cannot open, let alone count, before it ends |
 | The tab is visible | switching tabs, minimising, another app in front |
 | The window has focus | clicking a second window (a second desktop window counts as "not watching") |
 | The browser is online | offline / connection lost |
@@ -104,6 +104,26 @@ leaving the player open overnight cannot farm minutes. Accrued seconds live in
 `localStorage` under a per-day key (`1w.watched:<type>:<id>[:s..e]:<date>`), so a reload
 does not reset the allowance — the next day starts a fresh one. When the allowance is
 spent the player keeps playing, the ledger stops and a toast explains it once.
+
+**The sponsor countdown is a deadline, not a tally of ticks.** `state.adDeadline` holds the
+instant the 30 seconds end (`Date.now() + 30 000`), and every beat of the 250 ms timer *reads*
+it instead of adding a second — so a tab the browser throttled for a minute finishes the count
+the moment it is looked at, instead of starting over. The deadline is written to
+`sessionStorage` under `1w.ad.gate` (one ticket per film or episode), which means:
+
+| Event | What happens to the count |
+| --- | --- |
+| A second tab opens (the sponsor link) | nothing — the ticket is this tab's, the clock keeps running |
+| The sponsor page redirects somewhere else | nothing — it has its own document, this one is untouched |
+| The tab is backgrounded, throttled or frozen | nothing — the next beat reads the deadline and catches up |
+| The page is reloaded | it **resumes** from the ticket, it never goes back to 30 |
+| The countdown was already finished here | the next Play opens the player directly |
+| The window is closed | the ticket dies with `sessionStorage`, which is the only thing that stops the clock |
+
+`state.adCleared` is set by the countdown alone, and `isCounting()`, `startPlayer()` and
+`renderLimitNote()` all read it: the player cannot mount and the ledger cannot tick while the
+sponsor gate is up. Before it ends the line under the player reads
+`Watch time starts when the sponsor countdown ends · this title counts up to 132 min.`
 
 The line under the player shows the live state — `Counting · 3:20 of 132 min`,
 `Paused — this window is not focused · 3:20 of 132 min`, `Limit reached — all 132 min of
