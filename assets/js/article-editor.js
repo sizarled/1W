@@ -47,6 +47,7 @@ import { COUNTRIES } from "./countries.js";
 import { wordsIn, readingTime, sanitizeHtml, firstImage } from "./article-text.js";
 import { SUPABASE, storageUrl } from "./config.js";
 import { createRte } from "./rte.js";
+import { createContents, rowLabel } from "./contents.js";
 
 /* the studio embeds this editor: the flag is on <body data-ae-embed="1"> */
 const EMBED = document.body.dataset.aeEmbed === "1";
@@ -128,6 +129,7 @@ const ERRORS = {
 
 const $ = (sel) => qs(sel);
 let rte = null;
+let contents = null;
 
 /* ================================================================== */
 /* helpers                                                            */
@@ -471,6 +473,52 @@ function paintFields() {
 }
 
 /* ================================================================== */
+/* the contents                                                       */
+/* ================================================================== */
+/*
+ * The index of the piece is the piece: every H2, H3 and H4 in the body, in
+ * order, listed in the side column. Press one and the page goes there and
+ * the caret lands inside the heading — so the writer carries on from that
+ * line rather than from the top of a long article.
+ */
+function contentsItems() {
+  const body = $("[data-e-body]");
+  if (!body) return [];
+  return [...body.querySelectorAll("h2, h3, h4")].map((node) => ({
+    node,
+    level: Number(node.tagName.slice(1)),
+    label: rowLabel(node) || "An untitled heading",
+  }));
+}
+
+function paintContents() {
+  if (!contents) return;
+  const items = contentsItems();
+  contents.paint(items);
+  const count = $("[data-e-toc-count]");
+  if (count) count.textContent = items.length ? `${items.length} heading${items.length === 1 ? "" : "s"}` : "";
+}
+
+/** Go there: the page scrolls, the heading lights, the caret moves in. */
+function jumpToHeading(item) {
+  const node = item && item.node;
+  if (!node || !node.isConnected) return;
+  node.scrollIntoView?.({ behavior: "smooth", block: "center" });
+  node.classList.add("is-jump");
+  setTimeout(() => node.classList.remove("is-jump"), 1400);
+
+  /* the body takes the focus first: focusing is what can drop a caret, so the
+     range goes in after it, never before */
+  $("[data-e-body]")?.focus({ preventScroll: true });
+  const range = document.createRange();
+  range.selectNodeContents(node);
+  range.collapse(true);
+  const selection = document.getSelection ? document.getSelection() : window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
+/* ================================================================== */
 /* the keywords                                                       */
 /* ================================================================== */
 /*
@@ -705,6 +753,7 @@ function paintAll() {
   paintWhen();
   paintFields();
   paintKeywords();
+  paintContents();
   paintChecks();
   paintStatus();
   paintMine();
@@ -1583,6 +1632,7 @@ function bind() {
       onChange: (html) => {
         S.html = html;
         paintCounts();
+        paintContents();
         paintChecks();
         scheduleDraft();
       },
@@ -1922,6 +1972,11 @@ function bind() {
       scheduleDraft();
     })
   );
+
+  contents = createContents($("[data-e-toc]"), {
+    empty: "No headings yet. Press H2 in the toolbar and the piece's contents appear here.",
+    onJump: jumpToHeading,
+  });
 
   /* the import button is this module's own, so it exists on both pages */
   mountHtmlImport();

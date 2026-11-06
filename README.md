@@ -1166,7 +1166,7 @@ published (and refused without a media link), an article refused in a studio hub
 categories three deep with the fourth refused (`deep`) and a duplicate refused, a third blog created
 then a fourth refused (`limit`, level 1), staff added by code and an unknown code refused
 (`member`), and the subscriber list reporting a real member with their country.
-`tools/creator-smoke.mjs` (322 checks) runs the studio end to end — an empty studio that creates, configures
+`tools/creator-smoke.mjs` (325 checks) runs the studio end to end — an empty studio that creates, configures
 (private + password + staff), saves, refuses, and deletes a studio; a studio page holding one of each
 hub (tables, columns, action menus, the editor saving a draft then publishing, blog articles vs
 drafts, categories, subscribers, library books); and the `?section=&tab=` deep links.
@@ -1308,7 +1308,7 @@ block that rolled itself back: a member who owned nothing asked the desk and got
 `video_save` refused their hub with `hub_role`; the owner then approved them into a cinema
 (`IDCN100006`), the desk listed it as `role: publisher`, and the same call wrote a **published**
 video into that hub (`{ok:true, status:"published", code:"PST-001034", hub:"IDCN100006"}`) while a hub
-that never approved them still answered `hub_role`. `tools/publisher-smoke.mjs` (76 checks) runs the
+that never approved them still answered `hub_role`. `tools/publisher-smoke.mjs` (78 checks) runs the
 page end to end in jsdom: signed out, approved nowhere, the rail and the editor's picker agreeing,
 the full form present, a publish that names the hub and stays on the page, the clean form, the two
 tabs, the rail retargeting the editor, and both deep links (`?studio=`, `?id=`).
@@ -1459,10 +1459,21 @@ present in `video_mine`; a like opened the composer and a comment landed; a save
 `passwords` key left the existing password in place. The test rows were removed afterwards (three demo
 videos from the Blender open movies remain in the feed).
 
-Test: `node tools/video-smoke.mjs` — **243/243** (feed, sort, search, watch, reaction→comment, a locked
+Test: `node tools/video-smoke.mjs` — **254/254** (feed, sort, search, watch, reaction→comment, a locked
 door and its password, a missing video, the editor signed out and in, the payload of a publish, of an
 exclusive rule set and of a private list, the player and the sixteen host cases, the oEmbed stills, the
-studio picker, and the forwarding page).
+studio picker, the contents rail, and the forwarding page).
+
+**The form carries its own contents too.** A video form is nine sections long — the source, the words,
+the extras, the live preview, the studio, the thumbnail, the audience, the moment, the details — so it
+opens with the same **Contents** rail: one row per section, in the order the form is read, numbered
+`01…`, with the count in its head. A press scrolls to that section, lights it up, and puts the caret in
+its first field (a section of switches takes the focus itself, since a radio button is not a place to
+land in). The box that lists the sections is not one of them.
+
+Both rails are one module — `assets/js/contents.js` — and one set of styles, so the article editor, the
+video editor, the writing room inside `creator.html` and the editor embedded in `publisher.html` all
+index themselves the same way.
 
 #### The studio a video goes into
 
@@ -1579,6 +1590,14 @@ longer edited, but a piece that already carries them keeps them — the save car
 the form does not own, so a new field on this page can never quietly throw an old one away. The rule
 lives in `article-editor.js`, so the studio's writing room wears it too.
 
+**The piece carries its own contents.** The side column opens with a **Contents** rail: every `h2`, `h3`
+and `h4` in the body, in the order they are read, numbered `01…`, a sub-heading set in from its parent,
+and a count in the head (`3 headings`). It is rebuilt as the piece is written — and only rebuilt when the
+headings actually change, so a writer typing in the body never loses the row they were standing on.
+Press one and the page scrolls to that heading, the heading lights up for a moment, and **the caret
+lands inside it** — the writer carries on from that line instead of from the top of a long piece. An
+empty piece says so: *No headings yet. Press H2 in the toolbar and the piece's contents appear here.*
+
 **A piece that already exists somewhere else comes in through *Import HTML*.** The button sits in the
 piece's head, beside the title counter, and it is put there by `article-editor.js` itself — so the
 studio's writing room has it too, on the same code. The dialog takes the page either way: paste it, or
@@ -1601,9 +1620,10 @@ import is not a second renderer: what it inserts is exactly what the reader woul
 taken off that list so the generator cannot overwrite them.
 
 DDL + functions: `tools/sql/articles-page.sql` — **applied**. Test: `node tools/article-smoke.mjs` —
-**231/231** (the index, the empty index, the reader and its sanitizer, reaction→comment→vote, the
+**243/243** (the index, the empty index, the reader and its sanitizer, reaction→comment→vote, the
 exclusive gate with its steps and reminder, the private gate with a wrong and a right password, a
-missing piece, the editor signed out and in, every toolbar function on a real range, the keyword rule —
+missing piece, the editor signed out and in, every toolbar function on a real range, the contents rail —
+a row per heading, a press that lights the heading and moves the caret into it — the keyword rule —
 a head of three words waking the long tails, a tail refused without the head, a head refused past three
 words — importing an HTML
 page through the paste box and through a chosen file — scripts, styles and handlers gone, the headline
@@ -1686,8 +1706,8 @@ the editors need**, each pinned to a name pattern and a set of extensions (`user
 | Gate | Result |
 | --- | --- |
 | `node tools/rte-smoke.mjs` | **45/45** (every command, links, insertion, history, paste, drop, keys, toolbar state) |
-| `node tools/article-smoke.mjs` | **231/231** |
-| `node tools/video-smoke.mjs` | **208/208** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
+| `node tools/article-smoke.mjs` | **243/243** |
+| `node tools/video-smoke.mjs` | **254/254** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
 
 ### The six OAuth apps — one checklist each
 
@@ -2505,6 +2525,7 @@ assets/js/articles.js       articles.html: the index, the search, the shelves
 assets/js/article.js        article.html: one piece, the two doors, the comments
 assets/js/article-editor.js article-editor.html: the editor and article_save (embedded by creator.html)
 assets/js/article-text.js   word count, reading time and the body allowlist, shared by both
+assets/js/contents.js       the contents rail both editors carry: the piece's headings, the form's sections
 assets/js/rte.js            the writing surface: ranges, formatting, history, paste, keys
 assets/js/embed.js          the one host list: YouTube · Vimeo · Dailymotion · TikTok · Facebook·
                             Drive · Pinterest · Reddit · a file — for the editor and the watch screen

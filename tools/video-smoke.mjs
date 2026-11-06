@@ -939,6 +939,37 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
 }
 
 /* ================================================================== */
+/* pass 14 — the contents of the form                                 */
+/* ================================================================== */
+{
+  const { document, window, errors } = await editor("p14");
+  const rows = [...document.querySelectorAll("[data-ved-toc] [data-toc]")];
+
+  expect("contents: the form carries a rail", Boolean(document.querySelector("[data-ved-toc]")), "");
+  expect("contents: one row per section", rows.length === 9, rows.length);
+  expect("contents: the count is spoken", document.querySelector("[data-ved-toc-count]")?.textContent === "9 sections", document.querySelector("[data-ved-toc-count]")?.textContent);
+  expect(
+    "contents: in the order the form is read",
+    rows[0]?.textContent.includes("The video") && rows[2]?.textContent.includes("Extra choices") && rows[8]?.textContent.includes("Details"),
+    rows.map((row) => row.textContent.trim()).join(" | ")
+  );
+  expect("contents: numbered", rows[8]?.textContent.trim().startsWith("09"), rows[8]?.textContent);
+  expect("contents: the box that lists them is not one of them", !rows.some((row) => /Contents/.test(row.textContent)), rows.map((row) => row.textContent.trim()).join(" | "));
+
+  const audienceRow = rows.find((row) => /Who sees it/.test(row.textContent));
+  audienceRow.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await wait(30);
+  const audienceBox = [...document.querySelectorAll(".vcard-box")].find(
+    (box) => box.querySelector(".vcard-box__title")?.textContent.trim() === "Who sees it"
+  );
+  expect("contents: a press marks the row", audienceRow.classList.contains("is-active"), audienceRow.className);
+  expect("contents: and lights the section up", audienceBox.classList.contains("is-jump"), audienceBox.className);
+  expect("contents: the section takes the focus", audienceBox.contains(document.activeElement), document.activeElement?.tagName);
+  expect("contents: nothing threw", errors.length === 0, errors.join(" | "));
+  expect("contents: the jump is drawn", css.includes(".vcard-box.is-jump"), "");
+}
+
+/* ================================================================== */
 /* pass 13 — the old address and the stylesheet                       */
 /* ================================================================== */
 {

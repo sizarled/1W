@@ -1009,6 +1009,11 @@
   top: calc(var(--header-h) + 1rem);
 }
 
+.vcard-box.is-jump {
+  outline: 1px solid var(--line-2);
+  outline-offset: 4px;
+}
+
 .vcard-box {
   display: grid;
   gap: 0.8rem;

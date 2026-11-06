@@ -13,8 +13,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/css/base.css?v=20261105e" />
     <link rel="stylesheet" href="assets/css/layout.css?v=20261105e" />
-    <link rel="stylesheet" href="assets/css/components.css?v=20261105e" />
-    <link rel="stylesheet" href="assets/css/article.css?v=20261112b" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261113a" />
+    <link rel="stylesheet" href="assets/css/article.css?v=20261113a" />
     <script>
       /* apply the saved theme (or the OS preference) before first paint */
       (function () {
@@ -33,7 +33,7 @@
       })();
     </script>
     <script type="module" src="assets/js/app.js?v=20261106a"></script>
-    <script type="module" src="assets/js/article-editor.js?v=20261112b"></script>
+    <script type="module" src="assets/js/article-editor.js?v=20261113a"></script>
   </head>
   <body data-page="articleEditor" data-title="Write an article">
     <a class="skip-link" href="#main">Skip to content</a>
@@ -296,6 +296,16 @@
           <!-- the side column                                            -->
           <!-- ========================================================== -->
           <aside class="aed__side">
+            <!-- the piece's own contents -------------------------------- -->
+            <section class="apanel">
+              <div class="apanel__head">
+                <h2 class="apanel__title">Contents</h2>
+                <span class="apanel__meta" data-e-toc-count></span>
+              </div>
+              <div class="toc" data-e-toc></div>
+              <p class="apanel__hint">The headings of the piece, in order — press one to write from there.</p>
+            </section>
+
             <section class="apanel">
               <div class="apanel__head">
                 <h2 class="apanel__title">Ready?</h2>

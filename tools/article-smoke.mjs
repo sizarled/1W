@@ -734,6 +734,40 @@ const MEMBER = {
   expect("hands: the video becomes a captioned link", body.innerHTML.includes("the shot in question"), body.innerHTML);
   expect("hands: nothing is embedded", !body.innerHTML.includes("<iframe"), body.innerHTML);
 
+  /* the contents: the piece's own headings, and a way to any of them */
+  const tocHost = document.querySelector("[data-e-toc]");
+  expect("contents: the rail stands in the side column", Boolean(document.querySelector(".aed__side [data-e-toc]")), "");
+  expect("contents: with nothing to list it says so", /No headings yet/.test(tocHost?.textContent || ""), tocHost?.textContent);
+
+  body.innerHTML =
+    "<h2>The port at night</h2><p>one</p><h3>Four in the morning</h3><p>two</p><h2>What the light does</h2>";
+  body.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await wait(30);
+  const tocRows = [...document.querySelectorAll("[data-e-toc] [data-toc]")];
+  expect("contents: one row per heading", tocRows.length === 3, tocRows.length);
+  expect(
+    "contents: in the order they are read",
+    tocRows[0]?.textContent.includes("The port at night") && tocRows[2]?.textContent.includes("What the light does"),
+    tocRows.map((row) => row.textContent).join(" | ")
+  );
+  expect("contents: numbered", tocRows[2]?.textContent.trim().startsWith("03"), tocRows[2]?.textContent);
+  expect("contents: a sub-heading is set in", tocRows[1]?.classList.contains("is-h3") && !tocRows[0]?.classList.contains("is-h3"), tocRows[1]?.className);
+  expect("contents: the count is spoken", document.querySelector("[data-e-toc-count]")?.textContent === "3 headings", document.querySelector("[data-e-toc-count]")?.textContent);
+
+  tocRows[2].dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await wait(30);
+  const jumped = body.querySelectorAll("h2")[1];
+  expect("contents: a press marks the row", tocRows[2].classList.contains("is-active"), tocRows[2].className);
+  expect("contents: and lights the heading up", jumped.classList.contains("is-jump"), jumped.className);
+  const landed = window.getSelection();
+  expect("contents: the caret is put inside it", landed?.anchorNode === jumped || landed?.anchorNode?.parentElement === jumped, String(landed?.anchorNode?.nodeName));
+
+  body.innerHTML = "<p>a piece with no headings at all</p>";
+  body.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await wait(30);
+  expect("contents: no headings, no rows", document.querySelectorAll("[data-e-toc] [data-toc]").length === 0);
+  expect("contents: and the rail says how to get them", /Press H2/.test(document.querySelector("[data-e-toc]")?.textContent || ""), document.querySelector("[data-e-toc]")?.textContent);
+
   /* clear formatting */
   body.innerHTML = "<p><strong>thick</strong> and <em>slanted</em></p>";
   caretIn(body.querySelector("strong").firstChild, 1);

@@ -202,6 +202,13 @@ function deskFetch(href) {
     expect(`editor: ${sel} is here`, Boolean(document.querySelector(sel)));
   });
   expect("editor: the file input is here", Boolean(document.querySelector("[data-ved-file]")));
+  const deskRows = [...document.querySelectorAll("[data-ved-toc] [data-toc]")];
+  expect("editor: the desk carries the contents rail too", deskRows.length === 9, String(deskRows.length));
+  expect(
+    "editor: listing the same sections",
+    /The video/.test(deskRows[0]?.textContent || "") && deskRows.some((row) => /Who sees it/.test(row.textContent)),
+    deskRows.map((row) => row.textContent.trim()).join(" | ")
+  );
   const hubSelect = document.querySelector("[data-ved-hub]");
   expect("editor: the picker points at the desk's hub", hubSelect.value === "IDCN100006", hubSelect.value);
   expect("editor: and offers no stray own-feed", !/My own feed/.test(hubSelect.textContent), hubSelect.textContent.trim().slice(0, 80));

@@ -13,8 +13,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/css/base.css?v=20261105e" />
     <link rel="stylesheet" href="assets/css/layout.css?v=20261105e" />
-    <link rel="stylesheet" href="assets/css/components.css?v=20261105e" />
-    <link rel="stylesheet" href="assets/css/video.css?v=20261108a" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261113a" />
+    <link rel="stylesheet" href="assets/css/video.css?v=20261113a" />
     <script>
       /* apply the saved theme (or the OS preference) before first paint */
       (function () {
@@ -33,7 +33,7 @@
       })();
     </script>
     <script type="module" src="assets/js/app.js?v=20261105e"></script>
-    <script type="module" src="assets/js/video-editor.js?v=20261110a"></script>
+    <script type="module" src="assets/js/video-editor.js?v=20261113a"></script>
   </head>
   <body data-page="videoEditor" data-title="Publish a video">
     <a class="skip-link" href="#main">Skip to content</a>
@@ -65,6 +65,16 @@
           <!-- the main column                                            -->
           <!-- ========================================================== -->
           <div class="ved__col">
+            <!-- the form's own contents --------------------------------- -->
+            <section class="vcard-box" data-ved-toc-box>
+              <div class="vcard-box__head">
+                <h2 class="vcard-box__title">Contents</h2>
+                <span class="vcount" data-ved-toc-count></span>
+              </div>
+              <div class="toc" data-ved-toc></div>
+              <p class="vhint">Every section of this form, in order — press one to go there.</p>
+            </section>
+
             <!-- source ------------------------------------------------- -->
             <section class="vcard-box">
               <div class="vcard-box__head">

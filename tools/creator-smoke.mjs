@@ -1643,6 +1643,14 @@ async function passDoors() {
   expect("writer: the headline became the title", w.qs("[data-e-title]")?.value === "A page from elsewhere", w.qs("[data-e-title]")?.value);
   expect("writer: and a heading in the piece", Boolean(roomBody.querySelector("h2")), roomBody.innerHTML.slice(0, 90));
 
+  /* the room's contents rail is the editor's own */
+  const roomRows = [...w.qsa("[data-e-toc] [data-toc]")];
+  expect("writer: the rail lists the heading that came in", roomRows.length === 1 && /A page from elsewhere/.test(roomRows[0].textContent), roomRows.map((row) => row.textContent.trim()).join(" | "));
+  expect("writer: and counts it", /1 heading/.test(w.text("[data-e-toc-count]")), w.text("[data-e-toc-count]"));
+  w.click(roomRows[0]);
+  await w.wait(40);
+  expect("writer: a press lights the heading up", Boolean(roomBody.querySelector("h2.is-jump")), roomBody.innerHTML.slice(0, 90));
+
   /* back to the table */
   w.click(w.qs("[data-cr-writer-back]"));
   await w.wait(90);

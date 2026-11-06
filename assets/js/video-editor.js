@@ -26,6 +26,7 @@ import { sessionToken, getMember } from "./session.js";
 import { COUNTRIES } from "./countries.js";
 import { SUPABASE, storageUrl } from "./config.js";
 import { embedUrl, autoThumb, isFile, sourceKind, sourceLabel, HOSTS, pinterestId, redditPath } from "./embed.js";
+import { createContents } from "./contents.js";
 
 const S = {
   token: "",
@@ -101,6 +102,7 @@ const ERRORS = {
 
 const $ = (sel) => qs(sel);
 const el = {};
+let contents = null;
 
 /* publisher.html embeds this editor — the same form, the same call, the same
    rules — rather than keeping a second, thinner one for publishers. The page
@@ -426,7 +428,51 @@ function paintStatus() {
   }
 }
 
+/**
+ * The contents of the form: every section of it, in the order it is read —
+ * the source, the words, the extras, then the side column's own. One press
+ * goes there; the box that lists them is not one of them.
+ */
+function contentsItems() {
+  const shell = $("[data-ved-shell]");
+  if (!shell) return [];
+  return [...shell.querySelectorAll(".vcard-box")]
+    .filter((box) => !box.hasAttribute("data-ved-toc-box") && !box.hidden)
+    .map((box) => {
+      const title = box.querySelector(".vcard-box__title");
+      return title ? { node: box, label: (title.textContent || "").trim() } : null;
+    })
+    .filter(Boolean);
+}
+
+function paintContents() {
+  if (!contents) return;
+  const items = contentsItems();
+  contents.paint(items);
+  const count = $("[data-ved-toc-count]");
+  if (count) count.textContent = `${items.length} section${items.length === 1 ? "" : "s"}`;
+}
+
+/** Go there: the page scrolls, the section lights, its first field takes the caret. */
+function jumpToSection(item) {
+  const node = item && item.node;
+  if (!node || !node.isConnected) return;
+  node.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  node.classList.add("is-jump");
+  setTimeout(() => node.classList.remove("is-jump"), 1400);
+
+  /* the section itself takes the focus — a radio is not a place to land in,
+     and a form of switches would have nowhere to put a caret at all */
+  node.setAttribute("tabindex", "-1");
+  node.focus?.({ preventScroll: true });
+  const first = node.querySelector(
+    'input:not([type="hidden"]):not([type="radio"]):not([type="checkbox"]):not([disabled]):not([hidden]), textarea:not([disabled]):not([hidden]), select:not([disabled]):not([hidden])'
+  );
+  first?.focus?.({ preventScroll: true });
+}
+
 function paintAll() {
+  paintContents();
   paintSourceNote();
   paintPlayer();
   paintCounters();
@@ -1110,6 +1156,11 @@ function paintDraftNote() {
 }
 
 function bind() {
+  contents = createContents($("[data-ved-toc]"), {
+    empty: "This form has no sections yet.",
+    onJump: jumpToSection,
+  });
+
   /* the source */
   let stillTimer = null;
   el.embed.addEventListener("input", () => {

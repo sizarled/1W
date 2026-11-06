@@ -2140,3 +2140,73 @@ html[data-theme="light"] .plan--featured {
     max-width: none;
   }
 }
+
+/* contents — a rail of places, in the two editors --------------------- */
+.toc {
+  display: grid;
+  gap: 0.05rem;
+  max-height: 16rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.toc__row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.36rem 0.45rem;
+  border: 0;
+  border-radius: 0.35rem;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.76rem;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+  transition: color 140ms var(--ease), background 140ms var(--ease);
+}
+
+.toc__row:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+}
+
+.toc__row:focus-visible {
+  outline: 1px solid var(--line-2);
+  outline-offset: 1px;
+}
+
+.toc__row.is-active {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+.toc__row.is-h3 {
+  padding-left: 1.5rem;
+}
+
+.toc__row.is-h4 {
+  padding-left: 2.6rem;
+}
+
+.toc__n {
+  flex: none;
+  font-size: 0.62rem;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.toc__label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.toc__empty {
+  padding: 0.15rem 0.45rem 0.3rem;
+  font-size: 0.72rem;
+  line-height: 1.55;
+  color: var(--faint);
+}

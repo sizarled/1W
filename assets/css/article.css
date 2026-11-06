@@ -2055,6 +2055,13 @@
   line-height: 1.55;
 }
 
+/* a heading the contents just took the writer to */
+.aed__body .is-jump {
+  outline: 2px solid var(--line-2);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
 /* the keywords ------------------------------------------------------ */
 .aken {
   margin-top: 0.95rem;
