@@ -105,7 +105,7 @@ const FEED = {
   can_write: true,
 };
 
-const BODY = `<p>Every few months a film arrives with a shot that refuses to cut.</p><h2>The camera is always saying something</h2><p>When a shot refuses to cut, the director gives up two tools.</p><blockquote><p>A shot that lasts four minutes because nothing needed cutting is four minutes long.</p></blockquote><p onclick="steal()">And a <a href="javascript:alert(1)">bad link</a>.</p><script>alert(2)</script>`;
+const BODY = `<p>Every few months a film arrives with a shot that refuses to cut.</p><h2>The camera is always saying something</h2><p>When a shot refuses to cut, the director gives up two tools.</p><h3>What a cut is for</h3><p>Two shots, one meaning: that is a cut.</p><h2>The light does the cutting</h2><blockquote><p>A shot that lasts four minutes because nothing needed cutting is four minutes long.</p></blockquote><p onclick="steal()">And a <a href="javascript:alert(1)">bad link</a>.</p><script>alert(2)</script>`;
 
 const OPEN = {
   ok: true,
@@ -375,6 +375,31 @@ const MEMBER = {
   expect("reader: the writer card links to the hub", document.querySelector(".rauth a")?.getAttribute("href") === "creator.html?studio=%40ledsizar", document.querySelector(".rauth a")?.getAttribute("href"));
   expect("reader: suggestions are listed", document.querySelector("[data-r-suggest]")?.hidden === false);
 
+  /* the piece's own contents, before its text */
+  const tocWrap = document.querySelector("[data-r-toc-wrap]");
+  const bodyNode = document.querySelector("[data-r-body]");
+  const tocRows = [...document.querySelectorAll("[data-r-toc] [data-toc]")];
+  expect("contents: the reader is given the index", tocWrap?.hidden === false, tocWrap?.hidden);
+  expect(
+    "contents: and it stands before the text",
+    Boolean(tocWrap && bodyNode && tocWrap.compareDocumentPosition(bodyNode) & window.Node.DOCUMENT_POSITION_FOLLOWING),
+    ""
+  );
+  expect("contents: one row per heading", tocRows.length === 3, tocRows.length);
+  expect(
+    "contents: in the order they are read",
+    tocRows[0]?.textContent.includes("The camera is always saying something") && tocRows[2]?.textContent.includes("The light does the cutting"),
+    tocRows.map((row) => row.textContent.trim()).join(" | ")
+  );
+  expect("contents: a sub-heading is set in", tocRows[1]?.classList.contains("is-h3"), tocRows[1]?.className);
+  expect("contents: the headings got an address", document.querySelector("[data-r-body] h3")?.id === "sec-2", document.querySelector("[data-r-body] h3")?.id);
+
+  const headings = [...document.querySelectorAll("[data-r-body] h2, [data-r-body] h3")];
+  tocRows[2].dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await wait(40);
+  expect("contents: a press lights the heading up", headings[2]?.classList.contains("is-jump"), headings[2]?.className);
+  expect("contents: and the place has an address to send", window.location.hash === "#sec-3", window.location.hash);
+
   /* the reaction counters */
   expect("reader: the counters arrive", document.querySelector("[data-r-like]")?.textContent === "3", document.querySelector("[data-r-like]")?.textContent);
 
@@ -407,6 +432,28 @@ const MEMBER = {
   expect("reader: the vote is an agreement", lastCall(calls, "post_comment_vote")?.body.p_agree === true);
   expect("reader: the count moves", document.querySelector('[data-r-vote][data-agree="1"] b')?.textContent === "3", document.querySelector('[data-r-vote][data-agree="1"] b')?.textContent);
   expect("reader: nothing threw", errors.length === 0, errors.join(" | "));
+}
+
+/* ================================================================== */
+/* pass 3b — one heading is not a table of contents                   */
+/* ================================================================== */
+{
+  const { document, errors } = boot("article.html", {
+    url: "article.html?id=PST-001021",
+    storage: MEMBER,
+    fetchImpl: (href) => {
+      const fn = fnName(href);
+      if (fn === "article_get")
+        return reply({ ...OPEN, article: { ...row({ code: "PST-001021" }), body: "<h2>Only one place</h2><p>and nowhere else to go.</p>" } });
+      if (fn === "post_comments") return reply({ ok: true, comments: [] });
+      return reply([]);
+    },
+  });
+  await import(`file://${join(root, "assets/js/article.js")}?p3b`);
+  await wait(90);
+  expect("contents: a piece with one heading shows no index", document.querySelector("[data-r-toc-wrap]")?.hidden === true);
+  expect("contents: and nothing to press", document.querySelectorAll("[data-r-toc] [data-toc]").length === 0);
+  expect("contents: nothing threw", errors.length === 0, errors.join(" | "));
 }
 
 /* ================================================================== */

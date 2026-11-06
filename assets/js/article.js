@@ -18,6 +18,7 @@
  */
 import { rpc } from "./data.js";
 import { sanitizeHtml as sanitize } from "./article-text.js";
+import { createContents, rowLabel } from "./contents.js";
 import { qs, qsa, esc, compact, timeAgo, avatarPlaceholder } from "./utils.js";
 import { icon } from "./icons.js";
 import { toast } from "./ui.js";
@@ -445,6 +446,7 @@ function readerMarkup(data) {
 
   const bodyEl = qs("[data-r-body]");
   if (bodyEl) bodyEl.innerHTML = body;
+  paintContents();
 
   const tags = qs("[data-r-tags]");
   if (tags) {
@@ -493,6 +495,51 @@ function showState({ title, text, action = "", iconName = "info" }) {
       <p class="astate__text">${esc(text)}</p>
       ${action}
     </div>`;
+}
+
+/* ================================================================== */
+/* the piece's own contents                                           */
+/* ================================================================== */
+/*
+ * A long piece is read in places, not in one go: the reader gets the
+ * headings before the text — the same rail the editor carries — and a press
+ * takes them to that line. The headings get ids on the way in, so the place
+ * has an address someone can send to someone else.
+ */
+let contents = null;
+
+function paintContents() {
+  const bodyEl = qs("[data-r-body]");
+  const wrap = qs("[data-r-toc-wrap]");
+  const items = bodyEl
+    ? [...bodyEl.querySelectorAll("h2, h3, h4")].map((node, index) => {
+        node.id = `sec-${index + 1}`;
+        return { node, level: Number(node.tagName.slice(1)), label: rowLabel(node) || "…" };
+      })
+    : [];
+
+  /* one heading is not a table of contents */
+  if (wrap) wrap.hidden = items.length < 2;
+  contents?.paint(items.length >= 2 ? items : []);
+
+  const wanted = (location.hash || "").replace(/^#/, "");
+  if (wanted) {
+    const target = items.find((item) => item.node.id === decodeURIComponent(wanted));
+    if (target) target.node.scrollIntoView?.({ block: "start" });
+  }
+}
+
+function jumpToHeading(item) {
+  const node = item && item.node;
+  if (!node) return;
+  node.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  node.classList.add("is-jump");
+  setTimeout(() => node.classList.remove("is-jump"), 1400);
+  try {
+    history.replaceState(null, "", `#${node.id}`);
+  } catch {
+    /* a file:// page may refuse the address; the jump still happened */
+  }
 }
 
 async function load() {
@@ -890,6 +937,7 @@ function bind() {
 function boot() {
   const reportBox = qs("[data-r-report-box]");
   if (reportBox) reportBox.hidden = true;
+  contents = createContents(qs("[data-r-toc]"), { onJump: jumpToHeading });
   bind();
   load();
 }

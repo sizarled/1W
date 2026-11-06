@@ -2055,6 +2055,29 @@
   line-height: 1.55;
 }
 
+/* the piece's own contents, for the reader --------------------------- */
+.reader__toc {
+  margin: 1.4rem 0 1.6rem;
+  padding: 0.85rem 1rem 0.95rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--bg-soft) 62%, transparent);
+}
+
+.reader__toc-head {
+  margin-bottom: 0.45rem;
+  font-size: 0.66rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.prose .is-jump {
+  outline: 2px solid var(--line-2);
+  outline-offset: 5px;
+  border-radius: 4px;
+}
+
 /* a heading the contents just took the writer to */
 .aed__body .is-jump {
   outline: 2px solid var(--line-2);

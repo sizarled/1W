@@ -50,7 +50,8 @@ export function createContents(host, options = {}) {
     host.dataset.tocKey = key;
 
     if (!state.items.length) {
-      host.innerHTML = `<p class="toc__empty">${esc(state.empty)}</p>`;
+      /* a rail with nothing to say and nothing to say it with stays out */
+      host.innerHTML = state.empty ? `<p class="toc__empty">${esc(state.empty)}</p>` : "";
       return;
     }
 

@@ -13,8 +13,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/css/base.css?v=20261105e" />
     <link rel="stylesheet" href="assets/css/layout.css?v=20261105e" />
-    <link rel="stylesheet" href="assets/css/components.css?v=20261105e" />
-    <link rel="stylesheet" href="assets/css/article.css?v=20261107a" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261113a" />
+    <link rel="stylesheet" href="assets/css/article.css?v=20261113a" />
     <script>
       /* apply the saved theme (or the OS preference) before first paint */
       (function () {
@@ -33,7 +33,7 @@
       })();
     </script>
     <script type="module" src="assets/js/app.js?v=20261106a"></script>
-    <script type="module" src="assets/js/article.js?v=20261106a"></script>
+    <script type="module" src="assets/js/article.js?v=20261113a"></script>
   </head>
   <body data-page="article" data-title="Article">
     <a class="skip-link" href="#main">Skip to content</a>
@@ -66,6 +66,12 @@
               <figure class="reader__cover" data-r-cover hidden>
                 <img src="" alt="" data-r-cover-img />
               </figure>
+
+              <!-- what is in the piece, before its text -->
+              <nav class="reader__toc" data-r-toc-wrap hidden aria-label="Contents">
+                <p class="reader__toc-head">In this piece</p>
+                <div class="toc" data-r-toc></div>
+              </nav>
 
               <!-- the body, sanitised against an allowlist -->
               <div class="prose" data-r-body></div>

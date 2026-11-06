@@ -1544,6 +1544,14 @@ shelf per field, then lists everything; a card carries the cover, the door's bad
 *Private*, *Followers*, *Draft*), the field and category, the writer, the reading time, the reads,
 the comments and the age.
 
+**A long piece is read in places, so the reader is handed its index first.** Above the text stands
+*In this piece*: every `h2`, `h3` and `h4` the allowlist kept, in the order they are read, numbered `01…`,
+a sub-heading set in from its parent — the same rail the editors carry (`assets/js/contents.js`). A press
+takes the reader to that line, lights it for a moment, and **writes the place into the address bar**
+(`#sec-3`), so a paragraph can be sent to someone; opening a link that already carries that hash lands on
+it. The headings get their ids as the body is rendered, never from the server. A piece with a single
+heading is not indexed, and the rail stays away entirely.
+
 The reader keeps the measure: a 68-character prose column with the site's type scale, a sticky column
 with the writer's card (**Follow** through `profile_follow_toggle`) and the suggestions, a bar with
 *Useful / Not useful / Save / Share / Report*, and the conversation. Commenting follows the site rule:
@@ -1620,10 +1628,12 @@ import is not a second renderer: what it inserts is exactly what the reader woul
 taken off that list so the generator cannot overwrite them.
 
 DDL + functions: `tools/sql/articles-page.sql` — **applied**. Test: `node tools/article-smoke.mjs` —
-**243/243** (the index, the empty index, the reader and its sanitizer, reaction→comment→vote, the
+**254/254** (the index, the empty index, the reader and its sanitizer, reaction→comment→vote, the
 exclusive gate with its steps and reminder, the private gate with a wrong and a right password, a
-missing piece, the editor signed out and in, every toolbar function on a real range, the contents rail —
-a row per heading, a press that lights the heading and moves the caret into it — the keyword rule —
+missing piece, the reader's own contents — the index before the text, a press that lights the heading and
+puts the place in the address bar, a one-heading piece that is not indexed — the editor signed out and in,
+every toolbar function on a real range, the editor's contents rail — a row per heading, a press that
+lights the heading and moves the caret into it — the keyword rule —
 a head of three words waking the long tails, a tail refused without the head, a head refused past three
 words — importing an HTML
 page through the paste box and through a chosen file — scripts, styles and handlers gone, the headline
@@ -1706,7 +1716,7 @@ the editors need**, each pinned to a name pattern and a set of extensions (`user
 | Gate | Result |
 | --- | --- |
 | `node tools/rte-smoke.mjs` | **45/45** (every command, links, insertion, history, paste, drop, keys, toolbar state) |
-| `node tools/article-smoke.mjs` | **243/243** |
+| `node tools/article-smoke.mjs` | **254/254** |
 | `node tools/video-smoke.mjs` | **254/254** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
 
 ### The six OAuth apps — one checklist each
