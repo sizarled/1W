@@ -1666,6 +1666,33 @@ Eleven pieces from @ledsizar, @jhon007 and @ledsizar7 remain on the index — ni
 exclusive (`PST-001020`, open to LV5–LV10) and one private (`PST-001021`, the password is
 `1world2026`), so both gates can be seen without publishing anything.
 
+### A blog's reading page — `blog.html?studio=<code>`
+
+The studio writes a blog's articles and `articles.html` lists every article on the platform, but the
+**blog itself** — the place a reader lands — did not exist. `blog.html?studio=IDBL100003` is that page,
+built in the shape the blog mock asked for and in the site's own clothes: a **cover** carrying the
+blog's mark and its name, its words, its sections as chips, one **search** over everything in it, the
+numbers under the name (*articles · writers · reads · comments*), a **most read** rail, **one row per
+section**, the **sections themselves** to walk into, and a section view with its own sort and *More*.
+
+The sections are the blog's **categories** when its pieces carry them, and the pieces' **fields** when
+they do not — a blog that made a category and never used it still reads as a set of shelves rather
+than one empty one. The server decides which and says so (`by`), and every link the page builds carries
+that back with it.
+
+| Call | What it answers |
+| --- | --- |
+| `blog_page(token, ref, password)` | the cover, the mark, the name, the words, the sections with their counts, and the numbers — or `locked`, with nothing inside |
+| `blog_feed(token, ref, section, by, search, sort, limit, offset)` | the pieces of one section (or the whole blog), searched and sorted, as the same cards `articles.html` draws |
+
+The door is the hub's own door — `blog_page` asks `creator_hub_view`, so owner, staff, VIP list,
+password and exclusivity are decided in one place — and every card is filtered by `post_visible_to` on
+top of it, so an exclusive piece keeps its audience even inside a public blog. A private blog shows its
+name and asks for the password (`?key=…`); a wrong one says so and stays shut.
+
+The page has two doors into it: **Open the blog**, beside *Write an article* on the studio's Articles
+tab, and **Read the blog** on the hub page a visitor reaches with `creator.html?studio=<code>`.
+
 ### The writing surface — one editor, every function
 
 Both writing pages now edit through **`assets/js/rte.js`**, a small rich-text core written on DOM
@@ -1737,7 +1764,8 @@ the editors need**, each pinned to a name pattern and a set of extensions (`user
 | Gate | Result |
 | --- | --- |
 | `node tools/rte-smoke.mjs` | **45/45** (every command, links, insertion, history, paste, drop, keys, toolbar state) |
-| `node tools/article-smoke.mjs` | **254/254** |
+| `node tools/article-smoke.mjs` | **281/281** |
+| `node tools/blog-smoke.mjs` | **70/70** (the address, the closed door, the hero, the home, a section, the search) |
 | `node tools/video-smoke.mjs` | **254/254** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
 
 ### The six OAuth apps — one checklist each
@@ -2557,6 +2585,8 @@ assets/js/article.js        article.html: one piece, the two doors, the comments
 assets/js/article-editor.js article-editor.html: the editor and article_save (embedded by creator.html)
                             question-editor.html: the same engine as a space's question — question_save
 assets/js/article-text.js   word count, reading time and the body allowlist, shared by both
+assets/js/blog.js           blog.html: one blog as a reader meets it — its cover, its sections, its search
+assets/css/blog.css         that page: the cover hero, the rows, the section cards
 assets/js/contents.js       the contents rail both editors carry: the piece's headings, the form's sections
 assets/js/rte.js            the writing surface: ranges, formatting, history, paste, keys
 assets/js/embed.js          the one host list: YouTube · Vimeo · Dailymotion · TikTok · Facebook·
@@ -2590,6 +2620,7 @@ tools/dashboard-smoke.mjs   dashboard test (five gates, rail, popover, codes, se
 tools/sidebar-smoke.mjs     sidebar rail test (edge reveal, pin, Escape, mobile drawer, dashboard menu)
 tools/video-smoke.mjs       videos + video editor test (feed, player, doors, payload)
 tools/article-smoke.mjs     articles test (index, reader, sanitizer, doors, payload)
+tools/blog-smoke.mjs        a blog's reading page test (address, door, hero, home, section, search)
 tools/rte-smoke.mjs         the editor itself (every command, on real ranges)
 tools/sql/storage-editors.sql  the two storage folders the editors may write to
 tools/court-smoke.mjs       activation wizard + court room test

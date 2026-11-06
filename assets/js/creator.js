@@ -903,6 +903,11 @@ function renderList(host, hub, tab) {
         <span class="cr-bar__count">${rows.length} shown · ${esc(num(counts.all || 0))} in this ${esc(sectionOf(state.section).noun)}</span>
       </div>
       <div class="cr-bar__right">
+        ${
+          hub.kind === "blog" && tab.key === "articles"
+            ? `<a class="dsh-btn dsh-btn--sm" href="blog.html?studio=${encodeURIComponent(hub.code || "")}" data-cr-blog-open><i data-icon="eye"></i> Open the blog</a>`
+            : ""
+        }
         <label class="cr-search">
           <i data-icon="search" aria-hidden="true"></i>
           <input class="dsh-input" type="search" placeholder="Search ${esc(tab.label.toLowerCase())}" aria-label="Search this table" data-cr-search value="${esc(state.search)}" />
@@ -2215,6 +2220,11 @@ function renderHubPage(host) {
             <p class="crp-hubhero__owner">by <a href="creator.html?creator=${encodeURIComponent(hub.owner || "")}" data-crp-owner="${esc(hub.owner || "")}">${esc(ownerLabel)}</a>${hub.field ? ` · ${esc(hub.field)}` : ""}</p>
           </div>
           <div class="crp-hubhero__acts">
+            ${
+              hub.kind === "blog"
+                ? `<a class="dsh-btn dsh-btn--sm" href="blog.html?studio=${encodeURIComponent(hub.code || "")}" data-crp-blog><i data-icon="eye"></i> Read the blog</a>`
+                : ""
+            }
             ${
               role === "owner" || role === "staff"
                 ? `<a class="dsh-btn dsh-btn--sm" href="creator.html?section=${encodeURIComponent(manageSection)}&hub=${encodeURIComponent(hub.id)}"><i data-icon="settings"></i> Manage</a>

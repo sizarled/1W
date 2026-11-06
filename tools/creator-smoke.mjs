@@ -1691,6 +1691,12 @@ async function passDoors() {
   expect("writer: the table is back", !w.hidden("[data-cr-shell]"));
   expect("writer: and it was re-read", calls.filter((c) => c.includes("creator_items")).length >= 2, String(calls.filter((c) => c.includes("creator_items")).length));
 
+  /* the blog has a reading page of its own, and two doors lead to it */
+  const door = w.qs("[data-cr-blog-open]");
+  expect("writer: the tab opens the blog's reading page", door?.getAttribute("href") === "blog.html?studio=IDBL100003", door?.getAttribute("href"));
+  expect("writer: and says so", /Open the blog/.test(door ? door.textContent : ""), door ? door.textContent.trim() : "none");
+
+
   /* a row written in the editor opens in the editor, not in a table form */
   await w.wait(120);
   const editAct = w.qs('[data-cr-act="edit"][data-id="post-9"]') || w.qs('[data-cr-act="open"][data-id="post-9"]');
@@ -1701,6 +1707,15 @@ async function passDoors() {
   expect("writer: it fetched the piece by its code", calls.some((c) => c.includes("article_get")), "article_get");
   expect("writer: and filled the title", w.qs("[data-e-title]")?.value === "The port at night", w.qs("[data-e-title]")?.value);
   expect("writer: no errors", w.errors.length === 0, w.errors.join(" | "));
+
+  /* and the blog, as a visitor meets it, carries the same door */
+  scenario.hubView = { kind: "blog", name: "My blog", code: "IDBL100003", description: "Long pieces about films.", field: "" };
+  const hv = await boot(52, { search: "?studio=IDBL100003" });
+  expect("blog: the hub page opens", /My blog/.test(hv.text(".crp-hubhero__name")), hv.text(".crp-hubhero__name"));
+  const readBlog = hv.qs("[data-crp-blog]");
+  expect("blog: the hub page offers its reading page", readBlog?.getAttribute("href") === "blog.html?studio=IDBL100003", readBlog?.getAttribute("href"));
+  expect("blog: and names it", /Read the blog/.test(readBlog ? readBlog.textContent : ""), readBlog ? readBlog.textContent.trim() : "none");
+  delete scenario.hubView;
 }
 
 /* ------------------------------------------------------------------ */
