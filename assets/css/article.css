@@ -2055,6 +2055,88 @@
   line-height: 1.55;
 }
 
+/* attachments — a question's own files ------------------------------ */
+.aatt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 1.1rem 1rem;
+  border: 1px dashed var(--line-2);
+  border-radius: var(--radius-sm);
+  text-align: center;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--muted);
+  cursor: pointer;
+  transition: border-color 140ms var(--ease), background 140ms var(--ease);
+}
+
+.aatt.is-over {
+  border-color: var(--text-2);
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+}
+
+.aatt__mark {
+  display: inline-flex;
+  color: var(--faint);
+}
+
+.aatt__mark .ico {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.aatt small {
+  color: var(--faint);
+  font-size: 0.7rem;
+}
+
+.aatt__list {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.6rem;
+}
+
+.aatt__row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  font-size: 0.75rem;
+}
+
+.aatt__name {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  color: var(--text-2);
+  text-decoration: none;
+}
+
+.aatt__name .ico {
+  width: 0.95rem;
+  height: 0.95rem;
+  flex: none;
+  color: var(--faint);
+}
+
+.aatt__name span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aatt__size {
+  margin-left: auto;
+  color: var(--faint);
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+}
+
 /* the piece's own contents, for the reader --------------------------- */
 .reader__toc {
   margin: 1.4rem 0 1.6rem;

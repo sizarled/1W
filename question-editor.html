@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ask a question — 1World Web</title>
+    <meta name="description" content="Ask a question: the question, what it is about, the files that come with it, who may answer, and when it goes out." />
+    <meta name="theme-color" content="#060607" />
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="assets/css/base.css?v=20261105e" />
+    <link rel="stylesheet" href="assets/css/layout.css?v=20261105e" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261113a" />
+    <link rel="stylesheet" href="assets/css/article.css?v=20261114a" />
+    <script>
+      /* apply the saved theme (or the OS preference) before first paint */
+      (function () {
+        try {
+          var saved = JSON.parse(localStorage.getItem("1w.theme") || "null");
+          var theme =
+            saved === "light" || saved === "dark"
+              ? saved
+              : window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
+                ? "light"
+                : "dark";
+          document.documentElement.dataset.theme = theme;
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute("content", theme === "light" ? "#f4f4f5" : "#060607");
+        } catch (e) {}
+      })();
+    </script>
+    <script type="module" src="assets/js/app.js?v=20261106a"></script>
+    <script type="module" src="assets/js/article-editor.js?v=20261114a"></script>
+  </head>
+  <body data-page="questionEditor" data-title="Ask a question" data-ae-kind="question">
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div data-site-header></div>
+    <div data-site-sidebar></div>
+
+    <main class="site-main arts" id="main">
+      <div class="wrap">
+        <!-- ============================================================ -->
+        <!-- head                                                         -->
+        <!-- ============================================================ -->
+        <header class="arts__head">
+          <div class="arts__intro">
+            <p class="eyebrow"><span class="eyebrow__dot"></span>Member questions</p>
+            <h1 class="arts__title" data-e-heading>Ask a question</h1>
+            <p class="arts__sub" data-e-sub>
+              Ask it, attach what it is about, and decide who may answer. A question can go out now, at a moment you
+              pick, or wait as a draft — and a private one can be opened by name or by a password of your own.
+            </p>
+          </div>
+          <div class="arts__acts">
+            <a class="btn btn--ghost btn--sm" href="creator.html"><i data-icon="arrowLeft"></i> Creator studio</a>
+            <button class="btn btn--quiet btn--sm" type="button" data-e-preview-open><i data-icon="eye"></i> Reader preview</button>
+          </div>
+        </header>
+
+        <!-- sign-in / error state -->
+        <div data-e-state hidden></div>
+
+        <div class="aed" data-e-shell hidden>
+          <!-- ========================================================== -->
+          <!-- the writing column                                         -->
+          <!-- ========================================================== -->
+          <div class="aed__col">
+            <!-- the piece ---------------------------------------------- -->
+            <section class="apanel">
+              <div class="apanel__head">
+                <h2 class="apanel__title">The question</h2>
+                <span class="apanel__meta" data-e-title-count></span>
+              </div>
+
+              <input class="input aed__title" data-e-title maxlength="200" placeholder="The title" aria-label="Title" />
+              <textarea class="input aed__desc" data-e-desc rows="2" maxlength="400" placeholder="One or two lines under the title" aria-label="Description"></textarea>
+
+              <div class="aed__tools" data-e-tools role="toolbar" aria-label="Formatting">
+                <select class="aed__block" data-e-block aria-label="Block style">
+                  <option value="p">Paragraph</option>
+                  <option value="h2">Heading 2</option>
+                  <option value="h3">Heading 3</option>
+                  <option value="blockquote">Quote</option>
+                </select>
+                <span class="atool-sep"></span>
+                <button class="atool" type="button" data-cmd="bold" title="Bold" aria-label="Bold"><i data-icon="bold"></i></button>
+                <button class="atool" type="button" data-cmd="italic" title="Italic" aria-label="Italic"><i data-icon="italic"></i></button>
+                <button class="atool" type="button" data-cmd="underline" title="Underline" aria-label="Underline"><i data-icon="underline"></i></button>
+                <button class="atool" type="button" data-cmd="strikeThrough" title="Strikethrough" aria-label="Strikethrough"><i data-icon="strike"></i></button>
+                <span class="atool-sep"></span>
+                <button class="atool" type="button" data-cmd="insertUnorderedList" title="Bulleted list" aria-label="Bulleted list"><i data-icon="listBullet"></i></button>
+                <button class="atool" type="button" data-cmd="insertOrderedList" title="Numbered list" aria-label="Numbered list"><i data-icon="listNumber"></i></button>
+                <span class="atool-sep"></span>
+                <button class="atool" type="button" data-cmd="justifyLeft" title="Align left" aria-label="Align left"><i data-icon="alignLeft"></i></button>
+                <button class="atool" type="button" data-cmd="justifyCenter" title="Centre" aria-label="Centre"><i data-icon="alignCenter"></i></button>
+                <button class="atool" type="button" data-cmd="justifyRight" title="Align right" aria-label="Align right"><i data-icon="alignRight"></i></button>
+                <span class="atool-sep"></span>
+                <button class="atool" type="button" data-cmd="insertLink" title="Add a link" aria-label="Add a link"><i data-icon="link"></i></button>
+                <button class="atool" type="button" data-cmd="unlink" title="Remove the link" aria-label="Remove the link"><i data-icon="unlink"></i></button>
+                <button class="atool" type="button" data-cmd="removeFormat" title="Clear the formatting" aria-label="Clear the formatting"><i data-icon="eraser"></i></button>
+                <span class="atool-sep"></span>
+                <button class="atool" type="button" data-cmd="insertImage" title="Add an image" aria-label="Add an image"><i data-icon="image"></i></button>
+                <button class="atool" type="button" data-cmd="insertVideo" title="Add a video" aria-label="Add a video"><i data-icon="film"></i></button>
+                <span class="atool-sep"></span>
+                <button class="atool" type="button" data-cmd="undo" title="Undo" aria-label="Undo"><i data-icon="undo"></i></button>
+                <button class="atool" type="button" data-cmd="redo" title="Redo" aria-label="Redo"><i data-icon="redo"></i></button>
+              </div>
+
+              <div
+                class="aed__body prose"
+                data-e-body
+                contenteditable="true"
+                role="textbox"
+                aria-multiline="true"
+                aria-label="The article"
+                data-placeholder="Start writing — headings, quotes, lists, pictures and links are all in the bar above."
+              ></div>
+
+              <div class="aed__foot">
+                <span data-e-words>0 words</span>
+                <span data-e-reading>1 min read</span>
+              </div>
+            </section>
+
+            <!-- the cover ---------------------------------------------- -->
+            <section class="apanel">
+              <div class="apanel__head">
+                <h2 class="apanel__title">Cover</h2>
+                <span class="apanel__meta">16:9 · the picture on the card</span>
+              </div>
+              <div class="acover">
+                <div class="acover__frame" data-e-cover-frame></div>
+                <div class="acover__acts">
+                  <button class="btn btn--ghost btn--sm" type="button" data-e-cover-upload><i data-icon="upload"></i> Upload</button>
+                  <button class="btn btn--ghost btn--sm" type="button" data-e-cover-url><i data-icon="link"></i> A link</button>
+                  <button class="btn btn--quiet btn--sm" type="button" data-e-cover-first><i data-icon="image"></i> First image in the piece</button>
+                  <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" data-e-cover-file hidden />
+                </div>
+              </div>
+              <p class="apanel__hint">PNG, JPEG, WEBP or GIF, up to 4 MB. Leave it empty and the first picture in the piece becomes the cover.</p>
+            </section>
+
+            <!-- attachments (a question's own files) -------------------- -->
+            <section class="apanel" data-e-attach hidden>
+              <div class="apanel__head">
+                <h2 class="apanel__title">Attachments</h2>
+                <span class="apanel__meta" data-e-attach-count></span>
+              </div>
+              <label class="aatt" data-e-attach-drop>
+                <span class="aatt__mark"><i data-icon="upload"></i></span>
+                <span>Drop the files here, or <b>choose them</b></span>
+                <small>Pictures, video, documents and archives — five at most, 10 MB each.</small>
+                <input
+                  type="file"
+                  multiple
+                  hidden
+                  data-e-attach-input
+                  accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.csv,.rtf,.zip"
+                />
+              </label>
+              <div class="aatt__list" data-e-attach-list></div>
+            </section>
+
+            <!-- field, tags, language ---------------------------------- -->
+            <section class="apanel">
+              <div class="apanel__head">
+                <h2 class="apanel__title">What it is about</h2>
+                <span class="apanel__meta" data-e-tag-count></span>
+              </div>
+              <div class="aed__row" style="margin-top:0">
+                <label class="afield"><span class="alabel">Category</span>
+                  <input class="input" data-e-category placeholder="Craft, Industry, Notebook…" maxlength="60" /></label>
+                <label class="afield"><span class="alabel">Language</span>
+                  <select class="input" data-e-lang></select></label>
+              </div>
+
+              <!-- the keywords: one head term, and the long tails --- -->
+              <div class="aken" data-e-keys>
+                <div class="aken__head">
+                  <span class="alabel">Main keyword</span>
+                  <span class="aken__count" data-e-main-count>0 / 3 words</span>
+                </div>
+                <input class="input" data-e-keyword dir="auto" maxlength="60"
+                  placeholder="الربح من الانترنت — three words at most" />
+                <div class="aken__head">
+                  <span class="alabel">Long-tail keywords</span>
+                  <span class="aken__count" data-e-sub-count>0 / 5</span>
+                </div>
+                <p class="aken__hint">
+                  Five at most. Each one carries the main keyword and runs five words or more — the way a long tail does.
+                </p>
+                <div class="aken__rows">
+                  <label class="aken__row"><span class="aken__n">1</span>
+                    <input class="input" data-e-sub-keyword dir="auto" maxlength="90" disabled placeholder="A main keyword first" />
+                    <span class="aken__say" data-e-sub-say></span></label>
+                  <label class="aken__row"><span class="aken__n">2</span>
+                    <input class="input" data-e-sub-keyword dir="auto" maxlength="90" disabled placeholder="A main keyword first" />
+                    <span class="aken__say" data-e-sub-say></span></label>
+                  <label class="aken__row"><span class="aken__n">3</span>
+                    <input class="input" data-e-sub-keyword dir="auto" maxlength="90" disabled placeholder="A main keyword first" />
+                    <span class="aken__say" data-e-sub-say></span></label>
+                  <label class="aken__row"><span class="aken__n">4</span>
+                    <input class="input" data-e-sub-keyword dir="auto" maxlength="90" disabled placeholder="A main keyword first" />
+                    <span class="aken__say" data-e-sub-say></span></label>
+                  <label class="aken__row"><span class="aken__n">5</span>
+                    <input class="input" data-e-sub-keyword dir="auto" maxlength="90" disabled placeholder="A main keyword first" />
+                    <span class="aken__say" data-e-sub-say></span></label>
+                </div>
+              </div>
+
+              <div class="aed__row" style="margin-top:.7rem">
+                <input class="input" data-e-tag-input placeholder="Add a tag and press Enter — twelve at most" maxlength="40" />
+                <button class="btn btn--ghost btn--sm" type="button" data-e-tag-add>Add</button>
+              </div>
+              <div class="aed__chips" data-e-chips style="margin-top:.5rem"></div>
+              <p class="apanel__hint">
+                The tags decide what this question sits next to. The main keyword is what a search asks for; the long
+                tails are the ways people actually type it.
+              </p>
+            </section>
+
+            <!-- who may read it ---------------------------------------- -->
+            <section class="apanel">
+              <div class="apanel__head">
+                <h2 class="apanel__title">Who may answer it</h2>
+                <span class="apanel__meta" data-e-vis-label></span>
+              </div>
+              <div class="aed__seg" data-e-vis>
+                <button type="button" data-vis="general" class="is-active">Everyone</button>
+                <button type="button" data-vis="limited">An audience</button>
+                <button type="button" data-vis="private">Private</button>
+                <button type="button" data-vis="followers">Followers</button>
+              </div>
+              <p class="apanel__hint" data-e-vis-hint></p>
+
+              <!-- an audience -->
+              <div class="avis" data-e-audience hidden>
+                <div class="aed__row" style="margin-top:0">
+                  <label class="afield"><span class="alabel">Country</span>
+                    <select class="input" data-e-country-sel></select></label>
+                  <label class="afield"><span class="alabel">Language</span>
+                    <select class="input" data-e-lang-sel></select></label>
+                </div>
+                <div class="aed__chips" data-e-countries></div>
+                <div class="aed__chips" data-e-langs></div>
+                <div class="aed__row">
+                  <label class="afield"><span class="alabel">Lowest level</span>
+                    <input class="input" type="number" min="1" max="10" data-e-lv-min value="1" /></label>
+                  <label class="afield"><span class="alabel">Highest level</span>
+                    <input class="input" type="number" min="1" max="10" data-e-lv-max value="10" /></label>
+                </div>
+                <div class="aed__row">
+                  <input class="input" data-e-person-input placeholder="Or name a member — @handle" maxlength="60" />
+                  <button class="btn btn--ghost btn--sm" type="button" data-e-person-add>Name them</button>
+                </div>
+                <div class="aed__list" data-e-people></div>
+                <p class="apanel__hint">
+                  Any one condition is enough: a reader in one of the countries, speaking one of the languages, inside
+                  the level range, or named here can open the piece.
+                </p>
+              </div>
+
+              <!-- private -->
+              <div class="avis" data-e-private hidden>
+                <div class="aed__row" style="margin-top:0">
+                  <input class="input" data-e-person-input placeholder="A member — @handle" maxlength="60" />
+                  <button class="btn btn--ghost btn--sm" type="button" data-e-person-add>Name them</button>
+                </div>
+                <div class="aed__list" data-e-people></div>
+                <div class="aed__row">
+                  <input class="input" data-e-pass-input placeholder="A password — four characters at least" maxlength="60" />
+                  <button class="btn btn--ghost btn--sm" type="button" data-e-pass-add>Add</button>
+                  <button class="btn btn--quiet btn--sm" type="button" data-e-pass-gen>Generate one</button>
+                </div>
+                <div class="aed__list" data-e-passes></div>
+                <p class="apanel__hint">
+                  A password is stored as a hash: it opens the piece for one visit and can never be read back, not even
+                  by you. Whoever types it in reads the piece without joining the list.
+                </p>
+              </div>
+            </section>
+
+            <!-- where it goes, and when -------------------------------- -->
+            <section class="apanel">
+              <div class="apanel__head">
+                <h2 class="apanel__title">When it goes out</h2>
+              </div>
+              <p class="apanel__hint">A question opens to whoever the door above allows, at the moment you pick.</p>
+
+              <div class="aed__row" style="margin-top:.9rem">
+                <div class="aed__seg" data-e-when>
+                  <button type="button" data-when="now" class="is-active">Now</button>
+                  <button type="button" data-when="later">Pick a moment</button>
+                </div>
+                <input class="input" type="datetime-local" data-e-when-at hidden aria-label="When it goes out" />
+              </div>
+            </section>
+          </div>
+
+          <!-- ========================================================== -->
+          <!-- the side column                                            -->
+          <!-- ========================================================== -->
+          <aside class="aed__side">
+            <!-- the piece's own contents -------------------------------- -->
+            <section class="apanel">
+              <div class="apanel__head">
+                <h2 class="apanel__title">Contents</h2>
+                <span class="apanel__meta" data-e-toc-count></span>
+              </div>
+              <div class="toc" data-e-toc></div>
+              <p class="apanel__hint">The headings of the piece, in order — press one to write from there.</p>
+            </section>
+
+            <section class="apanel">
+              <div class="apanel__head">
+                <h2 class="apanel__title" data-e-ready-title>Ready?</h2>
+                <span class="apanel__meta" data-e-status-kind></span>
+              </div>
+              <p class="aed__status" data-e-status></p>
+              <div class="aed__checks" data-e-checks></div>
+              <div class="aed__btns">
+                <button class="btn btn--primary" type="button" data-e-publish><i data-icon="upload"></i> Publish</button>
+                <button class="btn btn--ghost" type="button" data-e-draft><i data-icon="file"></i> Save draft</button>
+                <button class="btn btn--quiet btn--sm" type="button" data-e-preview-open><i data-icon="eye"></i> Reader preview</button>
+              </div>
+            </section>
+
+            <section class="apanel">
+              <div class="apanel__head">
+                <h2 class="apanel__title" data-e-mine-title>In your name</h2>
+                <span class="apanel__meta" data-e-mine-count></span>
+              </div>
+              <div class="aed__mine" data-e-mine></div>
+            </section>
+          </aside>
+        </div>
+      </div>
+    </main>
+
+    <!-- ============================================================== -->
+    <!-- the one dialog: link, image or video                           -->
+    <!-- ============================================================== -->
+    <dialog class="adlg" data-e-dlg>
+      <div class="adlg__head">
+        <h2 class="adlg__title" data-e-dlg-title>Add</h2>
+        <button class="atool" type="button" data-e-dlg-close aria-label="Close"><i data-icon="close"></i></button>
+      </div>
+      <div class="adlg__body" data-e-dlg-body></div>
+      <p class="adlg__err" data-e-dlg-err hidden></p>
+      <div class="adlg__foot">
+        <button class="btn btn--quiet btn--sm" type="button" data-e-dlg-cancel>Cancel</button>
+        <button class="btn btn--primary btn--sm" type="button" data-e-dlg-ok>Insert</button>
+      </div>
+    </dialog>
+
+    <!-- ============================================================== -->
+    <!-- the reader preview                                             -->
+    <!-- ============================================================== -->
+    <dialog class="aprev" data-e-prev>
+      <div class="aprev__bar">
+        <strong style="font-size:.82rem">Reader preview</strong>
+        <select class="input" data-prev-country aria-label="Simulated reader country"></select>
+        <select class="input" data-prev-lang aria-label="Simulated reader language"></select>
+        <input class="input" type="number" min="1" max="10" value="1" data-prev-level aria-label="Simulated reader level" style="flex:0 0 90px" />
+        <label class="acheck" style="margin:0;flex:0 0 auto">
+          <input type="checkbox" data-prev-follow /> <span>Follows you</span>
+        </label>
+        <button class="btn btn--quiet btn--sm" type="button" data-e-prev-close><i data-icon="close"></i> Close</button>
+      </div>
+      <div class="aprev__scroll" data-prev-scroll></div>
+    </dialog>
+
+    <div data-site-footer></div>
+  </body>
+</html>

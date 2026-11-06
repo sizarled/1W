@@ -114,7 +114,7 @@ const SECTIONS = [
     icon: "help",
     noun: "space",
     tabs: [
-      { key: "questions", label: "Questions", type: "list", kind: "question", cols: ["item", "space", "vis", "answers", "followers", "refollows", "act"], actions: ["edit", "close", "delete"] },
+      { key: "questions", label: "Questions", type: "list", kind: "question", cols: ["item", "space", "vis", "answers", "followers", "refollows", "act"], actions: ["edit", "close", "delete"], cta: { label: "Ask a question", icon: "help", action: "question" } },
       { key: "answers", label: "Answers", type: "list", kind: "answer", cols: ["item", "parent", "vis", "likes", "dislikes", "replies", "reports", "act"], actions: ["open", "edit", "share", "delete"] },
       { key: "categories", label: "Categories", type: "categories" },
       { key: "participants", label: "Participants", type: "participants" },
@@ -122,7 +122,6 @@ const SECTIONS = [
       { key: "subscribers", label: "Subscribers", type: "subscribers" },
     ],
     add: [
-      { kind: "question", label: "Question" },
       { category: true, label: "Category" },
     ],
   },
@@ -256,7 +255,6 @@ const KIND_FIELDS = {
   podcast: { media: "Audio link", body: "Show notes", words: false },
   playlist: { media: "First item link", body: "Description", words: false },
   article: { media: "", body: "Body", words: true },
-  question: { media: "", body: "Details", words: true },
   answer: { media: "", body: "Your answer", words: true },
   book: { media: "Ebook link (PDF / EPUB)", body: "Description", words: false },
   document: { media: "File link", body: "Description", words: false },
@@ -849,7 +847,7 @@ const ACTION_LABEL = {
 
 /* a member video lives in the video editor, a blog's article in the article
    editor; the table only lends them a row */
-const EDITOR_SOURCES = { "video-editor": "video", "article-editor": "article" };
+const EDITOR_SOURCES = { "video-editor": "video", "article-editor": "article", "question-editor": "question" };
 
 function isEditorRow(row) {
   return Boolean(row && EDITOR_SOURCES[row.source]);
@@ -895,7 +893,7 @@ function renderList(host, hub, tab) {
      so instead of offering an empty form */
   const cta = tab.cta
     ? tab.cta.action
-      ? `<button class="dsh-btn dsh-btn--primary dsh-btn--sm" type="button" data-cr-article-new><i data-icon="${esc(tab.cta.icon || "pen")}"></i> ${esc(tab.cta.label)}</button>`
+      ? `<button class="dsh-btn dsh-btn--primary dsh-btn--sm" type="button" ${tab.cta.action === "question" ? "data-cr-question-new" : "data-cr-article-new"}><i data-icon="${esc(tab.cta.icon || "pen")}"></i> ${esc(tab.cta.label)}</button>`
       : `<a class="dsh-btn dsh-btn--primary dsh-btn--sm" href="${esc(withHub(tab.cta.href))}" data-cr-video-new><i data-icon="${esc(tab.cta.icon || "upload")}"></i> ${esc(tab.cta.label)}</a>`
     : "";
   const head = `
@@ -1503,7 +1501,7 @@ function renderEditor(host) {
 
       <div class="cr-card">
         <label class="dsh-field">
-          <span class="dsh-field__label">${draft.kind === "question" ? "The question" : "Title"}</span>
+          <span class="dsh-field__label">Title</span>
           <input class="dsh-input" type="text" maxlength="200" value="${esc(draft.title || "")}" placeholder="Give it a name" data-item-title />
         </label>
         <div class="cr-grid2">
@@ -1528,7 +1526,7 @@ function renderEditor(host) {
 
       <div class="cr-card">
         <label class="dsh-field">
-          <span class="dsh-field__label">${esc(draft.kind === "question" ? "Details" : fields.body || "Body")}</span>
+          <span class="dsh-field__label">${esc(fields.body || "Body")}</span>
           <textarea class="dsh-textarea cr-editor__body ${draft.kind === "article" ? "dsh-textarea--tall" : ""}" rows="10" data-item-body>${esc(draft.body || "")}</textarea>
         </label>
         <p class="cr-card__hint" data-item-count>${esc(num(String(draft.body || "").trim() ? String(draft.body).trim().split(/\s+/).filter(Boolean).length : 0))} words</p>
@@ -1600,8 +1598,8 @@ function renderEditor(host) {
           <span>${esc(
             draft.kind === "article"
               ? "An article publishes with at least 12 words in the body."
-              : ["question", "answer"].includes(draft.kind)
-                ? "A question or an answer publishes with at least 6 words."
+              : draft.kind === "answer"
+                ? "An answer publishes with at least 6 words."
                 : "This kind publishes with its link and a title of 3 characters."
           )} ${esc(currentHub()?.visibility === "private" ? "This hub is private, so its items inherit the password." : "")}</span>
         </p>
@@ -3281,6 +3279,13 @@ function openEditor(kind, row = null) {
     openWriter({ id: row ? row.code : "" });
     return;
   }
+  /* a space's question is written on question-editor.html, which is the same
+     engine as the article's. A row that already exists in the hub's own
+     library is still the table's, so it keeps opening there. */
+  if (kind === "question") {
+    openWriter({ id: row ? row.code : "", kind: "question" });
+    return;
+  }
   state.editor = row ? { ...row } : blankItem(kind || "video", hub.id);
   state.view = "editor";
   if (row) state.editor.tags = row.tags || [];
@@ -3315,26 +3320,29 @@ function openEditor(kind, row = null) {
  * `ae:published` / `ae:drafted`; the table underneath is reloaded and the
  * member is put back where they were.
  */
-function openWriter({ id = "" } = {}) {
+function openWriter({ id = "", kind = "article" } = {}) {
   const hub = currentHub();
   const writer = el("[data-cr-writer]");
   if (!hub) return;
   if (!writer) {
-    toast({ title: "No writing room", message: "This page did not carry the article editor.", tone: "error" });
+    toast({ title: "No writing room", message: "This page did not carry the writing editor.", tone: "error" });
     return;
   }
-  state.writer = { id: String(id || "") };
+  const asking = kind === "question";
+  state.writer = { id: String(id || ""), kind: asking ? "question" : "article" };
   const shell = el("[data-cr-shell]");
   if (shell) shell.hidden = true;
   writer.hidden = false;
   const where = el("[data-cr-writer-where]");
   if (where) {
-    where.textContent = `${state.writer.id ? "Editing an article in" : "Writing in"} ${hub.name} · ${hub.code}`;
+    where.textContent = asking
+      ? `${state.writer.id ? "Editing a question in" : "Asking in"} ${hub.name} · ${hub.code}`
+      : `${state.writer.id ? "Editing an article in" : "Writing in"} ${hub.name} · ${hub.code}`;
   }
   document.body.dataset.crWriter = "1";
   document.dispatchEvent(
     new CustomEvent("ae:open", {
-      detail: { id: state.writer.id, hub: hub.code, hubName: hub.name, field: hub.field || "" },
+      detail: { id: state.writer.id, hub: hub.code, hubName: hub.name, field: hub.field || "", kind: state.writer.kind },
     })
   );
   try {
@@ -3731,6 +3739,11 @@ document.addEventListener("click", (event) => {
     return openWriter({});
   }
 
+  if (target.closest("[data-cr-question-new]")) {
+    event.preventDefault();
+    return openWriter({ kind: "question" });
+  }
+
   if (target.closest("[data-cr-writer-back]")) {
     event.preventDefault();
     return closeWriter({ reload: false });
@@ -3747,15 +3760,15 @@ document.addEventListener("click", (event) => {
     const fromEditor = Boolean(kind);
     if (action === "delete") {
       return openConfirm(
-        fromEditor ? (kind === "article" ? "Delete this article?" : "Delete this video?") : "Delete this item?",
+        fromEditor ? (kind === "article" ? "Delete this article?" : kind === "question" ? "Delete this question?" : "Delete this video?") : "Delete this item?",
         "It disappears from the studio and from the public page. This cannot be undone.",
         fromEditor ? "post" : "item",
         fromEditor ? row?.code || id : id
       );
     }
     if (fromEditor && (action === "open" || action === "edit")) {
-      if (kind === "article") {
-        openWriter({ id: row?.code || "" });
+      if (kind === "article" || kind === "question") {
+        openWriter({ id: row?.code || "", kind });
         return;
       }
       location.href = `video-editor.html?id=${encodeURIComponent(row?.code || "")}`;

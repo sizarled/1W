@@ -24,6 +24,22 @@
  * a help page nobody can read is not a help page.
  *
  * ------------------------------------------------------------------
+ * Two kinds, one engine
+ * ------------------------------------------------------------------
+ * The same page asks a question and writes a piece. `question-editor.html`
+ * says `<body data-ae-kind="question">` and the engine changes its clothes:
+ *
+ *   the title is *the question*, the body needs six words instead of twelve,
+ *   the button asks instead of publishing, an **Attachments** panel appears
+ *   (pictures, video, documents and archives, up to five), the draft lives
+ *   under another key, and the save goes to `question_save` instead of
+ *   `article_save` — a question is a row of `posts` with
+ *   `content_type = 'question'`, so it gets the same audience, the same
+ *   private list, the same passwords and the same schedule a piece gets.
+ *
+ * Everything else — the toolbar, Import HTML, the contents rail, the
+ * keywords, the doors, the reader preview — is the code below, unchanged.
+ *
  * Embedded in the studio
  * ------------------------------------------------------------------
  * creator.html does not keep a second, thinner article form: the blog's
@@ -52,6 +68,10 @@ import { createContents, rowLabel } from "./contents.js";
 /* the studio embeds this editor: the flag is on <body data-ae-embed="1"> */
 const EMBED = document.body.dataset.aeEmbed === "1";
 
+/* article, or question — the page says which, and the studio can change it */
+let docKind = document.body.dataset.aeKind === "question" ? "question" : "article";
+const isQuestion = () => docKind === "question";
+
 const S = {
   hub: "",
   hubName: "",
@@ -66,6 +86,7 @@ const S = {
   keyword: "",
   subs: [],
   otherMeta: {},
+  attachments: [],
   place: "content",
   help: "",
   tags: [],
@@ -168,7 +189,8 @@ function bodyHtml() {
 /* ================================================================== */
 /* the draft on this device                                           */
 /* ================================================================== */
-const DRAFT_KEY = "1w.articles.draft";
+/* a question and a piece are not the same draft */
+const draftKey = () => (isQuestion() ? "1w.questions.draft" : "1w.articles.draft");
 let draftTimer = null;
 
 function draftFields() {
@@ -183,6 +205,7 @@ function draftFields() {
     keyword: S.keyword,
     subs: S.subs,
     otherMeta: S.otherMeta,
+    attachments: S.attachments,
     tags: S.tags,
     language: S.language,
     thumb: S.thumb,
@@ -198,7 +221,7 @@ function draftFields() {
 
 function writeDraft() {
   try {
-    localStorage.setItem(DRAFT_KEY, JSON.stringify(draftFields()));
+    localStorage.setItem(draftKey(), JSON.stringify(draftFields()));
     paintStatus();
   } catch {
     /* storage full or blocked — the piece is still on screen */
@@ -213,7 +236,7 @@ function scheduleDraft() {
 
 function readDraft() {
   try {
-    const raw = localStorage.getItem(DRAFT_KEY);
+    const raw = localStorage.getItem(draftKey());
     if (!raw) return null;
     const draft = JSON.parse(raw);
     if (!draft) return null;
@@ -228,7 +251,7 @@ function readDraft() {
 function clearDraft() {
   clearTimeout(draftTimer);
   try {
-    localStorage.removeItem(DRAFT_KEY);
+    localStorage.removeItem(draftKey());
   } catch {
     /* nothing to clear */
   }
@@ -243,6 +266,7 @@ function restoreDraft(draft) {
   S.keyword = draft.keyword || "";
   S.subs = Array.isArray(draft.subs) ? draft.subs.slice(0, LONGTAIL_MAX) : [];
   S.otherMeta = draft.otherMeta && typeof draft.otherMeta === "object" ? draft.otherMeta : {};
+  S.attachments = Array.isArray(draft.attachments) ? draft.attachments.filter((file) => file && file.url) : [];
   S.tags = Array.isArray(draft.tags) ? draft.tags.slice(0, 12) : [];
   S.language = draft.language || "en";
   S.thumb = draft.thumb || "";
@@ -405,6 +429,22 @@ function paintPrivate() {
 
 function paintPlace() {
   const seg = $("[data-e-place]");
+  if (isQuestion()) {
+    /* a question has no Help section and no field ladder: it goes to the space
+       it was asked in, open to whoever the door allows */
+    if (seg) seg.hidden = true;
+    const help = $("[data-e-help]");
+    if (help) help.hidden = true;
+    const hint = $("[data-e-place-hint]");
+    if (hint) {
+      hint.textContent = EMBED
+        ? `It is asked in ${S.hubName || "this hub"} — open to whoever your door below allows.`
+        : "It goes to the space you ask it in, open to whoever your door below allows.";
+    }
+    const label = $("[data-e-place-label]");
+    if (label) label.textContent = EMBED ? S.hubName || "This space" : "Question";
+    return;
+  }
   if (seg && EMBED) {
     /* in a blog there is nothing to choose: it goes into this blog, and the
        site's Help is not the blog's business */
@@ -615,7 +655,7 @@ function fillKeywords() {
 }
 
 /** What the editor does not edit, it does not throw away. */
-const MANAGED_META = ["place", "field", "category", "help", "main_keyword", "sub_keywords"];
+const MANAGED_META = ["place", "field", "category", "help", "main_keyword", "sub_keywords", "attachments"];
 
 function otherMetaOf(meta) {
   const keep = {};
@@ -634,8 +674,14 @@ function checks() {
   const list = [];
   const words = wordsIn(S.html);
   list.push({ label: "A title", ok: S.title.trim().length > 0 && S.title.trim().length <= 200 });
-  list.push({ label: "A body", ok: words > 0 });
-  list.push({ label: "A field", ok: S.place === "help" ? Boolean(S.help) : Boolean(S.field.trim()) });
+  list.push({
+    label: isQuestion() ? "A question — six words at least" : "A body",
+    ok: words >= (isQuestion() ? 6 : 1),
+  });
+  /* a question is asked in a space, so it has no shelf of its own to pick */
+  if (!isQuestion()) {
+    list.push({ label: "A field", ok: S.place === "help" ? Boolean(S.help) : Boolean(S.field.trim()) });
+  }
   if (S.place === "help") list.push({ label: "A help section", ok: Boolean(S.help) });
   if (S.vis === "limited") {
     list.push({
@@ -698,7 +744,7 @@ function paintStatus() {
   }
   let draftNote = "";
   try {
-    const raw = localStorage.getItem(DRAFT_KEY);
+    const raw = localStorage.getItem(draftKey());
     const kept = raw ? JSON.parse(raw) : null;
     if (kept && kept.savedAt) {
       const at = new Date(kept.savedAt);
@@ -712,7 +758,8 @@ function paintStatus() {
   const publish = $("[data-e-publish]");
   if (publish) {
     publish.disabled = S.busy;
-    publish.innerHTML = S.place === "help" ? `${icon("send")} Send for review` : `${icon("upload")} ${S.code ? "Save and publish" : "Publish"}`;
+    const askLabel = isQuestion() ? (S.code ? "Save and publish" : "Ask the question") : S.code ? "Save and publish" : "Publish";
+    publish.innerHTML = S.place === "help" ? `${icon("send")} Send for review` : `${icon("upload")} ${askLabel}`;
   }
   const draft = $("[data-e-draft]");
   if (draft) draft.disabled = S.busy;
@@ -734,12 +781,46 @@ function paintMine() {
     .slice(0, 12)
     .map(
       (row) => `
-      <a href="article.html?id=${encodeURIComponent(row.code || row.id)}">
+      <a href="${isQuestion() ? "question-editor.html" : "article.html"}?id=${encodeURIComponent(row.code || row.id)}">
         <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(row.title || "Untitled")}</span>
         <span>${esc(row.status === "published" ? timeAgo(row.published_at) : row.status)}</span>
       </a>`
     )
     .join("");
+}
+
+/**
+ * The clothes the kind wears: the title's own name, the button's own verb, the
+ * attachments panel (a question has one, a piece does not) and the draft note.
+ */
+function paintKind() {
+  document.body.dataset.aeKind = docKind;
+  const question = isQuestion();
+
+  const attach = $("[data-e-attach]");
+  if (attach) attach.hidden = !question;
+
+  const title = $("[data-e-title]");
+  if (title) title.placeholder = question ? "The question" : "The title";
+  const desc = $("[data-e-desc]");
+  if (desc) desc.placeholder = question ? "What you already know, and what you are asking" : "One or two lines under the title";
+
+  /* a question has no shelf to pick: the field goes with the ladder */
+  const field = $("[data-e-field]");
+  if (field) {
+    const box = field.closest("label");
+    if (box) box.hidden = question;
+  }
+
+  const ready = $("[data-e-ready-title]");
+  if (ready) ready.textContent = question ? "Ready to ask?" : "Ready?";
+  const mine = $("[data-e-mine-title]");
+  if (mine) mine.textContent = question ? "Your questions" : "In your name";
+
+  paintAttachments();
+  paintPlace();
+  paintStatus();
+  paintChecks();
 }
 
 function paintAll() {
@@ -754,6 +835,7 @@ function paintAll() {
   paintFields();
   paintKeywords();
   paintContents();
+  paintAttachments();
   paintChecks();
   paintStatus();
   paintMine();
@@ -784,7 +866,8 @@ function payload(status) {
   const meta = {
     ...S.otherMeta,
     place,
-    field: place === "help" ? "" : S.field.trim(),
+    /* a question is asked in a space, and a space has no shelf to sort it into */
+    field: place === "help" || isQuestion() ? "" : S.field.trim(),
     category: S.category.trim(),
     main_keyword: S.keyword.trim(),
     sub_keywords: S.subs
@@ -793,6 +876,9 @@ function payload(status) {
       .slice(0, LONGTAIL_MAX),
     help: place === "help" ? S.help : "",
   };
+  if (isQuestion()) {
+    meta.attachments = S.attachments.map((file) => ({ name: file.name, url: file.url, size: file.size, type: file.type }));
+  }
   const body = {
     id: S.code || null,
     /* the blog it belongs to: only ever set by the studio's embedded form */
@@ -851,7 +937,7 @@ async function save(status) {
 
   let res = null;
   try {
-    res = await rpc("article_save", { p_token: S.token, p_payload: payload(finalStatus) });
+    res = await rpc(isQuestion() ? "question_save" : "article_save", { p_token: S.token, p_payload: payload(finalStatus) });
   } catch (error) {
     toast({ title: "The server refused it", message: error.message, tone: "error" });
   }
@@ -878,14 +964,14 @@ async function save(status) {
   if (S.status === "draft") {
     toast({ title: "Draft saved", message: "It is under “In your name”, on this page and on the index.", tone: "success", iconName: "check" });
     if (EMBED) {
-      document.dispatchEvent(new CustomEvent("ae:drafted", { detail: { code: S.code, title: S.title, hub: S.hub } }));
+      document.dispatchEvent(new CustomEvent("ae:drafted", { detail: { code: S.code, title: S.title, hub: S.hub, kind: docKind } }));
       return;
     }
     if (!location.search.includes("id=")) {
       history.replaceState(null, "", `?id=${encodeURIComponent(S.code)}`);
     }
     const heading = $("[data-e-heading]");
-    if (heading) heading.textContent = "Edit an article";
+    if (heading) heading.textContent = isQuestion() ? "Edit a question" : "Edit an article";
     return;
   }
 
@@ -901,9 +987,17 @@ async function save(status) {
   }
 
   clearDraft();
+  const asked = isQuestion();
   toast({
-    title: S.status === "scheduled" ? "Scheduled" : "Published",
-    message: S.status === "scheduled" ? "It opens by itself at the moment you picked." : EMBED ? "It is in the blog's table now." : "It is on the index now.",
+    title: S.status === "scheduled" ? "Scheduled" : asked ? "Asked" : "Published",
+    message:
+      S.status === "scheduled"
+        ? "It opens by itself at the moment you picked."
+        : EMBED
+          ? `It is in the ${asked ? "space" : "blog"}'s table now.`
+          : asked
+            ? "Your question is out."
+            : "It is on the index now.",
     tone: "success",
     iconName: "check",
   });
@@ -912,11 +1006,14 @@ async function save(status) {
     /* the studio takes over from here: it closes the writer and refreshes the
        blog's table, so the piece is where the member expects to see it */
     document.dispatchEvent(
-      new CustomEvent("ae:published", { detail: { code: S.code, title: S.title, status: S.status, hub: S.hub } })
+      new CustomEvent("ae:published", { detail: { code: S.code, title: S.title, status: S.status, hub: S.hub, kind: docKind } })
     );
     return;
   }
 
+  /* a question has no reader page of its own yet, so the page it is written
+     on stays put; a piece goes to its reader */
+  if (isQuestion()) return;
   setTimeout(() => {
     location.href = `article.html?id=${encodeURIComponent(S.code)}`;
   }, 700);
@@ -936,6 +1033,7 @@ function resetForm() {
   S.keyword = "";
   S.subs = [];
   S.otherMeta = {};
+  S.attachments = [];
   S.place = "content";
   S.help = "";
   S.tags = [];
@@ -975,6 +1073,9 @@ function resetForm() {
  * (a new piece) or the code of one to edit.
  */
 async function startEmbedded(detail = {}) {
+  /* the room writes whatever the studio asked for: a blog's piece, or a
+     space's question */
+  docKind = detail.kind === "question" ? "question" : "article";
   S.token = sessionToken() || "";
   S.hub = String(detail.hub || "").trim().toUpperCase();
   S.hubName = String(detail.hubName || "").trim();
@@ -994,6 +1095,7 @@ async function startEmbedded(detail = {}) {
   }
 
   resetForm();
+  paintKind();
   const shell = $("[data-e-shell]");
   if (shell) shell.hidden = false;
 
@@ -1008,8 +1110,117 @@ async function startEmbedded(detail = {}) {
   fillKeywords();
   loadFields();
   loadMine();
-  document.dispatchEvent(new CustomEvent("ae:ready", { detail: { hub: S.hub, code: S.code } }));
+  document.dispatchEvent(new CustomEvent("ae:ready", { detail: { hub: S.hub, code: S.code, kind: docKind } }));
   $("[data-e-title]")?.focus();
+}
+
+/* ================================================================== */
+/* attachments                                                        */
+/* ================================================================== */
+/*
+ * A question often needs the thing it is about: a still, a clip, a document,
+ * an archive. Five files, 10 MB each, into `users/files` in the source bucket
+ * — the same bucket, its own folder, its own policy. What the piece keeps is
+ * the name, the address and the size; the file itself is not copied again.
+ */
+const ATTACH_MAX = 5;
+const ATTACH_LIMIT = 10 * 1024 * 1024;
+const ATTACH_EXT = /\.(jpg|jpeg|png|webp|gif|mp4|webm|ogg|mov|pdf|doc|docx|xls|xlsx|ppt|pptx|txt|md|csv|rtf|zip)$/i;
+
+function sizeLabel(bytes) {
+  const n = Number(bytes) || 0;
+  if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  if (n >= 1024) return `${Math.round(n / 1024)} KB`;
+  return `${n} B`;
+}
+
+function paintAttachments() {
+  const host = $("[data-e-attach-list]");
+  const count = $("[data-e-attach-count]");
+  if (count) count.textContent = `${S.attachments.length} / ${ATTACH_MAX}`;
+  if (!host) return;
+  if (!S.attachments.length) {
+    host.innerHTML = `<p class="apanel__hint">Nothing attached yet.</p>`;
+    return;
+  }
+  host.innerHTML = S.attachments
+    .map(
+      (file, index) => `
+      <div class="aatt__row">
+        <a class="aatt__name" href="${esc(file.url)}" target="_blank" rel="noopener noreferrer">${icon("file")} <span>${esc(file.name)}</span></a>
+        <span class="aatt__size">${esc(sizeLabel(file.size))}</span>
+        <button class="atool" type="button" data-attach-rm="${index}" aria-label="Remove ${esc(file.name)}">${icon("close")}</button>
+      </div>`
+    )
+    .join("");
+}
+
+async function uploadAttachment(file) {
+  if (!file) return;
+  if (S.attachments.length >= ATTACH_MAX) {
+    toast({ title: "Five files at most", message: "Take one out to add another.", tone: "error" });
+    return;
+  }
+  if (!ATTACH_EXT.test(file.name || "")) {
+    toast({ title: "Not that kind of file", message: "Pictures, video, documents and archives.", tone: "error" });
+    return;
+  }
+  if (file.size > ATTACH_LIMIT) {
+    toast({ title: "That file is too big", message: "10 MB at most.", tone: "error" });
+    return;
+  }
+  const ext = (file.name.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const name = `question_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  try {
+    const res = await fetch(`${SUPABASE.url}/storage/v1/object/source/users/files/${name}`, {
+      method: "POST",
+      headers: { apikey: SUPABASE.publishableKey, "Content-Type": file.type || "application/octet-stream", "x-upsert": "true" },
+      body: file,
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(text.slice(0, 120) || `HTTP ${res.status}`);
+    }
+    S.attachments.push({ name: file.name, url: storageUrl(`users/files/${name}`), size: file.size, type: file.type || "" });
+    paintAttachments();
+    scheduleDraft();
+    toast({ title: "Attached", message: file.name, tone: "success", iconName: "check" });
+  } catch (error) {
+    toast({ title: "Upload failed", message: error?.message || "Please try again.", tone: "error" });
+  }
+}
+
+/** The drop zone, its picker, and the cross on a file — wired once. */
+function wireAttachments() {
+  const drop = $("[data-e-attach-drop]");
+  const input = $("[data-e-attach-input]");
+  const list = $("[data-e-attach-list]");
+  if (!drop || !input) return;
+
+  input.addEventListener("change", () => {
+    [...(input.files || [])].forEach((file) => uploadAttachment(file));
+    input.value = "";
+  });
+  ["dragenter", "dragover"].forEach((type) =>
+    drop.addEventListener(type, (event) => {
+      event.preventDefault();
+      drop.classList.add("is-over");
+    })
+  );
+  ["dragleave", "dragend"].forEach((type) => drop.addEventListener(type, () => drop.classList.remove("is-over")));
+  drop.addEventListener("drop", (event) => {
+    event.preventDefault();
+    drop.classList.remove("is-over");
+    const files = (event.dataTransfer && event.dataTransfer.files) || [];
+    [...files].forEach((file) => uploadAttachment(file));
+  });
+  list?.addEventListener("click", (event) => {
+    const remove = event.target.closest?.("[data-attach-rm]");
+    if (!remove) return;
+    S.attachments.splice(Number(remove.getAttribute("data-attach-rm")), 1);
+    paintAttachments();
+    scheduleDraft();
+  });
 }
 
 /* ================================================================== */
@@ -1978,6 +2189,8 @@ function bind() {
     onJump: jumpToHeading,
   });
 
+  wireAttachments();
+
   /* the import button is this module's own, so it exists on both pages */
   mountHtmlImport();
 }
@@ -2002,7 +2215,7 @@ function showState({ title, text, action = "", iconName = "info" }) {
 
 async function loadMine() {
   try {
-    const res = await rpc("article_mine", { p_token: S.token });
+    const res = await rpc(isQuestion() ? "question_mine" : "article_mine", { p_token: S.token });
     if (res && res.ok) {
       S.mine = Array.isArray(res.rows) ? res.rows : [];
       paintMine();
@@ -2036,12 +2249,12 @@ async function loadExisting(code) {
   try {
     res = await rpc("article_get", { p_token: S.token, p_ref: code, p_key: "" });
   } catch (error) {
-    toast({ title: "That article did not load", message: error.message, tone: "error" });
+    toast({ title: isQuestion() ? "That question did not load" : "That article did not load", message: error.message, tone: "error" });
     return false;
   }
   if (!res || res.ok !== true || res.locked) {
     toast({
-      title: res && res.locked ? "That piece is not yours to edit" : "That article is gone",
+      title: res && res.locked ? "That piece is not yours to edit" : isQuestion() ? "That question is gone" : "That article is gone",
       message: res && res.locked ? "Only the writer can edit it." : "",
       tone: "error",
     });
@@ -2065,6 +2278,7 @@ async function loadExisting(code) {
   S.keyword = meta.main_keyword || "";
   S.subs = Array.isArray(meta.sub_keywords) ? meta.sub_keywords.slice(0, LONGTAIL_MAX) : [];
   S.otherMeta = otherMetaOf(meta);
+  S.attachments = Array.isArray(meta.attachments) ? meta.attachments.filter((file) => file && file.url) : [];
   S.help = meta.help || "";
   S.tags = (Array.isArray(row.keywords) ? row.keywords : []).filter((tag) => tag.role === "main").map((tag) => tag.keyword);
   S.hasPassword = Boolean(row.asks_password);
@@ -2106,7 +2320,7 @@ async function loadExisting(code) {
   if (lang) lang.value = S.language;
 
   const heading = $("[data-e-heading]");
-  if (heading) heading.textContent = "Edit an article";
+  if (heading) heading.textContent = isQuestion() ? "Edit a question" : "Edit an article";
   const sub = $("[data-e-sub]");
   if (sub) sub.textContent = `${S.code} · ${S.status === "published" ? "published" : S.status}`;
   return true;
@@ -2120,6 +2334,7 @@ function fillLanguages() {
 async function boot() {
   S.token = sessionToken() || "";
   fillLanguages();
+  paintKind();
   bind();
 
   if (EMBED) {

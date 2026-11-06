@@ -237,6 +237,17 @@ function stubFetch(url, opts = {}) {
     });
   }
 
+  if (href.includes("/rpc/question_save")) {
+    scenario.savedQuestion = body.p_payload || {};
+    return reply({
+      ok: true,
+      code: "PST-003001",
+      status: (body.p_payload || {}).status || "draft",
+      scheduled_at: null,
+      question: { code: "PST-003001", title: (body.p_payload || {}).title || "", status: (body.p_payload || {}).status || "draft" },
+    });
+  }
+
   if (href.includes("/rpc/article_mine")) {
     return reply({ ok: true, rows: scenario.myArticles || [] });
   }
@@ -1690,6 +1701,103 @@ async function passDoors() {
   expect("writer: it fetched the piece by its code", calls.some((c) => c.includes("article_get")), "article_get");
   expect("writer: and filled the title", w.qs("[data-e-title]")?.value === "The port at night", w.qs("[data-e-title]")?.value);
   expect("writer: no errors", w.errors.length === 0, w.errors.join(" | "));
+}
+
+/* ------------------------------------------------------------------ */
+/* pass 51 — a space's question is asked in the same room             */
+/* ------------------------------------------------------------------ */
+/*
+ * The space used to keep its own small form under `Question · new`: a title, a
+ * paragraph, a visibility. It was a second, weaker door beside the article
+ * engine, so it is gone. What the Questions tab opens now is the writing room
+ * in its question kind — attachments, keywords, doors, schedule and all.
+ */
+scenario = {
+  hubs: [hub({ id: "hub-space", code: "IDSP100002", kind: "space", name: "The questions space" })],
+  items: [
+    {
+      id: "q-1",
+      code: "PST-003000",
+      kind: "question",
+      title: "Which ending rewired you?",
+      summary: "",
+      status: "published",
+      visibility: "public",
+      source: "question-editor",
+      words: 32,
+      lines: 3,
+      chars: 210,
+      minutes: 0,
+      likes: 1,
+      dislikes: 0,
+      comments: 0,
+      reports: 0,
+      answers: 0,
+      followers: 0,
+      refollows: 0,
+      published_at: new Date(NOW).toISOString(),
+    },
+  ],
+  myArticles: [],
+  fields: [],
+  article: { code: "PST-003000", title: "Which ending rewired you?", status: "published", visibility: "general", language: "en", keywords: [], audience: [], article: { meta: { place: "content", attachments: [] } } },
+  can: { publish: true, advertise: false },
+  role: "owner",
+};
+{
+  const q = await boot(51, { search: "?section=space&tab=questions", articleEditor: true });
+
+  expect("question: the space's table is open", /Questions/.test(q.text(".cr-bar__title")), q.text(".cr-bar__title"));
+  const askCta = q.qs("[data-cr-question-new]");
+  expect("question: the tab carries Ask a question", Boolean(askCta) && /Ask a question/.test(askCta.textContent), askCta ? askCta.textContent.trim() : "none");
+  expect("question: the room waits closed", q.hidden("[data-cr-writer]"));
+
+  /* the old form is gone, not duplicated */
+  q.click(q.qs("[data-cr-add-toggle]"));
+  await q.wait(50);
+  expect("question: the Add menu offers no second question form", !q.qs("[data-cr-add='question']"), q.text("[data-cr-add-menu]").slice(0, 160));
+
+  q.click(askCta);
+  await q.wait(260);
+  expect("question: the room opens", !q.hidden("[data-cr-writer]"));
+  expect("question: it says which space", /Asking in The questions space/.test(q.text("[data-cr-writer-where]")) && /IDSP100002/.test(q.text("[data-cr-writer-where]")), q.text("[data-cr-writer-where]"));
+  expect("question: the editor's own form stands there", !q.hidden("[data-e-shell]") && Boolean(q.qs("[data-e-title]")) && Boolean(q.qs("[data-e-tools]")));
+  expect("question: with the attachments panel", !q.hidden("[data-e-attach]"));
+  expect("question: and its count", /0 \/ 5/.test(q.text("[data-e-attach-count]")), q.text("[data-e-attach-count]"));
+  expect("question: the button asks the question", /Ask the question/.test(q.text("[data-e-publish]")), q.text("[data-e-publish]"));
+  expect("question: the readiness is the question's", /Ready to ask\?/.test(q.text("[data-e-ready-title]")), q.text("[data-e-ready-title]"));
+  expect("question: no Help section to pick", q.hidden("[data-e-place]"));
+  expect("question: no field ladder either", !q.qs("[data-e-field]")?.closest("label") || q.qs("[data-e-field]").closest("label").hidden === true, "the field is still on screen");
+
+  q.type(q.qs("[data-e-title]"), "Which ending rewired you?");
+  const qbody = q.qs("[data-e-body]");
+  qbody.innerHTML = "<p>Which last shot changed the whole film you had just watched?</p>";
+  qbody.dispatchEvent(new q.window.Event("input", { bubbles: true }));
+  await q.wait(80);
+  q.click(q.qs("[data-e-publish]"));
+  await q.wait(320);
+
+  const saved = scenario.savedQuestion || {};
+  expect("question: it reaches the server through question_save", scenario.savedQuestion !== null && scenario.savedQuestion !== undefined, JSON.stringify(scenario.savedQuestion));
+  expect("question: never through article_save", !scenario.savedArticle, JSON.stringify(scenario.savedArticle || null));
+  expect("question: with the space's code on it", saved.hub === "IDSP100002", JSON.stringify(saved.hub));
+  expect("question: published straight away", saved.status === "published", JSON.stringify(saved.status));
+  expect("question: with the question itself", /last shot changed/.test(String(saved.body || "")), String(saved.body || "").slice(0, 60));
+  expect("question: with an attachments list", Array.isArray((saved.meta || {}).attachments), JSON.stringify(saved.meta));
+  expect("question: and no field in meta", (saved.meta || {}).field === "", JSON.stringify((saved.meta || {}).field));
+  expect("question: the room closes itself", q.hidden("[data-cr-writer]"));
+  expect("question: the table is back", !q.hidden("[data-cr-shell]"));
+
+  /* an editor-written question opens in the editor */
+  await q.wait(120);
+  const edit = q.qs('[data-cr-act="edit"][data-id="q-1"]') || q.qs('[data-cr-act="open"][data-id="q-1"]');
+  expect("question: the row offers its editor", Boolean(edit), q.text("[data-cr-view]").slice(0, 160));
+  q.click(edit);
+  await q.wait(300);
+  expect("question: the row opens the room", !q.hidden("[data-cr-writer]"));
+  expect("question: it fetched the question by its code", calls.some((c) => c.includes("article_get")), "article_get");
+  expect("question: and filled the title", q.qs("[data-e-title]")?.value === "Which ending rewired you?", q.qs("[data-e-title]")?.value);
+  expect("question: nothing threw", q.errors.length === 0, q.errors.join(" | "));
 }
 
 /* ------------------------------------------------------------------ */

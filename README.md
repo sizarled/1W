@@ -1135,6 +1135,24 @@ gone there — a blog is not the site's Help — and a publish never navigates: 
 the editor that owns the row (`video-editor` / `article-editor`); a legacy `member_content` article
 keeps `source: hub` and still opens in the table, so nothing already written is stranded.
 
+**A space's question is written in the same room.** *Question · new* was the table's own thin form —
+a title, a paragraph of details, a visibility, two niche boxes — and it is gone: a question is a
+second **kind** of the one engine, not a second editor. `question-editor.html` is
+`article-editor.html` with `<body data-ae-kind="question">`, and the studio opens it exactly the way
+it opens an article: `ae:open` `{ hub, hubName, id?, kind: "question" }` into the same writing room,
+so a question carries the rich-text toolbar, the HTML import, the contents rail, the cover and
+thumbnail, the keywords (one head term, five long tails), the door, the private list and passwords,
+the schedule, the reader preview and the autosaved draft — nothing is trimmed. The kid paints
+itself: `Ready to ask?`, *Ask the question*, a six-word body rule, no Help section and no field
+ladder (a question is not sorted onto a shelf), and **Attachments** — up to five files of 10 MB
+(pictures, video, PDF, Word/Excel/PowerPoint, text, markdown, CSV, RTF, ZIP, by drag or by picker)
+uploaded to `source/users/files/question_*` and kept as `meta.attachments[]`. Saving goes to
+`question_save`, the loader is the same `article_get`, the list under *Your questions* is
+`question_mine`, and a published question stays on the page instead of navigating to a reader.
+`posts.content_type` learned the word, `member_post_save` stores a question's body and
+`article_meta` like an article, and `creator_items` / `creator_hub_posts` count it with
+`source: question-editor`.
+
 `creator_item_save` takes the hub, the kind, the title, summary, body, media link, thumbnail, tags,
 language, age, visibility, category, parent (an answer points at its question), field, niche,
 **micro** and **nano** niche. Publishing is guarded on the server: an active membership, a title of
@@ -1515,7 +1533,8 @@ the temporary studio and the session were removed afterwards.
 
 The three article mocks became three real pages, in the site's own clothes: **`articles.html`** (the
 index), **`article.html?id=<code>`** (one piece) and **`article-editor.html`** (writing and
-publishing). The mocks' own theme system and palette were not carried over — only their geometry.
+publishing), with **`question-editor.html?id=<code>`** as the same editor in its question kind. The
+mocks' own theme system and palette were not carried over — only their geometry.
 
 An article is a row of `posts` with `content_type = 'article'`, the same row likes, comments, reports
 and reach already live on. It needed one column of its own — `posts.article_meta` (`place`, `field`,
@@ -1530,6 +1549,8 @@ thin wrapper around one general save.
 | `article_mine(token)` | the member's own rows, drafts, scheduled and pending ones included |
 | `article_save(token, payload)` | one call for a draft, a publish, a schedule or a review; the wrapper on `member_post_save` |
 | `article_card(post, viewer)` | `post_card` plus `article { meta, field, category, place, words, reading, host }` |
+| `question_save(token, payload)` | the article's save for a space's question: same payload, one `hub` key, six words to publish, `meta.attachments[]` |
+| `question_mine(token)` | the member's own questions — the *Your questions* panel of the question page |
 | `post_comment_vote(token, comment_id, agree)` | agree / disagree under a comment, one vote per member |
 
 `member_post_save(token, payload, type)` is the one save behind both editors: `title`,
@@ -2534,6 +2555,7 @@ assets/css/article.css      member articles: the index, the reader, the writing 
 assets/js/articles.js       articles.html: the index, the search, the shelves
 assets/js/article.js        article.html: one piece, the two doors, the comments
 assets/js/article-editor.js article-editor.html: the editor and article_save (embedded by creator.html)
+                            question-editor.html: the same engine as a space's question — question_save
 assets/js/article-text.js   word count, reading time and the body allowlist, shared by both
 assets/js/contents.js       the contents rail both editors carry: the piece's headings, the form's sections
 assets/js/rte.js            the writing surface: ranges, formatting, history, paste, keys

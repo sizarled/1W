@@ -1182,7 +1182,8 @@ const MEMBER = {
   const html =
     readFileSync(join(root, "articles.html"), "utf8") +
     readFileSync(join(root, "article.html"), "utf8") +
-    readFileSync(join(root, "article-editor.html"), "utf8");
+    readFileSync(join(root, "article-editor.html"), "utf8") +
+    readFileSync(join(root, "question-editor.html"), "utf8");
   const shared =
     readFileSync(join(root, "assets/css/base.css"), "utf8") +
     readFileSync(join(root, "assets/css/components.css"), "utf8") +
@@ -1201,6 +1202,100 @@ const MEMBER = {
   const links =
     readFileSync(join(root, "assets/js/watch.js"), "utf8") + readFileSync(join(root, "assets/js/cast.js"), "utf8");
   expect("links: the rest of the site still points at article.html?id=", links.includes("article.html?id="));
+}
+
+/* ------------------------------------------------------------------ */
+/* pass 12 — a question is written with the article's own engine       */
+/* ------------------------------------------------------------------ */
+/*
+ * The studio's table form for a space's question is gone. question-editor.html
+ * is the article page with `data-ae-kind="question"`: one engine, two kinds.
+ * What this pass pins down is that the page really is the engine (not a second,
+ * thinner form), that the kind paints itself, and that a published question
+ * travels to question_save with its own words rule and its attachments.
+ */
+{
+  const page = readFileSync(join(root, "question-editor.html"), "utf8");
+  expect("question page: it declares the question kind", page.includes('data-ae-kind="question"'));
+  expect("question page: it loads the same engine", /assets\/js\/article-editor\.js\?v=/.test(page));
+  expect("question page: it keeps the editor's own index", page.includes("data-e-toc"));
+  expect(
+    "question page: it keeps every editor function",
+    ["data-cmd", "data-e-preview-open", "data-e-vis", "data-e-when", "data-e-keys", "data-e-tag-input"].every((hook) => page.includes(hook)),
+    "a function went missing"
+  );
+  const attachHooks = ["data-e-attach", "data-e-attach-drop", "data-e-attach-input", "data-e-attach-list", "data-e-attach-count"];
+  expect(
+    "question page: the attachments panel is whole",
+    attachHooks.every((hook) => page.includes(hook)),
+    attachHooks.filter((hook) => !page.includes(hook)).join(" ")
+  );
+  expect("question page: no Help section, no field ladder", !page.includes("data-e-place>") && !page.includes("data-e-field"));
+  expect("question page: the door asks who may answer", page.includes("Who may answer it"));
+
+  const { document, calls, errors } = boot("question-editor.html", {
+    url: "question-editor.html",
+    storage: MEMBER,
+    fetchImpl: (href) => {
+      const fn = fnName(href);
+      if (fn === "question_mine") return reply({ ok: true, rows: [row({ code: "PST-002001", type: "question", title: "An older question" })] });
+      if (fn === "article_mine") return reply({ ok: true, rows: [] });
+      if (fn === "article_feed") return reply({ ok: true, rows: [], fields: [], rails: [], total: 0 });
+      if (fn === "question_save")
+        return reply({ ok: true, code: "PST-002000", status: "published", scheduled_at: null, question: row({ code: "PST-002000", type: "question" }) });
+      if (fn === "article_save") return reply({ ok: true, code: "PST-009999", status: "published" });
+      return reply([]);
+    },
+  });
+  await import(`file://${join(root, "assets/js/article-editor.js")}?p12`);
+  await wait(80);
+
+  expect("question editor: the form is shown", document.querySelector("[data-e-shell]")?.hidden === false);
+  expect("question editor: the attachments panel is open", document.querySelector("[data-e-attach]")?.hidden === false);
+  expect("question editor: the panel counts five", document.querySelector("[data-e-attach-count]")?.textContent === "0 / 5", document.querySelector("[data-e-attach-count]")?.textContent);
+  expect("question editor: the readiness is the question's", document.querySelector("[data-e-ready-title]")?.textContent === "Ready to ask?", document.querySelector("[data-e-ready-title]")?.textContent);
+  expect(
+    "question editor: the button asks the question",
+    (document.querySelector("[data-e-publish]")?.textContent || "").includes("Ask the question"),
+    document.querySelector("[data-e-publish]")?.textContent
+  );
+  const checkText = () => document.querySelector("[data-e-checks]")?.textContent || "";
+  expect("question editor: six words are the body rule", checkText().includes("six words"), checkText());
+  expect("question editor: there is no field to pick", !checkText().includes("A field"), checkText());
+  expect("question editor: its own list is read", calls.some((c) => fnName(c.href) === "question_mine"), calls.map((c) => fnName(c.href)).join(","));
+  expect("question editor: and not the articles' list", !calls.some((c) => fnName(c.href) === "article_mine"));
+  expect("question editor: an old question is listed", (document.querySelector("[data-e-mine]")?.textContent || "").includes("An older question"), document.querySelector("[data-e-mine]")?.textContent);
+  expect(
+    "question editor: and it opens in the editor",
+    (document.querySelector("[data-e-mine] a")?.getAttribute("href") || "").startsWith("question-editor.html?id="),
+    document.querySelector("[data-e-mine] a")?.getAttribute("href")
+  );
+
+  /* three words do not make a question */
+  document.querySelector("[data-e-title]").value = "Which film changed endings?";
+  document.querySelector("[data-e-title]").dispatchEvent(new Event("input", { bubbles: true }));
+  document.querySelector("[data-e-body]").innerHTML = "<p>A short question.</p>";
+  document.querySelector("[data-e-body]").dispatchEvent(new Event("input", { bubbles: true }));
+  await wait(30);
+  document.querySelector("[data-e-publish]").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  await wait(140);
+  expect("question editor: a three-word question is refused", lastCall(calls, "question_save") === undefined, calls.map((c) => fnName(c.href)).join(","));
+  expect("question editor: it never falls back to article_save", lastCall(calls, "article_save") === undefined);
+
+  /* six words, and it goes */
+  document.querySelector("[data-e-body]").innerHTML = "<p>Which ending rewired the way you watch a film?</p>";
+  document.querySelector("[data-e-body]").dispatchEvent(new Event("input", { bubbles: true }));
+  await wait(30);
+  document.querySelector("[data-e-publish]").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  await wait(220);
+  const sent = lastCall(calls, "question_save");
+  expect("question editor: it saves through question_save", Boolean(sent), calls.map((c) => fnName(c.href)).join(","));
+  expect("question editor: as a published question", sent?.body.p_payload.status === "published", sent?.body.p_payload.status);
+  expect("question editor: with the question as written", String(sent?.body.p_payload.body || "").includes("rewired the way you watch"), sent?.body.p_payload.body);
+  expect("question editor: with no field in meta", (sent?.body.p_payload.meta || {}).field === "", JSON.stringify(sent?.body.p_payload.meta));
+  expect("question editor: with an attachments list", Array.isArray((sent?.body.p_payload.meta || {}).attachments), JSON.stringify(sent?.body.p_payload.meta));
+  expect("question editor: with the member's token", sent?.body.p_token === "tok-article");
+  expect("question editor: nothing threw", errors.length === 0, errors.join(" | "));
 }
 
 /* ------------------------------------------------------------------ */
