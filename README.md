@@ -2256,7 +2256,7 @@ browser that already has the old file.
 ```bash
 node tools/dashboard-smoke.mjs   # 156 checks: the five gates, rail, popover, codes, sections, Unlock now, Account settings
 node tools/sidebar-smoke.mjs     # 93 checks: the edge, the pin, Escape, the mobile drawer, the dashboard menu
-node tools/panel-smoke.mjs       # 89 checks: the desk's three states, the rows, the switch, the dialog, the shelf
+node tools/panel-smoke.mjs       # 90 checks: the desk's three states, the rows, the switch, the dialog, the shelf
 node tools/court-smoke.mjs       # 115 checks: the four steps, uploads, both doors, the court room
 node tools/iptv-smoke.mjs        # 43 checks: the playlists, the groups, the page, the deep links
 node tools/activated-smoke.mjs   # 35 checks: hidden panels, image link, ad pause, code return

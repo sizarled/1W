@@ -372,6 +372,7 @@ function deskFetch(href) {
   expect("files: the shelf reads the public door", /rpc\("platform_public"\)/.test(shelf));
   expect("files: the homepage draws it", /loadPlatforms/.test(home) && /paintPlatforms/.test(home));
   expect("files: the homepage heading follows", /data-platform-title/.test(index) && /platformHeading/.test(home));
+  expect("files: an empty table steps the section aside", /section\.hidden = list\.length === 0/.test(home));
   expect("files: the footer follows too", /paintFooterDots/.test(shell) && /data-footer-social/.test(shell));
   expect("files: the homepage sidebar starts hidden", /defaultPinned: false/.test(shell), "shell.js");
   expect("files: the SQL creates the table", /create table if not exists public\.platform/i.test(sql));
