@@ -138,6 +138,8 @@ const state = {
   apiError: "",
   apiEdit: null,
   apiBusy: false,
+  /* the creator pages: the hubs behind the seven rows, asked once per visit */
+  creator: { hubs: [], limits: {}, level: 1, loaded: false, loading: false, error: "" },
 };
 
 const token = sessionToken();
@@ -530,9 +532,9 @@ function viewBody(key) {
     case "analytics":
       return analyticsView();
     case "creator":
-      return surfacesView("creator");
+      return creatorView();
     case "publisher":
-      return surfacesView("publisher");
+      return publisherView();
     case "advertiser":
       return advertiserView();
     case "settings-site":
@@ -1401,85 +1403,246 @@ function analyticsView() {
   `;
 }
 
-/**
- * Creator and Publisher surfaces.
- *
- * A creator surface is a door into the editor: it carries the content kind
- * the surface holds (`creator.html?kind=…`), so the button opens the right
- * form instead of a dead toast. A publisher surface opens `publisher.html` —
- * the desk, with the video editor embedded in it.
- */
-const SURFACE_KINDS = {
-  "e-Studio": "studio/videos",
-  "e-Server": "studio/videos",
-  "e-Blog": "blog/articles",
-  "e-Gallery": "gallery/images",
-  "e-Space": "space/questions",
-  "e-Library": "library/books",
-  "e-Cinema": "studio/videos",
-};
+/* ================================================================== */
+/* creator pages                                                       */
+/* ================================================================== */
 
-/** The studio deep link for a surface: `creator.html?section=…&tab=…`. */
-function studioLink(surface) {
-  const path = SURFACE_KINDS[surface];
-  if (!path) return "";
-  const [section, tab] = path.split("/");
-  return `creator.html?section=${encodeURIComponent(section)}&tab=${encodeURIComponent(tab)}`;
+/**
+ * The seven creator pages a member owns, in the order the dashboard shows
+ * them. `kind` is the hub kind in the tables; `section`/`tab` the studio and the
+ * tab that create the page and hold its content.
+ */
+const CREATOR_SURFACES = [
+  { surface: "e-Studio", kind: "channel", section: "studio", tab: "videos", icon: "tv", use: "Films, series and videos" },
+  { surface: "e-Server", kind: "server", section: "server", tab: "channels", icon: "monitor", use: "IPTV playlists and channels" },
+  { surface: "e-Blog", kind: "blog", section: "blog", tab: "articles", icon: "article", use: "Articles and long reads" },
+  { surface: "e-Gallery", kind: "gallery", section: "gallery", tab: "images", icon: "image", use: "Images and collections" },
+  { surface: "e-Space", kind: "space", section: "space", tab: "questions", icon: "help", use: "Community posts" },
+  { surface: "e-Library", kind: "library", section: "library", tab: "books", icon: "database", use: "Documents and books" },
+  { surface: "e-Cinema", kind: "cinema", section: "cinema", tab: "films", icon: "film", use: "Curated screenings" },
+];
+
+const VIS_WORDS = { public: "Public", exclusive: "Exclusive", private: "Private" };
+
+/** The studio door that creates a page: its section, its first tab, the form. */
+function studioDoor(surface) {
+  return `creator.html?section=${encodeURIComponent(surface.section)}&tab=${encodeURIComponent(surface.tab)}&new=1`;
 }
 
-function surfacesView(kind) {
-  const rows =
-    kind === "creator"
-      ? [
-          ["e-Studio", "Films, series and videos"],
-          ["e-Server", "IPTV playlists and channels"],
-          ["e-Blog", "Articles and long reads"],
-          ["e-Gallery", "Images and collections"],
-          ["e-Space", "Community posts"],
-          ["e-Library", "Documents and books"],
-          ["e-Cinema", "Curated screenings"],
-        ]
-      : [
-          ["e-Store", "Products and orders"],
-          ["e-Auction", "Standard lots"],
-          ["Super auction", "Featured lots"],
-          ["Hyper auction", "Premium lots"],
-          ["e-Bank", "Wallet and payouts"],
-          ["Community", "Followers and members"],
-        ];
+/** The studio door that edits one hub — `settings` edits the page itself. */
+function hubDoor(hub, surface, tab) {
+  const params = new URLSearchParams({ section: surface.section, hub: hub.id, tab: tab || "settings" });
+  return `creator.html?${params.toString()}`;
+}
 
-  const editorDoor =
-    kind === "creator"
-      ? `<a class="dsh-btn dsh-btn--sm" href="creator.html?section=studio"><i data-icon="plus"></i>Open the studio</a>`
-      : `<a class="dsh-btn dsh-btn--sm" href="publisher.html"><i data-icon="upload"></i>The publisher's desk</a>`;
+/** A hub's public page: a blog has its own page, every other hub has one. */
+function hubPublicDoor(hub) {
+  const code = hub.code || hub.id;
+  return hub.kind === "blog"
+    ? `blog.html?studio=${encodeURIComponent(code)}`
+    : `creator.html?studio=${encodeURIComponent(code)}`;
+}
 
+/** One created page: its state, its numbers and the doors into it. */
+function hubLine(hub, surface) {
+  const meta = [
+    `${num(Number(hub.published) || 0)} published`,
+    `${num(Number(hub.drafts) || 0)} draft${Number(hub.drafts) === 1 ? "" : "s"}`,
+    `${num(Number(hub.subscribers) || 0)} subscriber${Number(hub.subscribers) === 1 ? "" : "s"}`,
+    VIS_WORDS[hub.visibility] || "Public",
+  ];
+  return `
+    <li class="dsh-hub">
+      <div class="dsh-hub__head">
+        <span class="dsh-chip" data-tone="${hub.status === "hidden" ? "off" : "on"}">${hub.status === "hidden" ? "Hidden" : "Live"}</span>
+        <strong>${esc(hub.name || "Untitled")}</strong>
+        ${hub.code ? `<code class="dsh-hub__code">${esc(hub.code)}</code>` : ""}
+      </div>
+      <p class="dsh-hub__meta">${esc(meta.join(" · "))}</p>
+      <div class="dsh-table__actions">
+        <a class="dsh-btn dsh-btn--sm" href="${esc(hubDoor(hub, surface))}"><i data-icon="settings"></i>Edit page</a>
+        <a class="dsh-btn dsh-btn--ghost dsh-btn--sm" href="${esc(hubDoor(hub, surface, surface.tab))}"><i data-icon="${esc(surface.icon)}"></i>Content</a>
+        <a class="dsh-btn dsh-btn--ghost dsh-btn--sm" href="${esc(hubPublicDoor(hub))}"><i data-icon="external"></i>Open</a>
+      </div>
+    </li>`;
+}
+
+/** One table row per surface: every page of that kind, or the door to create it. */
+function creatorRow(surface) {
+  const c = state.creator;
+  const hubs = (c.hubs || []).filter((hub) => hub.kind === surface.kind);
+  const usedIn = (c.limits || {})[surface.kind] || null;
+  const limit = usedIn ? Number(usedIn.limit) || 0 : 0;
+
+  let status;
+  if (!c.loaded) {
+    status = c.error
+      ? `<span class="dsh-chip" data-tone="off">Not loaded</span>`
+      : `<span class="dsh-hub__meta">Checking your pages…</span>`;
+  } else if (hubs.length) {
+    status = `<ul class="dsh-hubs">${hubs.map((hub) => hubLine(hub, surface)).join("")}</ul>`;
+  } else {
+    status = `<span class="dsh-chip" data-tone="off">Not created</span>`;
+  }
+
+  let action;
+  if (!c.loaded) {
+    action = `<a class="dsh-btn dsh-btn--sm" href="${esc(studioDoor(surface))}"><i data-icon="plus"></i>Create</a>`;
+  } else if (!limit || hubs.length < limit) {
+    action = `<a class="dsh-btn dsh-btn--sm" href="${esc(studioDoor(surface))}"><i data-icon="plus"></i>${hubs.length ? "Add another" : "Create"}</a>`;
+    if (limit) action += `<span class="dsh-hub__meta">${esc(num(hubs.length))} / ${esc(num(limit))}</span>`;
+  } else {
+    action = `<span class="dsh-chip" data-tone="off">${esc(num(limit))} of ${esc(num(limit))}</span>`;
+  }
+
+  return `<tr data-surface-row="${esc(surface.kind)}">
+    <td><span class="dsh-surface"><i data-icon="${esc(surface.icon)}"></i><strong>${esc(surface.surface)}</strong></span></td>
+    <td>${esc(surface.use)}</td>
+    <td>${status}</td>
+    <td data-surface-create><div class="dsh-table__actions">${action}</div></td>
+  </tr>`;
+}
+
+/** The table, with the one message that says why it is empty when it is. */
+function creatorTable() {
+  const c = state.creator;
+  const notice = c.error
+    ? `<div class="dsh-empty">
+        <i data-icon="lock"></i>
+        <p class="dsh-empty__title">Your pages could not be listed</p>
+        <p class="dsh-empty__text">The studio did not answer. Check the connection and try again — the doors below still open.</p>
+        <button class="dsh-btn dsh-btn--sm" type="button" data-creator-retry><i data-icon="refresh"></i>Try again</button>
+      </div>`
+    : "";
+  return `${notice}
+  <div class="dsh-table-wrap"><table class="dsh-table">
+    <thead><tr><th>Surface</th><th>For</th><th>Status</th><th></th></tr></thead>
+    <tbody>${CREATOR_SURFACES.map(creatorRow).join("")}</tbody>
+  </table></div>`;
+}
+
+/**
+ * Creator management: the seven pages, created and edited from here.
+ *
+ * The rows are the hubs of `creator_hubs_list` — a page that exists carries its
+ * name, code, visibility and counts with two doors (edit the page, write its
+ * content); a page that does not exist carries the door that creates it. The
+ * content itself is written in the studio at `creator.html`, one tab per kind.
+ */
+function creatorView() {
   return `
     <div class="dsh-note"><i data-icon="info"></i><span>
-      ${
-        kind === "creator"
-          ? `Every creator page is managed here — name, description, logo, cover, category and niche.
-             The editor writes the content itself: a draft is private and saves as you type, publishing
-             needs an active membership.`
-          : `Every ${kind} page is managed here: name, description, logo, cover, category and niche.
-             Publishing opens the public page at <b>${kind}.html?${kind}=ID</b>.`
-      }
+      Every creator page is created and edited from this table — name, description, logo, cover,
+      category, niches and visibility. The content of a page is written in the studio:
+      <b>creator.html</b> opens the same seven sections, one tab per kind of content.
+    </span></div>
+    <div class="dsh-grid" data-creator-stats>${creatorStats()}</div>
+    <section class="dsh-card">
+      <div class="dsh-card__head">
+        <h2 class="dsh-card__title">Your creator pages</h2>
+        <a class="dsh-btn dsh-btn--sm" href="creator.html?section=studio"><i data-icon="settings"></i>Open the studio</a>
+      </div>
+      <div data-creator-table>${creatorTable()}</div>
+    </section>
+    <section class="dsh-card">
+      <div class="dsh-card__head"><h2 class="dsh-card__title">Where the content lives</h2></div>
+      <dl class="dsh-kv">
+        ${CREATOR_SURFACES.map((s) => `<div><dt>${esc(s.surface)}</dt><dd>creator.html?section=${esc(s.section)}&tab=${esc(s.tab)}</dd></div>`).join("")}
+      </dl>
+      <p class="dsh-help" style="margin-top:.6rem">A page is the hub — its name, its look, its audience. The tab above is where its content is written, and every table there is a studio table.</p>
+    </section>
+  `;
+}
+
+/**
+ * Asking the studio for the member's hubs. One call, once per visit; the table
+ * repaints in place so the rest of the view never waits on it.
+ */
+async function loadCreatorPages({ force = false } = {}) {
+  const c = state.creator;
+  if (c.loading) return;
+  if (c.loaded && !force) return;
+  c.loading = true;
+  c.error = "";
+  let res = null;
+  try {
+    res = await rpc("creator_hubs_list", { p_token: token });
+  } catch {
+    res = null;
+  }
+  c.loading = false;
+  if (!res || res.ok !== true) {
+    c.error = res?.error || "network";
+    c.loaded = false;
+  } else {
+    c.loaded = true;
+    c.hubs = Array.isArray(res.hubs) ? res.hubs : [];
+    c.limits = res.limits || {};
+    c.level = Number(res.level) || 1;
+  }
+  if (state.view !== "creator") return;
+  const host = qs("[data-creator-table]");
+  if (host) {
+    host.innerHTML = creatorTable();
+    hydrateIcons(host);
+  }
+  refreshCreatorStats();
+}
+
+/** The four numbers above the table, repainted with the same answer. */
+function refreshCreatorStats() {
+  const host = qs("[data-creator-stats]");
+  if (host) host.innerHTML = creatorStats();
+}
+
+function creatorStats() {
+  const hubs = state.creator.hubs || [];
+  const sum = (key) => hubs.reduce((total, hub) => total + (Number(hub[key]) || 0), 0);
+  const drafts = sum("drafts");
+  return [
+    stat("sparkle", "Pages created", `${num(hubs.length)} / ${CREATOR_SURFACES.length}`, hubs.length ? "One hub per page" : "Nothing created yet"),
+    stat("upload", "Published items", num(sum("published")), `${num(drafts)} draft${drafts === 1 ? "" : "s"} waiting`),
+    stat("users", "Subscribers", num(sum("subscribers")), "Across every page"),
+    stat("clock", "Watch minutes", num(sum("minutes")), "Counted from the audience"),
+  ].join("");
+}
+
+function wireCreator(root) {
+  /* the retry appears after the first answer, so the door listens on the view */
+  root.addEventListener("click", (event) => {
+    if (event.target.closest("[data-creator-retry]")) loadCreatorPages({ force: true });
+  });
+  loadCreatorPages();
+}
+
+/** Publisher surfaces. A publisher's door is the desk, with the video editor in it. */
+function publisherView() {
+  const rows = [
+    ["e-Store", "Products and orders"],
+    ["e-Auction", "Standard lots"],
+    ["Super auction", "Featured lots"],
+    ["Hyper auction", "Premium lots"],
+    ["e-Bank", "Wallet and payouts"],
+    ["Community", "Followers and members"],
+  ];
+  return `
+    <div class="dsh-note"><i data-icon="info"></i><span>
+      Every publisher page is managed here: name, description, logo, cover, category and niche.
+      Publishing opens the public page at <b>publisher.html?studio=ID</b>.
     </span></div>
     <section class="dsh-card">
-      <div class="dsh-card__head"><h2 class="dsh-card__title">Your ${kind} pages</h2>${editorDoor}</div>
+      <div class="dsh-card__head"><h2 class="dsh-card__title">Your publisher pages</h2>
+        <a class="dsh-btn dsh-btn--sm" href="publisher.html"><i data-icon="upload"></i>The publisher's desk</a></div>
       <div class="dsh-table-wrap"><table class="dsh-table">
         <thead><tr><th>Surface</th><th>For</th><th>Status</th><th></th></tr></thead>
         <tbody>${rows
-          .map(([name, use]) => {
-            const href = kind === "creator" ? studioLink(name) : "";
-            const action = href
-              ? `<a class="dsh-btn dsh-btn--sm" href="${esc(href)}"><i data-icon="plus"></i>Create</a>`
-              : `<button class="dsh-btn dsh-btn--sm" type="button" data-surface="${esc(name)}"><i data-icon="plus"></i>Create</button>`;
-            return `<tr>
+          .map(
+            ([name, use]) => `<tr>
               <td><strong>${esc(name)}</strong></td><td>${esc(use)}</td>
               <td><span class="dsh-chip" data-tone="off">Not created</span></td>
-              <td><div class="dsh-table__actions">${action}</div></td>
-            </tr>`;
-          })
+              <td><div class="dsh-table__actions"><button class="dsh-btn dsh-btn--sm" type="button" data-surface="${esc(name)}"><i data-icon="plus"></i>Create</button></div></td>
+            </tr>`
+          )
           .join("")}</tbody>
       </table></div>
     </section>
@@ -2257,6 +2420,7 @@ function onChange(event) {
 function wireView(key, root) {
   if (key === "settings-account") wireAccount(root);
   if (key === "settings-platforms") wirePlatforms(root);
+  if (key === "creator") wireCreator(root);
 
   const form = qs("[data-code-form]", root);
   if (form) {

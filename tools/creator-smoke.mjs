@@ -12,7 +12,8 @@
  *          the action menu, the item editor (save draft then publish), the
  *          blog tabs (articles vs drafts send different filters), a hub
  *          switch, categories, subscribers, and the Add-content dropdown.
- * Pass 4 — deep links: ?section=library&tab=documents opens there.
+ * Pass 4 — deep links: ?section=library&tab=documents opens there, and
+ *          ?new=1 (the dashboard's Create) opens the form itself.
  * Pass 6/7 — ?creator=@handle, and a private hub behind its password.
  * Pass 8 — ?section=studio without a session still asks for a sign-in.
  * Pass 9 — the Participants tab: a pending ask, approve, the two lists,
@@ -962,6 +963,13 @@ async function main() {
   expect("deep link: `studio` opens the studio section", /Studio/.test(d.text(".cr-section.is-on")), d.text(".cr-section.is-on"));
   expect("deep link: the videos tab is active", /Videos/.test(d.text(".cr-tab.is-on")), d.text(".cr-tab.is-on"));
   d.window.close();
+
+  /* the dashboard's Create button names the section and asks for the form */
+  const nu = await boot("4-new", { search: "?section=server&tab=channels&new=1" });
+  expect("new: the section is open", /Server/.test(nu.text(".cr-section.is-on")), nu.text(".cr-section.is-on"));
+  expect("new: the channels tab is active", /Channels/.test(nu.text(".cr-tab.is-on")), nu.text(".cr-tab.is-on"));
+  expect("new: the form opens itself", Boolean(nu.qs("[data-new-hub-name]")) && /New server/i.test(nu.text(".cr-modal")), nu.text(".cr-modal").slice(0, 80));
+  nu.window.close();
 
   const lib = await boot(5, { search: "?section=library&tab=documents" });
   const d2 = lib;

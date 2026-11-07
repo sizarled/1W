@@ -142,6 +142,24 @@ function accountPayload() {
   };
 }
 
+/* Creator management — three hubs across two kinds: a second blog, a hidden
+   one, and a studio that already sits at the level's limit. */
+const CREATOR_LIMITS = {
+  channel: { used: 1, limit: 1 },
+  blog: { used: 2, limit: 3 },
+  space: { used: 0, limit: 2 },
+  library: { used: 0, limit: 2 },
+  gallery: { used: 0, limit: 2 },
+  server: { used: 0, limit: 2 },
+  cinema: { used: 0, limit: 2 },
+};
+
+const CREATOR_HUBS = [
+  { id: "h-chan", code: "IDST100044", kind: "channel", name: "Amrani Studio", visibility: "public", status: "active", published: 7, drafts: 1, subscribers: 120, minutes: 900, items: 8 },
+  { id: "h-blog-a", code: "IDST100042", kind: "blog", name: "The Amrani Letter", visibility: "public", status: "active", published: 12, drafts: 3, subscribers: 45, minutes: 820, items: 15 },
+  { id: "h-blog-b", code: "IDST100043", kind: "blog", name: "Notes on cinema", visibility: "exclusive", status: "hidden", published: 2, drafts: 0, subscribers: 4, minutes: 30, items: 2 },
+];
+
 /* the Platforms panel — the server owns the list of accepted platforms */
 const API_PLATFORMS = [
   { slug: "youtube", label: "YouTube" },
@@ -240,6 +258,10 @@ function stubFetch(url, opts = {}) {
     return reply({ ok: true, removed: true });
   }
   if (href.includes("/rpc/member_api_keys")) return reply(apiKeysPayload());
+  if (href.includes("/rpc/creator_hubs_list")) {
+    if (scenario.creatorFails) return Promise.resolve({ ok: false, status: 400, json: async () => ({}), text: async () => "creator_hubs_list failed" });
+    return reply({ ok: true, level: 3, hubs: scenario.creatorHubs || [], limits: CREATOR_LIMITS });
+  }
   if (href.includes("/rpc/member_logout")) return reply({ ok: true });
   return reply([]);
 }
@@ -871,6 +893,87 @@ function expect(name, condition, detail = "") {
   expect("keys refused: the reason is said", /already store a key/i.test(dup.document.body.textContent));
   expect("keys refused: no errors", dup.errors.length === 0, dup.errors.join(" | "));
   dup.window.close();
+}
+
+/* ------------------------------------------------------------------ */
+/* pass 7 — creator management                                         */
+/* ------------------------------------------------------------------ */
+{
+  scenario = { status: "active", creatorHubs: CREATOR_HUBS };
+  calls.length = 0;
+  const p = await boot("creator");
+  p.click(p.qs('[data-nav] [data-goto="creator"]'));
+  await p.wait(120);
+
+  const view = p.qs('[data-view="creator"]');
+  expect("creator: the view renders", Boolean(view));
+  expect("creator: the studio is asked once", calls.filter((c) => c.includes("creator_hubs_list")).length === 1);
+  expect("creator: the seven pages", p.qsa("[data-surface-row]").length === 7, String(p.qsa("[data-surface-row]").length));
+  expect(
+    "creator: the seven surfaces in order",
+    p.qsa("[data-surface-row]").map((row) => row.dataset.surfaceRow).join(",") === "channel,server,blog,gallery,space,library,cinema",
+    p.qsa("[data-surface-row]").map((row) => row.dataset.surfaceRow).join(",")
+  );
+  expect("creator: the heading", /Your creator pages/i.test(p.text('[data-view="creator"]')));
+  expect("creator: the studio door", (p.qs('[data-view="creator"] .dsh-card__head a')?.getAttribute("href") || "") === "creator.html?section=studio");
+  expect("creator: the four numbers", p.qsa('[data-creator-stats] .dsh-stat').length === 4);
+  expect("creator: pages counted", /3 \/ 7/.test(p.text('[data-view="creator"]')), p.text('[data-creator-stats]'));
+
+  /* the studios that exist say their state, their code and their counts */
+  const blogs = p.qs('[data-surface-row="blog"]');
+  expect("creator: both blogs are listed", p.qsa('[data-surface-row="blog"] .dsh-hub').length === 2);
+  expect("creator: the blog's name", /The Amrani Letter/.test(blogs?.textContent || ""));
+  expect("creator: the blog's code", /IDST100042/.test(blogs?.textContent || ""));
+  expect("creator: a live page says Live", /Live/.test(blogs?.textContent || ""));
+  expect("creator: a hidden page says Hidden", /Hidden/.test(blogs?.textContent || ""));
+  expect("creator: the counts are shown", /12 published/.test(blogs?.textContent || "") && /3 drafts/.test(blogs?.textContent || "") && /45 subscribers/.test(blogs?.textContent || ""));
+  expect("creator: the visibility is shown", /Exclusive/.test(blogs?.textContent || ""));
+
+  /* the doors: edit the page, write its content, open it publicly */
+  const editDoor = blogs?.querySelector('a[href*="tab=settings"]')?.getAttribute("href") || "";
+  expect("creator: the edit door", editDoor === "creator.html?section=blog&hub=h-blog-a&tab=settings", editDoor);
+  const contentDoor = blogs?.querySelector('a[href*="tab=articles"]')?.getAttribute("href") || "";
+  expect("creator: the content door", contentDoor === "creator.html?section=blog&hub=h-blog-a&tab=articles", contentDoor);
+  const openDoor = blogs?.querySelector('a[href^="blog.html"]')?.getAttribute("href") || "";
+  expect("creator: a blog opens on its own page", openDoor === "blog.html?studio=IDST100042", openDoor);
+  const studioOpen = p.qs('[data-surface-row="channel"] a[href^="creator.html?studio="]')?.getAttribute("href") || "";
+  expect("creator: a studio opens on its hub page", studioOpen === "creator.html?studio=IDST100044", studioOpen);
+
+  /* a page that does not exist carries the door that creates it */
+  const empty = (kind) => p.qsa(`[data-surface-row="${kind}"] [data-surface-create] a`).map((a) => a.getAttribute("href"));
+  expect("creator: the server is not created", /Not created/.test(p.text('[data-surface-row="server"]')));
+  expect("creator: the server's create door", (empty("server")[0] || "") === "creator.html?section=server&tab=channels&new=1", empty("server").join(" "));
+  expect("creator: the gallery's create door", (empty("gallery")[0] || "") === "creator.html?section=gallery&tab=images&new=1", empty("gallery").join(" "));
+  expect("creator: the space's create door", (empty("space")[0] || "") === "creator.html?section=space&tab=questions&new=1", empty("space").join(" "));
+  expect("creator: the library's create door", (empty("library")[0] || "") === "creator.html?section=library&tab=books&new=1", empty("library").join(" "));
+  expect("creator: the cinema's create door", (empty("cinema")[0] || "") === "creator.html?section=cinema&tab=films&new=1", empty("cinema").join(" "));
+
+  /* at the level's limit there is no second studio */
+  const studioRow = p.qs('[data-surface-row="channel"] [data-surface-create]');
+  expect("creator: the studio at its limit", /1 of 1/.test(studioRow?.textContent || ""), studioRow?.textContent || "");
+  expect("creator: no create button at the limit", !studioRow?.querySelector('a[href*="section=studio"]'));
+  expect("creator: a blog under the limit can add one", /Add another/.test(p.text('[data-surface-row="blog"] [data-surface-create]')));
+  expect("creator: no errors", p.errors.length === 0, p.errors.join(" | "));
+  report.pass7 = p.text('[data-view="creator"]').slice(0, 90);
+  p.window.close();
+
+  /* the studio does not answer: the rows say so and offer a retry */
+  scenario = { status: "active", creatorHubs: CREATOR_HUBS, creatorFails: true };
+  const bad = await boot("creator-fails");
+  bad.click(bad.qs('[data-nav] [data-goto="creator"]'));
+  await bad.wait(160);
+  expect("creator down: it says so", /could not be listed/i.test(bad.text('[data-view="creator"]')), bad.text('[data-view="creator"]').slice(0, 120));
+  expect("creator down: the retry is offered", Boolean(bad.qs("[data-creator-retry]")));
+  expect("creator down: the seven rows still stand", bad.qsa("[data-surface-row]").length === 7);
+  expect("creator down: a create door still works", (bad.qs('[data-surface-row="blog"] [data-surface-create] a')?.getAttribute("href") || "") === "creator.html?section=blog&tab=articles&new=1");
+
+  scenario = { status: "active", creatorHubs: CREATOR_HUBS };
+  bad.click(bad.qs("[data-creator-retry]"));
+  await bad.wait(200);
+  expect("creator retry: the page comes back", /The Amrani Letter/.test(bad.text('[data-view="creator"]')), bad.text('[data-view="creator"]').slice(0, 120));
+  expect("creator retry: no retry left", !bad.qs("[data-creator-retry]"));
+  expect("creator down: no errors", bad.errors.length === 0, bad.errors.join(" | "));
+  bad.window.close();
 }
 
 /* ------------------------------------------------------------------ */

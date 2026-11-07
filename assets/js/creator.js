@@ -4164,6 +4164,9 @@ async function boot() {
   await loadTab();
   await refresh();
   syncUrl();
+  /* the dashboard's Create button already said what to make — the form opens
+     itself, on the section it named, with the name field ready */
+  if (params.get("new") === "1") openNewHub();
 }
 
 if (document.readyState === "loading") {

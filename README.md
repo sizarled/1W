@@ -991,12 +991,46 @@ stored value is deliberately not read).
 - **Account settings** — the identity card (member id, username and email locked, phone,
   status, plan), a real **Change password** form (current + new + repeat), and the recovery
   accounts — Telegram, WhatsApp, Google, Facebook, X, Pinterest, Reddit and TikTok. See below.
+- **Creator management** — the seven creator pages (e-Studio, e-Server, e-Blog, e-Gallery,
+  e-Space, e-Library, e-Cinema), created *and* edited from `dashboard.html#creator`. See
+  *Your creator pages* below.
 
 **Staged — the layout and copy are in place, the aggregation comes next**
 
 Payments (the wallet, the 100:1 calculator, the payout form and the status chain are drawn,
-no transfer row is written yet), Analytics, Creator, Publisher, Advertiser and Profile settings.
+no transfer row is written yet), Analytics, Publisher, Advertiser and Profile settings.
 Each one states what it will do instead of pretending to have data.
+
+### Your creator pages — created and edited from the dashboard
+
+`dashboard.html#creator` is the only place a creator page is *made* and *named*. It draws seven
+rows — one per page — from **one** call, `creator_hubs_list(token)`, which returns the member's
+hubs and the limit each kind has at their level:
+
+| Surface | For | Kind | Create / content tab |
+| --- | --- | --- | --- |
+| e-Studio | Films, series and videos | `channel` | `creator.html?section=studio&tab=videos` |
+| e-Server | IPTV playlists and channels | `server` | `creator.html?section=server&tab=channels` |
+| e-Blog | Articles and long reads | `blog` | `creator.html?section=blog&tab=articles` |
+| e-Gallery | Images and collections | `gallery` | `creator.html?section=gallery&tab=images` |
+| e-Space | Community posts | `space` | `creator.html?section=space&tab=questions` |
+| e-Library | Documents and books | `library` | `creator.html?section=library&tab=books` |
+| e-Cinema | Curated screenings | `cinema` | `creator.html?section=cinema&tab=films` |
+
+A row with no hub shows a dashed **Not created** chip and a **Create** button that carries the
+section, the tab and `new=1` — so `creator.html` opens on that section with the *New studio /
+server / …* form already open (`openNewHub()` at boot). A row that owns hubs lists them: the
+status (`Live` / `Hidden`), the name, the public code (`IDST100001`-style), the counts
+(published, drafts, subscribers) and the visibility, with three doors each — **Edit page**
+(`…&tab=settings`), **Content** (the kind's own tab) and **Open** (the public page: a blog opens
+on `blog.html?studio=<code>`, every other hub on `creator.html?studio=<code>`). At the level's
+limit the button becomes a `1 of 1` chip instead of a seventh form that would be refused.
+
+The content of those pages is **not** written here: it is written in the studio, which opens the
+same seven sections under the same names. The dashboard's second card prints that mapping, and the
+studio's footer links back to `dashboard.html#creator`. If the studio does not answer, the table
+says so and offers **Try again**; the seven rows and their doors keep working, because creating a
+page only needs the URL.
 
 ### Account settings — the password, and where a code can find you
 
@@ -1215,10 +1249,11 @@ published (and refused without a media link), an article refused in a studio hub
 categories three deep with the fourth refused (`deep`) and a duplicate refused, a third blog created
 then a fourth refused (`limit`, level 1), staff added by code and an unknown code refused
 (`member`), and the subscriber list reporting a real member with their country.
-`tools/creator-smoke.mjs` (325 checks) runs the studio end to end — an empty studio that creates, configures
+`tools/creator-smoke.mjs` (360 checks) runs the studio end to end — an empty studio that creates, configures
 (private + password + staff), saves, refuses, and deletes a studio; a studio page holding one of each
 hub (tables, columns, action menus, the editor saving a draft then publishing, blog articles vs
-drafts, categories, subscribers, library books); and the `?section=&tab=` deep links.
+drafts, categories, subscribers, library books); and the `?section=&tab=` deep links — including
+`&new=1`, the door the dashboard's **Create** uses, which opens the *New server* form by itself.
 
 ### Creator — the front door: find a creator, then walk into a hub
 
@@ -2274,7 +2309,7 @@ browser that already has the old file.
 ### Tests
 
 ```bash
-node tools/dashboard-smoke.mjs   # 156 checks: the five gates, rail, popover, codes, sections, Unlock now, Account settings
+node tools/dashboard-smoke.mjs   # 216 checks: the five gates, rail, popover, codes, sections, Unlock now, Account settings, creator pages
 node tools/sidebar-smoke.mjs     # 93 checks: the edge, the pin, Escape, the mobile drawer, the dashboard menu
 node tools/panel-smoke.mjs       # 90 checks: the desk's three states, the rows, the switch, the dialog, the shelf
 node tools/court-smoke.mjs       # 115 checks: the four steps, uploads, both doors, the court room
@@ -2295,7 +2330,12 @@ link carrying the code, WhatsApp's code box verified and the row unlinked again,
 mismatch that never leaves the browser, a wrong current password that says which field, and an
 already-linked chat that reads **Linked · @handle** — and, with an OAuth app present, the live
 button, the popup, the `postMessage` that turns the row **Linked**, and a refusal that is said out
-loud. `court-smoke.mjs` covers the activation page as a guest, on a first activation (request sent,
+loud. Its last pass is **Creator management**: the seven surfaces in order, the studio asked once,
+a live and a hidden hub with their codes and counts, the three doors (edit page, content, open —
+a blog to `blog.html?studio=…`, a studio to `creator.html?studio=…`), the create doors that carry
+their own section and `new=1`, a studio already at its level's limit showing `1 of 1` instead of a
+button, and a studio that does not answer — the message, the **Try again**, the seven rows still
+standing, and the table coming back after the retry. `court-smoke.mjs` covers the activation page as a guest, on a first activation (request sent,
 form closed), after activation while active (**Active now**, upgrade link with the member id),
 after activation while expired (re-activation request → “Request sent”), a paid plan that was
 never activated (no wizard, the doors) and while banned (no doors, trial links), plus the court
@@ -2729,7 +2769,7 @@ tools/register-smoke.mjs    registration test (form, duplicates, member ID, succ
 tools/login-smoke.mjs       sign-in test (states, success card, restore, log out)
 tools/rest-smoke.mjs        recovery test (three steps, link, device path, .txt)
 tools/delivery-smoke.mjs    the Apps Script under Node: token, email, WhatsApp template, Telegram
-tools/dashboard-smoke.mjs   dashboard test (five gates, rail, popover, codes, sections)
+tools/dashboard-smoke.mjs   dashboard test (five gates, rail, popover, codes, sections, creator pages)
 tools/sidebar-smoke.mjs     sidebar rail test (edge reveal, pin, Escape, mobile drawer, dashboard menu)
 tools/video-smoke.mjs       videos + video editor test (feed, player, doors, payload)
 tools/article-smoke.mjs     articles test (index, reader, sanitizer, doors, payload)
