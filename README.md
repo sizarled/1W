@@ -1122,8 +1122,12 @@ nowhere in the DOM, replace keeping one row, remove, and a refusal that explains
 ### Creator — the studio: seven hub kinds, one working area
 
 **`creator.html`** is the creator studio. The rail on the left is the member (avatar, name,
-username, `ID…` code) and the five things they run; the working area changes with the section.
-Every one of the five is the same object on the server — a **hub** — because their settings are the
+username, `ID…` code) over two labelled groups — **Discover** (the public directory of creators, and
+the same directory narrowed to publishers) and **Your pages** (the seven things they run) — and the
+working area changes with the section. Above it sits the band of the hub being worked on: its
+cover, its logo or initials, the section and its code, the field and its niches, the seat, and the
+numbers it lives on — visibility, subscribers, items, minutes, likes, reports — as one row of pills.
+Every one of the seven is the same object on the server — a **hub** — because their settings are the
 same settings; what differs is what hangs underneath:
 
 | Section | Tabs | Items |
@@ -1250,7 +1254,7 @@ published (and refused without a media link), an article refused in a studio hub
 categories three deep with the fourth refused (`deep`) and a duplicate refused, a third blog created
 then a fourth refused (`limit`, level 1), staff added by code and an unknown code refused
 (`member`), and the subscriber list reporting a real member with their country.
-`tools/creator-smoke.mjs` (374 checks) runs the studio end to end — an empty studio that creates, configures
+`tools/creator-smoke.mjs` (399 checks) runs the studio end to end — an empty studio that creates, configures
 (private + password + staff), saves, refuses, and deletes a studio; a studio page holding one of each
 hub (tables, columns, action menus, the editor saving a draft then publishing, blog articles vs
 drafts, categories, subscribers, library books); and the `?section=&tab=` deep links — including

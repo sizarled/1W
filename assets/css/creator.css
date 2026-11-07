@@ -20,6 +20,10 @@
 }
 
 .cr {
+  /* one horizontal rhythm for the bar, the hub strip, the tabs and the view */
+  --cr-x: clamp(1rem, 3vw, 2rem);
+  /* the hairline every stratum of the workspace is divided by */
+  --cr-hair: color-mix(in srgb, var(--text) 8%, transparent);
   padding-block: 0 0;
 }
 
@@ -106,9 +110,10 @@
 /* ------------------------------------------------------------------ */
 .cr-shell {
   display: grid;
-  grid-template-columns: 248px minmax(0, 1fr);
+  grid-template-columns: 264px minmax(0, 1fr);
   align-items: start;
   min-height: calc(100vh - var(--header-h));
+  background: var(--bg);
 }
 
 @media (max-width: 900px) {
@@ -124,41 +129,134 @@
   position: sticky;
   top: var(--header-h);
   align-self: start;
-  display: grid;
-  /* me · discover · the sections · the foot */
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
-  gap: 0.9rem;
+  /* me · a label · discover · a label · the sections · the foot —
+     flex, not grid, so the rail still reads when one of the two lists
+     is empty (a member with no discover list keeps their own at the top) */
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
   height: calc(100vh - var(--header-h));
-  padding: 1.1rem 0.9rem 1rem;
+  padding: 1rem 0.85rem 0.9rem;
   border-right: 1px solid var(--line);
-  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 72%, transparent), transparent 42%),
+    color-mix(in srgb, var(--bg-soft) 80%, transparent);
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
 }
 
+/*
+ * On a phone the rail is not a column beside the work — there is no room
+ * beside anything. It becomes one strip above it: the member, their own
+ * pages as chips, and the discover list after them, all on one line that
+ * scrolls sideways. The foot's three links live in the dashboard anyway.
+ */
 @media (max-width: 900px) {
   .cr-side {
     position: static;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.4rem;
     height: auto;
+    padding: 0.55rem var(--cr-x);
+    overflow-x: auto;
+    overflow-y: hidden;
     border-right: 0;
     border-bottom: 1px solid var(--line);
+    scrollbar-width: none;
+  }
+
+  .cr-side::-webkit-scrollbar {
+    display: none;
+  }
+
+  .cr-me {
+    flex: none;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0 0.35rem 0 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .cr-me__avatar {
+    width: 30px;
+    height: 30px;
+    font-size: 0.68rem;
+    outline: 0;
+  }
+
+  .cr-me__name {
+    font-size: 0.78rem;
+    max-width: 12ch;
+  }
+
+  .cr-me__handle,
+  .cr-me__code,
+  .cr-side__label,
+  .cr-side__foot {
+    display: none;
+  }
+
+  .cr-sections {
+    display: flex;
+    flex: none;
+    gap: 0.3rem;
+  }
+
+  .cr-section {
+    grid-template-columns: 16px auto auto;
+    width: auto;
+    padding: 0.4rem 0.65rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+  }
+
+  .cr-section::before {
+    display: none;
+  }
+
+  .cr-section.is-on {
+    border-color: transparent;
+    background: var(--text);
+    color: var(--bg);
+  }
+
+  .cr-section.is-on .ico,
+  .cr-section.is-on .cr-section__count {
+    color: var(--bg);
+  }
+
+  .cr-section.is-on .cr-section__count {
+    border-color: color-mix(in srgb, var(--bg) 28%, transparent);
+  }
+
+  .cr-section__name {
+    font-size: 0.78rem;
   }
 }
 
 .cr-me {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
-  padding: 0.55rem;
+  gap: 0.7rem;
+  margin-bottom: 0.35rem;
+  padding: 0.6rem;
   border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--text) 4%, transparent), transparent),
+    var(--surface);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 5%, transparent);
 }
 
 .cr-me__avatar {
   display: grid;
   place-items: center;
-  width: 46px;
-  height: 46px;
+  width: 44px;
+  height: 44px;
   flex: none;
   border-radius: 999px;
   border: 1px solid var(--line-2);
@@ -166,7 +264,10 @@
   color: var(--text-2);
   font-size: 0.85rem;
   font-weight: 650;
+  letter-spacing: 0.02em;
   overflow: hidden;
+  outline: 1px solid color-mix(in srgb, var(--text) 5%, transparent);
+  outline-offset: 2px;
 }
 
 .cr-me__avatar img {
@@ -184,6 +285,7 @@
 .cr-me__name {
   font-size: 0.85rem;
   font-weight: 650;
+  letter-spacing: -0.005em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -205,35 +307,67 @@
 }
 
 /* the five sections ------------------------------------------------- */
+.cr-side__label {
+  margin: 0.45rem 0 0;
+  padding-inline: 0.55rem;
+  font-size: 0.58rem;
+  font-weight: 650;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
 .cr-sections {
   display: grid;
-  gap: 0.25rem;
+  gap: 0.15rem;
   align-content: start;
 }
 
 .cr-section {
+  position: relative;
   display: grid;
-  grid-template-columns: 22px minmax(0, 1fr) auto;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.55rem;
+  gap: 0.6rem;
   width: 100%;
-  padding: 0.55rem 0.6rem;
+  padding: 0.5rem 0.55rem;
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  border-radius: 10px;
   background: transparent;
   color: var(--text-2);
+  font: inherit;
   text-align: left;
   cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+}
+
+/* the seat the rail is on, said with a bar rather than a box */
+.cr-section::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: -0.85rem;
+  width: 2px;
+  height: 16px;
+  border-radius: 2px;
+  background: transparent;
+  transform: translateY(-50%);
+  transition: background 0.14s ease;
 }
 
 .cr-section:hover {
-  background: var(--surface-2);
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  color: var(--text);
 }
 
 .cr-section.is-on {
-  border-color: var(--line-2);
-  background: var(--surface-2);
+  border-color: transparent;
+  background: color-mix(in srgb, var(--text) 7%, transparent);
   color: var(--text);
+}
+
+.cr-section.is-on::before {
+  background: var(--text);
 }
 
 .cr-section .ico {
@@ -249,19 +383,27 @@
 .cr-section__name {
   font-size: 0.82rem;
   font-weight: 600;
+  letter-spacing: -0.005em;
 }
 
 .cr-section__count {
-  min-width: 20px;
+  min-width: 22px;
   height: 18px;
   padding: 0 0.35rem;
   border-radius: 999px;
-  border: 1px solid var(--line-2);
+  border: 1px solid var(--line);
   display: grid;
   place-items: center;
-  font-size: 0.62rem;
-  color: var(--muted);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--faint);
   font-variant-numeric: tabular-nums;
+}
+
+.cr-section.is-on .cr-section__count {
+  border-color: var(--line-2);
+  color: var(--text-2);
 }
 
 .cr-section__count.is-full {
@@ -271,23 +413,27 @@
 
 .cr-side__foot {
   display: grid;
-  gap: 0.15rem;
-  padding-top: 0.6rem;
-  border-top: 1px solid var(--line);
+  gap: 0.1rem;
+  margin-top: auto;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--cr-hair);
 }
 
 .cr-side__link {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
-  padding: 0.4rem 0.5rem;
-  border-radius: var(--radius-sm);
-  font-size: 0.76rem;
+  gap: 0.5rem;
+  padding: 0.42rem 0.55rem;
+  border-radius: 9px;
+  font-size: 0.75rem;
+  font-weight: 500;
   color: var(--muted);
+  text-decoration: none;
+  transition: background 0.14s ease, color 0.14s ease;
 }
 
 .cr-side__link:hover {
-  background: var(--surface-2);
+  background: color-mix(in srgb, var(--text) 5%, transparent);
   color: var(--text);
 }
 
@@ -302,7 +448,6 @@
 .cr-main {
   min-width: 0;
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr);
   align-content: start;
   min-height: calc(100vh - var(--header-h));
 }
@@ -316,10 +461,10 @@
   justify-content: space-between;
   gap: 0.8rem;
   flex-wrap: wrap;
-  padding: 0.85rem clamp(0.9rem, 3vw, 1.6rem);
-  border-bottom: 1px solid var(--line);
-  background: color-mix(in srgb, var(--bg) 92%, transparent);
-  backdrop-filter: saturate(1.3) blur(14px);
+  padding: 0.8rem var(--cr-x);
+  border-bottom: 1px solid var(--cr-hair);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: saturate(1.3) blur(16px);
 }
 
 .cr-pick {
@@ -329,9 +474,9 @@
 }
 
 .cr-pick__label {
-  font-size: 0.64rem;
-  font-weight: 600;
-  letter-spacing: 0.13em;
+  font-size: 0.58rem;
+  font-weight: 650;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--faint);
 }
@@ -343,13 +488,15 @@
 }
 
 .cr-pick__select {
-  min-width: 230px;
-  height: 36px;
+  min-width: 250px;
+  height: 38px;
   font-size: 0.84rem;
+  font-weight: 550;
 }
 
 .cr-pick__hint {
   font-size: 0.68rem;
+  line-height: 1.5;
   color: var(--faint);
 }
 
@@ -363,37 +510,41 @@
 
 .cr-drop {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + 8px);
   right: 0;
   z-index: 60;
-  min-width: 208px;
-  padding: 0.3rem;
+  min-width: 224px;
+  padding: 0.32rem;
   display: grid;
-  gap: 0.1rem;
+  gap: 0.06rem;
   border: 1px solid var(--line-2);
-  border-radius: var(--radius);
+  border-radius: 12px;
   background: var(--surface);
-  box-shadow: var(--shadow-lg);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 5%, transparent),
+    var(--shadow-lg);
 }
 
 .cr-drop__item {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.55rem;
   width: 100%;
-  padding: 0.45rem 0.55rem;
+  padding: 0.46rem 0.55rem;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: 8px;
   background: transparent;
   color: var(--text-2);
+  font: inherit;
   font-size: 0.8rem;
   text-align: left;
   text-decoration: none;
   cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
 }
 
 .cr-drop__item:hover {
-  background: var(--surface-2);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
   color: var(--text);
 }
 
@@ -414,27 +565,65 @@
 }
 
 /* the hub strip ----------------------------------------------------- */
+/*
+ * The hub as a header, not a row: a monochrome wash of its own cover behind
+ * the logo, the name and the code, and the numbers it lives on set off to the
+ * right. It is the only place on the page with a picture in it, so the picture
+ * is graded down to grey and half hidden — the furniture around it stays the
+ * one thing the eye lands on.
+ */
 .cr-hubhead {
-  display: flex;
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.7rem;
-  flex-wrap: wrap;
-  padding: 0.75rem clamp(0.9rem, 3vw, 1.6rem);
-  border-bottom: 1px solid var(--line);
+  gap: 0.95rem;
+  padding: clamp(0.95rem, 2vw, 1.2rem) var(--cr-x);
+  border-bottom: 1px solid var(--cr-hair);
+  overflow: hidden;
+}
+
+.cr-hubhead::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(120% 180% at 0% 0%, color-mix(in srgb, var(--text) 7%, transparent), transparent 60%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 60%, transparent), transparent);
+  pointer-events: none;
+}
+
+.cr-hubhead__cover {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 40%;
+  opacity: 0.16;
+  filter: grayscale(1) contrast(1.06);
+  pointer-events: none;
 }
 
 .cr-hubhead__logo {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 999px;
+  width: 54px;
+  height: 54px;
+  border-radius: 14px;
   border: 1px solid var(--line-2);
   background: var(--surface-2);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 6%, transparent),
+    0 8px 24px -12px rgba(0, 0, 0, 0.9);
   overflow: hidden;
   flex: none;
-  font-size: 0.72rem;
-  font-weight: 650;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
   color: var(--text-2);
 }
 
@@ -446,36 +635,89 @@
 
 .cr-hubhead__id {
   display: grid;
-  gap: 0.1rem;
+  gap: 0.22rem;
   min-width: 0;
 }
 
-.cr-hubhead__name {
-  font-size: 0.92rem;
+.cr-hubhead__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  font-size: 0.58rem;
   font-weight: 650;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.cr-hubhead__dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.6;
+}
+
+.cr-hubhead__code {
+  font-family: var(--font-sans);
+  letter-spacing: 0.1em;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.cr-hubhead__name {
+  font-size: clamp(1.05rem, 1.6vw, 1.28rem);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--text);
 }
 
 .cr-hubhead__sub {
-  font-size: 0.7rem;
-  color: var(--faint);
+  font-size: 0.73rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cr-hubhead__stats {
   display: flex;
   gap: 0.35rem;
   flex-wrap: wrap;
+  justify-content: flex-end;
   margin-left: auto;
+}
+
+@media (max-width: 860px) {
+  .cr-hubhead {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .cr-hubhead__stats {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    margin-left: 0;
+  }
+
+  .cr-hubhead__sub {
+    white-space: normal;
+  }
 }
 
 .cr-pill {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  height: 24px;
-  padding: 0 0.55rem;
+  gap: 0.32rem;
+  height: 26px;
+  padding: 0 0.6rem;
   border-radius: 999px;
   border: 1px solid var(--line-2);
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+  backdrop-filter: blur(6px);
   font-size: 0.68rem;
+  font-weight: 550;
   color: var(--text-2);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -487,9 +729,11 @@
   color: var(--muted);
 }
 
+/* a closed door is said with a broken line, not with a colour */
 .cr-pill[data-tone="private"] {
-  border-color: color-mix(in srgb, #d8b45a 55%, var(--line-2));
-  color: #e6c980;
+  border-style: dashed;
+  border-color: var(--line-3);
+  color: var(--muted);
 }
 
 .cr-pill[data-tone="exclusive"] {
@@ -505,54 +749,95 @@
 }
 
 /* tabs -------------------------------------------------------------- */
+/*
+ * Underlined rather than pill-shaped: a bar of sections belongs to the page,
+ * not to a button. The line under the active one is the whole signal.
+ */
 .cr-tabs {
   display: flex;
-  gap: 0.25rem;
-  flex-wrap: wrap;
-  padding: 0.6rem clamp(0.9rem, 3vw, 1.6rem);
-  border-bottom: 1px solid var(--line);
+  gap: 0.15rem;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding: 0 var(--cr-x);
+  border-bottom: 1px solid var(--cr-hair);
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+}
+
+.cr-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .cr-tab {
-  height: 32px;
-  padding: 0 0.75rem;
-  border-radius: 999px;
-  border: 1px solid var(--line-2);
+  position: relative;
+  height: 42px;
+  padding: 0 0.05rem;
+  margin-right: 1.15rem;
+  border: 0;
+  border-radius: 0;
   background: transparent;
   color: var(--muted);
-  font-size: 0.76rem;
+  font: inherit;
+  font-size: 0.79rem;
   font-weight: 600;
+  letter-spacing: -0.005em;
   cursor: pointer;
   white-space: nowrap;
+  scroll-snap-align: start;
+  transition: color 0.14s ease;
+}
+
+.cr-tab::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: transparent;
+  transition: background 0.14s ease;
+}
+
+.cr-tab:hover {
+  color: var(--text-2);
 }
 
 .cr-tab.is-on {
+  background: transparent;
+  color: var(--text);
+}
+
+.cr-tab.is-on::after {
   background: var(--text);
-  color: var(--bg);
-  border-color: transparent;
 }
 
 /* the view ---------------------------------------------------------- */
 .cr-view {
   min-width: 0;
-  padding: clamp(0.9rem, 3vw, 1.6rem);
+  padding: clamp(1rem, 2.6vw, 1.7rem) var(--cr-x) clamp(2rem, 5vw, 3.4rem);
   display: grid;
-  gap: 0.9rem;
+  gap: 1rem;
   align-content: start;
+}
+
+.cr-view > * {
+  min-width: 0;
 }
 
 .cr-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.6rem;
+  gap: 0.6rem 0.9rem;
   flex-wrap: wrap;
+  padding-bottom: 0.15rem;
 }
 
 .cr-bar__left {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.55rem;
   flex-wrap: wrap;
 }
 
@@ -565,13 +850,18 @@
 }
 
 .cr-bar__title {
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 650;
+  letter-spacing: -0.015em;
+  color: var(--text);
 }
 
 .cr-bar__count {
+  padding-left: 0.55rem;
+  border-left: 1px solid var(--cr-hair);
   font-size: 0.72rem;
   color: var(--faint);
+  font-variant-numeric: tabular-nums;
 }
 
 .cr-search {
@@ -591,24 +881,78 @@
 .cr-search .ico {
   position: absolute;
   top: 50%;
-  left: 0.6rem;
-  width: 13px;
-  height: 13px;
+  left: 0.72rem;
+  width: 14px;
+  height: 14px;
   transform: translateY(-50%);
   color: var(--faint);
   pointer-events: none;
 }
 
 .cr-search .dsh-input {
-  height: 34px;
-  padding-left: 1.9rem;
+  height: 36px;
+  padding-left: 2.1rem;
+  border-radius: 999px;
   font-size: 0.8rem;
-  min-width: 210px;
+  min-width: 220px;
+  transition: border-color 0.14s ease, background 0.14s ease;
+}
+
+.cr-search .dsh-input:focus {
+  border-color: var(--line-3);
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
 }
 
 /* tables ------------------------------------------------------------ */
+/*
+ * The shell of a table comes from dashboard.css; here it is tightened: the
+ * head loses its band and keeps a hairline, the rows answer the pointer, and
+ * the numbers line up in columns of their own.
+ */
+.cr-table .dsh-table-wrap {
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 4%, transparent),
+    var(--shadow-lg);
+}
+
 .cr-table .dsh-table {
   min-width: 760px;
+}
+
+.cr-table .dsh-table th {
+  padding: 0.7rem 0.85rem;
+  background: color-mix(in srgb, var(--surface-2) 55%, transparent);
+  border-bottom: 1px solid var(--line-2);
+  font-size: 0.62rem;
+  font-weight: 650;
+  letter-spacing: 0.14em;
+  color: var(--faint);
+}
+
+.cr-table .dsh-table td {
+  padding: 0.66rem 0.85rem;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+.cr-table .dsh-table tbody tr {
+  transition: background 0.12s ease;
+}
+
+.cr-table .dsh-table tbody tr:hover {
+  background: color-mix(in srgb, var(--text) 3.5%, transparent);
+}
+
+.cr-table .dsh-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.cr-table .dsh-table th:last-child,
+.cr-table .dsh-table td:last-child {
+  text-align: right;
 }
 
 .cr-thumb {
@@ -639,8 +983,9 @@
 }
 
 .cr-title strong {
-  font-size: 0.8rem;
+  font-size: 0.815rem;
   font-weight: 600;
+  letter-spacing: -0.005em;
   color: var(--text);
   line-height: 1.35;
 }
@@ -697,18 +1042,30 @@
   width: 28px;
   height: 28px;
   border-radius: 8px;
-  border: 1px solid var(--line-2);
+  border: 1px solid transparent;
   color: var(--muted);
   cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.12s ease, background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.cr-act > summary:focus-visible,
+tr:hover .cr-act > summary,
+.cr-act[open] > summary {
+  opacity: 1;
+  border-color: var(--line-2);
+  background: var(--surface-3);
+  color: var(--text);
 }
 
 .cr-act > summary::-webkit-details-marker {
   display: none;
 }
 
-.cr-act[open] > summary,
 .cr-act > summary:hover {
+  opacity: 1;
   background: var(--surface-3);
+  border-color: var(--line-2);
   color: var(--text);
 }
 
@@ -749,7 +1106,7 @@
 }
 
 .cr-act__item:hover {
-  background: var(--surface-2);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
   color: var(--text);
 }
 
@@ -766,31 +1123,36 @@
 /* empty view -------------------------------------------------------- */
 .cr-empty {
   display: grid;
-  gap: 0.6rem;
+  gap: 0.55rem;
   justify-items: center;
   text-align: center;
-  padding: clamp(1.6rem, 5vw, 3rem) 1rem;
-  border: 1px dashed var(--line-2);
+  padding: clamp(2rem, 6vw, 3.4rem) 1.25rem;
+  border: 1px solid var(--line);
   border-radius: var(--radius);
+  background:
+    radial-gradient(90% 120% at 50% 0%, color-mix(in srgb, var(--text) 4%, transparent), transparent 70%),
+    var(--surface);
   color: var(--muted);
 }
 
-.cr-empty .ico {
-  width: 22px;
-  height: 22px;
+.cr-empty > .ico {
+  width: 20px;
+  height: 20px;
+  margin-bottom: 0.2rem;
   color: var(--faint);
 }
 
 .cr-empty__title {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   font-weight: 650;
+  letter-spacing: -0.01em;
   color: var(--text);
 }
 
 .cr-empty__text {
-  max-width: 46ch;
+  max-width: 48ch;
   font-size: 0.8rem;
-  line-height: 1.6;
+  line-height: 1.65;
 }
 
 /* ------------------------------------------------------------------ */
@@ -804,30 +1166,36 @@
 
 .cr-card {
   display: grid;
-  gap: 0.8rem;
-  padding: clamp(0.9rem, 2.4vw, 1.2rem);
+  gap: 0.85rem;
+  padding: clamp(1rem, 2.4vw, 1.35rem);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--text) 2.5%, transparent), transparent 40%),
+    var(--surface);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 4%, transparent);
 }
 
 .cr-card__head {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
   gap: 0.6rem;
   flex-wrap: wrap;
+  padding-bottom: 0.1rem;
 }
 
 .cr-card__title {
-  font-size: 0.86rem;
+  font-size: 0.92rem;
   font-weight: 650;
+  letter-spacing: -0.012em;
+  color: var(--text);
 }
 
 .cr-card__hint {
-  font-size: 0.72rem;
-  color: var(--faint);
-  line-height: 1.55;
+  font-size: 0.74rem;
+  color: var(--muted);
+  line-height: 1.6;
 }
 
 .cr-grid2 {
@@ -1026,8 +1394,8 @@
 /* ------------------------------------------------------------------ */
 .cr-editor {
   display: grid;
-  gap: 0.9rem;
-  max-width: 980px;
+  gap: 1rem;
+  max-width: 1020px;
 }
 
 .cr-editor__head {
@@ -1036,19 +1404,28 @@
   justify-content: space-between;
   gap: 0.6rem;
   flex-wrap: wrap;
+  padding-bottom: 0.1rem;
 }
 
 .cr-editor__back {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.35rem 0.55rem;
+  gap: 0.4rem;
+  padding: 0.36rem 0.65rem;
   border: 1px solid var(--line-2);
   border-radius: 999px;
   background: transparent;
   color: var(--text-2);
+  font: inherit;
   font-size: 0.74rem;
   cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+}
+
+.cr-editor__back:hover {
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  border-color: var(--line-3);
+  color: var(--text);
 }
 
 .cr-editor__back .ico {
@@ -1109,12 +1486,19 @@
 }
 
 .cr-editor__foot {
+  position: sticky;
+  bottom: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.6rem;
   flex-wrap: wrap;
-  padding-top: 0.5rem;
+  margin-top: 0.2rem;
+  padding: 0.7rem 0;
+  border-top: 1px solid var(--cr-hair);
+  background: linear-gradient(180deg, transparent, var(--bg) 26%);
+  backdrop-filter: blur(6px);
+  z-index: 5;
 }
 
 .cr-editor__actions {
@@ -1213,11 +1597,17 @@
   margin-bottom: 0.15rem;
 }
 
+/* the two doors of the directory say where they lead, not how many */
 .cr-section--discover .cr-section__count {
-  font-size: 0.6rem;
-  letter-spacing: 0.06em;
+  min-width: 0;
+  height: auto;
+  padding: 0;
+  border: 0;
+  font-size: 0.56rem;
+  font-weight: 650;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--faint);
 }
 
 .crp {
@@ -1256,12 +1646,14 @@
 .crp-hero {
   display: grid;
   gap: 0.7rem;
-  padding: clamp(1.2rem, 4vw, 2.2rem);
+  padding: clamp(1.3rem, 4vw, 2.4rem);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   background:
-    radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--text) 7%, transparent), transparent 60%),
+    radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--text) 8%, transparent), transparent 62%),
+    radial-gradient(90% 120% at 0% 100%, color-mix(in srgb, var(--text) 4%, transparent), transparent 70%),
     var(--surface);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 5%, transparent);
 }
 
 .crp-hero__eyebrow {
@@ -1284,25 +1676,33 @@
   margin: 0;
   font-family: var(--font-serif);
   font-weight: 400;
-  font-size: clamp(2rem, 5vw, 3rem);
-  line-height: 1.02;
-  letter-spacing: -0.02em;
+  font-size: clamp(2.1rem, 5.2vw, 3.15rem);
+  line-height: 1;
+  letter-spacing: -0.022em;
+  text-wrap: balance;
 }
 
 .crp-hero__text {
   margin: 0;
-  max-width: 62ch;
+  max-width: 60ch;
   color: var(--text-2);
-  font-size: 0.86rem;
-  line-height: 1.6;
+  font-size: 0.9rem;
+  line-height: 1.68;
 }
 
 /* the search's three doors: everyone, owners, publishers ------------ */
+/* one track, three doors: the row reads as a single control */
 .crp-roles {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
-  margin-top: 0.75rem;
+  gap: 0.15rem;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 0.9rem;
+  padding: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-2) 70%, transparent);
 }
 
 .crp-role {
@@ -1310,26 +1710,28 @@
   align-items: center;
   gap: 0.35rem;
   height: 30px;
-  padding: 0 0.7rem;
-  border: 1px solid var(--line-2);
+  padding: 0 0.75rem;
+  border: 1px solid transparent;
   border-radius: 999px;
-  background: var(--surface-2);
+  background: transparent;
   color: var(--text-2);
   font: inherit;
   font-size: 0.74rem;
+  font-weight: 550;
   cursor: pointer;
   transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
 }
 
 .crp-role:hover {
-  border-color: var(--line-3);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
   color: var(--text);
 }
 
 .crp-role.is-on {
-  border-color: var(--text);
+  border-color: transparent;
   background: var(--text);
   color: var(--bg);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
 .crp-role i {
@@ -1421,16 +1823,18 @@
   display: flex;
   align-items: center;
   gap: 0.55rem;
-  height: 48px;
-  padding: 0 0.9rem;
+  height: 50px;
+  padding: 0 1rem;
   border: 1px solid var(--line-2);
   border-radius: 999px;
   background: var(--input-bg);
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
 
 .crp-search__box:focus-within {
   border-color: var(--line-3);
   background: var(--input-bg-focus);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--text) 5%, transparent);
 }
 
 .crp-search__box .ico {
@@ -1473,25 +1877,31 @@
 /* the directory cards ----------------------------------------------- */
 .crp-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  gap: 0.85rem;
 }
 
 .crp-card {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: start;
-  gap: 0.8rem;
-  padding: 0.9rem;
+  gap: 0.85rem;
+  padding: 1rem;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: var(--surface);
-  transition: border-color 0.16s ease, transform 0.16s ease;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--text) 2.5%, transparent), transparent 45%),
+    var(--surface);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 4%, transparent);
+  transition: border-color 0.16s ease, transform 0.16s var(--ease-out), box-shadow 0.16s ease;
 }
 
 .crp-card:hover {
   border-color: var(--line-3);
-  transform: translateY(-1px);
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 5%, transparent),
+    var(--shadow-lg);
 }
 
 .crp-avatar {
@@ -2793,10 +3203,12 @@ a.crp-ad:hover {
   justify-content: space-between;
   gap: 0.75rem;
   margin-bottom: 1.1rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid var(--cr-hair);
 }
 
 .cr-writer__where {
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   letter-spacing: 0.01em;
   color: var(--muted);
 }
@@ -2805,4 +3217,43 @@ a.crp-ad:hover {
    editor has nothing to say */
 .cr-writer [data-e-state] .aempty {
   margin: 0 auto;
+}
+
+
+/* ==================================================================
+   the last word — focus, motion and the small things
+   ------------------------------------------------------------------
+   Anything above may be overridden here: this is the layer that only
+   says how the page behaves when it is driven, not how it looks.
+   ================================================================== */
+
+/* a keyboard is a pointer too, and it says so in the same grey */
+.cr :where(button, a, input, select, textarea, summary, [tabindex]):focus-visible,
+.cr-writer :where(button, a, input, select, textarea, [contenteditable], [tabindex]):focus-visible,
+[data-e-dlg] :where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--text) 55%, transparent);
+  outline-offset: 2px;
+}
+
+/* the same page, without the movement */
+@media (prefers-reduced-motion: reduce) {
+  .cr *,
+  .cr *::before,
+  .cr *::after,
+  .cr-writer *,
+  .cr-writer *::before,
+  .cr-writer *::after {
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+  }
+}
+
+/* a wide table on a narrow screen scrolls, and the scrollbar says so */
+.cr-table .dsh-table-wrap {
+  scrollbar-width: thin;
+}
+
+/* a title too long for its row still names its hub */
+.cr-hubhead__name {
+  overflow-wrap: anywhere;
 }

@@ -743,13 +743,21 @@ function renderHubHead() {
   host.hidden = false;
   host.style.display = "";
   const logo = hub.logo_url
-    ? `<img src="${esc(hub.logo_url)}" alt="" width="40" height="40" />`
+    ? `<img src="${esc(hub.logo_url)}" alt="" width="52" height="52" />`
     : esc(String(hub.name || "?").trim().slice(0, 2).toUpperCase());
+  const section = sectionOf(state.section);
+  const seat = seatOf(hub);
+  const seatNote = seat === "publisher" ? "publisher seat" : seat === "staff" ? "staff access" : "owner";
   host.innerHTML = `
+    ${hub.cover_url ? `<img class="cr-hubhead__cover" src="${esc(hub.cover_url)}" alt="" loading="lazy" />` : ""}
     <span class="cr-hubhead__logo">${logo}</span>
     <div class="cr-hubhead__id">
+      <p class="cr-hubhead__eyebrow">
+        <span>${esc(section.label)}</span>
+        ${hub.code ? `<span class="cr-hubhead__dot" aria-hidden="true"></span><span class="cr-hubhead__code">${esc(hub.code)}</span>` : ""}
+      </p>
       <span class="cr-hubhead__name">${esc(hub.name)}</span>
-      <span class="cr-hubhead__sub">${esc(hub.field || "No field yet")}${hub.niches?.length ? ` · ${esc(hub.niches.join(", "))}` : ""}${isSeatPublisher(hub) ? " · publisher seat" : hub.owned === false ? " · staff access" : ""}</span>
+      <span class="cr-hubhead__sub">${esc(hub.field || "No field yet")}${hub.niches?.length ? ` · ${esc(hub.niches.join(", "))}` : ""} · ${esc(seatNote)}</span>
     </div>
     <div class="cr-hubhead__stats">
       <span class="cr-pill" data-tone="${esc(hub.visibility)}"><i data-icon="shield"></i>${esc(visLabel(hub.visibility))}</span>
