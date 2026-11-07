@@ -1031,6 +1031,16 @@ studio / server / …* form is already open (`openNewHub()` at boot). At the lev
 button becomes a `1 of 1` chip instead of a seventh form that would be refused. The tabs are a
 real `role="tablist"`: the arrow keys, Home and End walk them.
 
+**Managing a page** is the same card, one tab deeper. *Manage page* opens the page itself:
+**Page management** (logo, cover, name, description, field, niches, related links, visibility, the
+private password and its window, the excluded list, the exclusive criteria, subscriptions on or
+off, the simultaneous-viewer ceiling, staff, VIP, and the delete door), **Categories** (the
+three-level tree), **Participants** (the requests, approve or refuse, the publishers and
+advertisers inside, and the hub's own ads) and **Subscribers**. It is `assets/js/hub-admin.js` —
+one module, mounted by the dashboard, owning the four panes and their calls; the studio no longer
+carries any of them. `dashboard.html#creator&manage=<hub>` opens a page straight into its
+management, which is the door the public hub page's **Requests** button uses.
+
 The content of those pages is **not** written here: it is written in the studio, which opens the
 same seven sections under the same names. A page is the hub — its name, its look, its audience —
 and the tab is where its content is written; every table there is a studio table. (A cinema's
@@ -1138,11 +1148,17 @@ same settings; what differs is what hangs underneath:
 
 | Section | Tabs | Items |
 | --- | --- | --- |
-| **Studio** | Videos · Podcasts · Playlists · Studio management · Subscribers | `video`, `podcast`, `playlist` |
-| **Blog** | Articles · Drafts · Categories · Blog management · Subscribers | `article` (published / draft) |
-| **Space** | Questions · Answers · Categories · Space management · Subscribers | `question`, `answer` (a child row) |
-| **Library** | Books · Documents · Categories · Library management · Subscribers | `book`, `document` |
-| **Gallery** | Images · Categories · Gallery management · Subscribers | `image` |
+| **Studio** | Videos · Podcasts · Playlists | `video`, `podcast`, `playlist` |
+| **Blog** | Articles · Drafts | `article` (published / draft) |
+| **Space** | Questions · Answers | `question`, `answer` (a child row) |
+| **Library** | Books · Documents | `book`, `document` |
+| **Gallery** | Images | `image` |
+
+**The studio writes content and nothing else.** It makes no page, names no page and changes no
+page: the management tabs it used to carry (*Studio management*, *Categories*, *Participants*,
+*Subscribers*) are gone from it and live on `dashboard.html#creator`, where the page is made.
+The bar's **Add** and the empty state both hand you to the dashboard; `?new=1` and
+`?tab=settings` no longer open a form here — the section lands on its first table.
 
 The bar above the tabs is the two dropdowns the brief asks for: **Managing** (every hub of this
 kind, with its subscriber count, and `＋ Add a studio` at the end) and **Add content** (the kinds
@@ -1260,7 +1276,7 @@ published (and refused without a media link), an article refused in a studio hub
 categories three deep with the fourth refused (`deep`) and a duplicate refused, a third blog created
 then a fourth refused (`limit`, level 1), staff added by code and an unknown code refused
 (`member`), and the subscriber list reporting a real member with their country.
-`tools/creator-smoke.mjs` (401 checks) runs the studio end to end — an empty studio that creates, configures
+`tools/creator-smoke.mjs` (359 checks) runs the studio end to end — an empty studio, its tables
 (private + password + staff), saves, refuses, and deletes a studio; a studio page holding one of each
 hub (tables, columns, action menus, the editor saving a draft then publishing, blog articles vs
 drafts, categories, subscribers, library books); and the `?section=&tab=` deep links — including
@@ -1464,7 +1480,7 @@ blog with `role: "publisher"`, `creator_items` returned its two published rows w
 `draft`, `creator_item_get` opened it and `creator_item_delete` removed it — while another member's row
 answered `not_found`. The seat and the test session were removed afterwards. `tools/publisher-smoke.mjs`
 (52 checks) holds `publisher.html` to the program alone and follows an old `?studio=` link to
-`creator.html?studio=<code>`; `tools/creator-smoke.mjs` (401 checks) walks a publisher's seat room by
+`creator.html?studio=<code>`; `tools/creator-smoke.mjs` (359 checks) walks a publisher's seat room by
 room and re-checks that the owner's page did not change.
 
 DDL + functions: `tools/sql/creator-requests.sql` — **applied**, and exercised on the real database:
@@ -2379,11 +2395,11 @@ browser that already has the old file.
 ### Tests
 
 ```bash
-node tools/dashboard-smoke.mjs   # 246 checks: the five gates, rail, popover, codes, sections, Unlock now, Account settings, the seven creator tabs, the Publisher program
+node tools/dashboard-smoke.mjs   # 269 checks: the five gates, rail, popover, codes, sections, Unlock now, Account settings, the seven creator tabs, the management pane, the Publisher program
 node tools/sidebar-smoke.mjs     # 93 checks: the edge, the pin, Escape, the mobile drawer, the dashboard menu
 node tools/panel-smoke.mjs       # 90 checks: the desk's three states, the rows, the switch, the dialog, the shelf
 node tools/court-smoke.mjs       # 115 checks: the four steps, uploads, both doors, the court room
-node tools/creator-smoke.mjs     # 401 checks: the search (owners + publishers), the studio, the editors, a publisher's seat
+node tools/creator-smoke.mjs     # 359 checks: the search (owners + publishers), the tables, the editors, a publisher's seat
 node tools/publisher-smoke.mjs   # 52 checks: the program, the seat, the links, and the hand-off to the creator page
 node tools/iptv-smoke.mjs        # 43 checks: the playlists, the groups, the page, the deep links
 node tools/activated-smoke.mjs   # 35 checks: hidden panels, image link, ad pause, code return

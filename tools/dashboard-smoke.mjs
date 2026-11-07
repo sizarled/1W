@@ -290,6 +290,26 @@ function stubFetch(url, opts = {}) {
     if (scenario.creatorFails) return Promise.resolve({ ok: false, status: 400, json: async () => ({}), text: async () => "creator_hubs_list failed" });
     return reply({ ok: true, level: 3, hubs: scenario.creatorHubs || [], limits: CREATOR_LIMITS });
   }
+  if (href.includes("/rpc/creator_hub_save")) {
+    if (scenario.hubSaveFails) return reply({ ok: false, error: "staff" });
+    scenario.savedHub = body;
+    return reply({ ok: true, hub: { id: body.p_id || "h-new", code: "IDST100099", kind: body.p_kind, name: body.p_name, visibility: body.p_visibility || "public", status: "active", published: 0, drafts: 0, subscribers: 0, minutes: 0, items: 0, owned: true } });
+  }
+  if (href.includes("/rpc/creator_hub_access")) {
+    scenario.savedAccess = body;
+    return reply({ ok: true, hub: { id: body.p_hub, visibility: scenario.hubVisibility || "public", name: scenario.hubName || "The Amrani Letter" } });
+  }
+  if (href.includes("/rpc/creator_hub_delete")) return reply({ ok: true });
+  if (href.includes("/rpc/creator_categories")) return reply({ ok: true, rows: scenario.categories || [] });
+  if (href.includes("/rpc/creator_category_save")) return reply({ ok: true, row: { id: "cat-new", parent: body.p_parent || null, level: 1, name: body.p_name, items: 0 } });
+  if (href.includes("/rpc/creator_category_delete")) return reply({ ok: true });
+  if (href.includes("/rpc/creator_subscribers")) return reply({ ok: true, rows: scenario.subscribers || [] });
+  if (href.includes("/rpc/creator_participants")) return reply(scenario.participants || { ok: true, rows: [], publishers: [], advertisers: [], counts: {} });
+  if (href.includes("/rpc/creator_ads")) return reply({ ok: true, rows: scenario.ads || [] });
+  if (href.includes("/rpc/creator_request_decide")) {
+    scenario.decided = body;
+    return reply({ ok: true });
+  }
   if (href.includes("/rpc/member_logout")) return reply({ ok: true });
   return reply([]);
 }
@@ -967,8 +987,8 @@ function expect(name, condition, detail = "") {
   expect("creator: the visibility is shown", /Exclusive/.test(blogs?.textContent || ""));
 
   /* the doors: edit the page, write its content, open it publicly */
-  const editDoor = blogs?.querySelector('a[href*="tab=settings"]')?.getAttribute("href") || "";
-  expect("creator: the edit door", editDoor === "creator.html?section=blog&hub=h-blog-a&tab=settings", editDoor);
+  const manage = blogs?.querySelector('[data-creator-manage="h-blog-a"]');
+  expect("creator: the management door is here, not in the studio", Boolean(manage) && !blogs?.querySelector('a[href*="tab=settings"]'));
   const contentDoor = blogs?.querySelector('a[href*="tab=articles"]')?.getAttribute("href") || "";
   expect("creator: the content door", contentDoor === "creator.html?section=blog&hub=h-blog-a&tab=articles", contentDoor);
   const openDoor = blogs?.querySelector('a[href^="blog.html"]')?.getAttribute("href") || "";
@@ -977,13 +997,13 @@ function expect(name, condition, detail = "") {
   expect("creator: a studio opens on its hub page", studioOpen === "creator.html?studio=IDST100044", studioOpen);
 
   /* a page that does not exist carries the door that creates it */
-  const empty = (kind) => p.qsa(`[data-surface-row="${kind}"] [data-surface-create] a`).map((a) => a.getAttribute("href"));
+  const empty = (kind) => p.qsa(`[data-surface-row="${kind}"] [data-surface-create] [data-creator-new]`).map((b) => b.dataset.creatorNew);
   expect("creator: the server is not created", /Not created/.test(p.text('[data-surface-row="server"]')));
-  expect("creator: the server's create door", (empty("server")[0] || "") === "creator.html?section=server&tab=channels&new=1", empty("server").join(" "));
-  expect("creator: the gallery's create door", (empty("gallery")[0] || "") === "creator.html?section=gallery&tab=images&new=1", empty("gallery").join(" "));
-  expect("creator: the space's create door", (empty("space")[0] || "") === "creator.html?section=space&tab=questions&new=1", empty("space").join(" "));
-  expect("creator: the library's create door", (empty("library")[0] || "") === "creator.html?section=library&tab=books&new=1", empty("library").join(" "));
-  expect("creator: the cinema's create door", (empty("cinema")[0] || "") === "creator.html?section=cinema&tab=movies&new=1", empty("cinema").join(" "));
+  expect("creator: the server's create door", (empty("server")[0] || "") === "server", empty("server").join(" "));
+  expect("creator: the gallery's create door", (empty("gallery")[0] || "") === "gallery", empty("gallery").join(" "));
+  expect("creator: the space's create door", (empty("space")[0] || "") === "space", empty("space").join(" "));
+  expect("creator: the library's create door", (empty("library")[0] || "") === "library", empty("library").join(" "));
+  expect("creator: the cinema's create door", (empty("cinema")[0] || "") === "cinema", empty("cinema").join(" "));
 
   /* at the level's limit there is no second studio */
   const studioRow = p.qs('[data-surface-row="channel"] [data-surface-create]');
@@ -1010,7 +1030,7 @@ function expect(name, condition, detail = "") {
   expect("creator down: it says so", /could not be listed/i.test(bad.text('[data-view="creator"]')), bad.text('[data-view="creator"]').slice(0, 120));
   expect("creator down: the retry is offered", Boolean(bad.qs("[data-creator-retry]")));
   expect("creator down: the seven rows still stand", bad.qsa("[data-surface-row]").length === 7);
-  expect("creator down: a create door still works", (bad.qs('[data-surface-row="blog"] [data-surface-create] a')?.getAttribute("href") || "") === "creator.html?section=blog&tab=articles&new=1");
+  expect("creator down: a create door still works", (bad.qs('[data-surface-row="blog"] [data-surface-create] [data-creator-new]')?.dataset.creatorNew || "") === "blog");
 
   scenario = { status: "active", creatorHubs: CREATOR_HUBS };
   bad.click(bad.qs("[data-creator-retry]"));
@@ -1019,6 +1039,117 @@ function expect(name, condition, detail = "") {
   expect("creator retry: no retry left", !bad.qs("[data-creator-retry]"));
   expect("creator down: no errors", bad.errors.length === 0, bad.errors.join(" | "));
   bad.window.close();
+}
+
+/* ------------------------------------------------------------------ */
+/* pass 7b — a page is managed here, not in the studio                */
+/* ------------------------------------------------------------------ */
+{
+  scenario = {
+    status: "active",
+    creatorHubs: CREATOR_HUBS,
+    categories: [{ id: "c1", parent: null, level: 1, name: "Essay", items: 2 }],
+    subscribers: [{ name: "Jhon mark", username: "@jhon007", code: "ID100015", country: "Morocco", since: new Date(NOW - 864e5).toISOString() }],
+    participants: {
+      ok: true,
+      rows: [
+        {
+          id: "r1",
+          role: "publisher",
+          status: "pending",
+          message: "I write about the desert.",
+          created_at: new Date(NOW - 36e5).toISOString(),
+          decided_at: null,
+          member: { code: "ID100019", name: "Jhon Markoni", username: "@ledsizar7", avatar: "", country: "Morocco" },
+        },
+      ],
+      publishers: [],
+      advertisers: [],
+      counts: { pending: 1 },
+    },
+    ads: [],
+  };
+  calls.length = 0;
+  const p = await boot("creator-manage");
+  p.click(p.qs('[data-nav] [data-goto="creator"]'));
+  await p.wait(120);
+  p.click(p.qs('[data-creator-manage="h-blog-a"]'));
+  await p.wait(140);
+
+  expect("manage: the pane opens", Boolean(p.qs("[data-hub-name]")), p.text('[data-view="creator"]').slice(0, 120));
+  expect("manage: it names the page it manages", /The Amrani Letter/.test(p.text("[data-ha-head]")), p.text("[data-ha-head]"));
+  expect("manage: the four panes are offered", p.qsa("[data-ha-pane]").length === 4, String(p.qsa("[data-ha-pane]").length));
+  expect("manage: the studio is not asked again", calls.filter((c) => c.includes("creator_hubs_list")).length === 1);
+
+  const change = (node, value) => {
+    node.value = value;
+    node.dispatchEvent(new p.window.Event("change", { bubbles: true }));
+  };
+  const type = (node, value) => {
+    node.value = value;
+    node.dispatchEvent(new p.window.Event("input", { bubbles: true }));
+  };
+  change(p.qs("[data-hub-visibility]"), "private");
+  await p.wait(40);
+  expect("manage: private reveals the password", p.qs("[data-hub-pass-wrap]")?.hasAttribute("hidden") === false);
+  calls.length = 0;
+  p.click(p.qs("[data-cr-save-hub]"));
+  await p.wait(200);
+  expect("manage: the save goes out", calls.some((c) => c.includes("creator_hub_save")), calls.join(" "));
+  expect("manage: the access rules follow it", calls.some((c) => c.includes("creator_hub_access")));
+  expect("manage: it says saved", /Saved/i.test(p.text("[data-hub-state]")), p.text("[data-hub-state]"));
+
+  p.click(p.qs('[data-ha-pane="categories"]'));
+  await p.wait(180);
+  expect("manage: the tree is read", calls.some((c) => c.includes("creator_categories")));
+  expect("manage: the tree is drawn", /Essay/.test(p.text("[data-ha-view]")), p.text("[data-ha-view]").slice(0, 120));
+  type(p.qs("[data-cat-name]"), "Travel");
+  calls.length = 0;
+  p.click(p.qs("[data-cr-cat-add]"));
+  await p.wait(180);
+  expect("manage: a category is added here", calls.some((c) => c.includes("creator_category_save")));
+
+  p.click(p.qs('[data-ha-pane="subscribers"]'));
+  await p.wait(180);
+  expect("manage: the subscribers are listed", /Jhon mark/.test(p.text("[data-ha-view]")) && /ID100015/.test(p.text("[data-ha-view]")), p.text("[data-ha-view]").slice(0, 160));
+
+  p.click(p.qs('[data-ha-pane="participants"]'));
+  await p.wait(180);
+  expect("manage: the requests are read", calls.some((c) => c.includes("creator_participants")));
+  expect("manage: the waiting asker is named", /Jhon Markoni/.test(p.text("[data-ha-view]")), p.text("[data-ha-view]").slice(0, 160));
+  calls.length = 0;
+  p.click(p.qs('[data-cr-req="approve"]'));
+  await p.wait(180);
+  expect("manage: approving is sent from here", calls.some((c) => c.includes("creator_request_decide")) && scenario.decided?.p_decision === "approve", JSON.stringify(scenario.decided));
+
+  p.click(p.qs("[data-creator-back]"));
+  await p.wait(140);
+  expect("manage: back lands on the seven tabs", p.qsa("[data-surface-row]").length === 7);
+
+  /* a page that does not exist is made here too */
+  p.click(p.qs('[data-creator-tabbar] [data-tab-value="server"]'));
+  await p.wait(80);
+  p.click(p.qs('[data-surface-row="server"] [data-creator-new]'));
+  await p.wait(140);
+  expect("create: the form asks for a name", Boolean(p.qs("[data-creator-new-name]")));
+  type(p.qs("[data-creator-new-name]"), "My server");
+  calls.length = 0;
+  p.click(p.qs("[data-creator-create-go]"));
+  await p.wait(220);
+  expect("create: the call carries no id and the kind", scenario.savedHub?.p_id === null && scenario.savedHub?.p_kind === "server", JSON.stringify(scenario.savedHub?.p_kind));
+  expect("create: the new page opens for management", Boolean(p.qs("[data-hub-name]")));
+
+  /* and it can be deleted from here */
+  p.click(p.qs("[data-cr-delete-hub]"));
+  await p.wait(80);
+  expect("delete: it confirms first", Boolean(p.qs("[data-ha-confirm]")));
+  calls.length = 0;
+  p.click(p.qs("[data-ha-confirm]"));
+  await p.wait(220);
+  expect("delete: the call goes out", calls.some((c) => c.includes("creator_hub_delete")), calls.join(" "));
+  expect("delete: back to the tabs", p.qsa("[data-surface-row]").length === 7);
+  expect("manage: no errors", p.errors.length === 0, p.errors.join(" | "));
+  p.window.close();
 }
 
 /* ------------------------------------------------------------------ */

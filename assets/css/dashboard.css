@@ -1258,6 +1258,88 @@
   font-weight: 600;
 }
 
+/* a page, opened for management ------------------------------------- */
+.dsh-creator__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.dsh-card--admin {
+  padding: clamp(0.9rem, 2vw, 1.2rem);
+}
+
+.ha {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.ha__head {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.ha__id {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.ha__mark {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  background: var(--surface-2);
+  overflow: hidden;
+  color: var(--text-2);
+}
+
+.ha__mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ha__who {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.ha__name {
+  margin: 0;
+  font-size: 1.02rem;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+
+.ha__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.ha__code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+}
+
+.ha__tabs {
+  border-bottom: 1px solid var(--line);
+}
+
 /* a tab per creator page, and the panel under it -------------------- */
 .dsh-tabs--surfaces {
   gap: 0.15rem;

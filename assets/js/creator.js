@@ -72,9 +72,6 @@ const SECTIONS = [
       { key: "videos", label: "Videos", type: "list", kind: "video", cols: ["item", "vis", "minutes", "likes", "dislikes", "comments", "shares", "reports", "act"], actions: ["edit", "link", "delete"], cta: { label: "Publish a video", href: "video-editor.html", icon: "upload" } },
       { key: "podcasts", label: "Podcasts", type: "list", kind: "podcast", cols: ["item", "vis", "minutes", "likes", "dislikes", "comments", "shares", "reports", "act"], actions: ["edit", "link", "delete"] },
       { key: "playlists", label: "Playlists", type: "list", kind: "playlist", cols: ["item", "vis", "minutes", "likes", "dislikes", "comments", "shares", "reports", "act"], actions: ["edit", "link", "delete"] },
-      { key: "participants", label: "Participants", type: "participants" },
-      { key: "settings", label: "Studio management", type: "settings" },
-      { key: "subscribers", label: "Subscribers", type: "subscribers" },
     ],
     /* A video is not typed into this table any more. `video-editor.html` is
        the video form — the player, the thumbnail, the audience, the schedule —
@@ -95,10 +92,6 @@ const SECTIONS = [
     tabs: [
       { key: "articles", label: "Articles", type: "list", kind: "article", status: "published", cols: ["item", "vis", "minutes", "likes", "dislikes", "comments", "reports", "act"], actions: ["preview", "edit", "link", "delete"], cta: { label: "Write an article", icon: "pen", action: "article" } },
       { key: "drafts", label: "Drafts", type: "list", kind: "article", status: "draft", cols: ["item", "vis", "cat", "lines", "words", "chars", "act"], actions: ["publish", "preview", "delete"], cta: { label: "Write an article", icon: "pen", action: "article" } },
-      { key: "categories", label: "Categories", type: "categories" },
-      { key: "participants", label: "Participants", type: "participants" },
-      { key: "settings", label: "Blog management", type: "settings" },
-      { key: "subscribers", label: "Subscribers", type: "subscribers" },
     ],
     add: [
       { kind: "article", label: "Article", note: "opens the article editor" },
@@ -116,10 +109,6 @@ const SECTIONS = [
     tabs: [
       { key: "questions", label: "Questions", type: "list", kind: "question", cols: ["item", "space", "vis", "answers", "followers", "refollows", "act"], actions: ["edit", "close", "delete"], cta: { label: "Ask a question", icon: "help", action: "question" } },
       { key: "answers", label: "Answers", type: "list", kind: "answer", cols: ["item", "parent", "vis", "likes", "dislikes", "replies", "reports", "act"], actions: ["open", "edit", "share", "delete"] },
-      { key: "categories", label: "Categories", type: "categories" },
-      { key: "participants", label: "Participants", type: "participants" },
-      { key: "settings", label: "Space management", type: "settings" },
-      { key: "subscribers", label: "Subscribers", type: "subscribers" },
     ],
     add: [
       { category: true, label: "Category" },
@@ -135,10 +124,6 @@ const SECTIONS = [
     tabs: [
       { key: "books", label: "Books", type: "list", kind: "book", cols: ["item", "vis", "minutes", "downloads", "likes", "dislikes", "comments", "shares", "reports", "act"], actions: ["open", "edit", "link", "delete"] },
       { key: "documents", label: "Documents", type: "list", kind: "document", cols: ["item", "vis", "minutes", "downloads", "likes", "dislikes", "comments", "shares", "reports", "act"], actions: ["open", "edit", "link", "delete"] },
-      { key: "categories", label: "Categories", type: "categories" },
-      { key: "participants", label: "Participants", type: "participants" },
-      { key: "settings", label: "Library management", type: "settings" },
-      { key: "subscribers", label: "Subscribers", type: "subscribers" },
     ],
     add: [
       { kind: "book", label: "Book" },
@@ -155,10 +140,6 @@ const SECTIONS = [
     noun: "gallery",
     tabs: [
       { key: "images", label: "Images", type: "list", kind: "image", cols: ["item", "vis", "minutes", "likes", "dislikes", "comments", "shares", "reports", "act"], actions: ["open", "edit", "link", "delete"] },
-      { key: "categories", label: "Categories", type: "categories" },
-      { key: "participants", label: "Participants", type: "participants" },
-      { key: "settings", label: "Gallery management", type: "settings" },
-      { key: "subscribers", label: "Subscribers", type: "subscribers" },
     ],
     add: [
       { kind: "image", label: "Image" },
@@ -179,9 +160,6 @@ const SECTIONS = [
       { key: "xtream", label: "Xtream accounts", type: "list", kind: "xtream", cols: ["item", "vis", "act"], actions: ["edit", "delete"] },
       { key: "playlists", label: "Playlists", type: "list", kind: "playlist", cols: ["item", "vis", "minutes", "likes", "act"], actions: ["edit", "link", "delete"] },
       { key: "videos", label: "Videos", type: "list", kind: "video", cols: ["item", "vis", "minutes", "likes", "comments", "act"], actions: ["edit", "link", "delete"], cta: { label: "Publish a video", href: "video-editor.html", icon: "upload" } },
-      { key: "participants", label: "Participants", type: "participants" },
-      { key: "settings", label: "Server management", type: "settings" },
-      { key: "subscribers", label: "Subscribers", type: "subscribers" },
     ],
     add: [
       { kind: "channel", label: "Channel" },
@@ -203,9 +181,6 @@ const SECTIONS = [
       { key: "episodes", label: "Episodes", type: "list", kind: "episode", cols: ["item", "vis", "seats", "minutes", "likes", "act"], actions: ["edit", "link", "delete"] },
       { key: "playlists", label: "Playlists", type: "list", kind: "playlist", cols: ["item", "vis", "minutes", "likes", "act"], actions: ["edit", "link", "delete"] },
       { key: "videos", label: "Videos", type: "list", kind: "video", cols: ["item", "vis", "minutes", "likes", "comments", "act"], actions: ["edit", "link", "delete"], cta: { label: "Publish a video", href: "video-editor.html", icon: "upload" } },
-      { key: "participants", label: "Participants", type: "participants" },
-      { key: "settings", label: "Cinema management", type: "settings" },
-      { key: "subscribers", label: "Subscribers", type: "subscribers" },
     ],
     add: [
       { kind: "film", label: "Film" },
@@ -692,8 +667,8 @@ function renderTop() {
             (hub) =>
               `<option value="${esc(hub.id)}" ${hub.id === state.hub ? "selected" : ""}>${esc(hub.name)} — ${esc(num(hub.subscribers || 0))} subscribers</option>`
           )
-          .join("") + `<option value="__new">＋ Add a ${esc(section.noun)}</option>`
-      : `<option value="">No ${esc(section.noun)} yet</option><option value="__new">＋ Add a ${esc(section.noun)}</option>`;
+          .join("")
+      : `<option value="">No ${esc(section.noun)} yet</option>`;
     select.value = state.hub || (hubs.length ? hubs[0].id : "__new");
   }
 
@@ -806,16 +781,12 @@ function renderView() {
       section.icon,
       `No ${section.noun} yet`,
       `Create your first ${section.noun}: a name, a logo, a description, one field and up to five niches. You can run ${state.limits?.[section.kind]?.limit || 0} at level ${state.level}.`,
-      `<button class="dsh-btn dsh-btn--primary dsh-btn--sm" type="button" data-cr-new-hub><i data-icon="plus"></i> Add a ${esc(section.noun)}</button>`
+      `<a class="dsh-btn dsh-btn--primary dsh-btn--sm" href="dashboard.html#creator"><i data-icon="plus"></i> Add a ${esc(section.noun)}</a>`
     );
     hydrateIcons(host);
     return;
   }
 
-  if (tab.type === "participants") return renderParticipants(host, hub);
-  if (tab.type === "settings") return renderSettings(host, hub);
-  if (tab.type === "subscribers") return renderSubscribers(host, hub);
-  if (tab.type === "categories") return renderCategories(host, hub);
   return renderList(host, hub, tab);
 }
 
@@ -1005,281 +976,12 @@ function renderList(host, hub, tab) {
 /* ------------------------------------------------------------------ */
 /* settings                                                           */
 /* ------------------------------------------------------------------ */
-function renderSettings(host, hub) {
-  const section = sectionOf(state.section);
-  const links = Array.isArray(hub.links) ? hub.links : [];
-  const linkRows = (links.length ? links : [{ label: "", url: "" }])
-    .map(
-      (link, index) => `
-      <div class="cr-link-row" data-link-row data-index="${index}">
-        <input class="dsh-input" type="text" maxlength="40" value="${esc(link.label || "")}" placeholder="Label" data-link-label />
-        <input class="dsh-input" type="url" value="${esc(link.url || "")}" placeholder="https://…" data-link-url />
-        <button class="dsh-btn dsh-btn--sm" type="button" data-cr-link-remove aria-label="Remove link"><i data-icon="trash"></i></button>
-      </div>`
-    )
-    .join("");
-
-  host.innerHTML = `
-    <div class="cr-settings" data-settings="${esc(hub.id)}">
-      <div class="cr-card">
-        <div class="cr-card__head">
-          <h2 class="cr-card__title">${esc(section.label)} identity</h2>
-          <span class="cr-bar__count">${hub.owned === false ? "You are staff on this one" : "You own this one"}</span>
-        </div>
-
-        <div class="cr-logo-row">
-          <span class="cr-logo-row__mark" data-logo-mark>
-            ${hub.logo_url ? `<img src="${esc(hub.logo_url)}" alt="" width="64" height="64" />` : '<i data-icon="image"></i>'}
-          </span>
-          <label class="dsh-field">
-            <span class="dsh-field__label">Logo link</span>
-            <input class="dsh-input" type="url" value="${esc(hub.logo_url || "")}" placeholder="https://…/logo.png" data-hub-logo />
-          </label>
-        </div>
-
-        <div class="cr-cover-row">
-          <span class="cr-cover-row__mark" data-cover-mark>
-            ${hub.cover_url ? `<img src="${esc(hub.cover_url)}" alt="" width="108" height="62" />` : '<i data-icon="image"></i>'}
-          </span>
-          <label class="dsh-field">
-            <span class="dsh-field__label">Cover link</span>
-            <input class="dsh-input" type="url" value="${esc(hub.cover_url || "")}" placeholder="https://…/cover.jpg" data-hub-cover />
-          </label>
-        </div>
-
-        <label class="dsh-field">
-          <span class="dsh-field__label">Name</span>
-          <input class="dsh-input" type="text" maxlength="80" value="${esc(hub.name || "")}" data-hub-name />
-        </label>
-
-        <label class="dsh-field">
-          <span class="dsh-field__label">Description</span>
-          <textarea class="dsh-textarea" rows="3" maxlength="600" data-hub-description>${esc(hub.description || "")}</textarea>
-        </label>
-
-        <div class="cr-grid2">
-          <label class="dsh-field">
-            <span class="dsh-field__label">Field — one only</span>
-            <input class="dsh-input" type="text" maxlength="40" value="${esc(hub.field || "")}" placeholder="Cinema" data-hub-field />
-          </label>
-          <label class="dsh-field">
-            <span class="dsh-field__label">Niches — up to five, comma separated</span>
-            <input class="dsh-input" type="text" maxlength="200" value="${esc((hub.niches || []).join(", "))}" placeholder="Documentary, Essay" data-hub-niches />
-          </label>
-        </div>
-      </div>
-
-      <div class="cr-card">
-        <div class="cr-card__head"><h2 class="cr-card__title">Related links</h2><span class="cr-bar__count">up to ten</span></div>
-        <div class="cr-chips" data-links>${linkRows}</div>
-        <div><button class="dsh-btn dsh-btn--sm" type="button" data-cr-link-add><i data-icon="plus"></i> Add a link</button></div>
-      </div>
-
-      <div class="cr-card">
-        <div class="cr-card__head"><h2 class="cr-card__title">Who sees it</h2></div>
-        <div class="cr-grid3">
-          <label class="dsh-field">
-            <span class="dsh-field__label">Visibility</span>
-            <select class="dsh-select" data-hub-visibility>
-              ${VISIBILITY.map(([value, label]) => `<option value="${value}" ${hub.visibility === value ? "selected" : ""}>${label}${value === "public" ? " — anyone" : value === "exclusive" ? " — subscribers" : " — password / VIP"}</option>`).join("")}
-            </select>
-          </label>
-          <label class="dsh-field cr-hidden-field" data-hub-pass-wrap ${hub.visibility === "private" ? "" : "hidden"}>
-            <span class="dsh-field__label">Password</span>
-            <input class="dsh-input" type="text" maxlength="60" value="" placeholder="${hub.locked ? "•••• (unchanged)" : "set a password"}" data-hub-password autocomplete="new-password" />
-          </label>
-          <label class="dsh-field cr-hidden-field" data-hub-hours-wrap ${hub.visibility === "private" ? "" : "hidden"}>
-            <span class="dsh-field__label">Valid for</span>
-            <select class="dsh-select" data-hub-hours>
-              ${[[1, "1 hour"], [6, "6 hours"], [24, "1 day"], [72, "3 days"], [168, "1 week"], [336, "2 weeks"], [720, "1 month"]]
-                .map(([hours, label]) => `<option value="${hours}" ${hours === 24 ? "selected" : ""}>${label}</option>`)
-                .join("")}
-            </select>
-          </label>
-        </div>
-        <p class="cr-card__hint">${hub.password_until ? `The current password closes on ${esc(new Date(hub.password_until).toLocaleString())}.` : "A private hub asks for its password before anything opens; the window runs from one hour to one month."}</p>
-
-        ${excludedField(hub.excluded, "hub")}
-
-        <p class="cr-card__hint">Public is everyone except the excluded list. Exclusive asks for a subscription or a follow, and optionally a country, a language, an account level and a wealth of points.</p>
-        ${audienceFields(hub.audience, "hub", hub.visibility === "exclusive")}
-
-        <label class="cr-switch">
-          <input type="checkbox" data-hub-auto ${hub.auto_accept === false ? "" : "checked"} />
-          <span><strong>Take subscriptions and follows</strong> — with this off, nobody can subscribe to or follow this ${esc(section.noun)}.</span>
-        </label>
-      </div>
-
-      <div class="cr-card">
-        <div class="cr-card__head">
-          <h2 class="cr-card__title">${section.caps ? "Available devices" : "Viewers"}</h2>
-          <span class="cr-bar__count">${esc(section.caps ? "how many may watch at once" : "level based")}</span>
-        </div>
-        <div class="cr-grid2">
-          <label class="dsh-field">
-            <span class="dsh-field__label">Simultaneous viewers — empty means the level's ceiling</span>
-            <input class="dsh-input" type="number" min="0" value="${hub.max_viewers != null ? esc(String(hub.max_viewers)) : ""}" placeholder="${esc(String(hubCeiling(hub) ?? ""))}" data-hub-viewers />
-          </label>
-          <div class="cr-pill-wrap">
-            <span class="cr-pill" data-hub-cap><i data-icon="users"></i>${esc(capText(hubCeiling(hub)))}</span>
-          </div>
-        </div>
-        <p class="cr-card__hint">${
-          section.kind === "cinema"
-            ? "A cinema's films take 100 viewers per level and its series and episodes 1000; the top level has no ceiling. A film or an episode may carry a smaller number of its own."
-            : section.kind === "server"
-              ? "A server takes 100 simultaneous viewers per level, and the top level has no ceiling. A channel or a list may carry a smaller number of its own."
-              : "Simultaneous viewers stay open for this kind of hub."
-        }</p>
-      </div>
-
-      <div class="cr-card">
-        <div class="cr-card__head">
-          <h2 class="cr-card__title">Staff</h2>
-          <span class="cr-bar__count">they see this ${esc(section.noun)} in their own studio</span>
-        </div>
-        <p class="cr-card__hint">Staff are the publishers whose requests you approved — the Participants tab lists them. A member code added here works too.</p>
-        <div class="cr-chips" data-staff>
-          ${(hub.staff || []).map((code) => `<span class="cr-chip-x">${esc(code)}<button type="button" data-cr-chip-remove="staff" data-code="${esc(code)}" aria-label="Remove ${esc(code)} from staff"><i data-icon="close"></i></button></span>`).join("") || '<span class="cr-card__hint">Nobody yet.</span>'}
-        </div>
-        <label class="dsh-field">
-          <span class="dsh-field__label">Member codes — comma separated</span>
-          <input class="dsh-input" type="text" placeholder="ID100003, ID100015" data-hub-staff />
-        </label>
-      </div>
-
-      <div class="cr-card">
-        <div class="cr-card__head">
-          <h2 class="cr-card__title">VIP list</h2>
-          <span class="cr-bar__count">${(hub.vip || []).length} member${(hub.vip || []).length === 1 ? "" : "s"}</span>
-        </div>
-        <div class="cr-chips" data-vip>
-          ${(hub.vip || []).map((code) => `<span class="cr-chip-x">${esc(code)}<button type="button" data-cr-chip-remove="vip" data-code="${esc(code)}" aria-label="Remove ${esc(code)} from VIP"><i data-icon="close"></i></button></span>`).join("") || '<span class="cr-card__hint">Nobody yet — add a member code to let them in even when the hub is private.</span>'}
-        </div>
-        <label class="dsh-field">
-          <span class="dsh-field__label">Member codes — comma separated</span>
-          <input class="dsh-input" type="text" placeholder="ID100015" data-hub-vip />
-        </label>
-      </div>
-
-      <div class="cr-save">
-        <span class="cr-save__state" data-hub-state></span>
-        <button class="dsh-btn dsh-btn--primary dsh-btn--sm" type="button" data-cr-save-hub><i data-icon="check"></i> Save ${esc(section.noun)}</button>
-      </div>
-
-      ${
-        hub.owned === false
-          ? ""
-          : `<div class="cr-danger">
-              <p class="cr-danger__text">Deleting the ${esc(section.noun)} removes everything under it — its items, categories and subscribers. This cannot be undone.</p>
-              <button class="dsh-btn dsh-btn--sm dsh-btn--danger" type="button" data-cr-delete-hub><i data-icon="trash"></i> Delete ${esc(section.noun)}</button>
-            </div>`
-      }
-    </div>`;
-  hydrateIcons(host);
-}
-
 /* ------------------------------------------------------------------ */
 /* subscribers                                                        */
 /* ------------------------------------------------------------------ */
-function renderSubscribers(host, hub) {
-  const rows = state.subscribers || [];
-  host.innerHTML = `
-    <div class="cr-bar">
-      <div class="cr-bar__left">
-        <span class="cr-bar__title">Subscribers</span>
-        <span class="cr-bar__count">${esc(num(rows.length))} member${rows.length === 1 ? "" : "s"} · ${esc(num(hub.subscribers || 0))} counted</span>
-      </div>
-      <span class="cr-pill"><i data-icon="users"></i>${esc(num(hub.vip?.length || 0))} VIP · ${esc(num(hub.staff?.length || 0))} staff</span>
-    </div>
-    ${
-      rows.length
-        ? `<div class="dsh-table-wrap cr-table"><table class="dsh-table">
-            <thead><tr><th>Member</th><th>Code</th><th>Country</th><th>Subscribed</th></tr></thead>
-            <tbody>${rows
-              .map(
-                (row) => `<tr>
-                  <td><strong>${esc(row.name || "Member")}</strong> <span class="cr-code">${esc(row.username || "")}</span></td>
-                  <td class="cr-code">${esc(row.code || "—")}</td>
-                  <td>${esc(row.country || "—")}</td>
-                  <td>${esc(timeAgo(row.since) || "—")}</td>
-                </tr>`
-              )
-              .join("")}</tbody>
-          </table></div>`
-        : emptyBlock("users", "No subscriber yet", `When a member subscribes to your ${sectionOf(state.section).noun}, they appear here with their code, country and date.`)
-    }`;
-  hydrateIcons(host);
-}
-
 /* ------------------------------------------------------------------ */
 /* categories                                                         */
 /* ------------------------------------------------------------------ */
-function renderCategories(host, hub) {
-  const rows = state.categories || [];
-  const byParent = new Map();
-  rows.forEach((row) => {
-    const key = row.parent || "root";
-    if (!byParent.has(key)) byParent.set(key, []);
-    byParent.get(key).push(row);
-  });
-
-  const ordered = [];
-  const walk = (parent, depth) => {
-    (byParent.get(parent) || []).forEach((row) => {
-      ordered.push({ ...row, depth });
-      walk(row.id, depth + 1);
-    });
-  };
-  walk("root", 1);
-
-  const options = ordered
-    .filter((row) => row.level < 3)
-    .map((row) => `<option value="${esc(row.id)}">${"— ".repeat(row.level - 1)}${esc(row.name)}</option>`)
-    .join("");
-
-  host.innerHTML = `
-    <div class="cr-card">
-      <div class="cr-card__head">
-        <h2 class="cr-card__title">Categories</h2>
-        <span class="cr-bar__count">main → second → last · three levels</span>
-      </div>
-      ${
-        ordered.length
-          ? `<div class="dsh-table-wrap cr-table"><table class="dsh-table">
-              <thead><tr><th>Name</th><th>Level</th><th>Items</th><th></th></tr></thead>
-              <tbody>${ordered
-                .map(
-                  (row) => `<tr>
-                    <td><div class="cr-cat cr-cat--l${row.level}"><span class="cr-cat__lvl">${row.level}</span><span class="cr-cat__name">${esc(row.name)}</span></div></td>
-                    <td>${row.level === 1 ? "Main" : row.level === 2 ? "Second" : "Last"}</td>
-                    <td class="cr-num">${esc(num(row.items || 0))}</td>
-                    <td><div class="dsh-table__actions">
-                      <button class="dsh-btn dsh-btn--sm" type="button" data-cr-cat-del="${esc(row.id)}"><i data-icon="trash"></i> Delete</button>
-                    </div></td>
-                  </tr>`
-                )
-                .join("")}</tbody>
-            </table></div>`
-          : emptyBlock("filter", "No category yet", "Categories organise what sits in this hub. The first one is the main category; a second and a third can sit under it.")
-      }
-      <div class="cr-grid3">
-        <label class="dsh-field">
-          <span class="dsh-field__label">Name</span>
-          <input class="dsh-input" type="text" maxlength="60" placeholder="Documentary" data-cat-name />
-        </label>
-        <label class="dsh-field">
-          <span class="dsh-field__label">Under</span>
-          <select class="dsh-select" data-cat-parent><option value="">Nothing — a main category</option>${options}</select>
-        </label>
-        <div style="display:flex;align-items:flex-end">
-          <button class="dsh-btn dsh-btn--primary dsh-btn--sm" type="button" data-cr-cat-add><i data-icon="plus"></i> Add category</button>
-        </div>
-      </div>
-    </div>`;
-  hydrateIcons(host);
-}
-
 /* ------------------------------------------------------------------ */
 /* the item editor                                                    */
 /* ------------------------------------------------------------------ */
@@ -2618,178 +2320,14 @@ function copyText(value, label = "Link") {
 }
 
 /* ------------------------------------------------------------------ */
-/* the studio's Participants tab                                      */
-/* ------------------------------------------------------------------ */
-function renderParticipants(host, hub) {
-  const data = state.participants || {};
-  const rows = Array.isArray(data.rows) ? data.rows : [];
-  const pubs = Array.isArray(data.publishers) ? data.publishers : [];
-  const advs = Array.isArray(data.advertisers) ? data.advertisers : [];
-  const ads = Array.isArray(state.ads) ? state.ads : [];
-  const counts = data.counts || {};
-  const pending = rows.filter((row) => row.status === "pending");
-  const decided = rows.filter((row) => row.status !== "pending");
-
-  const requestCard = (row) => {
-    const member = row.member || {};
-    const role = ROLES[row.role] || row.role;
-    return `
-      <article class="cr-req ${row.status === "pending" ? "is-pending" : ""}" data-req="${esc(row.id)}">
-        <span class="cr-req__avatar">${avatarBlock(member.avatar, member.name, "crp-avatar crp-avatar--sm")}</span>
-        <div class="cr-req__body">
-          <p class="cr-req__head">
-            <span class="cr-req__name">${esc(member.name || "Member")}</span>
-            <span class="cr-req__code">${esc(member.code || "")}</span>
-            <span class="cr-chip" data-tone="${esc(row.role)}">${esc(role)}</span>
-            ${row.format ? `<span class="cr-chip" data-tone="format">${esc(AD_FORMAT_LABEL[row.format] || row.format)}</span>` : ""}
-            <span class="cr-chip" data-tone="${esc(row.status)}">${esc(requestStatusLabel(row.status))}</span>
-          </p>
-          <p class="cr-req__text">${esc(row.message || "")}</p>
-          <p class="cr-req__meta">
-            <span>${esc(member.username || "")}</span>
-            ${member.country ? `<span>${esc(member.country)}</span>` : ""}
-            ${row.budget ? `<span>${esc(num(Number(row.budget) || 0))} pts</span>` : ""}
-            ${row.link ? `<a href="${esc(row.link)}" target="_blank" rel="noopener noreferrer">The sample</a>` : ""}
-            <span>${esc(timeAgo(row.created_at))}</span>
-          </p>
-        </div>
-        <div class="cr-req__acts">
-          ${row.status === "pending"
-            ? `<button class="dsh-btn dsh-btn--primary dsh-btn--sm" type="button" data-cr-req="approve" data-id="${esc(row.id)}"><i data-icon="check"></i> Approve</button>
-               <button class="dsh-btn dsh-btn--sm" type="button" data-cr-req="reject" data-id="${esc(row.id)}"><i data-icon="close"></i> Refuse</button>`
-            : `<span class="cr-req__since">${row.decided_at ? esc(timeAgo(row.decided_at)) : ""}</span>`}
-        </div>
-      </article>`;
-  };
-
-  const listRow = (member, extra = "") => `
-    <li class="cr-who">
-      ${avatarBlock(member.avatar, member.name, "crp-avatar crp-avatar--sm")}
-      <span class="cr-who__name">${esc(member.name || "Member")}</span>
-      <span class="cr-who__code">${esc(member.code || "")}</span>
-      <span class="cr-who__handle">${esc(member.username || "")}</span>
-      ${extra}
-    </li>`;
-
-  const adRows = ads.length
-    ? ads
-        .map(
-          (ad) => `
-      <li class="cr-adrow">
-        <span class="cr-adrow__format"><i data-icon="${esc(AD_FORMAT_ICON[ad.format] || "image")}"></i>${esc(AD_FORMAT_LABEL[ad.format] || ad.format)}</span>
-        <span class="cr-adrow__title">${esc(ad.title)}</span>
-        <span class="cr-adrow__who">${esc(ad.member?.name || "")}</span>
-        <span class="cr-chip" data-tone="${ad.status === "live" ? "public" : "private"}">${esc(ad.status === "live" ? "Live" : "Paused")}</span>
-        <span class="cr-adrow__num">${esc(num(Number(ad.impressions) || 0))}</span>
-        <span class="cr-adrow__num">${esc(num(Number(ad.clicks) || 0))}</span>
-        <button class="dsh-btn dsh-btn--sm" type="button" data-cr-ad-del="${esc(ad.id)}" aria-label="Remove the ad"><i data-icon="trash"></i></button>
-      </li>`
-        )
-        .join("")
-    : `<li class="cr-empty__line">No ad yet.</li>`;
-
-  host.innerHTML = `
-    <div class="cr-part">
-      <div class="cr-bar">
-        <span class="cr-bar__count">${esc(num(Number(counts.pending) || 0))} waiting · ${esc(num(pubs.length))} publisher${pubs.length === 1 ? "" : "s"} · ${esc(num(advs.length))} advertiser${advs.length === 1 ? "" : "s"}</span>
-        <span class="cr-part__link">
-          <i data-icon="link"></i><code>${esc(studioLink(hub.code || hub.id))}</code>
-          <button class="dsh-btn dsh-btn--sm" type="button" data-cr-copy="${esc(studioLink(hub.code || hub.id))}">Copy</button>
-        </span>
-      </div>
-
-      <section class="cr-panel">
-        <h2 class="cr-panel__title"><i data-icon="users"></i> Waiting for an answer</h2>
-        ${pending.length ? pending.map(requestCard).join("") : `<p class="cr-empty__line">Nobody is waiting. Publishers and advertisers ask from the hub's own page.</p>`}
-      </section>
-
-      <section class="cr-panel">
-        <h2 class="cr-panel__title"><i data-icon="article"></i> Publishers <span class="cr-panel__n">${pubs.length}</span></h2>
-        ${pubs.length ? `<ul class="cr-who-list">${pubs.map((member) => listRow(member)).join("")}</ul>` : `<p class="cr-empty__line">No publisher yet — their drafts would arrive as drafts in this hub's tables.</p>`}
-      </section>
-
-      <section class="cr-panel">
-        <h2 class="cr-panel__title"><i data-icon="target"></i> Advertisers <span class="cr-panel__n">${advs.length}</span></h2>
-        ${advs.length ? `<ul class="cr-who-list">${advs.map((member) => listRow(member, `<span class="cr-who__extra">${esc(num(Number(member.ads) || 0))} ad${Number(member.ads) === 1 ? "" : "s"}</span>`)).join("")}</ul>` : `<p class="cr-empty__line">No advertiser yet — a banner, a video, an image or a paragraph, chosen by them.</p>`}
-      </section>
-
-      <section class="cr-panel">
-        <h2 class="cr-panel__title"><i data-icon="fire"></i> The ads in this hub <span class="cr-panel__n">${ads.length}</span></h2>
-        ${
-          ads.length
-            ? `<div class="cr-adtable">
-                 <div class="cr-adtable__head"><span>Format</span><span>Title</span><span>Advertiser</span><span>State</span><span>Views</span><span>Clicks</span><span></span></div>
-                 <ul class="cr-adlist">${adRows}</ul>
-               </div>`
-            : `<p class="cr-empty__line">No ad in this hub yet.</p>`
-        }
-      </section>
-
-      ${decided.length
-        ? `<section class="cr-panel">
-             <h2 class="cr-panel__title"><i data-icon="clock"></i> Already answered</h2>
-             ${decided.map(requestCard).join("")}
-           </section>`
-        : ""}
-    </div>`;
-  hydrateIcons(host);
-}
-
-async function decideRequest(id, decision) {
-  const stateNode = el(`[data-req="${id}"] .cr-req__acts`);
-  if (stateNode) stateNode.innerHTML = `<span class="cr-req__since">Working…</span>`;
-  try {
-    const res = await rpc("creator_request_decide", { p_token: state.token, p_id: id, p_decision: decision });
-    if (!res || !res.ok) {
-      toast({
-        title: "Not decided",
-        message:
-          { session: "The session ended.", decided: "Somebody already answered this one.", not_found: "That request is gone.", decision: "Unknown answer." }[
-            res?.error
-          ] || "The server refused the answer.",
-        tone: "error",
-      });
-      return loadTab().then(refresh);
-    }
-    toast({
-      title: decision === "approve" ? "Approved" : "Refused",
-      message:
-        decision === "approve"
-          ? "They can work in this hub now."
-          : "The request is closed; nothing was shared.",
-      iconName: decision === "approve" ? "check" : "close",
-    });
-    await loadHubs();
-    await loadTab();
-    await refresh();
-  } catch {
-    toast({ title: "Not decided", message: "The connection dropped.", tone: "error" });
-  }
-}
-
-async function removeAd(id) {
-  try {
-    const res = await rpc("creator_ad_delete", { p_token: state.token, p_id: id });
-    if (!res || !res.ok) {
-      toast({ title: "Not removed", message: "The server refused it.", tone: "error" });
-      return;
-    }
-    toast({ title: "Ad removed", message: "It is gone from the hub.", iconName: "trash" });
-    await loadTab();
-    await refresh();
-  } catch {
-    toast({ title: "Not removed", message: "The connection dropped.", tone: "error" });
-  }
-}
-
-/* ------------------------------------------------------------------ */
 /* the hub's page: asking to join, writing, advertising               */
 /* ------------------------------------------------------------------ */
 function participationBlock(hub, view) {
   const request = hub.request || view.request || null;
   const can = hub.can || {};
   const role = hub.role || "visitor";
-  const manageLink = `<a class="dsh-btn dsh-btn--sm" href="creator.html?section=${encodeURIComponent(hubInfo(hub.kind).slug)}&hub=${encodeURIComponent(hub.id)}&tab=participants"><i data-icon="users"></i> Requests</a>`;
+  /* requests are answered where the page is managed: the dashboard */
+  const manageLink = `<a class="dsh-btn dsh-btn--sm" href="dashboard.html#creator&manage=${encodeURIComponent(hub.id)}"><i data-icon="users"></i> Requests</a>`;
 
   if (role === "owner" || role === "staff") {
     return `
@@ -3194,32 +2732,6 @@ function closeModal() {
   renderTop();
 }
 
-function openNewHub() {
-  const section = sectionOf(state.section);
-  const limit = state.limits?.[section.kind] || {};
-  const used = hubsOf(section.kind).length;
-  const full = Number(limit.limit) && used >= Number(limit.limit);
-  openModal(`
-    <h2 class="cr-modal__title">New ${esc(section.noun)}</h2>
-    <p class="cr-modal__text">
-      ${full
-        ? `You run ${used} of ${limit.limit} ${esc(section.noun)}s at level ${state.level}. The next level opens another one.`
-        : `A name now; the logo, cover, description, field, niches, staff and access are in ${esc(section.label)} management once it exists.`}
-    </p>
-    ${
-      full
-        ? ""
-        : `<label class="dsh-field">
-             <span class="dsh-field__label">Name</span>
-             <input class="dsh-input" type="text" maxlength="80" placeholder="My ${esc(section.noun)}" data-new-hub-name />
-           </label>`
-    }
-    <div class="cr-modal__actions">
-      <button class="dsh-btn dsh-btn--sm" type="button" data-cr-modal-close>Cancel</button>
-      ${full ? "" : `<button class="dsh-btn dsh-btn--primary dsh-btn--sm" type="button" data-cr-create-hub><i data-icon="plus"></i> Create</button>`}
-    </div>`);
-}
-
 function openConfirm(title, text, action, id) {
   state.confirm = { action, id };
   openModal(`
@@ -3234,188 +2746,6 @@ function openConfirm(title, text, action, id) {
 /* ================================================================== */
 /* actions                                                            */
 /* ================================================================== */
-function hubPayload(hub) {
-  const root = el("[data-settings]");
-  if (!root) return null;
-  const value = (sel) => el(sel, root)?.value ?? "";
-  const links = qsa("[data-link-row]", root)
-    .map((row) => ({
-      label: (qs("[data-link-label]", row)?.value || "").trim(),
-      url: (qs("[data-link-url]", row)?.value || "").trim(),
-    }))
-    .filter((link) => link.url || link.label);
-
-  return {
-    p_token: state.token,
-    p_id: hub.id,
-    p_kind: hub.kind,
-    p_name: value("[data-hub-name]").trim(),
-    p_description: value("[data-hub-description]"),
-    p_logo_url: value("[data-hub-logo]").trim(),
-    p_cover_url: value("[data-hub-cover]").trim(),
-    p_links: links,
-    p_field: value("[data-hub-field]").trim(),
-    p_niches: value("[data-hub-niches]")
-      .split(",")
-      .map((n) => n.trim())
-      .filter(Boolean),
-    p_visibility: value("[data-hub-visibility]"),
-    p_password: value("[data-hub-password]"),
-    p_hours: Number(value("[data-hub-hours]") || 24),
-    p_staff: [
-      ...(hub.staff || []),
-      ...value("[data-hub-staff]")
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean),
-    ],
-    p_vip: [
-      ...(hub.vip || []),
-      ...value("[data-hub-vip]")
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean),
-    ],
-  };
-}
-
-function accessPayload(hub) {
-  const vis = el("[data-hub-visibility]")?.value || hub.visibility || "public";
-  const viewers = el("[data-hub-viewers]")?.value ?? "";
-  return {
-    p_token: state.token,
-    p_hub: hub.id,
-    p_excluded: excludedOf("hub"),
-    p_audience: audienceFor(vis, "hub"),
-    p_auto_accept: Boolean(el("[data-hub-auto]")?.checked),
-    p_viewers: viewers === "" ? 0 : Number(viewers),
-  };
-}
-
-function saveStateText(text, tone = "") {
-  const node = el("[data-hub-state]");
-  if (!node) return;
-  node.textContent = text;
-  node.dataset.tone = tone;
-}
-
-async function saveHub() {
-  const hub = currentHub();
-  if (!hub || state.busy) return;
-  const payload = hubPayload(hub);
-  if (!payload) return;
-  state.busy = true;
-  saveStateText("Saving…");
-  let res = null;
-  try {
-    res = await rpc("creator_hub_save", payload);
-  } catch {
-    res = null;
-  }
-  state.busy = false;
-  if (!res || res.ok !== true) {
-    const message = MESSAGES[res?.error] || "The save did not go through.";
-    saveStateText(message, "error");
-    toast({ title: "Not saved", message, tone: "error" });
-    return;
-  }
-  let access = null;
-  try {
-    access = await rpc("creator_hub_access", accessPayload(res.hub));
-  } catch {
-    access = null;
-  }
-  if (access && access.ok === false && access.error) {
-    const message = ACCESS_MESSAGES[access.error] || MESSAGES[access.error] || "The access rules were refused.";
-    saveStateText(message, "error");
-    toast({ title: "Access not saved", message, tone: "error" });
-  }
-  const saved = access && access.ok ? access.hub : res.hub;
-  state.hubs = state.hubs.map((entry) => (entry.id === saved.id ? saved : entry));
-  const pass = el("[data-hub-password]");
-  if (pass) {
-    pass.value = "";
-    pass.placeholder = saved.locked ? "•••• (unchanged)" : "set a password";
-  }
-  const staffInput = el("[data-hub-staff]");
-  if (staffInput) staffInput.value = "";
-  const vipInput = el("[data-hub-vip]");
-  if (vipInput) vipInput.value = "";
-  const view = el("[data-cr-view]");
-  if (view && state.view === "list" && sectionOf(state.section).tabs.find((t) => t.key === state.tab)?.type === "settings") {
-    renderSettings(view, saved);
-  }
-  saveStateText(`Saved ${timeAgo(saved.updated_at) || "just now"}`, "ok");
-  renderHubHead();
-  toast({ title: "Saved", message: `${saved.name} is up to date.`, iconName: "check" });
-}
-
-async function createHub() {
-  const section = sectionOf(state.section);
-  const name = (el("[data-new-hub-name]")?.value || "").trim();
-  if (name.length < 2) {
-    toast({ title: "A name first", message: "Two characters at least.", tone: "error" });
-    return;
-  }
-  let res = null;
-  try {
-    res = await rpc("creator_hub_save", {
-      p_token: state.token,
-      p_id: null,
-      p_kind: section.kind,
-      p_name: name,
-      p_description: "",
-      p_logo_url: "",
-      p_cover_url: "",
-      p_links: [],
-      p_field: "",
-      p_niches: [],
-      p_visibility: "public",
-      p_password: "",
-      p_hours: 24,
-      p_staff: [],
-      p_vip: [],
-    });
-  } catch {
-    res = null;
-  }
-  if (!res || res.ok !== true) {
-    toast({ title: "Not created", message: MESSAGES[res?.error] || "The server refused the new hub.", tone: "error" });
-    return;
-  }
-  closeModal();
-  state.hubs.push(res.hub);
-  state.hub = res.hub.id;
-  state.tab = "settings";
-  state.view = "list";
-  await loadTab();
-  await refresh();
-  toast({ title: `${section.label} created`, message: "Add the logo, description and access next.", iconName: "check" });
-}
-
-async function deleteHub() {
-  const hub = currentHub();
-  if (!hub) return;
-  let res = null;
-  try {
-    res = await rpc("creator_hub_delete", { p_token: state.token, p_id: hub.id });
-  } catch {
-    res = null;
-  }
-  closeModal();
-  if (!res || res.ok !== true) {
-    toast({ title: "Not deleted", message: MESSAGES[res?.error] || "The server did not confirm.", tone: "error" });
-    return;
-  }
-  state.hubs = state.hubs.filter((entry) => entry.id !== hub.id);
-  const next = hubsOf(hubKind())[0];
-  state.hub = next ? next.id : null;
-  state.tab = sectionOf(state.section).tabs[0].key;
-  await loadTab();
-  await refresh();
-  toast({ title: "Deleted", message: `${hub.name} is gone with everything under it.`, iconName: "trash" });
-}
-
 /**
  * A video published into this hub from video-editor.html is a row in `posts`,
  * so it is deleted through the posts door — not the hub's own.
@@ -3737,66 +3067,6 @@ async function copyLink(row) {
   toast({ title: "The link", message: url, iconName: "link" });
 }
 
-async function removeChip(list, code) {
-  const hub = currentHub();
-  if (!hub || !code) return;
-  const fn = list === "vip" ? "creator_hub_vip" : "creator_hub_staff";
-  let res = null;
-  try {
-    res = await rpc(fn, { p_token: state.token, p_id: hub.id, p_action: "remove", p_ref: code });
-  } catch {
-    res = null;
-  }
-  if (!res || res.ok !== true) {
-    toast({ title: "Not removed", message: MESSAGES[res?.error] || "The server refused.", tone: "error" });
-    return;
-  }
-  hub[list] = res[list] || [];
-  renderHubHead();
-  renderSettings(el("[data-cr-view]"), hub);
-  toast({ title: "Removed", message: `${code} is off the ${list} list.`, iconName: "check" });
-}
-
-async function addCategory() {
-  const hub = currentHub();
-  const name = (el("[data-cat-name]")?.value || "").trim();
-  const parent = el("[data-cat-parent]")?.value || null;
-  if (!hub || !name) {
-    toast({ title: "A category needs a name", tone: "error" });
-    return;
-  }
-  let res = null;
-  try {
-    res = await rpc("creator_category_save", { p_token: state.token, p_id: null, p_hub: hub.id, p_parent: parent, p_name: name });
-  } catch {
-    res = null;
-  }
-  if (!res || res.ok !== true) {
-    const message = MESSAGES[res?.error] || "The category was refused.";
-    toast({ title: "Not added", message, tone: "error" });
-    return;
-  }
-  state.categories = [...state.categories, res.row];
-  renderCategories(el("[data-cr-view]"), hub);
-  toast({ title: "Category added", message: name, iconName: "check" });
-}
-
-async function deleteCategory(id) {
-  const hub = currentHub();
-  let res = null;
-  try {
-    res = await rpc("creator_category_delete", { p_token: state.token, p_id: id });
-  } catch {
-    res = null;
-  }
-  if (!res || res.ok !== true) {
-    toast({ title: "Not deleted", message: MESSAGES[res?.error] || "The server refused.", tone: "error" });
-    return;
-  }
-  state.categories = state.categories.filter((row) => row.id !== id);
-  if (hub) renderCategories(el("[data-cr-view]"), hub);
-}
-
 /* ================================================================== */
 /* events                                                             */
 /* ================================================================== */
@@ -3884,18 +3154,6 @@ document.addEventListener("click", (event) => {
     return openAdForm();
   }
 
-  const decide = target.closest("[data-cr-req]");
-  if (decide) {
-    event.preventDefault();
-    return decideRequest(decide.dataset.id, decide.dataset.crReq);
-  }
-
-  const dropAd = target.closest("[data-cr-ad-del]");
-  if (dropAd) {
-    event.preventDefault();
-    return removeAd(dropAd.dataset.crAdDel);
-  }
-
   const copyAny = target.closest("[data-cr-copy]");
   if (copyAny) {
     event.preventDefault();
@@ -3950,14 +3208,7 @@ document.addEventListener("click", (event) => {
     }
     el("[data-cr-add-toggle]")?.setAttribute("aria-expanded", "false");
     const value = add.dataset.crAdd;
-    if (value === "hub") return openNewHub();
-    if (value === "category") return switchTab("categories");
     return openEditor(value, null);
-  }
-
-  if (target.closest("[data-cr-new-hub]")) {
-    event.preventDefault();
-    return openNewHub();
   }
 
   if (target.closest("[data-cr-article-new]")) {
@@ -4049,27 +3300,6 @@ document.addEventListener("click", (event) => {
     return;
   }
 
-  if (target.closest("[data-cr-save-hub]")) {
-    event.preventDefault();
-    return saveHub();
-  }
-
-  if (target.closest("[data-cr-delete-hub]")) {
-    event.preventDefault();
-    const hub = currentHub();
-    return openConfirm(
-      `Delete ${hub?.name || "this"}?`,
-      "Everything under it goes too — items, categories and subscribers. This cannot be undone.",
-      "hub",
-      hub?.id
-    );
-  }
-
-  if (target.closest("[data-cr-create-hub]")) {
-    event.preventDefault();
-    return createHub();
-  }
-
   if (target.closest("[data-cr-link-add]")) {
     event.preventDefault();
     const host = el("[data-links]");
@@ -4093,24 +3323,6 @@ document.addEventListener("click", (event) => {
     return;
   }
 
-  const chip = target.closest("[data-cr-chip-remove]");
-  if (chip) {
-    event.preventDefault();
-    removeChip(chip.dataset.crChipRemove, chip.dataset.code);
-    return;
-  }
-
-  if (target.closest("[data-cr-cat-add]")) {
-    event.preventDefault();
-    return addCategory();
-  }
-
-  const catDel = target.closest("[data-cr-cat-del]");
-  if (catDel) {
-    event.preventDefault();
-    return deleteCategory(catDel.dataset.crCatDel);
-  }
-
   if (target.closest("[data-cr-modal-close]")) {
     event.preventDefault();
     return closeModal();
@@ -4120,7 +3332,6 @@ document.addEventListener("click", (event) => {
     event.preventDefault();
     const pending = state.confirm || {};
     state.confirm = null;
-    if (pending.action === "hub") return deleteHub();
     if (pending.action === "item") return deleteItem(pending.id);
     if (pending.action === "post") return deletePostItem(pending.id);
     return closeModal();
@@ -4146,31 +3357,9 @@ document.addEventListener("change", (event) => {
     return loadDirectory();
   }
   if (select.matches("[data-cr-hub]")) {
-    if (select.value === "__new") return openNewHub();
     if (select.value) switchHub(select.value);
     return;
   }
-  if (select.matches("[data-hub-visibility]")) {
-    const priv = select.value === "private";
-    const pass = el("[data-hub-pass-wrap]");
-    const hours = el("[data-hub-hours-wrap]");
-    if (pass) {
-      pass.hidden = !priv;
-      pass.style.display = priv ? "" : "none";
-    }
-    if (hours) {
-      hours.hidden = !priv;
-      hours.style.display = priv ? "" : "none";
-    }
-    const aud = el('[data-aud="hub"]');
-    if (aud) {
-      const open = select.value === "exclusive";
-      aud.hidden = !open;
-      aud.style.display = open ? "" : "none";
-    }
-    return;
-  }
-
   if (select.matches("[data-item-visibility]")) {
     const aud = el('[data-aud="item"]');
     if (aud) {
@@ -4392,9 +3581,6 @@ async function boot() {
   await loadTab();
   await refresh();
   syncUrl();
-  /* the dashboard's Create button already said what to make — the form opens
-     itself, on the section it named, with the name field ready */
-  if (params.get("new") === "1") openNewHub();
 }
 
 if (document.readyState === "loading") {

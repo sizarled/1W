@@ -33,6 +33,7 @@ import { hydrateIcons, icon } from "./icons.js";
 import { toast } from "./ui.js";
 import { setMember, signOut, sessionToken, clearSessionToken } from "./session.js";
 import { createEdgeRail } from "./edge.js?v=20261116b";
+import { mountHubAdmin, unmountHubAdmin } from "./hub-admin.js?v=20261116a";
 import { brand } from "./brands.js";
 
 /* ================================================================== */
@@ -139,7 +140,8 @@ const state = {
   apiEdit: null,
   apiBusy: false,
   /* the creator pages: the hubs behind the seven rows, asked once per visit */
-  creator: { hubs: [], limits: {}, level: 1, loaded: false, loading: false, error: "" },
+  /* hub = the page whose management is open, creating = the kind being made */
+  creator: { hubs: [], limits: {}, level: 1, loaded: false, loading: false, error: "", hub: null, creating: null },
   /* the publisher program: the seat, the links, the counters */
   program: { me: null, loaded: false, tried: false, loading: false, error: "" },
 };
@@ -429,7 +431,12 @@ function gateNode(key) {
 /* routing                                                             */
 /* ================================================================== */
 function initialView() {
-  const key = (location.hash || "").replace("#", "");
+  /* `#creator&manage=<hub>` — a page opened straight for management, which is
+     the door the public hub page's Requests button uses */
+  const raw = (location.hash || "").replace("#", "");
+  const [key, ...rest] = raw.split("&");
+  const manage = rest.map((part) => part.split("=")).find(([name]) => name === "manage");
+  if (manage && manage[1]) state.creator.hub = decodeURIComponent(manage[1]);
   return VIEW_META[key] ? key : "overview";
 }
 
@@ -1417,13 +1424,13 @@ function analyticsView() {
  * tab that create the page and hold its content.
  */
 const CREATOR_SURFACES = [
-  { surface: "e-Studio", kind: "channel", section: "studio", tab: "videos", icon: "tv", use: "Films, series and videos" },
-  { surface: "e-Server", kind: "server", section: "server", tab: "channels", icon: "monitor", use: "IPTV playlists and channels" },
-  { surface: "e-Blog", kind: "blog", section: "blog", tab: "articles", icon: "article", use: "Articles and long reads" },
-  { surface: "e-Gallery", kind: "gallery", section: "gallery", tab: "images", icon: "image", use: "Images and collections" },
-  { surface: "e-Space", kind: "space", section: "space", tab: "questions", icon: "help", use: "Community posts" },
-  { surface: "e-Library", kind: "library", section: "library", tab: "books", icon: "database", use: "Documents and books" },
-  { surface: "e-Cinema", kind: "cinema", section: "cinema", tab: "movies", icon: "film", use: "Curated screenings" },
+  { surface: "e-Studio", kind: "channel", section: "studio", tab: "videos", icon: "tv", label: "Studio", noun: "studio", use: "Films, series and videos" },
+  { surface: "e-Server", kind: "server", section: "server", tab: "channels", icon: "monitor", label: "Server", noun: "server", caps: true, use: "IPTV playlists and channels" },
+  { surface: "e-Blog", kind: "blog", section: "blog", tab: "articles", icon: "article", label: "Blog", noun: "blog", categories: true, use: "Articles and long reads" },
+  { surface: "e-Gallery", kind: "gallery", section: "gallery", tab: "images", icon: "image", label: "Gallery", noun: "gallery", categories: true, use: "Images and collections" },
+  { surface: "e-Space", kind: "space", section: "space", tab: "questions", icon: "help", label: "Space", noun: "space", categories: true, use: "Community posts" },
+  { surface: "e-Library", kind: "library", section: "library", tab: "books", icon: "database", label: "Library", noun: "library", categories: true, use: "Documents and books" },
+  { surface: "e-Cinema", kind: "cinema", section: "cinema", tab: "movies", icon: "film", label: "Cinema", noun: "cinema", caps: true, use: "Curated screenings" },
 ];
 
 const VIS_WORDS = { public: "Public", exclusive: "Exclusive", private: "Private" };
@@ -1464,7 +1471,7 @@ function hubLine(hub, surface) {
       </div>
       <p class="dsh-hub__meta">${esc(meta.join(" · "))}</p>
       <div class="dsh-table__actions">
-        <a class="dsh-btn dsh-btn--sm" href="${esc(hubDoor(hub, surface))}"><i data-icon="settings"></i>Edit page</a>
+        <button class="dsh-btn dsh-btn--sm" type="button" data-creator-manage="${esc(hub.id)}"><i data-icon="settings"></i>Manage page</button>
         <a class="dsh-btn dsh-btn--ghost dsh-btn--sm" href="${esc(hubDoor(hub, surface, surface.tab))}"><i data-icon="${esc(surface.icon)}"></i>Content</a>
         <a class="dsh-btn dsh-btn--ghost dsh-btn--sm" href="${esc(hubPublicDoor(hub))}"><i data-icon="external"></i>Open</a>
       </div>
@@ -1490,9 +1497,9 @@ function surfaceCreate(surface) {
   let action;
 
   if (!c.loaded) {
-    action = `<a class="dsh-btn dsh-btn--sm" href="${esc(studioDoor(surface))}"><i data-icon="plus"></i>Create</a>`;
+    action = `<button class="dsh-btn dsh-btn--sm" type="button" data-creator-new="${esc(surface.kind)}"><i data-icon="plus"></i>Create</button>`;
   } else if (!limit || hubs.length < limit) {
-    action = `<a class="dsh-btn dsh-btn--sm" href="${esc(studioDoor(surface))}"><i data-icon="plus"></i>${hubs.length ? "Add another" : "Create"}</a>`;
+    action = `<button class="dsh-btn dsh-btn--sm" type="button" data-creator-new="${esc(surface.kind)}"><i data-icon="plus"></i>${hubs.length ? "Add another" : "Create"}</button>`;
     if (limit) action += `<span class="dsh-hub__meta">${esc(num(hubs.length))} / ${esc(num(limit))}</span>`;
   } else {
     action = `<span class="dsh-chip" data-tone="off">${esc(num(limit))} of ${esc(num(limit))}</span>`;
@@ -1583,6 +1590,8 @@ function creatorWorkspace() {
  * section and one tab that holds it, and every table there is a studio table.
  */
 function creatorView() {
+  if (state.creator.hub) return creatorAdminView();
+  if (state.creator.creating) return creatorCreateView();
   return `
     <div class="dsh-note"><i data-icon="info"></i><span>
       Every creator page is created and edited from these tabs — name, description, logo, cover,
@@ -1597,6 +1606,64 @@ function creatorView() {
       </div>
       <div data-creator-table>${creatorWorkspace()}</div>
       <p class="dsh-help">A page is the hub — its name, its look, its audience. The tab above is where its content is written, and every table there is a studio table.</p>
+    </section>
+  `;
+}
+
+/**
+ * One page, open for management: its identity, its links, who sees it, its
+ * staff and VIP, its categories, its participants and its subscribers.
+ *
+ * The whole pane is `hub-admin.js`; this view only gives it a room and the
+ * way back.
+ */
+function creatorAdminView() {
+  const c = state.creator;
+  const hub = (c.hubs || []).find((entry) => entry.id === c.hub);
+  const surface = hub ? CREATOR_SURFACES.find((entry) => entry.kind === hub.kind) : null;
+  if (!hub || !surface) {
+    c.hub = null;
+    return creatorView();
+  }
+  return `
+    <div class="dsh-creator__bar">
+      <button class="dsh-btn dsh-btn--sm" type="button" data-creator-back><i data-icon="arrowLeft"></i>Your creator pages</button>
+      <a class="dsh-btn dsh-btn--ghost dsh-btn--sm" href="${esc(contentDoor(surface))}"><i data-icon="${esc(surface.icon)}"></i>Write its content</a>
+    </div>
+    <section class="dsh-card dsh-card--admin">
+      <div data-creator-admin></div>
+    </section>
+  `;
+}
+
+/** A page that does not exist yet: a name, and the form that makes it. */
+function creatorCreateView() {
+  const c = state.creator;
+  const surface = CREATOR_SURFACES.find((entry) => entry.kind === c.creating) || CREATOR_SURFACES[0];
+  const limit = Number((c.limits || {})[surface.kind]?.limit) || 0;
+  const used = (c.hubs || []).filter((hub) => hub.kind === surface.kind).length;
+  const full = limit > 0 && used >= limit;
+  return `
+    <div class="dsh-creator__bar">
+      <button class="dsh-btn dsh-btn--sm" type="button" data-creator-back><i data-icon="arrowLeft"></i>Your creator pages</button>
+    </div>
+    <section class="dsh-card" data-creator-create>
+      <div class="dsh-card__head">
+        <h2 class="dsh-card__title">New ${esc(surface.noun)}</h2>
+        <span class="dsh-hub__meta">${esc(surface.surface)} · ${esc(num(used))} of ${limit ? esc(num(limit)) : "—"}</span>
+      </div>
+      ${
+        full
+          ? `<p class="dsh-help">You run ${esc(num(used))} of ${esc(num(limit))} ${esc(surface.noun)}s at level ${esc(num(c.level))}. The next level opens another one.</p>`
+          : `<label class="dsh-field">
+               <span class="dsh-field__label">Name</span>
+               <input class="dsh-input" type="text" maxlength="80" placeholder="My ${esc(surface.noun)}" data-creator-new-name />
+             </label>
+             <p class="dsh-help">A name now. The logo, cover, description, field, niches, staff and access are in this page's management once it exists.</p>`
+      }
+      <div class="dsh-table__actions">
+        ${full ? "" : `<button class="dsh-btn dsh-btn--primary dsh-btn--sm" type="button" data-creator-create-go><i data-icon="plus"></i>Create ${esc(surface.noun)}</button>`}
+      </div>
     </section>
   `;
 }
@@ -1657,7 +1724,29 @@ function creatorStats() {
 function wireCreator(root) {
   /* the retry appears after the first answer, so the door listens on the view */
   root.addEventListener("click", (event) => {
-    if (event.target.closest("[data-creator-retry]")) loadCreatorPages({ force: true });
+    if (event.target.closest("[data-creator-retry]")) return loadCreatorPages({ force: true });
+
+    const manage = event.target.closest("[data-creator-manage]");
+    if (manage) {
+      state.creator.hub = manage.dataset.creatorManage;
+      return openCreatorSubView();
+    }
+
+    const fresh = event.target.closest("[data-creator-new]");
+    if (fresh) {
+      state.creator.creating = fresh.dataset.creatorNew;
+      state.creator.hub = null;
+      return openCreatorSubView();
+    }
+
+    if (event.target.closest("[data-creator-back]")) {
+      state.creator.hub = null;
+      state.creator.creating = null;
+      unmountHubAdmin();
+      return openCreatorSubView();
+    }
+
+    if (event.target.closest("[data-creator-create-go]")) return createCreatorPage();
   });
 
   /* the seven pages are a tablist, so the arrow keys walk it and keep the focus
@@ -1677,6 +1766,82 @@ function wireCreator(root) {
   });
 
   loadCreatorPages();
+  mountCreatorAdmin();
+}
+
+/** The page is wearing a sub-view (a management pane, a create form): repaint it. */
+function openCreatorSubView() {
+  setView("creator", { silent: true });
+  mountCreatorAdmin();
+}
+
+/** Where the management pane is drawn, and what it tells us back. */
+function mountCreatorAdmin() {
+  const host = qs("[data-creator-admin]");
+  const hub = (state.creator.hubs || []).find((entry) => entry.id === state.creator.hub);
+  if (!host || !hub) return;
+  const surface = CREATOR_SURFACES.find((entry) => entry.kind === hub.kind) || CREATOR_SURFACES[0];
+  mountHubAdmin(host, {
+    token,
+    hub,
+    section: surface,
+    changed: (saved) => {
+      /* the name, the badge and the numbers in the card behind us moved */
+      if (!saved) return;
+      state.creator.hubs = (state.creator.hubs || []).map((entry) =>
+        entry.id === saved.id ? { ...entry, ...saved } : entry
+      );
+    },
+    deleted: () => {
+      state.creator.hubs = (state.creator.hubs || []).filter((entry) => entry.id !== hub.id);
+      state.creator.hub = null;
+      unmountHubAdmin();
+      openCreatorSubView();
+      toast({ title: "Page deleted", message: `${hub.name} is gone with everything under it.`, iconName: "trash" });
+    },
+  });
+}
+
+/** A new page: the name is the whole form, the rest is management once it exists. */
+async function createCreatorPage() {
+  const surface = CREATOR_SURFACES.find((entry) => entry.kind === state.creator.creating);
+  if (!surface) return;
+  const name = (qs("[data-creator-new-name]")?.value || "").trim();
+  if (name.length < 2) {
+    toast({ title: "A name first", message: "Two characters at least.", tone: "error" });
+    return;
+  }
+  let res = null;
+  try {
+    res = await rpc("creator_hub_save", {
+      p_token: token,
+      p_id: null,
+      p_kind: surface.kind,
+      p_name: name,
+      p_description: "",
+      p_logo_url: "",
+      p_cover_url: "",
+      p_links: [],
+      p_field: "",
+      p_niches: [],
+      p_visibility: "public",
+      p_password: "",
+      p_hours: 24,
+      p_staff: [],
+      p_vip: [],
+    });
+  } catch {
+    res = null;
+  }
+  if (!res || res.ok !== true) {
+    toast({ title: "Not created", message: res?.error === "limit" ? "This page kind is at its limit for your level." : "The server refused the new page.", tone: "error" });
+    return;
+  }
+  state.creator.hubs = [...(state.creator.hubs || []), res.hub];
+  state.creator.creating = null;
+  state.creator.hub = res.hub.id;
+  openCreatorSubView();
+  toast({ title: `${surface.label} created`, message: "Add the logo, the description and the access next.", iconName: "check" });
 }
 
 /* ================================================================== */

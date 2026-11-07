@@ -791,63 +791,18 @@ async function main() {
   expect("empty: the rail names them", /Studio[\s\S]*Blog[\s\S]*Space[\s\S]*Library[\s\S]*Gallery[\s\S]*Server[\s\S]*Cinema/.test(railText), railText);
   expect("empty: the member is in the rail", p.text("[data-cr-name]") === "Youssef El Amrani", p.text("[data-cr-name]"));
   expect("empty: the member code is there", p.text("[data-cr-code]") === "ID100042", p.text("[data-cr-code]"));
-  expect("empty: the switcher offers the add option", /Add a studio/i.test(p.text("[data-cr-hub]")), p.text("[data-cr-hub]"));
+  expect("empty: the switcher says there is none", /No studio yet/i.test(p.text("[data-cr-hub]")), p.text("[data-cr-hub]"));
   expect("empty: the view asks for a studio", /No studio yet/i.test(p.text("[data-cr-view]")));
   expect("empty: the limit is stated", /0 of 1 studios/i.test(p.text("[data-cr-hub-hint]")), p.text("[data-cr-hub-hint]"));
 
-  // create the studio
-  p.click(p.qs("[data-cr-new-hub]"));
-  await p.wait(60);
-  expect("create: the modal opens", Boolean(p.qs("[data-new-hub-name]")));
-  p.type(p.qs("[data-new-hub-name]"), "Studio One");
-  calls.length = 0;
-  p.click(p.qs("[data-cr-create-hub]"));
-  await p.wait(240);
-  expect("create: the call went out", calls.some((c) => c.includes("creator_hub_save")));
-  expect("create: the hub is in the switcher", /Studio One/.test(p.text("[data-cr-hub]")), p.text("[data-cr-hub]"));
-  expect("create: the settings tab opens", Boolean(p.qs("[data-hub-name]")));
-  expect("create: no errors", p.errors.length === 0, p.errors.join(" | "));
-
-  // settings: identity, private access, staff
-  p.type(p.qs("[data-hub-name]"), "Studio One");
-  p.type(p.qs("[data-hub-description]"), "Films and long talks");
-  p.type(p.qs("[data-hub-field]"), "Cinema");
-  p.type(p.qs("[data-hub-niches]"), "Documentary, Essay");
-  p.type(p.qs("[data-hub-logo]"), "https://example.com/logo.png");
-  expect("settings: the password field is hidden while public", p.hidden("[data-hub-pass-wrap]"));
-  p.change(p.qs("[data-hub-visibility]"), "private");
-  await p.wait(40);
-  expect("settings: private reveals the password", !p.hidden("[data-hub-pass-wrap]"));
-  expect("settings: and the window select", Boolean(p.qs("[data-hub-hours]")));
-  p.type(p.qs("[data-hub-password]"), "open-sesame");
-  p.change(p.qs("[data-hub-hours]"), "168");
-  p.type(p.qs("[data-hub-staff]"), "ID100015");
-  calls.length = 0;
-  p.click(p.qs("[data-cr-save-hub]"));
-  await p.wait(260);
-  const hubCall = calls.find((c) => c.includes("creator_hub_save"));
-  expect("settings: the save is sent", Boolean(hubCall));
-  expect("settings: it says saved", /Saved/i.test(p.text("[data-hub-state]")), p.text("[data-hub-state]"));
-  expect("settings: the hub head shows private", /Private/i.test(p.text("[data-cr-hubhead]")), p.text("[data-cr-hubhead]"));
-  expect("settings: no errors", p.errors.length === 0, p.errors.join(" | "));
-
-  // a refused save is explained
-  scenario.hubSaveError = "staff";
-  p.click(p.qs("[data-cr-save-hub]"));
-  await p.wait(220);
-  expect("settings: a refusal is explained", /not a member/i.test(p.text("[data-hub-state]")), p.text("[data-hub-state]"));
-  scenario.hubSaveError = null;
-
-  // delete the hub
-  p.click(p.qs("[data-cr-delete-hub]"));
-  await p.wait(60);
-  expect("delete hub: it confirms first", Boolean(p.qs("[data-cr-confirm]")));
-  calls.length = 0;
-  p.click(p.qs("[data-cr-confirm]"));
-  await p.wait(240);
-  expect("delete hub: the call is sent", calls.some((c) => c.includes("creator_hub_delete")));
-  expect("delete hub: the view is empty again", /No studio yet/i.test(p.text("[data-cr-view]")));
-  expect("delete hub: no errors", p.errors.length === 0, p.errors.join(" | "));
+  /* a page is made on the dashboard now: the studio sends you there, and
+     carries no management of its own any more */
+  const door = p.qs('[data-cr-view] a[href="dashboard.html#creator"]');
+  expect("empty: the create door is the dashboard", Boolean(door), p.text("[data-cr-view]").slice(0, 120));
+  expect("empty: nothing in the studio makes a page", !p.qs("[data-cr-new-hub]") && !p.qs("[data-cr-create-hub]"));
+  expect("empty: no management tab", !/management|Categories|Participants|Subscribers/i.test(p.text("[data-cr-tabs]")), p.text("[data-cr-tabs]"));
+  expect("empty: the hub strip stays hidden", p.hidden("[data-cr-hubhead]"));
+  expect("empty: no errors", p.errors.length === 0, p.errors.join(" | "));
   p.window.close();
 
   /* ---------------------------------------------------------------- */
@@ -881,7 +836,8 @@ async function main() {
   const s = await boot(3, { search: "?section=studio" });
   expect("studio: the studio is selected", /Studio One/.test(s.text("[data-cr-hub]")), s.text("[data-cr-hub]"));
   expect("studio: the hub head carries subscribers", /1200|1,200/.test(s.text("[data-cr-hubhead]")), s.text("[data-cr-hubhead]"));
-  expect("studio: the tabs are the studio's", /Videos[\s\S]*Podcasts[\s\S]*Playlists[\s\S]*Studio management[\s\S]*Subscribers/.test(s.text("[data-cr-tabs]")), s.text("[data-cr-tabs]"));
+  expect("studio: the tabs are the studio's", /Videos[\s\S]*Podcasts[\s\S]*Playlists/.test(s.text("[data-cr-tabs]")), s.text("[data-cr-tabs]"));
+  expect("studio: and management is not among them", !/management|Participants|Subscribers/i.test(s.text("[data-cr-tabs]")), s.text("[data-cr-tabs]"));
   expect("studio: the videos table has its two rows", s.qsa("[data-cr-view] tbody tr").length === 2, String(s.qsa("[data-cr-view] tbody tr").length));
   const head = s.text("[data-cr-view] thead");
   expect("studio: the columns are the spec's", /Visibility[\s\S]*Minutes[\s\S]*Likes[\s\S]*Dislikes[\s\S]*Comments[\s\S]*Shares[\s\S]*Reports/.test(head), head);
@@ -955,7 +911,8 @@ async function main() {
   calls.length = 0;
   s.click(s.qs('[data-cr-section="blog"]'));
   await s.wait(260);
-  expect("blog: the tabs change", /Articles[\s\S]*Drafts[\s\S]*Categories[\s\S]*Blog management[\s\S]*Subscribers/.test(s.text("[data-cr-tabs]")), s.text("[data-cr-tabs]"));
+  expect("blog: the tabs change", /Articles[\s\S]*Drafts/.test(s.text("[data-cr-tabs]")), s.text("[data-cr-tabs]"));
+  expect("blog: and only content is in them", !/management|Categories|Participants|Subscribers/i.test(s.text("[data-cr-tabs]")), s.text("[data-cr-tabs]"));
   expect("blog: articles are listed", /A night in Marrakesh/.test(s.text("[data-cr-view]")));
   expect("blog: the articles tab shows reads", /Minutes/.test(s.text("[data-cr-view] thead")));
   const lastItems = calls.filter((c) => c.includes("creator_items")).length;
@@ -965,23 +922,6 @@ async function main() {
   expect("blog: the draft row is there", /Unfinished essay/.test(s.text("[data-cr-view]")), s.text("[data-cr-view]").slice(0, 160));
   expect("blog: drafts show lines, words and chars", /Lines[\s\S]*Words[\s\S]*Chars/.test(s.text("[data-cr-view] thead")));
   expect("blog: drafts have publish and preview", /Publish[\s\S]*Preview[\s\S]*Delete/.test(s.text("[data-cr-view]")));
-
-  // categories
-  s.click(s.qs('[data-cr-tab="categories"]'));
-  await s.wait(220);
-  expect("categories: the tree is drawn", /Essay/.test(s.text("[data-cr-view]")));
-  s.type(s.qs("[data-cat-name]"), "Travel");
-  calls.length = 0;
-  s.click(s.qs("[data-cr-cat-add]"));
-  await s.wait(220);
-  expect("categories: the add is sent", calls.some((c) => c.includes("creator_category_save")));
-  expect("categories: it lands in the table", /Travel/.test(s.text("[data-cr-view]")));
-
-  // subscribers
-  s.click(s.qs('[data-cr-tab="subscribers"]'));
-  await s.wait(220);
-  expect("subscribers: the member is listed", /Jhon mark/.test(s.text("[data-cr-view]")));
-  expect("subscribers: with their code", /ID100015/.test(s.text("[data-cr-view]")));
 
   // switching hub inside a section
   s.click(s.qs('[data-cr-section="library"]'));
@@ -1024,7 +964,7 @@ async function main() {
   const nu = await boot("4-new", { search: "?section=server&tab=channels&new=1" });
   expect("new: the section is open", /Server/.test(nu.text(".cr-section.is-on")), nu.text(".cr-section.is-on"));
   expect("new: the channels tab is active", /Channels/.test(nu.text(".cr-tab.is-on")), nu.text(".cr-tab.is-on"));
-  expect("new: the form opens itself", Boolean(nu.qs("[data-new-hub-name]")) && /New server/i.test(nu.text(".cr-modal")), nu.text(".cr-modal").slice(0, 80));
+  expect("new: the studio makes no page, so ?new=1 opens the table", !nu.qs(".cr-modal") && /Channels/.test(nu.text(".cr-tab.is-on")), nu.text(".cr-tab.is-on"));
   nu.window.close();
 
   const lib = await boot(5, { search: "?section=library&tab=documents" });
@@ -1107,74 +1047,10 @@ async function main() {
   c8.window.close();
 
   /* ---------------------------------------------------------------- */
-  /* pass 9 — the owner answers the two kinds of request              */
-  /* ---------------------------------------------------------------- */
-  scenario = {
-    hubs: [hub({ id: "hub-ch", kind: "channel", name: "Studio One" })],
-    items: [],
-    categories: [],
-    subscribers: [],
-    requests: [
-      {
-        id: "req-a",
-        role: "advertiser",
-        format: "banner",
-        message: "We sell cameras and lights; ten thousand impressions first.",
-        link: "https://example.com/portfolio",
-        budget: 500,
-        status: "pending",
-        created_at: new Date(NOW - 36e5).toISOString(),
-        decided_at: null,
-        member: { code: "ID100015", name: "Jhon mark", username: "@jhon007", avatar: "", country: "Morocco", level: 3 },
-      },
-      {
-        id: "req-b",
-        role: "publisher",
-        format: null,
-        message: "I write long film essays and would publish two a week.",
-        link: "",
-        budget: 0,
-        status: "approved",
-        created_at: new Date(NOW - 72e5).toISOString(),
-        decided_at: new Date(NOW - 36e5).toISOString(),
-        member: { code: "ID100019", name: "Jhon Markoni", username: "@ledsizar7", avatar: "", country: "Morocco", level: 2 },
-      },
-    ],
-    publishers: [{ code: "ID100019", name: "Jhon Markoni", username: "@ledsizar7", avatar: "", country: "Morocco" }],
-    advertisers: [{ code: "ID100015", name: "Jhon mark", username: "@jhon007", avatar: "", country: "Morocco", ads: 1 }],
-    ads: [
-      { id: "ad-9", format: "banner", title: "Cameras and lights", body: "", media_url: "https://example.com/b.png", link_url: "https://example.com", status: "live", impressions: 40, clicks: 3, member: { code: "ID100015", name: "Jhon mark" }, mine: false },
-    ],
-  };
-  calls.length = 0;
-  const c9 = await boot(9, { search: "?section=studio&tab=participants" });
-  expect("participants: the tab opens", /Participants/.test(c9.text(".cr-tab.is-on")), c9.text(".cr-tab.is-on"));
-  expect("participants: the calls go out", calls.some((c) => c.includes("creator_participants")) && calls.some((c) => c.includes("creator_ads")), calls.join(" "));
-  expect("participants: the counting line reads", /1 waiting/i.test(c9.text(".cr-bar__count")), c9.text(".cr-bar__count"));
-  expect("participants: the asker is named with the code", /Jhon mark[\s\S]*ID100015/.test(c9.text(".cr-req.is-pending")), c9.text(".cr-req.is-pending").slice(0, 160));
-  expect("participants: the role and the format are chips", /Advertiser/.test(c9.text(".cr-req.is-pending")) && /Banner/.test(c9.text(".cr-req.is-pending")));
-  expect("participants: the budget is read", /500 pts/.test(c9.text(".cr-req.is-pending")), c9.text(".cr-req__meta"));
-  expect("participants: the public link is offered", /creator\.html\?studio=IDST100001/.test(c9.text(".cr-part__link")), c9.text(".cr-part__link"));
-  expect("participants: the publisher list has the code", /ID100019/.test(c9.text(".cr-who-list")), c9.text(".cr-who-list"));
-  expect("participants: the ad table lists the ad", /Cameras and lights/.test(c9.text(".cr-adrow")), c9.text(".cr-adrow"));
-  expect("participants: the numbers of the ad are there", /40/.test(c9.text(".cr-adrow")) && /3/.test(c9.text(".cr-adrow")));
+  /* pass 9 — the participants pane is the dashboard's now: the studio
+     keeps no requests screen, and the public hub's Requests door points
+     at the dashboard's management */
 
-  calls.length = 0;
-  c9.click(c9.qs('[data-cr-req="approve"]'));
-  await c9.wait(320);
-  expect("participants: approving is sent", calls.some((c) => c.includes("creator_request_decide")), calls.join(" "));
-  expect("participants: the answer was approve", scenario.decided && scenario.decided.p_decision === "approve", JSON.stringify(scenario.decided));
-  expect("participants: the row is re-read", calls.some((c) => c.includes("creator_participants")), calls.join(" "));
-
-  calls.length = 0;
-  c9.click(c9.qs("[data-cr-ad-del]"));
-  await c9.wait(300);
-  expect("participants: removing an ad is sent", calls.some((c) => c.includes("creator_ad_delete")), calls.join(" "));
-  expect("participants: it is the right ad", scenario.deletedAd === "ad-9", String(scenario.deletedAd));
-  expect("participants: no errors", c9.errors.length === 0, c9.errors.join(" | "));
-  c9.window.close();
-
-  /* ---------------------------------------------------------------- */
   /* pass 10 — a member who is already let in writes and advertises   */
   /* ---------------------------------------------------------------- */
   scenario = {
@@ -1314,33 +1190,10 @@ async function passServer() {
   calls.length = 0;
   const s = await boot(12, { search: "?section=server" });
 
-  expect("server: the section is there", /Channels[\s\S]*Channel lists[\s\S]*Xtream accounts[\s\S]*Playlists[\s\S]*Server management[\s\S]*Subscribers/.test(s.text("[data-cr-tabs]")), s.text("[data-cr-tabs]"));
+  expect("server: the section is there", /Channels[\s\S]*Channel lists[\s\S]*Xtream accounts[\s\S]*Playlists/.test(s.text("[data-cr-tabs]")), s.text("[data-cr-tabs]"));
+  expect("server: no management tab is left", !/management|Subscribers/i.test(s.text("[data-cr-tabs]")), s.text("[data-cr-tabs]"));
   expect("server: the channels are listed", /BBC One/.test(s.text("[data-cr-view]")));
   expect("server: the list carries seats", /Seats/.test(s.text("[data-cr-view] thead")), s.text("[data-cr-view] thead"));
-
-  // the management tab
-  s.click(s.qs('[data-cr-tab="settings"]'));
-  await s.wait(220);
-  expect("server: available devices are asked for", Boolean(s.qs("[data-hub-viewers]")));
-  expect("server: the level's ceiling is stated", /100 at once/.test(s.text("[data-cr-view]")), s.text("[data-cr-view]").slice(0, 200));
-  expect("server: the excluded list is offered", Boolean(s.qs('[data-excluded-input="hub"]')));
-  expect("server: subscriptions can be switched off", Boolean(s.qs("[data-hub-auto]")));
-
-  s.change(s.qs("[data-hub-visibility]"), "exclusive");
-  await s.wait(40);
-  expect("server: exclusive reveals the criteria", !s.hidden('[data-aud="hub"]'));
-  expect("server: the criteria are the five", Boolean(s.qs('[data-aud-requires="hub"]')) && Boolean(s.qs('[data-aud-countries="hub"]')) && Boolean(s.qs('[data-aud-languages="hub"]')) && Boolean(s.qs('[data-aud-level="hub"]')) && Boolean(s.qs('[data-aud-wealth="hub"]')));
-  s.type(s.qs('[data-aud-countries="hub"]'), "Morocco, Egypt");
-  s.type(s.qs('[data-excluded-input="hub"]'), "ID100016");
-  s.type(s.qs("[data-hub-viewers]"), "50");
-  calls.length = 0;
-  s.click(s.qs("[data-cr-save-hub]"));
-  await s.wait(280);
-  expect("server: the hub save went out", calls.some((c) => c.includes("creator_hub_save")));
-  expect("server: the access rules followed it", calls.some((c) => c.includes("creator_hub_access")), calls.join(" "));
-  expect("server: the excluded codes travel", (scenario.savedAccess?.p_excluded || []).includes("ID100016"), JSON.stringify(scenario.savedAccess));
-  expect("server: the country rule travels", (scenario.savedAccess?.p_audience?.countries || []).includes("Morocco"), JSON.stringify(scenario.savedAccess));
-  expect("server: the device cap travels", scenario.savedAccess?.p_viewers === 50, JSON.stringify(scenario.savedAccess));
 
   // a channel with its group and EPG
   s.click(s.qs("[data-cr-add-toggle]"));
@@ -1440,14 +1293,9 @@ async function passCinema() {
   calls.length = 0;
   const s = await boot(13, { search: "?section=cinema" });
 
-  expect("cinema: the tabs are the cinema's", /Films[\s\S]*Episodes[\s\S]*Playlists[\s\S]*Cinema management[\s\S]*Subscribers/.test(s.text("[data-cr-tabs]")), s.text("[data-cr-tabs]"));
+  expect("cinema: the tabs are the cinema's", /Films[\s\S]*Episodes[\s\S]*Playlists/.test(s.text("[data-cr-tabs]")), s.text("[data-cr-tabs]"));
   expect("cinema: the films are listed", /Dune/.test(s.text("[data-cr-view]")));
   expect("cinema: the seats column is there", /Seats/.test(s.text("[data-cr-view] thead")));
-
-  s.click(s.qs('[data-cr-tab="settings"]'));
-  await s.wait(220);
-  expect("cinema: the film ceiling is stated", /100 at once/.test(s.text("[data-cr-view]")), s.text("[data-cr-view]").slice(0, 200));
-  expect("cinema: the series ceiling is explained", /1000/.test(s.text("[data-cr-view]")), s.text("[data-cr-view]").slice(0, 300));
 
   // a film
   s.click(s.qs("[data-cr-add-toggle]"));
@@ -1965,7 +1813,8 @@ async function seatPass() {
   const owner = await boot(62, { search: "?section=library&hub=hub-own" });
   await owner.wait(340);
   const ownerTabs = owner.qsa("[data-cr-tab]").map((btn) => btn.getAttribute("data-cr-tab"));
-  expect("owner: every tab is still there", ownerTabs.includes("settings") && ownerTabs.includes("subscribers"), ownerTabs.join(","));
+  expect("owner: the content tabs are all there", ownerTabs.join(",") === "books,documents", ownerTabs.join(","));
+  expect("owner: and management is not in the studio", !ownerTabs.some((key) => ["settings", "categories", "participants", "subscribers"].includes(key)), ownerTabs.join(","));
   expect("owner: no publisher seat is claimed", !/Publisher seat/i.test(owner.text("[data-cr-view]")), owner.text(".cr-bar").slice(0, 120));
   expect("owner: no errors", owner.errors.length === 0, owner.errors.join(" | "));
   owner.window.close();
