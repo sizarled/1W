@@ -1335,6 +1335,13 @@
 }
 
 /* creator pages — a surface, then one line per hub it owns --------- */
+.dsh-door {
+  overflow-wrap: anywhere;
+  text-align: right;
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
 .dsh-surface {
   display: inline-flex;
   align-items: center;

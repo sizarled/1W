@@ -1547,7 +1547,7 @@ function creatorView() {
     <section class="dsh-card">
       <div class="dsh-card__head"><h2 class="dsh-card__title">Where the content lives</h2></div>
       <dl class="dsh-kv">
-        ${CREATOR_SURFACES.map((s) => `<div><dt>${esc(s.surface)}</dt><dd>creator.html?section=${esc(s.section)}&tab=${esc(s.tab)}</dd></div>`).join("")}
+        ${CREATOR_SURFACES.map((s) => `<div><dt>${esc(s.surface)}</dt><dd class="dsh-mono dsh-door">creator.html?section=${esc(s.section)}&tab=${esc(s.tab)}</dd></div>`).join("")}
       </dl>
       <p class="dsh-help" style="margin-top:.6rem">A page is the hub — its name, its look, its audience. The tab above is where its content is written, and every table there is a studio table.</p>
     </section>
