@@ -976,6 +976,22 @@
   height: 13px;
 }
 
+/* a row is the door to its own thing: the title says so, the pointer agrees */
+.cr-row {
+  cursor: pointer;
+}
+
+.cr-row:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--text) 55%, transparent);
+  outline-offset: -2px;
+}
+
+.cr-row:hover .cr-title strong {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--text) 40%, transparent);
+  text-underline-offset: 3px;
+}
+
 .cr-title {
   display: grid;
   gap: 0.1rem;

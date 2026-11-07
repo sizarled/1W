@@ -1149,6 +1149,11 @@ same settings; what differs is what hangs underneath:
 | Section | Tabs | Items |
 | --- | --- | --- |
 | **Studio** | Videos · Podcasts · Playlists | `video`, `podcast`, `playlist` |
+
+**A row is a door.** Clicking anywhere on a table row opens the thing in it — a video in
+`video-editor.html?id=<code>`, an article or a question in the writing room, everything else in
+the item editor — and Enter or Space does the same on the focused row. The action menu, the links
+and the copy buttons keep their own clicks.
 | **Blog** | Articles · Drafts | `article` (published / draft) |
 | **Space** | Questions · Answers | `question`, `answer` (a child row) |
 | **Library** | Books · Documents | `book`, `document` |
@@ -2399,7 +2404,7 @@ node tools/dashboard-smoke.mjs   # 269 checks: the five gates, rail, popover, co
 node tools/sidebar-smoke.mjs     # 93 checks: the edge, the pin, Escape, the mobile drawer, the dashboard menu
 node tools/panel-smoke.mjs       # 90 checks: the desk's three states, the rows, the switch, the dialog, the shelf
 node tools/court-smoke.mjs       # 115 checks: the four steps, uploads, both doors, the court room
-node tools/creator-smoke.mjs     # 359 checks: the search (owners + publishers), the tables, the editors, a publisher's seat
+node tools/creator-smoke.mjs     # 363 checks: the search (owners + publishers), the tables, the editors, a publisher's seat
 node tools/publisher-smoke.mjs   # 52 checks: the program, the seat, the links, and the hand-off to the creator page
 node tools/iptv-smoke.mjs        # 43 checks: the playlists, the groups, the page, the deep links
 node tools/activated-smoke.mjs   # 35 checks: hidden panels, image link, ad pause, code return

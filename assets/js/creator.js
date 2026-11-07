@@ -951,7 +951,12 @@ function renderList(host, hub, tab) {
     ? `<div class="dsh-table-wrap cr-table"><table class="dsh-table">
         <thead><tr>${tab.cols.map((key) => `<th>${esc(COLS[key] || key)}</th>`).join("")}</tr></thead>
         <tbody>${rows
-          .map((row) => `<tr data-row="${esc(row.id)}">${tab.cols.map((key) => cellFor(key, row, tab)).join("")}</tr>`)
+          .map(
+            (row) =>
+              `<tr class="cr-row" data-row="${esc(row.id)}" data-cr-row="${esc(row.id)}" tabindex="0">${tab.cols
+                .map((key) => cellFor(key, row, tab))
+                .join("")}</tr>`
+          )
           .join("")}</tbody>
       </table></div>`
     : emptyBlock(
@@ -2893,6 +2898,26 @@ document.addEventListener("ae:drafted", () => {
   refresh().catch(() => {});
 });
 
+/**
+ * Opening a row.
+ *
+ * The title is the thing itself, so the whole row is the door to it: a video
+ * opens in the video editor that writes it, an article or a question in the
+ * writing room, and everything else in the item editor. The action menu and
+ * every link in the row keep their own click.
+ */
+function openRow(id) {
+  const row = [...state.rows, ...(state.questions || [])].find((entry) => entry.id === id);
+  if (!row) return;
+  const kind = editorKindOf(row);
+  if (kind === "article" || kind === "question") return openWriter({ id: row.code || "", kind });
+  if (kind === "video") {
+    location.href = `video-editor.html?id=${encodeURIComponent(row.code || "")}`;
+    return;
+  }
+  return editItem(id);
+}
+
 async function editItem(id) {
   const hub = currentHub();
   if (!hub) return;
@@ -3070,8 +3095,25 @@ async function copyLink(row) {
 /* ================================================================== */
 /* events                                                             */
 /* ================================================================== */
+/* Enter and Space open the row the pointer would */
+document.addEventListener("keydown", (event) => {
+  const focused = event.target?.closest?.("tr[data-cr-row]");
+  if (!focused) return;
+  if (event.key !== "Enter" && event.key !== " ") return;
+  event.preventDefault();
+  openRow(focused.dataset.crRow);
+});
+
 document.addEventListener("click", (event) => {
   const target = event.target;
+
+  /* a row is a door — but not when the click was meant for a button, a link or
+     the action menu inside it */
+  const row = target.closest("tr[data-cr-row]");
+  if (row && !target.closest("a, button, summary, details, input, select, textarea, label, [data-cr-act]")) {
+    event.preventDefault();
+    return openRow(row.dataset.crRow);
+  }
 
   if (target.closest("[data-cr-nav-creators]")) {
     event.preventDefault();

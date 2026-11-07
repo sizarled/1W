@@ -850,6 +850,20 @@ async function main() {
     return /Edit[\s\S]*Copy link[\s\S]*Delete/.test(first?.textContent || "");
   })());
 
+  /* the row itself is the door to the thing in it */
+  expect("row: every row is a door", s.qsa("[data-cr-view] tbody tr[data-cr-row]").length === 2 && s.qs("[data-cr-view] tbody tr[data-cr-row]")?.getAttribute("tabindex") === "0");
+  expect("row: it wears the pointer", s.qs("[data-cr-view] tbody tr[data-cr-row]")?.classList.contains("cr-row"));
+  s.click(s.qsa("[data-cr-view] tbody tr[data-cr-row]")[0]);
+  await s.wait(220);
+  expect("row: a click opens the item", s.qs("[data-item-title]")?.value === "The first film", s.qs("[data-item-title]")?.value);
+  s.click(s.qs("[data-cr-editor-back]"));
+  await s.wait(220);
+  s.click(s.qsa("[data-cr-view] .cr-act > summary")[0]);
+  await s.wait(60);
+  expect("row: the menu keeps its own click", !s.qs("[data-item-title]"), s.text("[data-cr-view]").slice(0, 80));
+  s.click(s.qsa("[data-cr-view] .cr-act > summary")[0]);
+  await s.wait(40);
+
   // search narrows it
   s.type(s.qs("[data-cr-search]"), "second");
   await s.wait(60);
