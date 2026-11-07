@@ -142,6 +142,30 @@ function accountPayload() {
   };
 }
 
+/* The Publisher program — a seat with two links, and the guest shape. */
+const PUBLISHER_GUEST = {
+  ok: true,
+  member: null,
+  publisher: null,
+  links: [],
+  conversions: [],
+  totals: { clicks: 0, signups: 0, points: 0, conversions: 0 },
+  values: { signup: 50, activation: 250, membership: 1000 },
+};
+
+const PUBLISHER_SEAT = {
+  ok: true,
+  member: { code: "ID100042", name: "Youssef El Amrani", username: "@youssef.amrani", avatar: "", points: 1250 },
+  publisher: { code: "IDPB100042", status: "active", channel: "The Casablanca Letter", place: "Casablanca", audience: 4200, note: "", created_at: new Date(NOW - 30 * 864e5).toISOString(), links: 2, clicks: 340, signups: 12, points: 1350 },
+  links: [
+    { id: "lnk-1", code: "K7M2QP4X", label: "Newsletter · March", hub: null, hub_code: null, hub_kind: null, hub_name: null, clicks: 300, signups: 10, points: 1100, created_at: new Date(NOW - 20 * 864e5).toISOString(), url: "register.html?ref=K7M2QP4X" },
+    { id: "lnk-2", code: "B4TR9ZQE", label: "Instagram bio", hub: "h-blog-a", hub_code: "IDBL100003", hub_kind: "blog", hub_name: "My blog", clicks: 40, signups: 2, points: 250, created_at: new Date(NOW - 5 * 864e5).toISOString(), url: "creator.html?studio=IDBL100003&ref=B4TR9ZQE" },
+  ],
+  conversions: [],
+  totals: { clicks: 340, signups: 12, points: 1350, conversions: 12 },
+  values: { signup: 50, activation: 250, membership: 1000 },
+};
+
 /* Creator management — three hubs across two kinds: a second blog, a hidden
    one, and a studio that already sits at the level's limit. */
 const CREATOR_LIMITS = {
@@ -258,6 +282,10 @@ function stubFetch(url, opts = {}) {
     return reply({ ok: true, removed: true });
   }
   if (href.includes("/rpc/member_api_keys")) return reply(apiKeysPayload());
+  if (href.includes("/rpc/publisher_me")) {
+    if (scenario.programFails) return Promise.resolve({ ok: false, status: 400, json: async () => ({}), text: async () => "publisher_me failed" });
+    return reply(scenario.program || PUBLISHER_GUEST);
+  }
   if (href.includes("/rpc/creator_hubs_list")) {
     if (scenario.creatorFails) return Promise.resolve({ ok: false, status: 400, json: async () => ({}), text: async () => "creator_hubs_list failed" });
     return reply({ ok: true, level: 3, hubs: scenario.creatorHubs || [], limits: CREATOR_LIMITS });
@@ -973,6 +1001,57 @@ function expect(name, condition, detail = "") {
   expect("creator retry: the page comes back", /The Amrani Letter/.test(bad.text('[data-view="creator"]')), bad.text('[data-view="creator"]').slice(0, 120));
   expect("creator retry: no retry left", !bad.qs("[data-creator-retry]"));
   expect("creator down: no errors", bad.errors.length === 0, bad.errors.join(" | "));
+  bad.window.close();
+}
+
+/* ------------------------------------------------------------------ */
+/* pass 8 — the Publisher program                                      */
+/* ------------------------------------------------------------------ */
+{
+  scenario = { status: "active", program: PUBLISHER_SEAT };
+  calls.length = 0;
+  const p = await boot("program");
+  p.click(p.qs('[data-nav] [data-goto="publisher"]'));
+  await p.wait(140);
+
+  const view = p.qs('[data-view="publisher"]');
+  expect("program: the view renders", Boolean(view));
+  expect("program: the seat is asked once", calls.filter((c) => c.includes("publisher_me")).length === 1);
+  expect("program: four numbers", p.qsa('[data-program-stats] .dsh-stat').length === 4);
+  expect("program: the code is the first number", /IDPB100042/.test(p.text('[data-program-stats]')), p.text('[data-program-stats]'));
+  expect("program: the clicks are counted", /340/.test(p.text('[data-program-stats]')), p.text('[data-program-stats]'));
+  expect("program: the points are counted", /1,350|1350/.test(p.text('[data-program-stats]')), p.text('[data-program-stats]'));
+  expect("program: the pay table is the promise", /50[\s\S]*250[\s\S]*1,000/.test(p.text('[data-view="publisher"]')), p.text('[data-view="publisher"]').slice(0, 200));
+  expect("program: the links are listed", /K7M2QP4X/.test(p.text('[data-view="publisher"]')) && /B4TR9ZQE/.test(p.text('[data-view="publisher"]')));
+  expect("program: a link says where it points", /My blog/.test(p.text('[data-view="publisher"]')) && /The whole site/.test(p.text('[data-view="publisher"]')));
+  expect("program: the door is the page", (p.qs('[data-view="publisher"] .dsh-card__head a')?.getAttribute("href") || "") === "publisher.html");
+  expect("program: the two kinds are explained", /Writing inside a hub/i.test(p.text('[data-view="publisher"]')) && /creator\.html\?section=publishers/.test(p.text('[data-view="publisher"]')));
+  expect("program: no errors", p.errors.length === 0, p.errors.join(" | "));
+  p.window.close();
+
+  /* a member with no seat is invited, not blocked */
+  scenario = { status: "active", program: PUBLISHER_GUEST };
+  const guest = await boot("program-guest");
+  guest.click(guest.qs('[data-nav] [data-goto="publisher"]'));
+  await guest.wait(140);
+  expect("program guest: the join door", (guest.qs('[data-view="publisher"] .dsh-card__head a')?.getAttribute("href") || "") === "publisher.html" && /Join the program/.test(guest.text('[data-view="publisher"]')));
+  expect("program guest: no code yet", /Not joined yet/.test(guest.text('[data-program-stats]')), guest.text('[data-program-stats]'));
+  expect("program guest: no error", !guest.qs("[data-program-retry]"));
+  expect("program guest: no errors", guest.errors.length === 0, guest.errors.join(" | "));
+  guest.window.close();
+
+  /* the program does not answer: a retry, and the rest of the page stands */
+  scenario = { status: "active", programFails: true };
+  const bad = await boot("program-down");
+  bad.click(bad.qs('[data-nav] [data-goto="publisher"]'));
+  await bad.wait(180);
+  expect("program down: it says so", /did not answer/i.test(bad.text('[data-view="publisher"]')), bad.text('[data-view="publisher"]').slice(0, 100));
+  expect("program down: the retry is offered", Boolean(bad.qs("[data-program-retry]")));
+  scenario = { status: "active", program: PUBLISHER_SEAT };
+  bad.click(bad.qs("[data-program-retry]"));
+  await bad.wait(220);
+  expect("program retry: the seat comes back", /IDPB100042/.test(bad.text("[data-program-stats]")), bad.text("[data-program-stats]"));
+  expect("program down: no errors", bad.errors.length === 0, bad.errors.join(" | "));
   bad.window.close();
 }
 

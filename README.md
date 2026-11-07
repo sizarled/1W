@@ -1249,7 +1249,7 @@ published (and refused without a media link), an article refused in a studio hub
 categories three deep with the fourth refused (`deep`) and a duplicate refused, a third blog created
 then a fourth refused (`limit`, level 1), staff added by code and an unknown code refused
 (`member`), and the subscriber list reporting a real member with their country.
-`tools/creator-smoke.mjs` (360 checks) runs the studio end to end — an empty studio that creates, configures
+`tools/creator-smoke.mjs` (374 checks) runs the studio end to end — an empty studio that creates, configures
 (private + password + staff), saves, refuses, and deletes a studio; a studio page holding one of each
 hub (tables, columns, action menus, the editor saving a draft then publishing, blog articles vs
 drafts, categories, subscribers, library books); and the `?section=&tab=` deep links — including
@@ -1262,10 +1262,29 @@ name, `@handle` and member code, three filters and a sort:
 
 | Control | Values |
 | --- | --- |
+| who | **Everyone · Owners · Publishers** — see below |
 | search | `name`, `@username`, `ID100015` — partial, case-insensitive |
 | kind | every kind, or only creators who run a studio, blog, space, library, gallery, server or cinema |
 | country | the countries that actually appear among creators (returned by the server) |
 | sort | most subscribers · most items · newest |
+
+#### Two kinds of people in one search
+
+The directory finds both halves of a creator page, and says which one a row is:
+
+| Who | What it means | Where it comes from |
+| --- | --- | --- |
+| **Owner** (مالك) | the member whose hubs these are — the studio, the blog, the space, the library, the gallery, the server, the cinema | `creator_hubs.owner` |
+| **Publisher** (ناشر) | somebody who writes *inside* a hub they do not own, after that owner approved them | their member code in `creator_hubs.publishers` |
+| **Owner & publisher** | both at once, which is the normal case for a working creator | the two above |
+
+`?section=publishers` (or `?role=publisher`, or the **Publishers** item in the studio's
+discover rail) opens the same search on the second half. A publisher card carries the badge, the
+number of places they write in, and a dashed chip per hub — each one links straight to that hub —
+and their own page grows a **Writes in** block beside the hubs they run, with the owner's name on
+every card. `creators_search(token, role, query, kind, country, sort)` answers all three shapes
+(`''` / `all`, `owner`, `publisher`), counts both (`owners`, `publishers`) and never mentions a
+private hub: a member who only writes inside one is not listed at all.
 
 Each card is a creator: avatar or initials, name, handle, code, flag and country, the seven kinds
 they run with their counts, their fields, and hubs / subscribers / items. One click opens their page:
@@ -1353,10 +1372,52 @@ way, under "Advertising in this hub"; the public reply only ever carries the `li
 | `creator_ad_save / creator_ad_delete / creator_ads` | the ad itself, for an approved advertiser and for the owner |
 | `creator_submit_item(token, hub, kind, …)` | a publisher's draft |
 
-#### The publisher's desk — `publisher.html`
+### Publisher — the program for creators outside the site
 
-An approved publisher is not a guest of the studio: they have a page of their own, and it holds the
-**real editor**, not a thinner copy of it. `publisher.html` embeds `video-editor.html`'s own form —
+**Publisher is not the same word as the search's.** In the directory a *publisher* is a member
+writing inside somebody else's hub. **This page is for the other kind: the creator who works
+outside 1World** — a channel, a newsletter, a Telegram group, a blog of their own — and carries the
+site's blogs, libraries, studios and films to an audience that never comes here.
+
+`publisher.html` has three rooms:
+
+| Room | What it holds |
+| --- | --- |
+| **The program** | what it is, the three steps, the pay table, and the seat: a code `IDPB100042`-style, where you publish, from where, how many people read you |
+| **Your links** | one link per hub or one for the whole site, each with its URL, clicks, sign-ups and points — plus the conversions table |
+| **Publish into a hub** | the older half, unchanged: the video editor, for a member an owner let in |
+
+What a conversion is worth, server-side:
+
+| Conversion | Points | Written by |
+| --- | --- | --- |
+| a click through the link | — | `publisher_visit(code)` — the page a `?ref=` lands on |
+| the visitor makes an account | 50 | `publisher_credit(code, member, 'signup')` |
+| the account is activated | 250 | `publisher_credit(code, member, 'activation')` |
+| the account takes a membership | 1 000 | `publisher_credit(code, member, 'membership')` |
+
+`publisher_credit` is **granted to `service_role` only** — a browser cannot mint its own points — and
+one member counts once per link per kind (a partial unique index). The points are written to the same
+`points_ledger` the rest of the site spends from, so a publisher's reward is spendable like any other
+point. A link is `register.html?ref=<code>` or `creator.html?studio=<hub code>&ref=<code>`; the app
+shell counts the click on arrival (`app.js` → `publisher_visit`) and keeps the code for the session so
+the registration page can credit the same publisher. A private or hidden hub cannot be promoted.
+
+DDL + functions: `tools/sql/publisher-program.sql` — `publishers`, `publisher_links`,
+`publisher_conversions`, and `publisher_me` / `publisher_join` / `publisher_link_save` /
+`publisher_link_delete` / `publisher_visit` / `publisher_credit`. **Applied** and exercised on the
+live project: a seat taken, its code issued, a link made for the whole site and one for a hub, a
+click counted by `publisher_visit`, and the JSON the page reads.
+
+The dashboard's **Publisher management** section is the same program seen from the member's side: the
+code, the clicks, the sign-ups and the points as four numbers, the pay table, the links as a table,
+and the two kinds of publisher spelled out so nobody confuses the seat in someone's blog with the
+program.
+
+#### The desk — the editor inside `publisher.html`
+
+The third room is the older half, and an approved publisher is not a guest of the studio: they have
+the **real editor**, not a thinner copy of it. `publisher.html` embeds `video-editor.html`'s own form —
 the link with drag & drop and the whole host list, the thumbnail (upload / picture / from the video),
 the title and description counters, the tags, the language, the age, the visibility with its
 exclusive rules and its private list and passwords, the schedule, the autosaved draft, the sticky
@@ -1392,10 +1453,14 @@ block that rolled itself back: a member who owned nothing asked the desk and got
 `video_save` refused their hub with `hub_role`; the owner then approved them into a cinema
 (`IDCN100006`), the desk listed it as `role: publisher`, and the same call wrote a **published**
 video into that hub (`{ok:true, status:"published", code:"PST-001034", hub:"IDCN100006"}`) while a hub
-that never approved them still answered `hub_role`. `tools/publisher-smoke.mjs` (78 checks) runs the
-page end to end in jsdom: signed out, approved nowhere, the rail and the editor's picker agreeing,
-the full form present, a publish that names the hub and stays on the page, the clean form, the two
-tabs, the rail retargeting the editor, and both deep links (`?studio=`, `?id=`).
+that never approved them still answered `hub_role`. `tools/publisher-smoke.mjs` (107 checks) runs the
+page end to end in jsdom: the program asked on boot and the seat taken (the payload carries where the
+member publishes and their audience), the code and the four numbers following it, a link made for the
+whole site and one pointed at a typed hub code, its row with the URL and counters, the removal, the
+conversions table, the guest seeing the program and both ways in — then the desk: signed out,
+approved nowhere, the rail and the editor's picker agreeing, the full form present, a publish that
+names the hub and stays on the page, the clean form, the two tabs, the rail retargeting the editor,
+and both deep links (`?studio=`, `?id=`).
 
 DDL + functions: `tools/sql/creator-requests.sql` — **applied**, and exercised on the real database:
 a member asked to advertise (banner, 500 points) and to publish in a hub, the owner read both in
@@ -2309,10 +2374,12 @@ browser that already has the old file.
 ### Tests
 
 ```bash
-node tools/dashboard-smoke.mjs   # 216 checks: the five gates, rail, popover, codes, sections, Unlock now, Account settings, creator pages
+node tools/dashboard-smoke.mjs   # 236 checks: the five gates, rail, popover, codes, sections, Unlock now, Account settings, creator pages, the Publisher program
 node tools/sidebar-smoke.mjs     # 93 checks: the edge, the pin, Escape, the mobile drawer, the dashboard menu
 node tools/panel-smoke.mjs       # 90 checks: the desk's three states, the rows, the switch, the dialog, the shelf
 node tools/court-smoke.mjs       # 115 checks: the four steps, uploads, both doors, the court room
+node tools/creator-smoke.mjs     # 374 checks: the search (owners + publishers), the studio, the editors
+node tools/publisher-smoke.mjs   # 107 checks: the program, the seat, the links, and the desk under them
 node tools/iptv-smoke.mjs        # 43 checks: the playlists, the groups, the page, the deep links
 node tools/activated-smoke.mjs   # 35 checks: hidden panels, image link, ad pause, code return
 node tools/rest-smoke.mjs        # 32 checks: the three steps, the link, the device path, the .txt
@@ -2730,7 +2797,7 @@ assets/js/blocks.js         blocked people/media cache used by every list
 assets/css/video.css        member videos: the feed, the player, the publish page
 assets/js/videos.js         videos.html: feed, watch screen, comments, reactions
 assets/js/video-editor.js   video-editor.html: the publish form and video_save (embedded by publisher.html)
-assets/js/publisher.js       publisher.html: the desk — the rail, the tabs, the published list
+assets/js/publisher.js       publisher.html: the program (seat, links, conversions) and the desk
 assets/css/publisher.css    the desk around the embedded editor
 assets/css/article.css      member articles: the index, the reader, the writing page
 assets/js/articles.js       articles.html: the index, the search, the shelves

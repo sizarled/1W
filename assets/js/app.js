@@ -11,8 +11,29 @@ import { avatarPlaceholder, enableDragScrollAll } from "./utils.js";
 import { startVisitTracking, finishVisit, lastVisitError } from "./visits.js?v=20261101a";
 import { initTheme, setTheme, toggleTheme, resetTheme, currentTheme, systemTheme } from "./theme.js";
 import { lookupVisitor, cachedVisitor } from "./geo.js";
+import { rpc } from "./data.js";
+
+/**
+ * A `?ref=` in the address is a publisher's link. The click is counted once
+ * per visit (`publisher_visit`), and the code is kept for the session so the
+ * registration page can credit the same publisher if this visitor signs up.
+ */
+async function capturePublisherRef() {
+  try {
+    const code = String(new URLSearchParams(location.search).get("ref") || "").trim().toUpperCase();
+    if (!code || !/^[A-Z0-9]{4,24}$/.test(code)) return;
+    const seen = `1w.pub.ref.${code}`;
+    if (sessionStorage.getItem(seen)) return;
+    sessionStorage.setItem(seen, "1");
+    sessionStorage.setItem("1w.pub.ref", code);
+    await rpc("publisher_visit", { p_code: code });
+  } catch (error) {
+    /* a counter is never worth a broken page */
+  }
+}
 
 async function boot() {
+  capturePublisherRef();
   mountShell();
   enableDragScrollAll();
   // the header list can be re-rendered when the session changes → wire it again

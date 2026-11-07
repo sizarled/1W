@@ -15,7 +15,7 @@
     <link rel="stylesheet" href="assets/css/layout.css?v=20261116a" />
     <link rel="stylesheet" href="assets/css/components.css?v=20261116b" />
     <link rel="stylesheet" href="assets/css/video.css?v=20261116a" />
-    <link rel="stylesheet" href="assets/css/publisher.css?v=20261110a" />
+    <link rel="stylesheet" href="assets/css/publisher.css?v=20261116e" />
     <script>
       /* apply the saved theme (or the OS preference) before first paint */
       (function () {
@@ -33,9 +33,9 @@
         } catch (e) {}
       })();
     </script>
-    <script type="module" src="assets/js/app.js?v=20261116c"></script>
+    <script type="module" src="assets/js/app.js?v=20261116e"></script>
     <script type="module" src="assets/js/video-editor.js?v=20261113a"></script>
-    <script type="module" src="assets/js/publisher.js?v=20261110a"></script>
+    <script type="module" src="assets/js/publisher.js?v=20261116e"></script>
   </head>
   <body data-page="publisher" data-title="Publisher" data-ved-embed="1" data-ved-hubcode="" data-pub-tab="new">
     <a class="skip-link" href="#main">Skip to content</a>
@@ -47,22 +47,126 @@
         <header class="vids__head">
           <div class="vids__intro">
             <p class="eyebrow"><span class="eyebrow__dot"></span>Publisher</p>
-            <h1 class="vids__title" data-ved-heading>The publisher's desk</h1>
+            <h1 class="vids__title">Carry 1World outside the site</h1>
             <p class="vids__sub">
-              The video editor itself, in this page: the link, the picture, who may see it and when. What you publish
-              here goes into the hub that approved you — live, under your name, with no one to review it first.
+              A publisher is a creator who works <b>outside</b> 1World: a channel, a newsletter, a group, a blog of
+              their own. Take a blog, a library, a studio or a whole film to your own audience with your own link,
+              and earn points for the people who arrive through it — per sign-up, per activation, per membership.
             </p>
           </div>
           <div class="vids__acts">
-            <a class="btn btn--ghost btn--sm" href="creator.html" data-pub-hub-link hidden><i data-icon="tv"></i> Open the hub</a>
-            <a class="btn btn--quiet btn--sm" href="videos.html"><i data-icon="film"></i> All videos</a>
+            <a class="btn btn--primary btn--sm" href="#pub-program" data-pub-jump="program"><i data-icon="sparkle"></i> Join the program</a>
+            <a class="btn btn--ghost btn--sm" href="creator.html"><i data-icon="compass"></i> Browse the creators</a>
           </div>
         </header>
 
-        <!-- a member without a hub, or without a session -->
-        <div class="vempty" data-pub-state hidden></div>
+        <!-- four numbers: the seat, the clicks, the people, the points -->
+        <div class="pstats" data-pub-stats aria-live="polite"></div>
 
-        <div class="pub" data-pub-shell hidden>
+        <!-- the three rooms of the page -->
+        <div class="pub__views" role="tablist" aria-label="Publisher">
+          <button class="pub__view is-on" type="button" role="tab" aria-selected="true" data-pub-view="program">
+            <i data-icon="sparkle"></i> The program
+          </button>
+          <button class="pub__view" type="button" role="tab" aria-selected="false" data-pub-view="links">
+            <i data-icon="link"></i> Your links <span class="vcount" data-pub-link-count></span>
+          </button>
+          <button class="pub__view" type="button" role="tab" aria-selected="false" data-pub-view="desk">
+            <i data-icon="upload"></i> Publish into a hub
+          </button>
+        </div>
+
+        <p class="pub__flash" data-pub-flash hidden></p>
+
+        <!-- ---------------------------------------------------------- -->
+        <!-- the program                                                -->
+        <!-- ---------------------------------------------------------- -->
+        <section class="pub__viewpanel" data-pub-viewpanel="program" id="pub-program">
+          <div class="promo">
+            <div class="promo__steps">
+              <h2 class="promo__title">Three steps, outside the site</h2>
+              <ol class="promo__list">
+                <li>
+                  <span class="promo__n">1</span>
+                  <div>
+                    <b>Join the program</b>
+                    <p>One form: where you publish, from where, and how many people read you. It gives you a seat and a
+                    public code, <code>IDPB100001</code>-style.</p>
+                  </div>
+                </li>
+                <li>
+                  <span class="promo__n">2</span>
+                  <div>
+                    <b>Take a link</b>
+                    <p>One per hub, or one for the whole site. Paste it in your channel, your post, your video
+                    description or your newsletter — anywhere outside 1World.</p>
+                  </div>
+                </li>
+                <li>
+                  <span class="promo__n">3</span>
+                  <div>
+                    <b>Get paid in points</b>
+                    <p>The click is counted for free. A visitor who signs up, activates, or takes a membership through
+                    your link pays you — in the same points the site spends.</p>
+                  </div>
+                </li>
+              </ol>
+            </div>
+
+            <aside class="promo__pay">
+              <h2 class="promo__title">What a conversion pays</h2>
+              <table class="promo__table">
+                <thead><tr><th>Conversion</th><th>Points</th></tr></thead>
+                <tbody>
+                  <tr><td>A click through your link</td><td>—</td></tr>
+                  <tr><td>The visitor makes an account</td><td><b data-pub-value="signup">50</b></td></tr>
+                  <tr><td>The account is activated</td><td><b data-pub-value="activation">250</b></td></tr>
+                  <tr><td>The account takes a membership</td><td><b data-pub-value="membership">1,000</b></td></tr>
+                </tbody>
+              </table>
+              <p class="vhint">
+                100 points = $1, as everywhere on the site. Points land in the member ledger the moment the server
+                records the conversion — nothing is claimed, nothing is estimated.
+              </p>
+              <ul class="promo__rules">
+                <li>One seat per member; the code is fixed and public.</li>
+                <li>Up to 40 links, one per hub or one for the whole site.</li>
+                <li>One conversion counts once per member per link, per kind.</li>
+                <li>A private or hidden hub cannot be promoted.</li>
+              </ul>
+            </aside>
+          </div>
+
+          <div class="seat" data-pub-seat></div>
+        </section>
+
+        <!-- ---------------------------------------------------------- -->
+        <!-- the links                                                  -->
+        <!-- ---------------------------------------------------------- -->
+        <section class="pub__viewpanel" data-pub-viewpanel="links" hidden>
+          <div class="links">
+            <div class="links__build" data-pub-link-form></div>
+            <div class="links__list" data-pub-links></div>
+          </div>
+          <div class="links__conv">
+            <h2 class="promo__title">Conversions</h2>
+            <div data-pub-conversions></div>
+          </div>
+        </section>
+
+        <!-- ---------------------------------------------------------- -->
+        <!-- the desk: the editor, into a hub that approved this member  -->
+        <!-- ---------------------------------------------------------- -->
+        <section class="pub__viewpanel" data-pub-viewpanel="desk" hidden>
+          <h2 class="promo__title pub__desktitle" data-ved-heading>The publisher's desk</h2>
+          <p class="vhint pub__desknote">
+            This half is for a member an owner let in: the editor writes straight into that hub, under your name,
+            with nobody reviewing it first.
+          </p>
+          <!-- a member without a hub, or without a session -->
+          <div class="vempty" data-pub-state hidden></div>
+
+          <div class="pub" data-pub-shell hidden>
           <aside class="pub__rail">
             <div class="pub__railhead">
               <h2 class="pub__railtitle">Where you publish</h2>
@@ -83,9 +187,7 @@
               </button>
             </div>
 
-            <p class="pub__flash" data-pub-flash hidden></p>
-
-            <!-- the editor, embedded — the same form video-editor.html holds -->
+     — the same form video-editor.html holds -->
             <div class="pub__panel" data-pub-panel="new">
               <div data-ved-state hidden></div>
 
@@ -389,6 +491,7 @@
             </div>
           </div>
         </div>
+        </section>
       </div>
     </main>
 

@@ -140,6 +140,8 @@ const state = {
   apiBusy: false,
   /* the creator pages: the hubs behind the seven rows, asked once per visit */
   creator: { hubs: [], limits: {}, level: 1, loaded: false, loading: false, error: "" },
+  /* the publisher program: the seat, the links, the counters */
+  program: { me: null, loaded: false, tried: false, loading: false, error: "" },
 };
 
 const token = sessionToken();
@@ -1615,38 +1617,150 @@ function wireCreator(root) {
   loadCreatorPages();
 }
 
-/** Publisher surfaces. A publisher's door is the desk, with the video editor in it. */
+/* ================================================================== */
+/* the Publisher program                                              */
+/* ================================================================== */
+
+/**
+ * Publisher management is the program, not a page of hubs.
+ *
+ * A publisher works *outside* the site: a channel, a newsletter, a group, a
+ * blog of their own. They carry 1World with a link of their own and are paid in
+ * points for the people the link brings — `publisher_me` carries the seat, the
+ * links and the counters, and `publisher.html` is where the links are made.
+ */
+const PUBLISHER_VALUES = [
+  ["A click through a link", "—", "Counted, nothing owed"],
+  ["The visitor makes an account", "50", "points"],
+  ["The account is activated", "250", "points"],
+  ["The account takes a membership", "1,000", "points"],
+];
+
+function publisherStats() {
+  const me = state.program.me || {};
+  const seat = me.publisher || null;
+  const totals = me.totals || {};
+  return [
+    stat("sparkle", "Publisher code", seat ? seat.code : "—", seat ? (seat.status === "paused" ? "Paused" : "Active seat") : "Not joined yet"),
+    stat("external", "Clicks", num(Number(totals.clicks) || 0), "Through every link"),
+    stat("users", "Sign-ups", num(Number(totals.signups) || 0), "People who stayed"),
+    stat("gem", "Points earned", num(Number(totals.points) || 0), seat ? `${num(Number(seat.points) || 0)} from ${num(Number(seat.links) || 0)} link(s)` : "Nothing yet"),
+  ].join("");
+}
+
 function publisherView() {
-  const rows = [
-    ["e-Store", "Products and orders"],
-    ["e-Auction", "Standard lots"],
-    ["Super auction", "Featured lots"],
-    ["Hyper auction", "Premium lots"],
-    ["e-Bank", "Wallet and payouts"],
-    ["Community", "Followers and members"],
-  ];
-  return `
-    <div class="dsh-note"><i data-icon="info"></i><span>
-      Every publisher page is managed here: name, description, logo, cover, category and niche.
-      Publishing opens the public page at <b>publisher.html?studio=ID</b>.
-    </span></div>
-    <section class="dsh-card">
-      <div class="dsh-card__head"><h2 class="dsh-card__title">Your publisher pages</h2>
-        <a class="dsh-btn dsh-btn--sm" href="publisher.html"><i data-icon="upload"></i>The publisher's desk</a></div>
-      <div class="dsh-table-wrap"><table class="dsh-table">
-        <thead><tr><th>Surface</th><th>For</th><th>Status</th><th></th></tr></thead>
-        <tbody>${rows
+  const me = state.program.me || {};
+  const seat = me.publisher || null;
+  const links = Array.isArray(me.links) ? me.links : [];
+  const busy = state.program.loading && !state.program.loaded;
+
+  const notice = state.program.error
+    ? `<div class="dsh-empty">
+        <i data-icon="lock"></i>
+        <p class="dsh-empty__title">The program did not answer</p>
+        <p class="dsh-empty__text">Check the connection and try again — the desk still opens.</p>
+        <button class="dsh-btn dsh-btn--sm" type="button" data-program-retry><i data-icon="refresh"></i>Try again</button>
+      </div>`
+    : "";
+
+  const linkRows = links.length
+    ? `<div class="dsh-table-wrap"><table class="dsh-table">
+        <thead><tr><th>Link</th><th>Points to</th><th>Clicks</th><th>Sign-ups</th><th>Points</th><th></th></tr></thead>
+        <tbody>${links
           .map(
-            ([name, use]) => `<tr>
-              <td><strong>${esc(name)}</strong></td><td>${esc(use)}</td>
-              <td><span class="dsh-chip" data-tone="off">Not created</span></td>
-              <td><div class="dsh-table__actions"><button class="dsh-btn dsh-btn--sm" type="button" data-surface="${esc(name)}"><i data-icon="plus"></i>Create</button></div></td>
+            (link) => `<tr>
+              <td><strong>${esc(link.label || link.code)}</strong><br /><code class="dsh-hub__code">${esc(link.code)}</code></td>
+              <td>${esc(link.hub_name || "The whole site")}</td>
+              <td>${esc(num(Number(link.clicks) || 0))}</td>
+              <td>${esc(num(Number(link.signups) || 0))}</td>
+              <td>${esc(num(Number(link.points) || 0))}</td>
+              <td><a class="dsh-btn dsh-btn--sm" href="publisher.html?tab=links"><i data-icon="link"></i>Open</a></td>
             </tr>`
           )
           .join("")}</tbody>
+      </table></div>`
+    : busy
+      ? `<p class="dsh-help">Reading your links…</p>`
+      : `<p class="dsh-help">${seat ? "No link yet — one for the whole site is enough to start." : "Join the program to get a code and your first link."}</p>`;
+
+  return `
+    <div class="dsh-note"><i data-icon="info"></i><span>
+      A publisher works outside 1World: a channel, a newsletter, a group, a blog of their own. Take a link, carry a
+      blog, a library, a studio or a whole film to your own audience, and earn points for the people who arrive —
+      <b>${PUBLISHER_VALUES[1][1]}</b> per sign-up, <b>${PUBLISHER_VALUES[2][1]}</b> per activation,
+      <b>${PUBLISHER_VALUES[3][1]}</b> per membership.
+    </span></div>
+    ${notice}
+    <div class="dsh-grid" data-program-stats>${publisherStats()}</div>
+    <section class="dsh-card">
+      <div class="dsh-card__head">
+        <h2 class="dsh-card__title">The program</h2>
+        <a class="dsh-btn dsh-btn--sm" href="publisher.html">${seat ? "Your links" : "Join the program"}<i data-icon="arrowRight"></i></a>
+      </div>
+      <div class="dsh-table-wrap"><table class="dsh-table">
+        <thead><tr><th>Conversion</th><th>Points</th><th></th></tr></thead>
+        <tbody>${PUBLISHER_VALUES.map(
+          ([what, points, meta]) => `<tr>
+            <td><strong>${esc(what)}</strong></td>
+            <td>${esc(points)}</td>
+            <td>${esc(meta)}</td>
+          </tr>`
+        ).join("")}</tbody>
       </table></div>
+      <p class="dsh-help" style="margin-top:.6rem">100 points = $1, as everywhere on the site. Points land in the
+      member ledger the moment the server records the conversion; a browser cannot mint them.</p>
     </section>
-  `;
+    <section class="dsh-card">
+      <div class="dsh-card__head">
+        <h2 class="dsh-card__title">Your links</h2>
+        <span class="dsh-chip">${esc(num(links.length))}</span>
+      </div>
+      <div data-program-links>${linkRows}</div>
+    </section>
+    <section class="dsh-card">
+      <div class="dsh-card__head"><h2 class="dsh-card__title">Two kinds of publisher</h2></div>
+      <dl class="dsh-kv">
+        <div><dt>Publisher (this program)</dt><dd class="dsh-door">outside the site · points per conversion</dd></div>
+        <div><dt>Writing inside a hub</dt><dd class="dsh-door">creator.html?section=publishers · the owners who let you in</dd></div>
+      </dl>
+      <p class="dsh-help" style="margin-top:.6rem">A member can be both: the program pays for the audience you bring,
+      a hub seat is where you write. The search in <b>creator.html</b> lists the second kind too.</p>
+    </section>`;
+}
+
+/**
+ * One call, once per visit, then the numbers repaint in place.
+ */
+async function loadProgram({ force = false } = {}) {
+  const c = state.program;
+  if (c.loading) return;
+  if (c.tried && !force) return;
+  c.tried = true;
+  c.loading = true;
+  c.error = "";
+  let res = null;
+  try {
+    res = await rpc("publisher_me", { p_token: token || "" });
+  } catch {
+    res = null;
+  }
+  c.loading = false;
+  if (!res || res.ok !== true) {
+    c.error = "network";
+  } else {
+    c.loaded = true;
+    c.me = res;
+  }
+  /* the notice and the retry live in the section, so the section is redrawn */
+  if (state.view !== "publisher") return;
+  setView("publisher", { silent: true });
+}
+
+function wireProgram(root) {
+  root.addEventListener("click", (event) => {
+    if (event.target.closest("[data-program-retry]")) loadProgram({ force: true });
+  });
+  loadProgram();
 }
 
 function advertiserView() {
@@ -2421,6 +2535,7 @@ function wireView(key, root) {
   if (key === "settings-account") wireAccount(root);
   if (key === "settings-platforms") wirePlatforms(root);
   if (key === "creator") wireCreator(root);
+  if (key === "publisher") wireProgram(root);
 
   const form = qs("[data-code-form]", root);
   if (form) {

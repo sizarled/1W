@@ -1291,6 +1291,120 @@
   line-height: 1.6;
 }
 
+/* the search's three doors: everyone, owners, publishers ------------ */
+.crp-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.75rem;
+}
+
+.crp-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  height: 30px;
+  padding: 0 0.7rem;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 0.74rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.crp-role:hover {
+  border-color: var(--line-3);
+  color: var(--text);
+}
+
+.crp-role.is-on {
+  border-color: var(--text);
+  background: var(--text);
+  color: var(--bg);
+}
+
+.crp-role i {
+  opacity: 0.75;
+}
+
+.crp-role__n {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.65;
+  font-size: 0.7rem;
+}
+
+/* the role a card is, and where a publisher writes ------------------ */
+.crp-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 0.4rem;
+  margin-left: 0.4rem;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  vertical-align: middle;
+}
+
+.crp-badge[data-tone="publisher"] {
+  border-style: dashed;
+}
+
+.crp-profile__name .crp-badge {
+  font-size: 0.6rem;
+  vertical-align: 0.35em;
+}
+
+.crp-writes {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+}
+
+.crp-writes__label {
+  color: var(--faint);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.62rem;
+}
+
+.crp-write {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  padding: 0 0.45rem;
+  height: 21px;
+  border: 1px dashed var(--line-2);
+  border-radius: 999px;
+  color: var(--text-2);
+  text-decoration: none;
+}
+
+.crp-write:hover {
+  border-color: var(--line-3);
+  color: var(--text);
+}
+
+.crp-writes__note {
+  margin: 0 0 0.6rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  max-width: 62ch;
+}
+
+.crp-hubcard--write .crp-hubcard__desc b {
+  color: var(--text);
+}
+
 .crp-search {
   display: grid;
   gap: 0.5rem;

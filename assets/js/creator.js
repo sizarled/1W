@@ -380,7 +380,7 @@ const state = {
   hubError: "",
   participants: null,
   ads: null,
-  directory: { q: "", kind: "", country: "", sort: "subscribers", rows: [], countries: [], count: 0, loading: false, error: "" },
+  directory: { q: "", role: "", kind: "", country: "", sort: "subscribers", rows: [], countries: [], count: 0, owners: 0, publishers: 0, loading: false, error: "" },
 };
 
 const el = (sel, root = document) => qs(sel, root);
@@ -594,10 +594,16 @@ function renderRail() {
   const discover = el("[data-cr-discover]");
   if (discover) {
     const on = isPublic();
+    const role = on ? state.directory.role : "";
     discover.innerHTML = `
-      <button class="cr-section cr-section--discover ${on ? "is-on" : ""}" type="button" data-cr-nav-creators aria-current="${on ? "page" : "false"}">
+      <button class="cr-section cr-section--discover ${on && role !== "publisher" ? "is-on" : ""}" type="button" data-cr-nav-creators aria-current="${on && role !== "publisher" ? "page" : "false"}">
         <i data-icon="search"></i>
         <span class="cr-section__name">Creators</span>
+        <span class="cr-section__count">find</span>
+      </button>
+      <button class="cr-section cr-section--discover ${role === "publisher" ? "is-on" : ""}" type="button" data-cr-nav-publishers aria-current="${role === "publisher" ? "page" : "false"}">
+        <i data-icon="pen"></i>
+        <span class="cr-section__name">Publishers</span>
         <span class="cr-section__count">find</span>
       </button>`;
     hydrateIcons(discover);
@@ -607,7 +613,8 @@ function renderRail() {
   if (foot) {
     foot.innerHTML = signedIn
       ? `<a class="cr-side__link" href="profile.html"><i data-icon="user"></i> Your profile</a>
-         <a class="cr-side__link" href="dashboard.html"><i data-icon="dashboard"></i> Dashboard</a>`
+         <a class="cr-side__link" href="dashboard.html#creator"><i data-icon="dashboard"></i> Your creator pages</a>
+         <a class="cr-side__link" href="dashboard.html"><i data-icon="settings"></i> Dashboard</a>`
       : `<a class="cr-side__link" href="login.html"><i data-icon="login"></i> Sign in</a>
          <a class="cr-side__link" href="register.html"><i data-icon="user"></i> Create an account</a>`;
     hydrateIcons(foot);
@@ -1754,7 +1761,8 @@ function syncUrl() {
   try {
     const params = new URLSearchParams();
     if (state.view === "creators") {
-      params.set("section", "creators");
+      params.set("section", state.directory.role === "publisher" ? "publishers" : "creators");
+      if (state.directory.role === "owner") params.set("role", "owner");
     } else if (state.view === "creator") {
       params.set("creator", state.creatorRef || "");
     } else if (state.view === "hubview") {
@@ -1890,11 +1898,14 @@ function renderDirectory(host) {
       <header class="crp-hero">
         <p class="crp-hero__eyebrow"><i data-icon="sparkle"></i> The directory</p>
         <h1 class="crp-hero__title">Find a creator</h1>
-        <p class="crp-hero__text">Search by name, handle or member code, then walk into the studios, blogs, spaces, libraries, galleries, servers and cinemas they run.</p>
+        <p class="crp-hero__text">${esc(directoryBlurb())}</p>
+        <div class="crp-roles" role="tablist" aria-label="Who are you looking for">
+          ${directoryRoles()}
+        </div>
         <form class="crp-search" data-crp-form role="search">
           <label class="crp-search__box">
             <i data-icon="search"></i>
-            <input class="crp-search__input" type="search" name="q" value="${esc(d.q)}" placeholder="Name, @handle or ID100015" aria-label="Search creators" data-crp-q autocomplete="off" />
+            <input class="crp-search__input" type="search" name="q" value="${esc(d.q)}" placeholder="Name, @handle or ID100015" aria-label="Search creators and publishers" data-crp-q autocomplete="off" />
           </label>
           <div class="crp-search__filters">
             <select class="dsh-select" data-crp-kind aria-label="Filter by kind of hub">${kindOptions}</select>
@@ -1910,13 +1921,53 @@ function renderDirectory(host) {
   hydrateIcons(host);
 }
 
+/* the three doors of the search: everybody, the owners, the publishers */
+const DIRECTORY_ROLES = [
+  { key: "", label: "Everyone", icon: "users", blurb: "Creators and publishers in one list." },
+  { key: "owner", label: "Owners", icon: "crown", blurb: "The members who own the studios, blogs, spaces, libraries, galleries, servers and cinemas." },
+  { key: "publisher", label: "Publishers", icon: "pen", blurb: "The members who write in hubs they do not own — a blog, a library, a studio somebody else runs." },
+];
+
+function roleOf() {
+  const key = state.directory.role;
+  return DIRECTORY_ROLES.find((row) => row.key === key) || DIRECTORY_ROLES[0];
+}
+
+function directoryBlurb() {
+  const role = roleOf();
+  return role.key === ""
+    ? "Search by name, handle or member code: the owners who run the studios, blogs, spaces, libraries, galleries, servers and cinemas — and the publishers who write inside hubs they do not own."
+    : role.key === "owner"
+      ? "Only the owners: the member whose name is on the studio, the blog, the space, the library, the gallery, the server or the cinema."
+      : "Only the publishers: the member who writes inside somebody else's hub, after that owner approved them.";
+}
+
+function directoryRoles() {
+  const d = state.directory;
+  const counts = { "": Number(d.owners || 0) + 0, owner: Number(d.owners || 0), publisher: Number(d.publishers || 0) };
+  return DIRECTORY_ROLES.map((role) => {
+    const on = d.role === role.key;
+    const n = counts[role.key];
+    return `<button class="crp-role ${on ? "is-on" : ""}" type="button" role="tab" aria-selected="${on}" data-crp-role="${esc(role.key)}" title="${esc(role.blurb)}">
+      <i data-icon="${esc(role.icon)}"></i>${esc(role.label)}${d.role === "" && role.key === "" ? "" : n ? `<span class="crp-role__n">${esc(num(n))}</span>` : ""}
+    </button>`;
+  }).join("");
+}
+
 function directoryLine() {
   const d = state.directory;
-  if (d.loading) return "Looking for creators…";
+  if (d.loading) return d.role === "publisher" ? "Looking for publishers…" : "Looking for creators…";
   if (d.error) return d.error;
   const count = Number(d.count || 0);
-  if (!count) return d.q || d.kind || d.country ? "No creator matches these filters." : "No creator has opened a hub yet.";
-  return `${num(count)} creator${count === 1 ? "" : "s"}${d.q ? ` for “${d.q}”` : ""}${d.kind ? ` with a ${hubInfo(d.kind).noun}` : ""}`;
+  if (!count) {
+    return d.q || d.kind || d.country
+      ? "Nobody matches these filters."
+      : d.role === "publisher"
+        ? "No publisher is writing in a public hub yet."
+        : "No creator has opened a hub yet.";
+  }
+  const noun = d.role === "publisher" ? "publisher" : "creator";
+  return `${num(count)} ${noun}${count === 1 ? "" : "s"}${d.q ? ` for “${d.q}”` : ""}${d.kind ? ` with a ${hubInfo(d.kind).noun}` : ""}`;
 }
 
 function directoryCards() {
@@ -1945,18 +1996,32 @@ function directoryCards() {
         .slice(0, 3)
         .map((field) => `<span class="crp-tag">${esc(field)}</span>`)
         .join("");
+      const writes = Array.isArray(row.writes_hubs) ? row.writes_hubs : [];
+      const role = row.role === "publisher" || row.role === "both" ? row.role : "owner";
+      const roleWord = role === "both" ? "Owner & publisher" : role === "publisher" ? "Publisher" : "Owner";
+      const writeChips = writes
+        .slice(0, 4)
+        .map(
+          (hub) =>
+            `<a class="crp-write" href="${esc(studioLink(hub.code || hub.id))}" data-crp-hub="${esc(hub.code || hub.id)}"><i data-icon="${esc(hubInfo(hub.kind).icon)}"></i>${esc(hub.name)}</a>`
+        )
+        .join("");
+      const ownStats = Number(row.hubs) > 0
+        ? `<span><b>${esc(num(Number(row.hubs) || 0))}</b> hub${Number(row.hubs) === 1 ? "" : "s"}</span>
+           <span><b>${esc(num(Number(row.subscribers) || 0))}</b> subscribers</span>`
+        : `<span><b>${esc(num(Number(row.writes) || writes.length || 0))}</b> hub${Number(row.writes || writes.length) === 1 ? "" : "s"} they write in</span>`;
       return `
-        <article class="crp-card">
+        <article class="crp-card" data-crp-role-row="${esc(role)}">
           ${avatarBlock(row.avatar, row.name)}
           <div class="crp-card__body">
             <a class="crp-card__name" href="creator.html?creator=${encodeURIComponent(row.ref || row.code || "")}" data-crp-open="${esc(row.ref || row.code || "")}">${esc(row.name || "Member")}</a>
-            <p class="crp-card__handle">${esc(handleOf(row))} · ${esc(row.code || "")}</p>
+            <p class="crp-card__handle">${esc(handleOf(row))} · ${esc(row.code || "")} <span class="crp-badge" data-tone="${esc(role)}">${esc(roleWord)}</span></p>
             <p class="crp-card__where">${flagOf(row.country)}<span>${esc(row.country || "No country")}</span></p>
             ${kinds ? `<p class="crp-kinds">${kinds}</p>` : ""}
+            ${writeChips ? `<p class="crp-writes"><span class="crp-writes__label">Writes in</span>${writeChips}</p>` : ""}
             ${fields ? `<p class="crp-tags">${fields}</p>` : ""}
             <p class="crp-card__stats">
-              <span><b>${esc(num(Number(row.hubs) || 0))}</b> hub${Number(row.hubs) === 1 ? "" : "s"}</span>
-              <span><b>${esc(num(Number(row.subscribers) || 0))}</b> subscribers</span>
+              ${ownStats}
               <span><b>${esc(num(Number(row.items) || 0))}</b> items</span>
             </p>
           </div>
@@ -1969,6 +2034,11 @@ function directoryCards() {
 function renderDirectoryResults() {
   const count = el("[data-crp-count]");
   if (count) count.textContent = directoryLine();
+  const roles = el(".crp-roles");
+  if (roles) {
+    roles.innerHTML = directoryRoles();
+    hydrateIcons(roles);
+  }
   const grid = el("[data-crp-grid]");
   if (grid) {
     grid.innerHTML = directoryCards();
@@ -1993,6 +2063,7 @@ async function loadDirectory({ focus = false } = {}) {
   try {
     const res = await rpc("creators_search", {
       p_token: state.token || "",
+      p_role: d.role,
       p_query: d.q,
       p_kind: d.kind,
       p_country: d.country,
@@ -2002,6 +2073,8 @@ async function loadDirectory({ focus = false } = {}) {
       d.rows = Array.isArray(res.rows) ? res.rows : [];
       d.countries = Array.isArray(res.countries) ? res.countries : d.countries;
       d.count = Number(res.count || d.rows.length);
+      d.owners = Number(res.owners || 0);
+      d.publishers = Number(res.publishers || 0);
       d.error = "";
     } else {
       d.rows = [];
@@ -2049,6 +2122,7 @@ function renderCreatorPage(host) {
   const creator = page.creator || {};
   const totals = page.totals || {};
   const hubs = Array.isArray(page.hubs) ? page.hubs : [];
+  const pubhubs = Array.isArray(page.pubhubs) ? page.pubhubs : [];
   const groups = HUBS.map((info) => ({
     info,
     rows: hubs.filter((hub) => hub.kind === info.kind),
@@ -2068,7 +2142,7 @@ function renderCreatorPage(host) {
       <header class="crp-profile">
         ${avatarBlock(creator.avatar, creator.name, "crp-avatar crp-avatar--lg")}
         <div class="crp-profile__id">
-          <h1 class="crp-profile__name">${esc(creator.name || "Member")}</h1>
+          <h1 class="crp-profile__name">${esc(creator.name || "Member")}<span class="crp-badge" data-tone="${pubhubs.length && hubs.length ? "both" : pubhubs.length ? "publisher" : "owner"}">${pubhubs.length && hubs.length ? "Owner & publisher" : pubhubs.length ? "Publisher" : "Owner"}</span></h1>
           <p class="crp-profile__handle">${esc(handleOf(creator))} <span class="crp-code">${esc(creator.code || "")}</span></p>
           <p class="crp-profile__where">${flagOf(creator.country)}<span>${esc(creator.country || "No country")}</span> · joined ${esc(dateOf(creator.joined))}</p>
           ${fields ? `<p class="crp-tags">${fields}</p>` : ""}
@@ -2082,6 +2156,7 @@ function renderCreatorPage(host) {
           <span class="crp-stat"><b>${esc(num(Number(totals.hubs) || 0))}</b><small>hubs</small></span>
           <span class="crp-stat"><b>${esc(num(Number(totals.subscribers) || 0))}</b><small>subscribers</small></span>
           <span class="crp-stat"><b>${esc(num(Number(totals.items) || 0))}</b><small>items</small></span>
+          ${pubhubs.length ? `<span class="crp-stat"><b>${esc(num(Number(totals.writes) || pubhubs.length))}</b><small>writes in</small></span>` : ""}
           <span class="crp-stat"><b>${esc(num(Number(totals.minutes) || 0))}</b><small>minutes</small></span>
           <span class="crp-stat"><b>${esc(num(Number(totals.likes) || 0))}</b><small>likes</small></span>
         </div>
@@ -2105,8 +2180,37 @@ function renderCreatorPage(host) {
             : emptyBlock("info", "No hub in the open", "This creator has not opened a public studio, blog, space, library, gallery, server or cinema yet.")
         }
       </section>
+
+      ${
+        pubhubs.length
+          ? `<section class="crp-hubs" aria-label="The hubs this member writes in" data-crp-writes-block>
+        <h2 class="crp-hubs__title">Writes in</h2>
+        <p class="crp-writes__note">${esc((creator.name || "This member").split(" ")[0])} publishes inside these hubs without owning them — the owner approved the seat, and what is written there is theirs.</p>
+        <div class="crp-hubgrid">${pubhubs.map(publishedCard).join("")}</div>
+      </section>`
+          : ""
+      }
     </div>`;
   hydrateIcons(host);
+}
+
+/* a hub somebody else owns, drawn from the publisher's side */
+function publishedCard(hub) {
+  const info = hubInfo(hub.kind);
+  const logo = hub.logo_url
+    ? `<img src="${esc(hub.logo_url)}" alt="" width="44" height="44" loading="lazy" />`
+    : `<span aria-hidden="true">${esc(initials(hub.name))}</span>`;
+  return `
+    <a class="crp-hubcard crp-hubcard--write" href="${esc(studioLink(hub.code || hub.id))}" data-crp-hub="${esc(hub.code || hub.id)}">
+      <span class="crp-hubcard__logo">${logo}</span>
+      <span class="crp-hubcard__body">
+        <span class="crp-hubcard__kind"><i data-icon="${esc(info.icon)}"></i>${esc(info.label)}</span>
+        <span class="crp-hubcard__name">${esc(hub.name)}</span>
+        <span class="crp-hubcard__desc">Owner <b>${esc(hub.owner_name || hub.owner || "")}</b>${hub.owner_code ? ` · ${esc(hub.owner_code)}` : ""}</span>
+        <span class="crp-hubcard__stats">${statPill("pen", hub.items, "published by them")}</span>
+      </span>
+      <span class="crp-hubcard__go"><i data-icon="arrowRight"></i></span>
+    </a>`;
 }
 
 function hubCard(hub) {
@@ -3613,6 +3717,17 @@ document.addEventListener("click", (event) => {
 
   if (target.closest("[data-cr-nav-creators]")) {
     event.preventDefault();
+    if (state.directory.role === "publisher") {
+      state.directory = { ...state.directory, role: "" };
+      renderRail();
+    }
+    return openDirectory();
+  }
+
+  if (target.closest("[data-cr-nav-publishers]")) {
+    event.preventDefault();
+    state.directory = { ...state.directory, role: "publisher", q: "" };
+    renderRail();
     return openDirectory();
   }
 
@@ -3647,9 +3762,22 @@ document.addEventListener("click", (event) => {
 
   if (target.closest("[data-crp-clear]")) {
     event.preventDefault();
-    state.directory = { ...state.directory, q: "", kind: "", country: "", sort: "subscribers" };
+    state.directory = { ...state.directory, q: "", role: "", kind: "", country: "", sort: "subscribers" };
     renderView();
     return loadDirectory();
+  }
+
+  const roleChip = target.closest("[data-crp-role]");
+  if (roleChip) {
+    event.preventDefault();
+    if (state.directory.role === roleChip.dataset.crpRole) return;
+    state.directory = { ...state.directory, role: roleChip.dataset.crpRole, q: "" };
+    state.directory.rows = [];
+    state.directory.loading = true;
+    renderRail();
+    renderView();
+    syncUrl();
+    return loadDirectory({ focus: true });
   }
 
   const joinButton = target.closest("[data-crp-join]");
@@ -4103,6 +4231,13 @@ async function boot() {
   const hubParam = params.get("hub");
   const studioParam = params.get("studio");
   const wantedSection = sectionFromUrl(params.get("section"));
+  /* `?section=publishers` (and `?role=`) open the same search on that half */
+  const wantedRole = (() => {
+    const role = String(params.get("role") || "").toLowerCase();
+    if (role === "owner" || role === "publisher") return role;
+    return String(params.get("section") || "").toLowerCase() === "publishers" ? "publisher" : "";
+  })();
+  if (wantedRole) state.directory.role = wantedRole;
 
   /* the public side needs no session: a directory, a creator, a hub */
   if (!wantedSection || creatorParam) {

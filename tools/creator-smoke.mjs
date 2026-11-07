@@ -361,16 +361,34 @@ function stubFetch(url, opts = {}) {
 
   if (href.includes("/rpc/creators_search")) {
     const query = String(body.p_query || "").toLowerCase();
+    const role = String(body.p_role || "");
+    const wanted = (row) => {
+      const owns = Number(row.hubs || 0) > 0;
+      const writes = Number(row.writes || (row.writes_hubs || []).length || 0) > 0;
+      if (role === "owner") return owns;
+      if (role === "publisher") return writes;
+      return owns || writes;
+    };
     const rows = (scenario.creators || []).filter(
       (row) =>
+        wanted(row) &&
         (!query ||
           String(row.name).toLowerCase().includes(query) ||
           String(row.username).toLowerCase().includes(query) ||
           String(row.code).toLowerCase().includes(query)) &&
-        (!body.p_kind || Number((row.counts || {})[body.p_kind] || 0) > 0) &&
+        (!body.p_kind || Number((row.counts || {})[body.p_kind] || 0) > 0 || (row.writes_hubs || []).some((hub) => hub.kind === body.p_kind)) &&
         (!body.p_country || row.country === body.p_country)
     );
-    return reply({ ok: true, rows, countries: scenario.countries || ["Morocco"], count: rows.length });
+    const pool = (scenario.creators || []).filter(wanted);
+    return reply({
+      ok: true,
+      role: role || "all",
+      rows,
+      countries: scenario.countries || ["Morocco"],
+      count: rows.length,
+      owners: pool.filter((row) => Number(row.hubs || 0) > 0).length,
+      publishers: pool.filter((row) => Number(row.writes || (row.writes_hubs || []).length || 0) > 0).length,
+    });
   }
 
   if (href.includes("/rpc/creator_public")) {
@@ -379,8 +397,10 @@ function stubFetch(url, opts = {}) {
       ok: true,
       is_self: Boolean(scenario.isSelf),
       creator: scenario.creator || creatorRow(),
-      totals: { hubs: 2, subscribers: 120, items: 4, minutes: 88, likes: 9 },
+      is_publisher: Boolean((scenario.pubHubs || []).length),
+      totals: { hubs: 2, subscribers: 120, items: 4, minutes: 88, likes: 9, writes: (scenario.pubHubs || []).length },
       hubs: scenario.creatorHubs || [],
+      pubhubs: scenario.pubHubs || [],
     });
   }
 
@@ -632,6 +652,16 @@ async function main() {
     creators: [
       creatorRow(),
       creatorRow({ ref: "ID100042", code: "ID100042", name: "Sara Bennani", username: "@sara", country: "Egypt", hubs: 1, subscribers: 40, counts: { gallery: 1 }, fields: ["Photography"] }),
+      /* she owns nothing: she was let into two hubs and writes there */
+      {
+        ref: "ID100077", code: "ID100077", name: "Nadia Rami", username: "@nadia", avatar: "", country: "Morocco",
+        fields: [], hubs: 0, subscribers: 0, items: 5, minutes: 61, likes: 12, counts: {},
+        role: "publisher", writes: 2,
+        writes_hubs: [
+          { id: "hub-nn", code: "IDBL100009", kind: "blog", name: "Night Notes", owner_name: "Jhon Markoni", owner_code: "ID100015", items: 4 },
+          { id: "hub-lb", code: "IDLB100010", kind: "library", name: "The Shelf", owner_name: "Sara Bennani", owner_code: "ID100042", items: 1 },
+        ],
+      },
     ],
     countries: ["Egypt", "Morocco"],
     creatorHubs: [
@@ -651,12 +681,16 @@ async function main() {
   expect("directory: it opens without a session", !anon.hidden("[data-cr-shell]"));
   expect("directory: the admin chrome is gone", anon.hidden("[data-cr-top]") && anon.hidden("[data-cr-tabs]"));
   expect("directory: the search reached the server", calls.some((c) => c.includes("creators_search")), calls.join(" "));
-  expect("directory: one card per creator", anon.qsa(".crp-card").length === 2, String(anon.qsa(".crp-card").length));
+  expect("directory: one card per creator", anon.qsa(".crp-card").length === 3, String(anon.qsa(".crp-card").length));
+  expect("directory: the three doors are offered", anon.qsa("[data-crp-role]").length === 3, String(anon.qsa("[data-crp-role]").length));
+  expect("directory: an owner is marked owner", /Owner/i.test(anon.text('[data-crp-role-row="owner"]')), anon.text('[data-crp-role-row="owner"]').slice(0, 80));
+  expect("directory: a publisher is marked publisher", /Publisher/i.test(anon.text('[data-crp-role-row="publisher"]')), anon.text('[data-crp-role-row="publisher"]').slice(0, 120));
+  expect("directory: the publisher names the hubs they write in", anon.qsa('[data-crp-role-row="publisher"] .crp-write').length === 2, String(anon.qsa('[data-crp-role-row="publisher"] .crp-write').length));
   expect("directory: a card names the creator and the handle", /Jhon Markoni[\s\S]*@jhon007/.test(anon.text(".crp-card")), anon.text(".crp-card").slice(0, 140));
   expect("directory: the kinds they run are on the card", anon.qsa(".crp-card .crp-kind").length >= 2, String(anon.qsa(".crp-card .crp-kind").length));
   expect("directory: the kind filter offers seven kinds", anon.qsa("[data-crp-kind] option").length === 8, String(anon.qsa("[data-crp-kind] option").length));
   expect("directory: the countries come from the server", anon.qsa("[data-crp-country] option").length === 3 && /Egypt/.test(anon.text("[data-crp-country]")), anon.text("[data-crp-country]"));
-  expect("directory: the count line reads", /2 creators/i.test(anon.text("[data-crp-count]")), anon.text("[data-crp-count]"));
+  expect("directory: the count line reads", /3 creators/i.test(anon.text("[data-crp-count]")), anon.text("[data-crp-count]"));
   expect("directory: the rail offers the way back", Boolean(anon.qs("[data-cr-nav-creators]")));
   expect("directory: a guest is named a guest", /Guest/.test(anon.text("[data-cr-name]")), anon.text("[data-cr-name]"));
   expect("directory: no errors", anon.errors.length === 0, anon.errors.join(" | "));
@@ -671,11 +705,31 @@ async function main() {
   // a filter with nothing behind it explains itself
   anon.change(anon.qs("[data-crp-kind]"), "space");
   await anon.wait(260);
-  expect("directory: an empty filter says so", /No creator matches/i.test(anon.text("[data-crp-count]")), anon.text("[data-crp-count]"));
+  expect("directory: an empty filter says so", /Nobody matches/i.test(anon.text("[data-crp-count]")), anon.text("[data-crp-count]"));
   expect("directory: and offers to clear", Boolean(anon.qs("[data-crp-clear]")));
   anon.click(anon.qs("[data-crp-clear]"));
   await anon.wait(260);
-  expect("directory: clearing brings everybody back", anon.qsa(".crp-card").length === 2, String(anon.qsa(".crp-card").length));
+  expect("directory: clearing brings everybody back", anon.qsa(".crp-card").length === 3, String(anon.qsa(".crp-card").length));
+
+  /* the search asks who: owners, publishers, or everybody */
+  anon.click(anon.qs('[data-crp-role="publisher"]'));
+  await anon.wait(320);
+  expect("roles: only the publishers are left", anon.qsa(".crp-card").length === 1 && /Nadia Rami/.test(anon.text(".crp-card")), anon.text(".crp-card").slice(0, 120));
+  expect("roles: the chip is the one on", anon.qs('[data-crp-role="publisher"]')?.classList.contains("is-on"), "on");
+  expect("roles: the count says publisher", /1 publisher/i.test(anon.text("[data-crp-count]")), anon.text("[data-crp-count]"));
+  expect("roles: the blurb explains the seat", /somebody else's hub/i.test(anon.text(".crp-hero")), anon.text(".crp-hero__text").slice(0, 120));
+  expect("roles: the address bar says publishers", /section=publishers/.test(anon.window.location.search), anon.window.location.search);
+
+  anon.click(anon.qs('[data-crp-role="owner"]'));
+  await anon.wait(320);
+  expect("roles: only the owners are left", anon.qsa(".crp-card").length === 2 && !/Nadia Rami/.test(anon.text("[data-crp-grid]")), String(anon.qsa(".crp-card").length));
+  expect("roles: a word still searches inside the role", true);
+  anon.type(anon.qs("[data-crp-q]"), "sara");
+  await anon.wait(560);
+  expect("roles: the search stays inside the role", anon.qsa(".crp-card").length === 1 && /Sara Bennani/.test(anon.text(".crp-card")), anon.text(".crp-card").slice(0, 90));
+  anon.click(anon.qs('[data-crp-role=""]'));
+  await anon.wait(320);
+  expect("roles: everybody comes back", anon.qsa(".crp-card").length >= 3 || /creator/i.test(anon.text("[data-crp-count]")), anon.text("[data-crp-count]"));
 
   // one creator
   calls.length = 0;
@@ -691,6 +745,7 @@ async function main() {
   expect("creator: every hub is a card", anon.qsa("[data-crp-hub]").length === 3, String(anon.qsa("[data-crp-hub]").length));
   expect("creator: a private hub is marked private", /Private/i.test(anon.text("[data-crp-hub=\"pub-priv\"]")), anon.text("[data-crp-hub=\"pub-priv\"]").slice(0, 120));
   expect("creator: the address bar holds the creator", /creator=ID100015/.test(anon.window.location.search), anon.window.location.search);
+  expect("creator: an owner with no seats is marked owner", /Owner/.test(anon.text(".crp-profile__name")), anon.text(".crp-profile__name"));
   expect("creator: no errors", anon.errors.length === 0, anon.errors.join(" | "));
 
   // one hub, inside creator.html

@@ -106,6 +106,84 @@ function boot(file, { url = "", storage = {}, fetchImpl } = {}) {
 
 const signedIn = { "1w.session": TOKEN, "1w.member": JSON.stringify(MEMBER) };
 
+/* the program: a guest, then a seat, then its links */
+const PROGRAM_VALUES = { signup: 50, activation: 250, membership: 1000 };
+let programSeat = null;
+let programLinks = [];
+
+function programMe() {
+  const totals = programLinks.reduce(
+    (sum, link) => ({
+      clicks: sum.clicks + link.clicks,
+      signups: sum.signups + link.signups,
+      points: sum.points + link.points,
+    }),
+    { clicks: 0, signups: 0, points: 0 }
+  );
+  return {
+    ok: true,
+    member: { code: "ID100042", name: "Youssef El Amrani", username: "@youssef.amrani", avatar: "", points: 1250 },
+    publisher: programSeat
+      ? {
+          ...programSeat,
+          links: programLinks.length,
+          clicks: totals.clicks,
+          signups: totals.signups,
+          points: totals.points,
+        }
+      : null,
+    links: programLinks,
+    conversions: programLinks.filter((link) => link.signups).length
+      ? [{ kind: "activation", points: 250, at: new Date(Date.now() - 3600_000).toISOString(), who: "Sara Bennani", link: programLinks[0].label }]
+      : [],
+    totals: { ...totals, conversions: 0 },
+    values: PROGRAM_VALUES,
+  };
+}
+
+function programFetch(href, opts = {}) {
+  const fn = fnName(href);
+  const body = opts.body ? JSON.parse(opts.body) : {};
+  if (fn === "publisher_me") return reply(programMe());
+  if (fn === "publisher_join") {
+    programSeat = {
+      code: "IDPB100042",
+      status: "active",
+      channel: body.p_channel,
+      place: body.p_place || "",
+      audience: Number(body.p_audience) || 0,
+      note: "",
+      created_at: new Date().toISOString(),
+    };
+    return reply({ ok: true, publisher: programSeat });
+  }
+  if (fn === "publisher_link_save") {
+    const link = {
+      id: `lnk-${programLinks.length + 1}`,
+      code: "K7M2QP4X",
+      label: body.p_label || "",
+      hub: null,
+      hub_code: body.p_hub || null,
+      hub_kind: body.p_hub ? "blog" : null,
+      hub_name: body.p_hub ? "My blog" : null,
+      clicks: 0,
+      signups: 0,
+      points: 0,
+      created_at: new Date().toISOString(),
+      url: body.p_hub ? `creator.html?studio=${body.p_hub}&ref=K7M2QP4X` : "register.html?ref=K7M2QP4X",
+    };
+    programLinks = [link, ...programLinks];
+    return reply({ ok: true, link });
+  }
+  if (fn === "publisher_link_delete") {
+    const id = body.p_id;
+    programLinks = programLinks.filter((link) => link.id !== id);
+    return reply({ ok: true });
+  }
+  if (fn === "publisher_hubs") return reply({ ok: true, hubs: [] });
+  return reply([]);
+}
+
 /* ================================================================== */
 /* pass 1 — signed out                                                */
 /* ================================================================== */
@@ -322,6 +400,105 @@ function deskFetch(href) {
   expect("edit: the fields are filled", document.querySelector("[data-ved-title]").value === "The port at night", document.querySelector("[data-ved-title]").value);
   expect("edit: the hub is still the desk's", document.querySelector("[data-ved-hub]").value === "IDCN100006", document.querySelector("[data-ved-hub]").value);
   expect("edit: no errors", errors.length === 0, errors.join(" | "));
+  window.close();
+}
+
+/* ================================================================== */
+/* pass 8 — the program                                               */
+/* ================================================================== */
+{
+  programSeat = null;
+  programLinks = [];
+  const { document, calls, errors, window } = boot("publisher.html", { storage: signedIn, fetchImpl: programFetch });
+  await import(`file://${join(root, "assets/js/video-editor.js")}?p8a`);
+  await import(`file://${join(root, "assets/js/publisher.js")}?p8a`);
+  await wait(220);
+
+  expect("program: the seat is asked on boot", calls.some((c) => fnName(c.href) === "publisher_me"), calls.map((c) => fnName(c.href)).join(","));
+  expect("program: the program is the first room", document.querySelector('[data-pub-viewpanel="program"]').hidden === false);
+  expect("program: the desk waits behind its tab", document.querySelector('[data-pub-viewpanel="desk"]').hidden === true);
+  expect("program: four numbers", document.querySelectorAll("[data-pub-stats] .pstat").length === 4, String(document.querySelectorAll("[data-pub-stats] .pstat").length));
+  expect("program: no code before joining", /Join to get one/.test(document.querySelector("[data-pub-stats]").textContent), document.querySelector("[data-pub-stats]").textContent.trim().slice(0, 60));
+  expect("program: the pay table is drawn from the server", /50[\s\S]*250[\s\S]*1,000/.test(document.querySelector('[data-pub-viewpanel="program"]').textContent), "values");
+  expect("program: the join form is offered", Boolean(document.querySelector("[data-pub-join]")));
+
+  /* joining */
+  calls.length = 0;
+  const form = document.querySelector("[data-pub-join]");
+  form.querySelector('[name="channel"]').value = "The Casablanca Letter";
+  form.querySelector('[name="place"]').value = "Casablanca";
+  form.querySelector('[name="audience"]').value = "4200";
+  form.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
+  await wait(260);
+  const joined = lastCall(calls, "publisher_join");
+  expect("join: the call goes out", Boolean(joined), calls.map((c) => fnName(c.href)).join(","));
+  expect("join: it carries where they publish", joined && joined.body.p_channel === "The Casablanca Letter", JSON.stringify(joined && joined.body));
+  expect("join: and the audience as a number", joined && joined.body.p_audience === 4200, JSON.stringify(joined && joined.body.p_audience));
+  expect("join: the seat comes back with a code", /IDPB100042/.test(document.querySelector("[data-pub-seat]").textContent), document.querySelector("[data-pub-seat]").textContent.trim().slice(0, 80));
+  expect("join: the numbers follow the seat", /IDPB100042/.test(document.querySelector("[data-pub-stats]").textContent), document.querySelector("[data-pub-stats]").textContent.trim().slice(0, 60));
+  expect("join: the page moves to the links", document.querySelector('[data-pub-viewpanel="links"]').hidden === false);
+  expect("join: no errors", errors.length === 0, errors.join(" | "));
+  window.close();
+}
+
+{
+  /* a seat, and the links it builds */
+  programSeat = { code: "IDPB100042", status: "active", channel: "The Casablanca Letter", place: "Casablanca", audience: 4200, note: "", created_at: new Date(Date.now() - 30 * 864e5).toISOString() };
+  programLinks = [];
+  const { document, calls, window, errors } = boot("publisher.html", { url: "publisher.html?tab=links", storage: signedIn, fetchImpl: programFetch });
+  await import(`file://${join(root, "assets/js/video-editor.js")}?p8b`);
+  await import(`file://${join(root, "assets/js/publisher.js")}?p8b`);
+  await wait(240);
+
+  expect("links: ?tab=links opens the links", document.querySelector('[data-pub-viewpanel="links"]').hidden === false);
+  expect("links: the seat card shows the code", /IDPB100042/.test(document.querySelector("[data-pub-seat]").textContent));
+  expect("links: an empty list explains itself", /No link yet/.test(document.querySelector("[data-pub-links]").textContent), document.querySelector("[data-pub-links]").textContent.trim().slice(0, 60));
+
+  calls.length = 0;
+  const form = document.querySelector("[data-pub-link-form-el]");
+  form.querySelector('[name="label"]').value = "Instagram bio";
+  form.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
+  await wait(260);
+  const saved = lastCall(calls, "publisher_link_save");
+  expect("links: the save goes out", Boolean(saved), calls.map((c) => fnName(c.href)).join(","));
+  expect("links: a blank hub is the whole site", saved && String(saved.body.p_hub) === "", JSON.stringify(saved && saved.body));
+  expect("links: the row is drawn", /Instagram bio/.test(document.querySelector("[data-pub-links]").textContent), document.querySelector("[data-pub-links]").textContent.trim().slice(0, 80));
+  expect("links: with its URL", /register\.html\?ref=K7M2QP4X/.test(document.querySelector("[data-pub-links]").textContent), "url");
+  expect("links: and its counters", /clicks[\s\S]*sign-ups[\s\S]*points/.test(document.querySelector("[data-pub-links]").textContent), "counters");
+  expect("links: the count badge follows", document.querySelector("[data-pub-link-count]").textContent === "1", document.querySelector("[data-pub-link-count]").textContent);
+
+  /* a hub code in the box points the link at that hub */
+  calls.length = 0;
+  const form2 = document.querySelector("[data-pub-link-form-el]");
+  form2.querySelector('[name="hubcode"]').value = "idbl100003";
+  form2.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
+  await wait(260);
+  const saved2 = lastCall(calls, "publisher_link_save");
+  expect("links: a typed code is sent upper-cased", saved2 && saved2.body.p_hub === "IDBL100003", JSON.stringify(saved2 && saved2.body));
+
+  /* removing one */
+  calls.length = 0;
+  document.querySelector("[data-pub-link-del]").dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+  await wait(240);
+  expect("links: the remove goes out", calls.some((c) => fnName(c.href) === "publisher_link_delete"), calls.map((c) => fnName(c.href)).join(","));
+  expect("links: no errors", errors.length === 0, errors.join(" | "));
+  window.close();
+}
+
+{
+  /* a visitor with no session still reads what the program is */
+  programSeat = null;
+  programLinks = [];
+  const { document, window } = boot("publisher.html", { fetchImpl: (href) => {
+    if (fnName(href) === "publisher_me") return reply({ ok: true, member: null, publisher: null, links: [], conversions: [], totals: { clicks: 0, signups: 0, points: 0 }, values: PROGRAM_VALUES });
+    return reply([]);
+  } });
+  await import(`file://${join(root, "assets/js/video-editor.js")}?p8c`);
+  await import(`file://${join(root, "assets/js/publisher.js")}?p8c`);
+  await wait(200);
+  expect("guest: the program is readable", document.querySelector('[data-pub-viewpanel="program"]').hidden === false);
+  expect("guest: the seat asks them to sign in", Boolean(document.querySelector('[data-pub-seat] a[href="login.html?next=publisher.html"]')), document.querySelector("[data-pub-seat]").innerHTML.slice(0, 100));
+  expect("guest: the ways in are both there", Boolean(document.querySelector('[data-pub-seat] a[href="register.html?next=publisher.html"]')));
   window.close();
 }
 
