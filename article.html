@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Article — 1World Web</title>
+    <meta name="description" content="One article by a member: the piece, its writer, the reactions and the comments." />
+    <meta name="theme-color" content="#060607" />
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="assets/css/base.css?v=20261116a" />
+    <link rel="stylesheet" href="assets/css/layout.css?v=20261116a" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261116b" />
+    <link rel="stylesheet" href="assets/css/article.css?v=20261116a" />
+    <script>
+      /* apply the saved theme (or the OS preference) before first paint */
+      (function () {
+        try {
+          var saved = JSON.parse(localStorage.getItem("1w.theme") || "null");
+          var theme =
+            saved === "light" || saved === "dark"
+              ? saved
+              : window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
+                ? "light"
+                : "dark";
+          document.documentElement.dataset.theme = theme;
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute("content", theme === "light" ? "#f4f4f5" : "#060607");
+        } catch (e) {}
+      })();
+    </script>
+    <script type="module" src="assets/js/app.js?v=20261116e"></script>
+    <script type="module" src="assets/js/article.js?v=20261113a"></script>
+  </head>
+  <body data-page="article" data-title="Article">
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div data-site-header></div>
+    <div data-site-sidebar></div>
+
+    <main class="site-main arts" id="main">
+      <div class="wrap">
+        <!-- the door, the empty page, or the answer -->
+        <div data-r-state hidden></div>
+
+        <article class="reader" data-r-reader hidden>
+          <!-- ========================================================== -->
+          <!-- the piece and the column beside it                         -->
+          <!-- ========================================================== -->
+          <div class="reader__top">
+            <div class="reader__main">
+              <nav class="reader__crumbs">
+                <a href="articles.html">All articles</a>
+                <span data-r-field></span>
+              </nav>
+
+              <header class="reader__head">
+                <div class="reader__badges" data-r-badges></div>
+                <h1 class="reader__title" data-r-title></h1>
+                <p class="reader__desc" data-r-desc hidden></p>
+                <div class="reader__by" data-r-by></div>
+              </header>
+
+              <figure class="reader__cover" data-r-cover hidden>
+                <img src="" alt="" data-r-cover-img />
+              </figure>
+
+              <!-- what is in the piece, before its text -->
+              <nav class="reader__toc" data-r-toc-wrap hidden aria-label="Contents">
+                <p class="reader__toc-head">In this piece</p>
+                <div class="toc" data-r-toc></div>
+              </nav>
+
+              <!-- the body, sanitised against an allowlist -->
+              <div class="prose" data-r-body></div>
+
+              <div class="reader__tags" data-r-tags hidden></div>
+              <div class="reader__acts" data-r-acts></div>
+
+              <!-- report -->
+              <div class="reader__report" data-r-report-box hidden>
+                <div class="afield">
+                  <span class="alabel">Why are you reporting it?</span>
+                  <select class="input" data-r-report-reason>
+                    <option value="spam">Spam</option>
+                    <option value="abuse">Abuse or harassment</option>
+                    <option value="copyright">Copyright</option>
+                    <option value="misleading">Misleading</option>
+                    <option value="other" selected>Something else</option>
+                  </select>
+                </div>
+                <div class="afield">
+                  <span class="alabel">A note for the moderators (optional)</span>
+                  <textarea class="input" data-r-report-note rows="2" maxlength="400"></textarea>
+                </div>
+                <div class="reader__report-acts">
+                  <button class="btn btn--quiet btn--sm" type="button" data-r-report-cancel>Cancel</button>
+                  <button class="btn btn--primary btn--sm" type="button" data-r-report-send>Send report</button>
+                </div>
+              </div>
+
+              <!-- the conversation -->
+              <div data-r-talk></div>
+            </div>
+
+            <aside class="reader__side">
+              <div data-r-author></div>
+              <div class="rsug" data-r-suggest hidden>
+                <div data-r-suggest-list></div>
+              </div>
+            </aside>
+          </div>
+        </article>
+      </div>
+    </main>
+
+    <div data-site-footer></div>
+  </body>
+</html>

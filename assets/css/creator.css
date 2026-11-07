@@ -1,0 +1,3259 @@
+/* ==================================================================
+   creator.html — the studio
+   ------------------------------------------------------------------
+   A left rail with the member and the five things they run, and a
+   working area that changes section by section: a channel, a blog, a
+   space, a library, a gallery. The tables and form fields come from
+   dashboard.css (`.dsh-table`, `.dsh-input`, …); this sheet only adds
+   the studio chrome — the rail, the top bar with its two dropdowns,
+   the action menus, the settings form and the item editor.
+   ================================================================== */
+
+.cr [hidden],
+.cr-state[hidden],
+.cr-shell[hidden] {
+  display: none !important;
+}
+
+.cr-body {
+  background: var(--bg);
+}
+
+.cr {
+  /* one horizontal rhythm for the bar, the hub strip, the tabs and the view */
+  --cr-x: clamp(1rem, 3vw, 2rem);
+  /* the hairline every stratum of the workspace is divided by */
+  --cr-hair: color-mix(in srgb, var(--text) 8%, transparent);
+  padding-block: 0 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* loading / error                                                    */
+/* ------------------------------------------------------------------ */
+.cr-state {
+  display: grid;
+  gap: 0.8rem;
+  align-content: center;
+  min-height: 60vh;
+  padding: clamp(1.2rem, 4vw, 2.4rem) var(--gutter);
+}
+
+.cr-skeleton {
+  height: 380px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+  background: linear-gradient(
+      100deg,
+      transparent 20%,
+      color-mix(in srgb, var(--text) 6%, transparent) 38%,
+      transparent 56%
+    )
+    0 0 / 220% 100%,
+    var(--surface-2);
+  animation: cr-shimmer 1.6s linear infinite;
+}
+
+@keyframes cr-shimmer {
+  to {
+    background-position: -220% 0, 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cr-skeleton {
+    animation: none;
+  }
+}
+
+.cr-gate {
+  display: grid;
+  gap: 0.75rem;
+  justify-items: center;
+  text-align: center;
+  padding: clamp(2rem, 7vw, 4rem) 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.cr-gate__icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  color: var(--text-2);
+}
+
+.cr-gate__title {
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+
+.cr-gate__text {
+  max-width: 48ch;
+  font-size: 0.86rem;
+  line-height: 1.65;
+  color: var(--muted);
+}
+
+.cr-gate__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+/* ------------------------------------------------------------------ */
+/* the shell                                                          */
+/* ------------------------------------------------------------------ */
+.cr-shell {
+  display: grid;
+  grid-template-columns: 264px minmax(0, 1fr);
+  align-items: start;
+  min-height: calc(100vh - var(--header-h));
+  background: var(--bg);
+}
+
+@media (max-width: 900px) {
+  .cr-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* the rail                                                           */
+/* ------------------------------------------------------------------ */
+.cr-side {
+  position: sticky;
+  top: var(--header-h);
+  align-self: start;
+  /* me · a label · discover · a label · the sections · the foot —
+     flex, not grid, so the rail still reads when one of the two lists
+     is empty (a member with no discover list keeps their own at the top) */
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  height: calc(100vh - var(--header-h));
+  padding: 1rem 0.85rem 0.9rem;
+  border-right: 1px solid var(--line);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 72%, transparent), transparent 42%),
+    color-mix(in srgb, var(--bg-soft) 80%, transparent);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+/*
+ * On a phone the rail is not a column beside the work — there is no room
+ * beside anything. It becomes one strip above it: the member, their own
+ * pages as chips, and the discover list after them, all on one line that
+ * scrolls sideways. The foot's three links live in the dashboard anyway.
+ */
+@media (max-width: 900px) {
+  .cr-side {
+    position: static;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.4rem;
+    height: auto;
+    padding: 0.55rem var(--cr-x);
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    scrollbar-width: none;
+  }
+
+  .cr-side::-webkit-scrollbar {
+    display: none;
+  }
+
+  .cr-me {
+    flex: none;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0 0.35rem 0 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .cr-me__avatar {
+    width: 30px;
+    height: 30px;
+    font-size: 0.68rem;
+    outline: 0;
+  }
+
+  .cr-me__name {
+    font-size: 0.78rem;
+    max-width: 12ch;
+  }
+
+  .cr-me__handle,
+  .cr-me__code,
+  .cr-side__label,
+  .cr-side__foot {
+    display: none;
+  }
+
+  .cr-sections {
+    display: flex;
+    flex: none;
+    gap: 0.3rem;
+  }
+
+  .cr-section {
+    grid-template-columns: 16px auto auto;
+    width: auto;
+    padding: 0.4rem 0.65rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+  }
+
+  .cr-section::before {
+    display: none;
+  }
+
+  .cr-section.is-on {
+    border-color: transparent;
+    background: var(--text);
+    color: var(--bg);
+  }
+
+  .cr-section.is-on .ico,
+  .cr-section.is-on .cr-section__count {
+    color: var(--bg);
+  }
+
+  .cr-section.is-on .cr-section__count {
+    border-color: color-mix(in srgb, var(--bg) 28%, transparent);
+  }
+
+  .cr-section__name {
+    font-size: 0.78rem;
+  }
+}
+
+.cr-me {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 0.35rem;
+  padding: 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--text) 4%, transparent), transparent),
+    var(--surface);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 5%, transparent);
+}
+
+.cr-me__avatar {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: var(--surface-3);
+  color: var(--text-2);
+  font-size: 0.85rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  overflow: hidden;
+  outline: 1px solid color-mix(in srgb, var(--text) 5%, transparent);
+  outline-offset: 2px;
+}
+
+.cr-me__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cr-me__id {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.cr-me__name {
+  font-size: 0.85rem;
+  font-weight: 650;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cr-me__handle {
+  font-size: 0.72rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cr-me__code {
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* the five sections ------------------------------------------------- */
+.cr-side__label {
+  margin: 0.45rem 0 0;
+  padding-inline: 0.55rem;
+  font-size: 0.58rem;
+  font-weight: 650;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.cr-sections {
+  display: grid;
+  gap: 0.15rem;
+  align-content: start;
+}
+
+.cr-section {
+  position: relative;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.5rem 0.55rem;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+}
+
+/* the seat the rail is on, said with a bar rather than a box */
+.cr-section::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: -0.85rem;
+  width: 2px;
+  height: 16px;
+  border-radius: 2px;
+  background: transparent;
+  transform: translateY(-50%);
+  transition: background 0.14s ease;
+}
+
+.cr-section:hover {
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  color: var(--text);
+}
+
+.cr-section.is-on {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+  color: var(--text);
+}
+
+.cr-section.is-on::before {
+  background: var(--text);
+}
+
+.cr-section .ico {
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+}
+
+.cr-section.is-on .ico {
+  color: var(--text);
+}
+
+.cr-section__name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+.cr-section__count {
+  min-width: 22px;
+  height: 18px;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  display: grid;
+  place-items: center;
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.cr-section.is-on .cr-section__count {
+  border-color: var(--line-2);
+  color: var(--text-2);
+}
+
+.cr-section__count.is-full {
+  color: var(--text);
+  border-color: var(--text-2);
+}
+
+.cr-side__foot {
+  display: grid;
+  gap: 0.1rem;
+  margin-top: auto;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--cr-hair);
+}
+
+.cr-side__link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.42rem 0.55rem;
+  border-radius: 9px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted);
+  text-decoration: none;
+  transition: background 0.14s ease, color 0.14s ease;
+}
+
+.cr-side__link:hover {
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  color: var(--text);
+}
+
+.cr-side__link .ico {
+  width: 14px;
+  height: 14px;
+}
+
+/* ------------------------------------------------------------------ */
+/* the working area                                                   */
+/* ------------------------------------------------------------------ */
+.cr-main {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  min-height: calc(100vh - var(--header-h));
+}
+
+.cr-top {
+  position: sticky;
+  top: var(--header-h);
+  z-index: 20;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  padding: 0.8rem var(--cr-x);
+  border-bottom: 1px solid var(--cr-hair);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: saturate(1.3) blur(16px);
+}
+
+.cr-pick {
+  display: grid;
+  gap: 0.25rem;
+  min-width: min(420px, 100%);
+}
+
+.cr-pick__label {
+  font-size: 0.58rem;
+  font-weight: 650;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.cr-pick__row {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.cr-pick__select {
+  min-width: 250px;
+  height: 38px;
+  font-size: 0.84rem;
+  font-weight: 550;
+}
+
+.cr-pick__hint {
+  font-size: 0.68rem;
+  line-height: 1.5;
+  color: var(--faint);
+}
+
+.cr-pick__hint.is-full {
+  color: var(--text-2);
+}
+
+.cr-add {
+  position: relative;
+}
+
+.cr-drop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  min-width: 224px;
+  padding: 0.32rem;
+  display: grid;
+  gap: 0.06rem;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 5%, transparent),
+    var(--shadow-lg);
+}
+
+.cr-drop__item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.46rem 0.55rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 0.8rem;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.cr-drop__item:hover {
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  color: var(--text);
+}
+
+.cr-drop__item .ico {
+  width: 14px;
+  height: 14px;
+  color: var(--muted);
+}
+
+.cr-drop__item[data-soon="true"] {
+  opacity: 0.55;
+}
+
+.cr-drop__sep {
+  height: 1px;
+  margin: 0.25rem 0.35rem;
+  background: var(--line);
+}
+
+/* the hub strip ----------------------------------------------------- */
+/*
+ * The hub as a header, not a row: a monochrome wash of its own cover behind
+ * the logo, the name and the code, and the numbers it lives on set off to the
+ * right. It is the only place on the page with a picture in it, so the picture
+ * is graded down to grey and half hidden — the furniture around it stays the
+ * one thing the eye lands on.
+ */
+.cr-hubhead {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.95rem;
+  padding: clamp(0.95rem, 2vw, 1.2rem) var(--cr-x);
+  border-bottom: 1px solid var(--cr-hair);
+  overflow: hidden;
+}
+
+.cr-hubhead::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(120% 180% at 0% 0%, color-mix(in srgb, var(--text) 7%, transparent), transparent 60%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 60%, transparent), transparent);
+  pointer-events: none;
+}
+
+.cr-hubhead__cover {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 40%;
+  opacity: 0.16;
+  filter: grayscale(1) contrast(1.06);
+  pointer-events: none;
+}
+
+.cr-hubhead__logo {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 14px;
+  border: 1px solid var(--line-2);
+  background: var(--surface-2);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 6%, transparent),
+    0 8px 24px -12px rgba(0, 0, 0, 0.9);
+  overflow: hidden;
+  flex: none;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--text-2);
+}
+
+.cr-hubhead__logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cr-hubhead__id {
+  display: grid;
+  gap: 0.22rem;
+  min-width: 0;
+}
+
+.cr-hubhead__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  font-size: 0.58rem;
+  font-weight: 650;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.cr-hubhead__dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.6;
+}
+
+.cr-hubhead__code {
+  font-family: var(--font-sans);
+  letter-spacing: 0.1em;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.cr-hubhead__name {
+  font-size: clamp(1.05rem, 1.6vw, 1.28rem);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--text);
+}
+
+.cr-hubhead__sub {
+  font-size: 0.73rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cr-hubhead__stats {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+@media (max-width: 860px) {
+  .cr-hubhead {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .cr-hubhead__stats {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    margin-left: 0;
+  }
+
+  .cr-hubhead__sub {
+    white-space: normal;
+  }
+}
+
+.cr-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  height: 26px;
+  padding: 0 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+  backdrop-filter: blur(6px);
+  font-size: 0.68rem;
+  font-weight: 550;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cr-pill .ico {
+  width: 12px;
+  height: 12px;
+  color: var(--muted);
+}
+
+/* a closed door is said with a broken line, not with a colour */
+.cr-pill[data-tone="private"] {
+  border-style: dashed;
+  border-color: var(--line-3);
+  color: var(--muted);
+}
+
+.cr-pill[data-tone="exclusive"] {
+  background: var(--text);
+  color: var(--bg);
+  border-color: transparent;
+}
+
+/* a publisher seat — somebody else's hub, written and not published */
+.cr-pill[data-tone="publisher"] {
+  border-style: dashed;
+  color: var(--text-2);
+}
+
+/* tabs -------------------------------------------------------------- */
+/*
+ * Underlined rather than pill-shaped: a bar of sections belongs to the page,
+ * not to a button. The line under the active one is the whole signal.
+ */
+.cr-tabs {
+  display: flex;
+  gap: 0.15rem;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding: 0 var(--cr-x);
+  border-bottom: 1px solid var(--cr-hair);
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+}
+
+.cr-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.cr-tab {
+  position: relative;
+  height: 42px;
+  padding: 0 0.05rem;
+  margin-right: 1.15rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.79rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  white-space: nowrap;
+  scroll-snap-align: start;
+  transition: color 0.14s ease;
+}
+
+.cr-tab::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: transparent;
+  transition: background 0.14s ease;
+}
+
+.cr-tab:hover {
+  color: var(--text-2);
+}
+
+.cr-tab.is-on {
+  background: transparent;
+  color: var(--text);
+}
+
+.cr-tab.is-on::after {
+  background: var(--text);
+}
+
+/* the view ---------------------------------------------------------- */
+.cr-view {
+  min-width: 0;
+  padding: clamp(1rem, 2.6vw, 1.7rem) var(--cr-x) clamp(2rem, 5vw, 3.4rem);
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+}
+
+.cr-view > * {
+  min-width: 0;
+}
+
+.cr-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem 0.9rem;
+  flex-wrap: wrap;
+  padding-bottom: 0.15rem;
+}
+
+.cr-bar__left {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+/* the search and the tab's own button, on one line */
+.cr-bar__right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.cr-bar__title {
+  font-size: 1rem;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  color: var(--text);
+}
+
+.cr-bar__count {
+  padding-left: 0.55rem;
+  border-left: 1px solid var(--cr-hair);
+  font-size: 0.72rem;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.cr-search {
+  position: relative;
+  display: block;
+}
+
+/* an entry that leaves the studio says where it goes, quietly */
+.cr-drop__note {
+  margin-left: auto;
+  padding-left: 0.5rem;
+  color: var(--faint);
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
+.cr-search .ico {
+  position: absolute;
+  top: 50%;
+  left: 0.72rem;
+  width: 14px;
+  height: 14px;
+  transform: translateY(-50%);
+  color: var(--faint);
+  pointer-events: none;
+}
+
+.cr-search .dsh-input {
+  height: 36px;
+  padding-left: 2.1rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  min-width: 220px;
+  transition: border-color 0.14s ease, background 0.14s ease;
+}
+
+.cr-search .dsh-input:focus {
+  border-color: var(--line-3);
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+}
+
+/* tables ------------------------------------------------------------ */
+/*
+ * The shell of a table comes from dashboard.css; here it is tightened: the
+ * head loses its band and keeps a hairline, the rows answer the pointer, and
+ * the numbers line up in columns of their own.
+ */
+.cr-table .dsh-table-wrap {
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 4%, transparent),
+    var(--shadow-lg);
+}
+
+.cr-table .dsh-table {
+  min-width: 760px;
+}
+
+.cr-table .dsh-table th {
+  padding: 0.7rem 0.85rem;
+  background: color-mix(in srgb, var(--surface-2) 55%, transparent);
+  border-bottom: 1px solid var(--line-2);
+  font-size: 0.62rem;
+  font-weight: 650;
+  letter-spacing: 0.14em;
+  color: var(--faint);
+}
+
+.cr-table .dsh-table td {
+  padding: 0.66rem 0.85rem;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+.cr-table .dsh-table tbody tr {
+  transition: background 0.12s ease;
+}
+
+.cr-table .dsh-table tbody tr:hover {
+  background: color-mix(in srgb, var(--text) 3.5%, transparent);
+}
+
+.cr-table .dsh-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.cr-table .dsh-table th:last-child,
+.cr-table .dsh-table td:last-child {
+  text-align: right;
+}
+
+.cr-thumb {
+  width: 46px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface-3);
+  object-fit: cover;
+  display: block;
+}
+
+.cr-thumb--empty {
+  display: grid;
+  place-items: center;
+  color: var(--faint);
+}
+
+.cr-thumb--empty .ico {
+  width: 13px;
+  height: 13px;
+}
+
+.cr-title {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 140px;
+}
+
+.cr-title strong {
+  font-size: 0.815rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: var(--text);
+  line-height: 1.35;
+}
+
+.cr-code {
+  font-size: 0.64rem;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.cr-num {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+}
+
+.cr-num.is-zero {
+  color: var(--faint);
+}
+
+.cr-vis {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  font-size: 0.62rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+.cr-vis[data-vis="exclusive"] {
+  background: var(--text);
+  color: var(--bg);
+  border-color: transparent;
+}
+
+.cr-vis[data-vis="private"] {
+  border-color: color-mix(in srgb, #d8b45a 55%, var(--line-2));
+  color: #e6c980;
+}
+
+/* the action menu --------------------------------------------------- */
+.cr-act {
+  position: relative;
+}
+
+.cr-act > summary {
+  list-style: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.12s ease, background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.cr-act > summary:focus-visible,
+tr:hover .cr-act > summary,
+.cr-act[open] > summary {
+  opacity: 1;
+  border-color: var(--line-2);
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.cr-act > summary::-webkit-details-marker {
+  display: none;
+}
+
+.cr-act > summary:hover {
+  opacity: 1;
+  background: var(--surface-3);
+  border-color: var(--line-2);
+  color: var(--text);
+}
+
+.cr-act > summary .ico {
+  width: 14px;
+  height: 14px;
+}
+
+.cr-act__menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 40;
+  min-width: 176px;
+  padding: 0.25rem;
+  display: grid;
+  gap: 0.05rem;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.cr-act__item {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 0.76rem;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.cr-act__item:hover {
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  color: var(--text);
+}
+
+.cr-act__item .ico {
+  width: 13px;
+  height: 13px;
+  color: var(--muted);
+}
+
+.cr-act__item[data-tone="danger"] {
+  color: #e0918a;
+}
+
+/* empty view -------------------------------------------------------- */
+.cr-empty {
+  display: grid;
+  gap: 0.55rem;
+  justify-items: center;
+  text-align: center;
+  padding: clamp(2rem, 6vw, 3.4rem) 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background:
+    radial-gradient(90% 120% at 50% 0%, color-mix(in srgb, var(--text) 4%, transparent), transparent 70%),
+    var(--surface);
+  color: var(--muted);
+}
+
+.cr-empty > .ico {
+  width: 20px;
+  height: 20px;
+  margin-bottom: 0.2rem;
+  color: var(--faint);
+}
+
+.cr-empty__title {
+  font-size: 0.95rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.cr-empty__text {
+  max-width: 48ch;
+  font-size: 0.8rem;
+  line-height: 1.65;
+}
+
+/* ------------------------------------------------------------------ */
+/* settings                                                           */
+/* ------------------------------------------------------------------ */
+.cr-settings {
+  display: grid;
+  gap: 1rem;
+  max-width: 860px;
+}
+
+.cr-card {
+  display: grid;
+  gap: 0.85rem;
+  padding: clamp(1rem, 2.4vw, 1.35rem);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--text) 2.5%, transparent), transparent 40%),
+    var(--surface);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+.cr-card__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding-bottom: 0.1rem;
+}
+
+.cr-card__title {
+  font-size: 0.92rem;
+  font-weight: 650;
+  letter-spacing: -0.012em;
+  color: var(--text);
+}
+
+.cr-card__hint {
+  font-size: 0.74rem;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.cr-grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.cr-grid3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+@media (max-width: 760px) {
+  .cr-grid2,
+  .cr-grid3 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.cr-logo-row {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.cr-logo-row__mark {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 999px;
+  border: 1px dashed var(--line-2);
+  background: var(--surface-2);
+  overflow: hidden;
+  color: var(--faint);
+}
+
+.cr-logo-row__mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cr-cover-row {
+  display: grid;
+  grid-template-columns: 108px minmax(0, 1fr);
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.cr-cover-row__mark {
+  display: grid;
+  place-items: center;
+  width: 108px;
+  height: 62px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--line-2);
+  background: var(--surface-2);
+  overflow: hidden;
+  color: var(--faint);
+}
+
+.cr-cover-row__mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cr-link-row {
+  display: grid;
+  grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr) auto;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.cr-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  min-height: 22px;
+}
+
+.cr-chip-x {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  height: 24px;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  font-size: 0.7rem;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.cr-chip-x button {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+}
+
+.cr-chip-x button .ico {
+  width: 10px;
+  height: 10px;
+}
+
+.cr-hidden-field[hidden] {
+  display: none !important;
+}
+
+.cr-save {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding-top: 0.4rem;
+}
+
+.cr-save__state {
+  font-size: 0.74rem;
+  color: var(--faint);
+}
+
+.cr-save__state[data-tone="error"] {
+  color: #e0918a;
+}
+
+.cr-save__state[data-tone="ok"] {
+  color: #7fc79a;
+}
+
+.cr-danger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding: 0.8rem;
+  border: 1px dashed color-mix(in srgb, #d9736a 45%, var(--line-2));
+  border-radius: var(--radius-sm);
+}
+
+.cr-danger__text {
+  font-size: 0.76rem;
+  color: var(--muted);
+  line-height: 1.55;
+  max-width: 52ch;
+}
+
+/* ------------------------------------------------------------------ */
+/* categories                                                         */
+/* ------------------------------------------------------------------ */
+.cr-cat {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.cr-cat__lvl {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  border: 1px solid var(--line-2);
+  font-size: 0.6rem;
+  color: var(--faint);
+  flex: none;
+}
+
+.cr-cat__name {
+  font-size: 0.8rem;
+  color: var(--text);
+}
+
+.cr-cat--l2 {
+  padding-left: 1.1rem;
+}
+
+.cr-cat--l3 {
+  padding-left: 2.2rem;
+}
+
+/* ------------------------------------------------------------------ */
+/* the item editor                                                    */
+/* ------------------------------------------------------------------ */
+.cr-editor {
+  display: grid;
+  gap: 1rem;
+  max-width: 1020px;
+}
+
+.cr-editor__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding-bottom: 0.1rem;
+}
+
+.cr-editor__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.36rem 0.65rem;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 0.74rem;
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+}
+
+.cr-editor__back:hover {
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  border-color: var(--line-3);
+  color: var(--text);
+}
+
+.cr-editor__back .ico {
+  width: 13px;
+  height: 13px;
+}
+
+.cr-editor__kind {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+/* the way out to the video editor, next to the kind of the thing */
+.cr-editor__head-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.cr-editor__open {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.32rem 0.6rem;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  color: var(--text-2);
+  font-size: 0.72rem;
+  text-decoration: none;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.cr-editor__open:hover {
+  background: var(--surface-3);
+  border-color: var(--line-3);
+  color: var(--text);
+}
+
+.cr-editor__open .ico {
+  width: 13px;
+  height: 13px;
+}
+
+.cr-editor .dsh-textarea {
+  min-height: 220px;
+  line-height: 1.7;
+  font-size: 0.86rem;
+}
+
+.cr-editor .dsh-textarea--tall {
+  min-height: 320px;
+}
+
+.cr-editor__foot {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 0.2rem;
+  padding: 0.7rem 0;
+  border-top: 1px solid var(--cr-hair);
+  background: linear-gradient(180deg, transparent, var(--bg) 26%);
+  backdrop-filter: blur(6px);
+  z-index: 5;
+}
+
+.cr-editor__actions {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.cr-note {
+  display: flex;
+  gap: 0.45rem;
+  align-items: flex-start;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+  font-size: 0.76rem;
+  line-height: 1.6;
+  color: var(--text-2);
+}
+
+.cr-note .ico {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  margin-top: 0.12rem;
+  color: var(--muted);
+}
+
+/* ------------------------------------------------------------------ */
+/* the add-hub / confirm modal                                        */
+/* ------------------------------------------------------------------ */
+.cr-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(4, 4, 7, 0.7);
+  backdrop-filter: blur(6px);
+}
+
+.cr-modal[hidden] {
+  display: none !important;
+}
+
+.cr-modal__card {
+  width: min(460px, 100%);
+  display: grid;
+  gap: 0.8rem;
+  padding: 1.1rem;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.cr-modal__title {
+  font-size: 0.98rem;
+  font-weight: 650;
+}
+
+.cr-modal__text {
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.cr-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+/* ==================================================================
+   the public side — the directory, one creator, one hub
+   ------------------------------------------------------------------
+   Three views that live in the same working area as the studio but
+   belong to everybody: a search for creators, a creator's page with
+   every hub they run, and a hub as a visitor sees it.
+   ================================================================== */
+
+.cr-side__hint {
+  margin: 0;
+  padding: 0.7rem 0.6rem;
+  border: 1px dashed var(--line-2);
+  border-radius: var(--radius-sm);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.cr-section--discover {
+  margin-bottom: 0.15rem;
+}
+
+/* the two doors of the directory say where they lead, not how many */
+.cr-section--discover .cr-section__count {
+  min-width: 0;
+  height: auto;
+  padding: 0;
+  border: 0;
+  font-size: 0.56rem;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.crp {
+  display: grid;
+  gap: 1.1rem;
+  align-content: start;
+}
+
+.crp-pill__word {
+  color: var(--muted);
+  margin-left: 0.2rem;
+}
+
+.crp-skeleton {
+  min-height: 260px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+  background: linear-gradient(
+      100deg,
+      transparent 20%,
+      color-mix(in srgb, var(--text) 6%, transparent) 38%,
+      transparent 56%
+    )
+    0 0 / 220% 100%,
+    var(--surface-2);
+  animation: cr-shimmer 1.6s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crp-skeleton {
+    animation: none;
+  }
+}
+
+/* the hero and its search ------------------------------------------- */
+.crp-hero {
+  display: grid;
+  gap: 0.7rem;
+  padding: clamp(1.3rem, 4vw, 2.4rem);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--text) 8%, transparent), transparent 62%),
+    radial-gradient(90% 120% at 0% 100%, color-mix(in srgb, var(--text) 4%, transparent), transparent 70%),
+    var(--surface);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 5%, transparent);
+}
+
+.crp-hero__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  font-size: 0.62rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.crp-hero__eyebrow .ico {
+  width: 13px;
+  height: 13px;
+}
+
+.crp-hero__title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-weight: 400;
+  font-size: clamp(2.1rem, 5.2vw, 3.15rem);
+  line-height: 1;
+  letter-spacing: -0.022em;
+  text-wrap: balance;
+}
+
+.crp-hero__text {
+  margin: 0;
+  max-width: 60ch;
+  color: var(--text-2);
+  font-size: 0.9rem;
+  line-height: 1.68;
+}
+
+/* the search's three doors: everyone, owners, publishers ------------ */
+/* one track, three doors: the row reads as a single control */
+.crp-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 0.9rem;
+  padding: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+}
+
+.crp-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  height: 30px;
+  padding: 0 0.75rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 550;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.crp-role:hover {
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  color: var(--text);
+}
+
+.crp-role.is-on {
+  border-color: transparent;
+  background: var(--text);
+  color: var(--bg);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.crp-role i {
+  opacity: 0.75;
+}
+
+.crp-role__n {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.65;
+  font-size: 0.7rem;
+}
+
+/* the role a card is, and where a publisher writes ------------------ */
+.crp-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 0.4rem;
+  margin-left: 0.4rem;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  vertical-align: middle;
+}
+
+.crp-badge[data-tone="publisher"] {
+  border-style: dashed;
+}
+
+.crp-profile__name .crp-badge {
+  font-size: 0.6rem;
+  vertical-align: 0.35em;
+}
+
+.crp-writes {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+}
+
+.crp-writes__label {
+  color: var(--faint);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.62rem;
+}
+
+.crp-write {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  padding: 0 0.45rem;
+  height: 21px;
+  border: 1px dashed var(--line-2);
+  border-radius: 999px;
+  color: var(--text-2);
+  text-decoration: none;
+}
+
+.crp-write:hover {
+  border-color: var(--line-3);
+  color: var(--text);
+}
+
+.crp-writes__note {
+  margin: 0 0 0.6rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  max-width: 62ch;
+}
+
+.crp-hubcard--write .crp-hubcard__desc b {
+  color: var(--text);
+}
+
+.crp-search {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+.crp-search__box {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  height: 50px;
+  padding: 0 1rem;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--input-bg);
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.crp-search__box:focus-within {
+  border-color: var(--line-3);
+  background: var(--input-bg-focus);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--text) 5%, transparent);
+}
+
+.crp-search__box .ico {
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+  flex: none;
+}
+
+.crp-search__input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+  outline: none;
+}
+
+.crp-search__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.crp-search__filters .dsh-select {
+  min-width: 150px;
+  max-width: 100%;
+}
+
+.crp-count {
+  margin: 0.15rem 0 0;
+  font-size: 0.74rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* the directory cards ----------------------------------------------- */
+.crp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  gap: 0.85rem;
+}
+
+.crp-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.85rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--text) 2.5%, transparent), transparent 45%),
+    var(--surface);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 4%, transparent);
+  transition: border-color 0.16s ease, transform 0.16s var(--ease-out), box-shadow 0.16s ease;
+}
+
+.crp-card:hover {
+  border-color: var(--line-3);
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 5%, transparent),
+    var(--shadow-lg);
+}
+
+.crp-avatar {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+  background: var(--surface-3);
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text-2);
+  flex: none;
+}
+
+.crp-avatar img,
+.crp-hubcard__logo img,
+.crp-hubhero__logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.crp-avatar--lg {
+  width: 88px;
+  height: 88px;
+  font-size: 1.3rem;
+}
+
+.crp-card__body {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.crp-card__name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+  text-decoration: none;
+  line-height: 1.25;
+}
+
+.crp-card__name:hover {
+  text-decoration: underline;
+}
+
+.crp-card__handle,
+.crp-card__where {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+  min-width: 0;
+}
+
+.crp-card__where .flag,
+.crp-profile__where .flag {
+  border-radius: 2px;
+}
+
+.crp-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0.25rem 0 0;
+}
+
+.crp-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  height: 21px;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  font-size: 0.64rem;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.crp-kind .ico {
+  width: 11px;
+  height: 11px;
+  color: var(--muted);
+}
+
+.crp-kind b {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.crp-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0.25rem 0 0;
+}
+
+.crp-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 0.45rem;
+  border-radius: 6px;
+  background: var(--surface-3);
+  font-size: 0.63rem;
+  letter-spacing: 0.02em;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.crp-card__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  margin: 0.3rem 0 0;
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+
+.crp-card__stats b {
+  color: var(--text);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.crp-card__open {
+  align-self: center;
+  white-space: nowrap;
+}
+
+/* a creator's page --------------------------------------------------- */
+.crp-back {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  font-size: 0.74rem;
+}
+
+.crp-back a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.crp-back a:hover {
+  color: var(--text);
+}
+
+.crp-back .ico {
+  width: 13px;
+  height: 13px;
+}
+
+.crp-profile {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: clamp(1rem, 3vw, 1.6rem);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.crp-profile__id {
+  display: grid;
+  gap: 0.25rem;
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.crp-profile__name {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-weight: 400;
+  font-size: clamp(1.6rem, 3.4vw, 2.2rem);
+  line-height: 1.05;
+}
+
+.crp-profile__handle {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--text-2);
+}
+
+.crp-code {
+  padding: 0.05rem 0.4rem;
+  border-radius: 6px;
+  border: 1px solid var(--line-2);
+  font-size: 0.66rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.crp-profile__where {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+.crp-profile__bio {
+  margin: 0.3rem 0 0;
+  max-width: 68ch;
+  font-size: 0.84rem;
+  line-height: 1.65;
+  color: var(--text-2);
+}
+
+.crp-profile__acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.crp-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(78px, 1fr));
+  gap: 0.4rem;
+  flex: 1 1 100%;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--line);
+}
+
+.crp-stat {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.crp-stat b {
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.crp-stat small {
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.crp-hubs {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.crp-hubs__title {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.crp-group {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.crp-group__head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.crp-group__head .ico {
+  width: 15px;
+  height: 15px;
+  color: var(--muted);
+}
+
+.crp-group__head span {
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--surface-3);
+  font-size: 0.64rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.crp-hubgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 0.6rem;
+}
+
+.crp-hubcard {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.7rem;
+  padding: 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 0.16s ease, transform 0.16s ease;
+}
+
+.crp-hubcard:hover {
+  border-color: var(--line-3);
+  transform: translateY(-1px);
+}
+
+.crp-hubcard__logo {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+  background: var(--surface-3);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-2);
+}
+
+.crp-hubcard__body {
+  display: grid;
+  gap: 0.18rem;
+  min-width: 0;
+}
+
+.crp-hubcard__kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.crp-hubcard__kind .ico {
+  width: 11px;
+  height: 11px;
+}
+
+.crp-hubcard__name {
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.crp-hubcard__desc {
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.crp-hubcard__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.25rem;
+}
+
+.crp-hubcard__go {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  align-self: center;
+}
+
+.crp-hubcard__go .ico {
+  width: 13px;
+  height: 13px;
+}
+
+/* one hub as a visitor ---------------------------------------------- */
+.crp-hubhero {
+  position: relative;
+  display: grid;
+  gap: 0.7rem;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.crp-hubhero__cover {
+  display: block;
+  width: 100%;
+  height: clamp(110px, 20vw, 190px);
+  object-fit: cover;
+}
+
+.crp-hubhero__cover.is-plain {
+  background:
+    radial-gradient(120% 160% at 0% 0%, color-mix(in srgb, var(--text) 10%, transparent), transparent 62%),
+    var(--surface-2);
+}
+
+.crp-hubhero__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0 clamp(0.9rem, 3vw, 1.5rem);
+  margin-top: -2.6rem;
+}
+
+.crp-hubhero__logo {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+  background: var(--surface-3);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-2);
+  flex: none;
+}
+
+.crp-hubhero__id {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.crp-hubhero__kind {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.6rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.crp-hubhero__kind .ico {
+  width: 12px;
+  height: 12px;
+}
+
+.crp-hubhero__name {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-weight: 400;
+  font-size: clamp(1.5rem, 3.6vw, 2.1rem);
+  line-height: 1.05;
+}
+
+.crp-hubhero__owner {
+  margin: 0;
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+.crp-hubhero__owner a {
+  color: var(--text-2);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.crp-hubhero__acts {
+  display: flex;
+  gap: 0.4rem;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.crp-hubhero__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0 clamp(0.9rem, 3vw, 1.5rem);
+}
+
+.crp-hubhero__desc {
+  margin: 0;
+  padding: 0 clamp(0.9rem, 3vw, 1.5rem) clamp(0.9rem, 3vw, 1.4rem);
+  max-width: 78ch;
+  font-size: 0.84rem;
+  line-height: 1.65;
+  color: var(--text-2);
+}
+
+.crp-items {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.crp-item {
+  display: grid;
+  grid-template-columns: 108px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+@media (max-width: 720px) {
+  .crp-item {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+
+  .crp-item__open {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}
+
+.crp-item__thumb {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface-3);
+  object-fit: cover;
+}
+
+.crp-item__thumb.is-plain .ico {
+  width: 20px;
+  height: 20px;
+  color: var(--muted);
+}
+
+.crp-item__body {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.crp-item__kind {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.crp-item__kind .ico {
+  width: 11px;
+  height: 11px;
+}
+
+.crp-item__title {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.crp-item__summary {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.crp-item__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  margin: 0.2rem 0 0;
+  font-size: 0.66rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.crp-item__meta span,
+.crp-item__meta i {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.22rem;
+}
+
+.crp-item__meta .ico {
+  width: 11px;
+  height: 11px;
+}
+
+.crp-item__open {
+  white-space: nowrap;
+}
+
+/* the private hub's door -------------------------------------------- */
+.crp-lock {
+  display: grid;
+  gap: 0.55rem;
+  justify-items: center;
+  text-align: center;
+  padding: clamp(1.6rem, 5vw, 3rem) clamp(1rem, 4vw, 2rem);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(120% 140% at 50% 0%, color-mix(in srgb, #d8b45a 9%, transparent), transparent 62%),
+    var(--surface);
+}
+
+.crp-lock__icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, #d8b45a 40%, var(--line-2));
+  color: #e6c980;
+}
+
+.crp-lock__icon .ico {
+  width: 20px;
+  height: 20px;
+}
+
+.crp-lock__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.crp-lock__text {
+  margin: 0;
+  max-width: 52ch;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.crp-lock__form {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem;
+  width: min(420px, 100%);
+  margin-top: 0.35rem;
+}
+
+.crp-lock__form .dsh-input {
+  flex: 1 1 180px;
+}
+
+.crp-lock__state {
+  margin: 0;
+  min-height: 1.1rem;
+  font-size: 0.72rem;
+  color: #e6c980;
+}
+
+/* ==================================================================
+   working inside a hub — publishers, advertisers and their asking
+   ================================================================== */
+
+.crp-avatar--sm {
+  width: 34px;
+  height: 34px;
+  font-size: 0.66rem;
+}
+
+/* the chips the studio and the hub page share ----------------------- */
+.cr-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  height: 21px;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  font-size: 0.63rem;
+  letter-spacing: 0.02em;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.cr-chip .ico {
+  width: 11px;
+  height: 11px;
+}
+
+.cr-chip[data-tone="publisher"] {
+  border-color: color-mix(in srgb, #6aa7d8 50%, var(--line-2));
+  color: #9cc7e8;
+}
+
+.cr-chip[data-tone="advertiser"] {
+  border-color: color-mix(in srgb, #d8b45a 55%, var(--line-2));
+  color: #e6c980;
+}
+
+.cr-chip[data-tone="format"] {
+  background: var(--surface-3);
+  border-color: transparent;
+}
+
+.cr-chip[data-tone="pending"] {
+  border-color: color-mix(in srgb, #d8b45a 55%, var(--line-2));
+  color: #e6c980;
+}
+
+.cr-chip[data-tone="approved"] {
+  border-color: color-mix(in srgb, #67c08a 55%, var(--line-2));
+  color: #8fd7a9;
+}
+
+.cr-chip[data-tone="rejected"],
+.cr-chip[data-tone="withdrawn"] {
+  color: var(--muted);
+}
+
+.cr-chip[data-tone="public"],
+.cr-chip[data-tone="exclusive"],
+.cr-chip[data-tone="private"] {
+  background: var(--surface-3);
+  border-color: transparent;
+}
+
+/* the Participants tab ---------------------------------------------- */
+.cr-part {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.cr-part__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.7rem;
+  color: var(--muted);
+  min-width: 0;
+}
+
+.cr-part__link code {
+  padding: 0.15rem 0.4rem;
+  border-radius: 6px;
+  border: 1px solid var(--line-2);
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 40ch;
+}
+
+.cr-part__link .ico {
+  width: 12px;
+  height: 12px;
+}
+
+.cr-panel {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.cr-panel__title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.cr-panel__title .ico {
+  width: 14px;
+  height: 14px;
+  color: var(--muted);
+}
+
+.cr-panel__n {
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--surface-3);
+  font-size: 0.64rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.cr-empty__line {
+  margin: 0;
+  padding: 0.5rem 0.1rem;
+  font-size: 0.76rem;
+  color: var(--muted);
+  list-style: none;
+}
+
+.cr-req {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.6rem;
+  padding: 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.cr-req.is-pending {
+  border-color: color-mix(in srgb, #d8b45a 35%, var(--line));
+}
+
+.cr-req__body {
+  display: grid;
+  gap: 0.22rem;
+  min-width: 0;
+}
+
+.cr-req__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+.cr-req__name {
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.cr-req__code {
+  font-size: 0.66rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.cr-req__text {
+  margin: 0;
+  font-size: 0.76rem;
+  line-height: 1.55;
+  color: var(--text-2);
+}
+
+.cr-req__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 0.1rem 0 0;
+  font-size: 0.66rem;
+  color: var(--muted);
+}
+
+.cr-req__meta a {
+  color: var(--text-2);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.cr-req__acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  justify-content: flex-end;
+}
+
+.cr-req__since {
+  font-size: 0.66rem;
+  color: var(--muted);
+}
+
+.cr-who-list {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cr-who {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1.4fr) auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.4rem;
+  border-radius: var(--radius-xs);
+  background: var(--surface-2);
+  font-size: 0.74rem;
+}
+
+.cr-who__name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cr-who__code,
+.cr-who__handle,
+.cr-who__extra {
+  font-size: 0.68rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.cr-adtable {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.cr-adtable__head,
+.cr-adrow {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1.5fr) minmax(0, 1fr) 74px 56px 56px auto;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.7rem;
+}
+
+.cr-adtable__head {
+  padding: 0 0.4rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.6rem;
+}
+
+.cr-adlist {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cr-adrow {
+  padding: 0.4rem;
+  border-radius: var(--radius-xs);
+  background: var(--surface-2);
+}
+
+.cr-adrow__format {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--text-2);
+}
+
+.cr-adrow__format .ico {
+  width: 12px;
+  height: 12px;
+  color: var(--muted);
+}
+
+.cr-adrow__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.cr-adrow__who {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cr-adrow__num {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  text-align: right;
+}
+
+/* asking to work here, on the hub's own page ------------------------ */
+.crp-join {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.85rem clamp(0.9rem, 3vw, 1.4rem);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background:
+    radial-gradient(120% 160% at 100% 0%, color-mix(in srgb, var(--text) 6%, transparent), transparent 60%),
+    var(--surface-2);
+}
+
+.crp-join__text {
+  display: grid;
+  gap: 0.2rem;
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.crp-join__title {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.crp-join__title .ico {
+  width: 15px;
+  height: 15px;
+  color: var(--muted);
+}
+
+.crp-join__note {
+  margin: 0;
+  font-size: 0.74rem;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.crp-join__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0.15rem 0 0;
+}
+
+.crp-join__acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+/* the ads themselves ------------------------------------------------ */
+.crp-ads {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.crp-ads__title {
+  margin: 0;
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.crp-ads__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 0.6rem;
+}
+
+.crp-ad {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 0.16s ease;
+}
+
+a.crp-ad:hover {
+  border-color: var(--line-3);
+}
+
+.crp-ad[data-format="banner"] {
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  align-items: center;
+}
+
+.crp-ad__media {
+  display: block;
+  width: 100%;
+  max-height: 260px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: var(--surface-3);
+}
+
+.crp-ad__media.is-banner {
+  aspect-ratio: 16 / 6;
+  max-height: 180px;
+}
+
+.crp-ad__body {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.crp-ad__tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.58rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.crp-ad__tag .ico {
+  width: 11px;
+  height: 11px;
+}
+
+.crp-ad__title {
+  font-size: 0.86rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.crp-ad__text {
+  font-size: 0.74rem;
+  line-height: 1.55;
+  color: var(--text-2);
+}
+
+.crp-ad__link {
+  font-size: 0.66rem;
+  color: var(--muted);
+}
+
+.crp-hubhero__code {
+  margin-left: 0.35rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 6px;
+  border: 1px solid var(--line-2);
+  font-size: 0.6rem;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+/* the three small forms in the modal -------------------------------- */
+.cr-form {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.6rem;
+}
+
+.cr-textarea {
+  min-height: 84px;
+  padding: 0.5rem 0.65rem;
+  resize: vertical;
+  line-height: 1.5;
+  font: inherit;
+}
+
+.cr-form__state {
+  margin: 0;
+  min-height: 1rem;
+  font-size: 0.72rem;
+  color: #e6c980;
+}
+
+/* ------------------------------------------------------------------ */
+/* server & cinema: the three doors, the seats, the qualities          */
+/* ------------------------------------------------------------------ */
+.cr-switch {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--dsh-line, rgba(255, 255, 255, 0.1));
+  border-radius: 0.7rem;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  color: var(--dsh-muted, #a9b1c3);
+  cursor: pointer;
+}
+
+.cr-switch input {
+  margin-top: 0.15rem;
+  accent-color: var(--dsh-accent, #7c5cff);
+}
+
+.cr-switch strong {
+  color: var(--dsh-ink, #eef1f7);
+  font-weight: 650;
+}
+
+.cr-aud {
+  margin-top: 0.85rem;
+}
+
+.cr-aud[hidden] {
+  display: none;
+}
+
+.cr-excluded {
+  margin-top: 0.85rem;
+}
+
+.cr-excluded .dsh-field__label {
+  display: block;
+  margin-bottom: 0.35rem;
+}
+
+.cr-excluded .dsh-input {
+  margin-top: 0.45rem;
+}
+
+.cr-pill-wrap {
+  display: flex;
+  align-items: center;
+  min-height: 2.6rem;
+}
+
+.cr-qchips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.3rem;
+}
+
+.cr-qchip {
+  border: 1px solid var(--dsh-line, rgba(255, 255, 255, 0.14));
+  background: transparent;
+  color: var(--dsh-muted, #a9b1c3);
+  border-radius: 999px;
+  padding: 0.22rem 0.62rem;
+  font-size: 0.74rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+
+.cr-qchip.is-on {
+  border-color: var(--dsh-accent, #7c5cff);
+  background: rgba(124, 92, 255, 0.16);
+  color: var(--dsh-ink, #eef1f7);
+}
+
+.cr-seats {
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+}
+
+.crp-item__quality {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0.35rem 0 0.2rem;
+}
+
+.crp-item__quality .cr-qchip {
+  padding: 0.14rem 0.5rem;
+  font-size: 0.68rem;
+}
+
+/* ------------------------------------------------------------------ */
+/* the writing room — article-editor.html's own form, in this page     */
+/* ------------------------------------------------------------------ */
+/*
+ * A blog's Article · new is not a table row with a textarea: it is the real
+ * editor (assets/css/article.css dresses every control), standing where the
+ * studio's table usually is. Only the frame around it is here.
+ */
+.cr-writer {
+  padding: clamp(1rem, 3vw, 1.9rem) var(--gutter) 7rem;
+}
+
+.cr-writer__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1.1rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid var(--cr-hair);
+}
+
+.cr-writer__where {
+  font-size: 0.76rem;
+  letter-spacing: 0.01em;
+  color: var(--muted);
+}
+
+/* the studio's own empty-state block sits inside the room when a draft of the
+   editor has nothing to say */
+.cr-writer [data-e-state] .aempty {
+  margin: 0 auto;
+}
+
+
+/* ==================================================================
+   the last word — focus, motion and the small things
+   ------------------------------------------------------------------
+   Anything above may be overridden here: this is the layer that only
+   says how the page behaves when it is driven, not how it looks.
+   ================================================================== */
+
+/* a keyboard is a pointer too, and it says so in the same grey */
+.cr :where(button, a, input, select, textarea, summary, [tabindex]):focus-visible,
+.cr-writer :where(button, a, input, select, textarea, [contenteditable], [tabindex]):focus-visible,
+[data-e-dlg] :where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--text) 55%, transparent);
+  outline-offset: 2px;
+}
+
+/* the same page, without the movement */
+@media (prefers-reduced-motion: reduce) {
+  .cr *,
+  .cr *::before,
+  .cr *::after,
+  .cr-writer *,
+  .cr-writer *::before,
+  .cr-writer *::after {
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+  }
+}
+
+/* a wide table on a narrow screen scrolls, and the scrollbar says so */
+.cr-table .dsh-table-wrap {
+  scrollbar-width: thin;
+}
+
+/* a title too long for its row still names its hub */
+.cr-hubhead__name {
+  overflow-wrap: anywhere;
+}

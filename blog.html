@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Blog — 1World Web</title>
+    <meta
+      name="description"
+      content="One blog as its readers meet it: its cover and its name, its sections, the pieces its readers open most, and a search of everything in it."
+    />
+    <meta name="theme-color" content="#060607" />
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="assets/css/base.css?v=20261116a" />
+    <link rel="stylesheet" href="assets/css/layout.css?v=20261116a" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261116b" />
+    <link rel="stylesheet" href="assets/css/article.css?v=20261116a" />
+    <link rel="stylesheet" href="assets/css/blog.css?v=20261115b" />
+    <script>
+      /* apply the saved theme (or the OS preference) before first paint */
+      (function () {
+        try {
+          var saved = JSON.parse(localStorage.getItem("1w.theme") || "null");
+          var theme =
+            saved === "light" || saved === "dark"
+              ? saved
+              : window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
+                ? "light"
+                : "dark";
+          document.documentElement.dataset.theme = theme;
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute("content", theme === "light" ? "#f4f4f5" : "#060607");
+        } catch (e) {}
+      })();
+    </script>
+    <script type="module" src="assets/js/app.js?v=20261116e"></script>
+    <script type="module" src="assets/js/blog.js?v=20261115b"></script>
+  </head>
+  <body data-page="blog" data-title="Blog">
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div data-site-header></div>
+    <div data-site-sidebar></div>
+
+    <main class="site-main blogp" id="main">
+      <div class="wrap">
+        <!-- what the page says while it is not the blog yet -->
+        <div data-b-state role="status" aria-live="polite" hidden></div>
+
+        <div data-b-shell hidden>
+          <!-- ========================================================== -->
+          <!-- the blog itself: its cover, its mark, its name, its words   -->
+          <!-- ========================================================== -->
+          <header class="bhero">
+            <div class="bhero__cover">
+              <img data-b-cover alt="" loading="eager" />
+              <span class="bhero__veil" aria-hidden="true"></span>
+            </div>
+
+            <div class="bhero__body">
+              <span class="bhero__mark" data-b-logo aria-hidden="true"></span>
+
+              <div class="bhero__id">
+                <p class="bhero__kind" data-b-kind></p>
+                <h1 class="bhero__name" data-b-name></h1>
+                <p class="bhero__desc" data-b-desc></p>
+                <div class="bhero__tags" data-b-tags></div>
+                <p class="bhero__by" data-b-owner></p>
+              </div>
+            </div>
+
+            <div class="bhero__acts">
+              <a class="btn btn--ghost btn--sm" href="articles.html" data-b-all>
+                <i data-icon="file"></i> All articles
+              </a>
+              <a class="btn btn--primary btn--sm" href="creator.html" data-b-studio>
+                <i data-icon="settings"></i> Its studio
+              </a>
+            </div>
+          </header>
+
+          <!-- the search: a piece, a writer, a section -->
+          <form class="bsearch" data-b-search role="search">
+            <span class="bsearch__ic"><i data-icon="search"></i></span>
+            <input
+              class="bsearch__input"
+              type="search"
+              data-b-q
+              placeholder="Search a piece, a word from it, a section…"
+              aria-label="Search this blog"
+              autocomplete="off"
+            />
+            <button class="bsearch__clear" type="button" data-b-clear hidden>Clear</button>
+          </form>
+
+          <div class="bstats" data-b-stats></div>
+
+          <!-- ========================================================== -->
+          <!-- one section, opened                                         -->
+          <!-- ========================================================== -->
+          <section class="bsec" data-b-section hidden>
+            <div class="bsec__head">
+              <button class="bback" type="button" data-b-back><i data-icon="arrowLeft"></i> All sections</button>
+              <div class="bsec__id">
+                <h2 class="bsec__title" data-b-section-name></h2>
+                <span class="bsec__count" data-b-section-count></span>
+              </div>
+              <div class="segmented bseg" data-b-sort role="tablist" aria-label="Sort this section">
+                <button class="segmented__btn is-active" type="button" role="tab" aria-selected="true" data-sort="popular">Most read</button>
+                <button class="segmented__btn" type="button" role="tab" aria-selected="false" data-sort="new">Newest</button>
+                <button class="segmented__btn" type="button" role="tab" aria-selected="false" data-sort="liked">Liked</button>
+              </div>
+            </div>
+            <div class="bgrid" data-b-grid></div>
+            <button class="btn btn--ghost btn--block" type="button" data-b-more hidden>More</button>
+          </section>
+
+          <!-- ========================================================== -->
+          <!-- the blog's own home                                         -->
+          <!-- ========================================================== -->
+          <div data-b-home>
+            <section class="brow brow--lead" data-b-popular hidden>
+              <div class="brow__head">
+                <div class="brow__id">
+                  <h2 class="brow__title">Most read</h2>
+                  <p class="brow__sub">What this blog's readers open most</p>
+                </div>
+                <div class="brow__arrows">
+                  <button class="barrow" type="button" data-b-arrow="-1" aria-label="Back">
+                    <i data-icon="arrowLeft"></i>
+                  </button>
+                  <button class="barrow" type="button" data-b-arrow="1" aria-label="On">
+                    <i data-icon="arrowRight"></i>
+                  </button>
+                </div>
+              </div>
+              <div class="brow__rail" data-b-popular-rail role="list" aria-label="Most read"></div>
+            </section>
+
+            <!-- one row per section -->
+            <div data-b-rows></div>
+
+            <!-- a blog that has not published yet -->
+            <div class="bempty" data-b-nothing hidden>
+              <p class="bempty__title">Not a piece published yet</p>
+              <p class="bempty__text">This blog is still being written. Its first article appears here the moment the studio publishes it.</p>
+            </div>
+
+            <!-- and every section, to walk into -->
+            <section class="bsecs" data-b-secs hidden>
+              <div class="brow__head">
+                <div class="brow__id">
+                  <h2 class="brow__title">Browse the sections</h2>
+                  <p class="brow__sub">Every shelf this blog keeps</p>
+                </div>
+              </div>
+              <div class="bsecs__grid" data-b-sec-grid></div>
+            </section>
+          </div>
+
+          <!-- ========================================================== -->
+          <!-- the search results                                          -->
+          <!-- ========================================================== -->
+          <section class="bfound" data-b-found hidden>
+            <div class="bsec__head">
+              <div class="bsec__id">
+                <h2 class="bsec__title" data-b-found-title></h2>
+                <span class="bsec__count" data-b-found-count role="status" aria-live="polite"></span>
+              </div>
+              <button class="bback" type="button" data-b-found-close><i data-icon="arrowLeft"></i> The blog</button>
+            </div>
+            <div class="bgrid" data-b-found-grid></div>
+            <div class="bempty" data-b-found-empty hidden>
+              <p class="bempty__title">Nothing in this blog matches</p>
+              <p class="bempty__text">Try another word, or walk one of the sections.</p>
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
+
+    <div data-site-footer></div>
+  </body>
+</html>

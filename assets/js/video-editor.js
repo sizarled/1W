@@ -1,0 +1,1629 @@
+/**
+ * video-editor.html — publish a video.
+ * ------------------------------------------------------------------
+ * One page, one server call:
+ *
+ *   video_save(token, {
+ *     id?, title, description, thumbnail, embed, language,
+ *     visibility,       general · limited · private · followers
+ *     status,           draft · published · scheduled
+ *     scheduled_at,     only when scheduled
+ *     tags[],           main keywords, twelve at most
+ *     audience[],       { kind: country|language|level|entity, value, mode: include }
+ *     profiles[],       the nominated list a private video opens to
+ *     passwords[],      hashed by the server; never readable again
+ *     meta{ age, download, vertical, source }
+ *   })
+ *
+ * The same call edits: `?id=PST-001005` pre-fills the form from
+ * video_get, and the payload carries the code back.
+ */
+import { rpc } from "./data.js";
+import { qs, qsa, esc } from "./utils.js";
+import { icon } from "./icons.js";
+import { toast } from "./ui.js";
+import { sessionToken, getMember } from "./session.js";
+import { COUNTRIES } from "./countries.js";
+import { SUPABASE, storageUrl } from "./config.js";
+import { embedUrl, autoThumb, isFile, sourceKind, sourceLabel, HOSTS, pinterestId, redditPath } from "./embed.js";
+import { createContents } from "./contents.js";
+
+const S = {
+  token: "",
+  code: "",
+  embed: "",
+  title: "",
+  desc: "",
+  tags: [],
+  thumb: "",
+  thumbChosen: false,
+  thumbAuto: false,
+  vis: "general",
+  when: "now",
+  whenAt: "",
+  countries: [],
+  langs: [],
+  lvMin: 1,
+  lvMax: 10,
+  followers: false,
+  people: [],
+  passes: [],
+  hasPassword: false,
+  language: "en",
+  age: "none",
+  download: false,
+  vertical: false,
+  status: "draft",
+  hub: "",
+  hubName: "",
+  hubs: [],
+  busy: false,
+  ready: false,
+};
+
+const LANGUAGES = [
+  ["ar", "Arabic"],
+  ["en", "English"],
+  ["fr", "French"],
+  ["es", "Spanish"],
+  ["de", "German"],
+  ["it", "Italian"],
+  ["pt", "Portuguese"],
+  ["tr", "Turkish"],
+];
+
+/* which hubs can hold a member video — the server's own rule
+   (creator_kind_allowed): a studio, a server, a cinema. */
+const HUB_KINDS = ["channel", "server", "cinema"];
+const HUB_KIND_LABEL = { channel: "studio", server: "server", cinema: "cinema" };
+
+const VIS_HINT = {
+  general: "Everyone, except the people you exclude. No account, no condition.",
+  limited: "Only the audience below — a country, a language, a level, or people you name.",
+  private: "Only the members you nominate, and whoever holds one of your passwords.",
+  followers: "Only the people who follow you. Nobody else, whatever their level.",
+};
+
+const ERRORS = {
+  session: "Your session ended — sign in again.",
+  title: "A title is needed.",
+  title_long: "The title is longer than 200 characters.",
+  visibility: "Pick public, exclusive or private.",
+  status: "That status is not one we know.",
+  embed: "That link is not a link we can open.",
+  schedule: "A scheduled video needs a moment in the future.",
+  profile: "Your member profile is missing — open your profile once, then come back.",
+  role: "That video belongs to someone else.",
+  not_found: "That video is gone.",
+  hub: "That studio is not one we know.",
+  hub_role: "That studio belongs to someone else — you are not its owner or staff.",
+  hub_kind: "That hub cannot hold a video.",
+};
+
+const $ = (sel) => qs(sel);
+const el = {};
+let contents = null;
+
+/* The form can also be embedded, so a page can lend it a hub instead of
+   keeping a second, thinner editor of its own: the host says so on
+   <body data-ved-embed="1"> and names the hub it picked on
+   <body data-ved-hub="IDCN100006">. In that mode the list of hubs comes from
+   `publisher_hubs` (the hubs an owner approved this member into, or their own
+   and the ones they staff), and a publish never carries the member off the
+   page. No page embeds it today — `publisher.html` is the program alone and a
+   publisher writes in `creator.html` — but the mode is part of the editor. */
+const EMBED = document.body.dataset.vedEmbed === "1";
+
+/* ================================================================== */
+/* helpers                                                            */
+/* ================================================================== */
+function randomPassword() {
+  const alphabet = "abcdefghjkmnpqrstuvwxyz23456789";
+  let out = "";
+  const bytes = new Uint32Array(12);
+  try {
+    crypto.getRandomValues(bytes);
+  } catch {
+    for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.random() * 4294967296;
+  }
+  for (let i = 0; i < 12; i += 1) out += alphabet[bytes[i] % alphabet.length];
+  return out;
+}
+
+function isoLocal(date) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function whenDate() {
+  if (S.when === "now") return null;
+  if (S.when === "later") {
+    const value = S.whenAt;
+    if (!value) return null;
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  const minutes = { "1h": 60, "1d": 1440, "1w": 10080 }[S.when] || 0;
+  if (!minutes) return null;
+  return new Date(Date.now() + minutes * 60000);
+}
+
+/* ================================================================== */
+/* paint                                                              */
+/* ================================================================== */
+function paintCounters() {
+  const titleCount = $("[data-ved-title-count]");
+  if (titleCount) {
+    titleCount.textContent = `${S.title.length} / 150`;
+    titleCount.classList.toggle("is-over", S.title.length > 150);
+  }
+  const descCount = $("[data-ved-desc-count]");
+  if (descCount) descCount.textContent = `${S.desc.length} / 5000`;
+  const tagCount = $("[data-ved-tag-count]");
+  if (tagCount) {
+    tagCount.textContent = `${S.tags.length} / 12`;
+    tagCount.classList.toggle("is-over", S.tags.length > 12);
+  }
+}
+
+function paintPreview() {
+  const media = $("[data-ved-preview-media]");
+  if (media) {
+    const src = S.thumb || autoThumb(S.embed);
+    const kind = sourceKind(S.embed);
+    if (src) {
+      media.innerHTML = `<img src="${esc(src)}" alt="" loading="lazy" /><span class="vprev__play" aria-hidden="true">${icon("play")}</span>`;
+    } else if (kind) {
+      /* no still to read: name the host inside the card rather than a blank */
+      media.innerHTML = `<div class="vprev__ph"><span>${esc(HOSTS[kind] || "Link")}</span>${icon("playCircle")}<span>${esc(S.embed ? "A picture would make the card" : "")}</span></div>`;
+    } else {
+      media.innerHTML = `<div class="vprev__ph">${icon("film")}</div>`;
+    }
+  }
+  const title = $("[data-ved-preview-title]");
+  if (title) title.textContent = S.title.trim() || "No title yet";
+  const meta = $("[data-ved-preview-meta]");
+  if (meta) {
+    const lang = (LANGUAGES.find(([code]) => code === S.language) || ["", S.language])[1];
+    const vis = { general: "Public", limited: "Exclusive", private: "Private", followers: "Followers" }[S.vis];
+    meta.textContent = `${vis} · ${lang}`;
+  }
+  const time = $("[data-ved-preview-time]");
+  if (time) {
+    const date = whenDate();
+    time.textContent = date
+      ? `Goes out ${date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}`
+      : "Goes out the moment you publish";
+  }
+  const studio = $("[data-ved-preview-studio]");
+  if (studio) {
+    const hub = S.hubs.find((h) => h.code === S.hub);
+    const name = hub ? hub.name : S.hub ? S.hubName || S.hub : "";
+    studio.hidden = !S.hub;
+    studio.innerHTML = S.hub
+      ? `${icon("tv")} <span>in ${esc(name)}</span>`
+      : "";
+  }
+
+  const badge = $("[data-ved-preview-badge]");
+  if (badge) badge.textContent = S.status === "published" && S.code ? "Published" : S.status === "scheduled" ? "Scheduled" : "Draft";
+
+  const badge2 = $("[data-ved-source-badge]");
+  if (badge2) {
+    badge2.textContent = S.embed ? HOSTS[sourceKind(S.embed)] || "Link" : "";
+  }
+}
+
+function paintThumb() {
+  const box = $("[data-ved-thumb-box]");
+  if (!box) return;
+  const src = S.thumb || autoThumb(S.embed);
+  box.innerHTML = src ? `<img src="${esc(src)}" alt="" loading="lazy" />` : "No picture yet";
+  const input = $("[data-ved-thumb]");
+  if (input && input.value !== S.thumb) input.value = S.thumb;
+
+  /* the honest part: only YouTube hands us a still by itself */
+  const hint = $("[data-ved-thumb-hint]");
+  if (hint) {
+    const kind = sourceKind(S.embed);
+    if (src && S.thumbAuto) {
+      hint.textContent = "Taken from the video. Upload one to replace it.";
+    } else if (src) {
+      hint.textContent = "";
+    } else if (!S.embed.trim()) {
+      hint.textContent = "Add the video first, then upload a picture for the card.";
+    } else if (kind === "youtube") {
+      hint.textContent = "The still from the video is on its way.";
+    } else if (kind === "file") {
+      hint.textContent = "A file has no still we can read — upload a picture, or the card goes grey.";
+    } else {
+      hint.textContent = `${HOSTS[kind] || "This host"} does not hand us a picture — upload one so the card is not blank.`;
+    }
+  }
+}
+
+function paintTags() {
+  const host = $("[data-ved-tags]");
+  if (!host) return;
+  host.innerHTML = S.tags
+    .map(
+      (tag, index) => `<span class="tag">${esc(tag)}<button type="button" data-ved-tag-remove="${index}" aria-label="Remove ${esc(tag)}">${icon("close")}</button></span>`
+    )
+    .join("");
+}
+
+function paintPeople() {
+  const host = $("[data-ved-people]");
+  if (!host) return;
+  host.innerHTML = S.people.length
+    ? S.people
+        .map(
+          (who, index) => `<span class="tag">${esc(who)}<button type="button" data-ved-person-remove="${index}" aria-label="Remove ${esc(who)}">${icon("close")}</button></span>`
+        )
+        .join("")
+    : `<p class="vhint">Nobody named yet.</p>`;
+}
+
+function paintPasses() {
+  const host = $("[data-ved-passes]");
+  if (!host) return;
+  const note = S.hasPassword && !S.passes.length
+    ? `<p class="vhint vhint--warn">This video already has a password on the server. Adding one here replaces the set.</p>`
+    : "";
+  host.innerHTML =
+    (S.passes.length
+      ? S.passes
+          .map(
+            (pass, index) => `<span class="tag">${esc(pass)}<button type="button" data-ved-pass-remove="${index}" aria-label="Remove the password">${icon("close")}</button></span>`
+          )
+          .join("")
+      : `<p class="vhint">No password on this one.</p>`) + note;
+}
+
+function paintCountries() {
+  const host = $("[data-ved-countries]");
+  if (host) {
+    host.innerHTML = S.countries.length
+      ? S.countries
+          .map(
+            (name, index) => `<span class="tag">${esc(name)}<button type="button" data-ved-country-remove="${index}" aria-label="Remove ${esc(name)}">${icon("close")}</button></span>`
+          )
+          .join("")
+      : `<p class="vhint">Every country.</p>`;
+  }
+  const langs = $("[data-ved-langs]");
+  if (langs) {
+    langs.innerHTML = S.langs.length
+      ? S.langs
+          .map(
+            (code, index) =>
+              `<span class="tag">${esc((LANGUAGES.find(([c]) => c === code) || ["", code])[1])}<button type="button" data-ved-lang-remove="${index}" aria-label="Remove">${icon("close")}</button></span>`
+          )
+          .join("")
+      : `<p class="vhint">Every language.</p>`;
+  }
+}
+
+function paintVisibility() {
+  qsa("[data-vis]", el.shell).forEach((btn) => {
+    btn.classList.toggle("is-on", btn.getAttribute("data-vis") === S.vis);
+  });
+  const hint = $("[data-ved-vis-hint]");
+  if (hint) hint.textContent = VIS_HINT[S.vis] || VIS_HINT.general;
+  const audience = $("[data-ved-audience]");
+  if (audience) audience.hidden = !(S.vis === "limited" || S.vis === "followers");
+  const priv = $("[data-ved-private]");
+  if (priv) priv.hidden = S.vis !== "private";
+  const passes = $("[data-ved-pass-wrap]");
+  if (passes) {
+    passes.hidden = S.vis === "general" || S.vis === "followers";
+    if (passes.hidden) passes.open = false;
+  }
+  const followers = $("[data-ved-followers]");
+  if (followers) followers.checked = S.vis === "followers";
+}
+
+function paintWhen() {
+  qsa("[data-when]", el.shell).forEach((btn) => {
+    btn.classList.toggle("is-on", btn.getAttribute("data-when") === S.when);
+  });
+  const field = $("[data-ved-when-date]");
+  if (field) field.hidden = S.when !== "later";
+  const input = $("[data-ved-when-input]");
+  if (input && S.when === "later" && !input.value) {
+    input.value = S.whenAt || isoLocal(new Date(Date.now() + 3600000));
+    S.whenAt = input.value;
+  }
+  const hint = $("[data-ved-when-hint]");
+  if (hint) {
+    const date = whenDate();
+    hint.textContent = date
+      ? `It stays invisible until ${date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}.`
+      : "It goes out the moment you publish.";
+  }
+}
+
+/**
+ * Which studio the video is published into. A member may run none, one or
+ * several (a studio, a server, a cinema) — the list comes from the same call
+ * the creator studio uses, and an empty answer is said plainly rather than
+ * left as an empty box.
+ */
+function paintHub() {
+  const select = $("[data-ved-hub]");
+  const note = $("[data-ved-hub-note]");
+  const link = $("[data-ved-hub-link]");
+  const count = $("[data-ved-hub-count]");
+  const list = S.hubs;
+  const hub = list.find((h) => h.code === S.hub);
+
+  if (select) {
+    const known = Boolean(hub);
+    select.innerHTML =
+      (EMBED ? "" : `<option value="">My own feed — no studio</option>`) +
+      list
+        .map(
+          (h) =>
+            `<option value="${esc(h.code)}">${esc(h.name)} · ${esc(HUB_KIND_LABEL[h.kind] || "studio")}${h.code ? ` · ${esc(h.code)}` : ""}</option>`
+        )
+        .join("") +
+      (!known && S.hub
+        ? `<option value="${esc(S.hub)}">${esc(S.hubName || S.hub)}</option>`
+        : "");
+    select.value = S.hub || "";
+    const label = select.closest("label");
+    if (label) label.hidden = !list.length && !S.hub;
+  }
+
+  if (count) count.textContent = list.length ? `${list.length} studio${list.length === 1 ? "" : "s"}` : "";
+
+  if (note) {
+    if (hub) {
+      note.textContent = EMBED
+        ? `${hub.name} · ${hub.code} — published here, live, under your name.`
+        : `${hub.name} · ${hub.code} — it appears in this studio's Videos tab, and in the feed.`;
+    } else if (S.hub) {
+      note.textContent = `${S.hubName || S.hub} · ${S.hub} — it appears in that studio's Videos tab, and in the feed.`;
+    } else if (!list.length) {
+      note.textContent = EMBED
+        ? "No hub has approved you as a publisher yet. Ask its owner from the hub's own page."
+        : "You run no studio yet. Create one, and it appears here.";
+    } else {
+      note.textContent = "It stays in your own feed. Pick a studio and it appears in that studio too.";
+    }
+  }
+
+  if (link) {
+    if (hub) {
+      link.hidden = false;
+      link.href = `creator.html?studio=${encodeURIComponent(hub.code)}`;
+      link.innerHTML = `${icon("tv")} ${EMBED ? "Open the hub" : "Open this studio"}`;
+    } else if (!list.length) {
+      link.hidden = false;
+      link.href = "creator.html?section=studio";
+      link.innerHTML = `${icon("plus")} Create a studio`;
+    } else {
+      link.hidden = true;
+    }
+  }
+}
+
+function paintAge() {
+  qsa("[data-age]", el.shell).forEach((btn) => {
+    btn.classList.toggle("is-on", btn.getAttribute("data-age") === S.age);
+  });
+}
+
+function paintStatus() {
+  const state = $("[data-ved-status]");
+  const dot = $("[data-ved-dot]");
+  const save = $("[data-ved-save]");
+  const publish = $("[data-ved-publish]");
+  const check = readiness();
+  if (state) state.textContent = check.message;
+  if (dot) dot.classList.toggle("is-ready", check.ok);
+  if (save) save.disabled = S.busy || !S.title.trim();
+  if (publish) {
+    publish.disabled = S.busy || !check.ok;
+    const label = S.when === "now" ? (S.code ? "Save and publish" : "Publish") : "Schedule";
+    publish.innerHTML = `${icon("upload")} ${label}`;
+  }
+}
+
+/**
+ * The contents of the form: every section of it, in the order it is read —
+ * the source, the words, the extras, then the side column's own. One press
+ * goes there; the box that lists them is not one of them.
+ */
+function contentsItems() {
+  const shell = $("[data-ved-shell]");
+  if (!shell) return [];
+  return [...shell.querySelectorAll(".vcard-box")]
+    .filter((box) => !box.hasAttribute("data-ved-toc-box") && !box.hidden)
+    .map((box) => {
+      const title = box.querySelector(".vcard-box__title");
+      return title ? { node: box, label: (title.textContent || "").trim() } : null;
+    })
+    .filter(Boolean);
+}
+
+function paintContents() {
+  if (!contents) return;
+  const items = contentsItems();
+  contents.paint(items);
+  const count = $("[data-ved-toc-count]");
+  if (count) count.textContent = `${items.length} section${items.length === 1 ? "" : "s"}`;
+}
+
+/** Go there: the page scrolls, the section lights, its first field takes the caret. */
+function jumpToSection(item) {
+  const node = item && item.node;
+  if (!node || !node.isConnected) return;
+  node.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  node.classList.add("is-jump");
+  setTimeout(() => node.classList.remove("is-jump"), 1400);
+
+  /* the section itself takes the focus — a radio is not a place to land in,
+     and a form of switches would have nowhere to put a caret at all */
+  node.setAttribute("tabindex", "-1");
+  node.focus?.({ preventScroll: true });
+  const first = node.querySelector(
+    'input:not([type="hidden"]):not([type="radio"]):not([type="checkbox"]):not([disabled]):not([hidden]), textarea:not([disabled]):not([hidden]), select:not([disabled]):not([hidden])'
+  );
+  first?.focus?.({ preventScroll: true });
+}
+
+function paintAll() {
+  paintContents();
+  paintSourceNote();
+  paintPlayer();
+  paintCounters();
+  paintPreview();
+  paintThumb();
+  paintTags();
+  paintPeople();
+  paintPasses();
+  paintCountries();
+  paintVisibility();
+  paintWhen();
+  paintHub();
+  paintAge();
+  paintStatus();
+}
+
+/* ================================================================== */
+/* validation                                                         */
+/* ================================================================== */
+function audienceRules() {
+  const rules = [];
+  if (S.vis === "followers") return rules;
+  S.countries.forEach((name) => rules.push({ kind: "country", value: name, mode: "include" }));
+  S.langs.forEach((code) => rules.push({ kind: "language", value: code, mode: "include" }));
+  const min = Math.max(0, Math.min(10, Number(S.lvMin) || 0));
+  const max = Math.max(0, Math.min(10, Number(S.lvMax) || 10));
+  if (!(min <= 1 && max >= 10)) {
+    for (let level = Math.min(min, max); level <= Math.max(min, max); level += 1) {
+      rules.push({ kind: "level", value: String(level), mode: "include" });
+    }
+  }
+  return rules;
+}
+
+function readiness() {
+  if (!S.embed.trim()) return { ok: false, message: "Add the video link to begin" };
+  if (!S.title.trim()) return { ok: false, message: "The title is still empty" };
+  if (S.title.trim().length > 200) return { ok: false, message: "The title is too long" };
+  if (S.tags.length > 12) return { ok: false, message: "Twelve tags at most" };
+  if (S.vis === "limited" && !S.followers) {
+    const rules = audienceRules();
+    const named = S.people.length > 0;
+    if (!rules.length && !named) {
+      return { ok: false, message: "An exclusive video needs an audience — add a rule or name someone" };
+    }
+  }
+  if (S.vis === "private" && !S.people.length && !S.passes.length && !S.hasPassword) {
+    return { ok: false, message: "A private video needs one nominated member or one password" };
+  }
+  if (S.when !== "now" && !whenDate()) {
+    return { ok: false, message: "Pick the moment it goes out" };
+  }
+  if (S.when === "later" && whenDate() && whenDate().getTime() < Date.now() + 60000) {
+    return { ok: false, message: "That moment has already passed" };
+  }
+  return { ok: true, message: S.code ? "Ready to save your changes" : "Ready to publish" };
+}
+
+/* ================================================================== */
+/* the payload                                                        */
+/* ================================================================== */
+function payload(status) {
+  const date = whenDate();
+  const people = [...S.people];
+  const rules = audienceRules();
+  if (S.vis === "limited") {
+    people.forEach((who) => rules.push({ kind: "entity", value: who.startsWith("@") ? who : `@${who}`, mode: "include" }));
+  }
+  const body = {
+    id: S.code || null,
+    hub: S.hub || null,
+    title: S.title.trim(),
+    description: S.desc.trim() || null,
+    thumbnail: (S.thumb || autoThumb(S.embed) || "").trim() || null,
+    embed: S.embed.trim() || null,
+    language: S.language,
+    visibility: S.vis,
+    status,
+    scheduled_at: status === "scheduled" && date ? date.toISOString() : null,
+    tags: S.tags.slice(0, 12),
+    audience: rules,
+    profiles: people,
+    meta: {
+      age: S.age,
+      download: Boolean(S.download),
+      vertical: Boolean(S.vertical),
+      source: sourceKind(S.embed) || "embed",
+    },
+  };
+  /* the passwords we were never shown are the passwords we must not wipe:
+     the key rides along only when the member added one in this visit. */
+  if (S.passes.length) body.passwords = S.passes;
+  return body;
+}
+
+async function save(status) {
+  if (S.busy) return;
+  if (status !== "draft") {
+    const check = readiness();
+    if (!check.ok) {
+      toast({ title: "Not yet", message: check.message, tone: "error", iconName: "info" });
+      return;
+    }
+  }
+  if (!S.title.trim()) {
+    toast({ title: "A title first", message: "Even a draft needs a name.", tone: "error" });
+    document.querySelector("[data-ved-title]")?.focus();
+    return;
+  }
+
+  S.busy = true;
+  paintStatus();
+  let res = null;
+  try {
+    res = await rpc("video_save", { p_token: S.token, p_payload: payload(status) });
+  } catch (error) {
+    toast({ title: "The server refused it", message: error.message, tone: "error" });
+  }
+  S.busy = false;
+
+  if (!res || res.ok !== true) {
+    const key = res && res.error;
+    toast({
+      title: "Not saved",
+      message: ERRORS[key] || "The server did not take that. Try again in a moment.",
+      tone: "error",
+      iconName: "info",
+    });
+    paintStatus();
+    return;
+  }
+
+  S.code = res.code || S.code;
+  S.status = res.status || status;
+  paintAll();
+
+  if (status === "draft") {
+    scheduleDraft();
+    toast({ title: "Draft saved", message: "Find it again under your videos.", tone: "success", iconName: "check" });
+    if (EMBED) {
+      document.dispatchEvent(new CustomEvent("ved:drafted", { detail: { code: S.code, hub: S.hub } }));
+      return;
+    }
+    if (!location.search.includes("id=")) window.history.replaceState(null, "", `?id=${encodeURIComponent(S.code)}`);
+    const heading = $("[data-ved-heading]");
+    if (heading) heading.textContent = "Edit a video";
+    return;
+  }
+
+  clearDraft();
+  toast({
+    title: status === "scheduled" ? "Scheduled" : "Published",
+    message: status === "scheduled" ? "It opens by itself at the moment you picked." : "It is in the feed now.",
+    tone: "success",
+    iconName: "check",
+  });
+
+  if (EMBED) {
+    /* the desk stays where it is: it lists the new video and hands the member a
+       clean form for the next one, instead of carrying them away from the hub */
+    const done = { code: S.code, status: S.status, hub: S.hub, title: S.title };
+    resetForm();
+    document.dispatchEvent(new CustomEvent("ved:published", { detail: done }));
+    return;
+  }
+
+  setTimeout(() => {
+    location.href = `videos.html#/v/${encodeURIComponent(S.code)}`;
+  }, 650);
+}
+
+/* ================================================================== */
+/* a fresh form — the desk's, after a publish                         */
+/* ================================================================== */
+function resetForm() {
+  S.code = "";
+  S.title = "";
+  S.desc = "";
+  S.embed = "";
+  S.thumb = "";
+  S.thumbChosen = false;
+  S.thumbAuto = false;
+  S.tags = [];
+  S.people = [];
+  S.passes = [];
+  S.hasPassword = false;
+  S.countries = [];
+  S.langs = [];
+  S.lvMin = 1;
+  S.lvMax = 10;
+  S.followers = false;
+  S.vis = "general";
+  S.when = "now";
+  S.whenAt = "";
+  S.language = "en";
+  S.age = "none";
+  S.download = false;
+  S.vertical = false;
+  S.status = "draft";
+  S.busy = false;
+  /* the hub is the desk's, and it stays: the next video goes to the same place */
+  if (el.title) el.title.value = "";
+  if (el.desc) el.desc.value = "";
+  if (el.embed) el.embed.value = "";
+  if (el.thumb) el.thumb.value = "";
+  if (el.tagInput) el.tagInput.value = "";
+  if (el.lang) el.lang.value = "en";
+  const vertical = $("[data-ved-vertical]");
+  if (vertical) vertical.checked = false;
+  const download = $("[data-ved-download]");
+  if (download) download.checked = false;
+  const followers = $("[data-ved-followers]");
+  if (followers) followers.checked = false;
+  const lvMin = $("[data-ved-lv-min]");
+  if (lvMin) lvMin.value = "1";
+  const lvMax = $("[data-ved-lv-max]");
+  if (lvMax) lvMax.value = "10";
+  paintAll();
+  if (el.embed) el.embed.dispatchEvent(new Event("input"));
+  if (el.title) el.title.focus();
+}
+
+/* ================================================================== */
+/* filling the form                                                   */
+/* ================================================================== */
+function fillSelects() {
+  const lang = $("[data-ved-lang]");
+  if (lang) {
+    lang.innerHTML = LANGUAGES.map(([code, label]) => `<option value="${code}">${label}</option>`).join("");
+  }
+  const country = $("[data-ved-country-sel]");
+  if (country) {
+    country.innerHTML =
+      `<option value="">Add a country…</option>` +
+      COUNTRIES.map((row) => `<option value="${esc(row.name)}">${esc(row.name)}</option>`).join("");
+  }
+  const langSel = $("[data-ved-lang-sel]");
+  if (langSel) {
+    langSel.innerHTML =
+      `<option value="">Add a language…</option>` + LANGUAGES.map(([code, label]) => `<option value="${code}">${label}</option>`).join("");
+  }
+}
+
+function setVisibility(vis) {
+  S.vis = vis;
+  paintVisibility();
+  paintPreview();
+  paintStatus();
+}
+
+function addTag(raw) {
+  const tag = String(raw || "").replace(/\s+/g, " ").trim().slice(0, 40);
+  if (!tag) return;
+  if (S.tags.length >= 12) {
+    toast({ title: "Twelve tags is the ceiling", message: "Remove one to add another.", tone: "error", iconName: "info", duration: 3200 });
+    return;
+  }
+  if (S.tags.some((t) => t.toLowerCase() === tag.toLowerCase())) return;
+  S.tags.push(tag);
+  paintTags();
+  paintCounters();
+  paintStatus();
+}
+
+/** The hubs this member may publish into — a studio, a server, a cinema. */
+async function loadHubs() {
+  let res = null;
+  try {
+    /* on the desk a hub is somewhere this member was approved to publish —
+       owned, staffed, or a publisher's place — so it asks a different door */
+    res = await rpc(EMBED ? "publisher_hubs" : "creator_hubs_list", { p_token: S.token });
+  } catch (error) {
+    console.warn("[1World] studios:", error.message);
+  }
+  if (!res || res.ok !== true) {
+    S.hubs = [];
+    return;
+  }
+  S.hubs = (Array.isArray(res.hubs) ? res.hubs : []).filter(
+    (hub) => hub && hub.code && HUB_KINDS.includes(hub.kind)
+  );
+}
+
+async function loadExisting(code) {
+  let res = null;
+  try {
+    res = await rpc("video_get", { p_token: S.token, p_ref: code, p_key: "" });
+  } catch (error) {
+    console.warn("[1World] video:", error.message);
+  }
+  if (!res || res.ok !== true || res.locked || !res.video) {
+    showState({
+      title: "That video is not yours to edit",
+      text: "It may be gone, or it belongs to another member.",
+      action: `<a class="btn btn--primary btn--sm" href="videos.html">${icon("arrowLeft")} Back to the videos</a>`,
+    });
+    return false;
+  }
+  const v = res.video;
+  const meta = (v.video && v.video.meta) || {};
+  S.code = v.code || code;
+  S.title = v.title || "";
+  S.desc = v.description || "";
+  S.thumb = v.thumbnail || "";
+  S.embed = (v.video && v.video.embed) || v.embed || "";
+  S.language = v.language || "en";
+  S.vis = ["general", "limited", "private", "followers"].includes(v.visibility) ? v.visibility : "general";
+  S.status = v.status || "draft";
+  S.hasPassword = Boolean(res.asks_password);
+  S.tags = Array.isArray(v.keywords) ? v.keywords.filter((k) => k.role === "main").map((k) => k.keyword) : [];
+  S.age = meta.age || "none";
+  if (v.video && v.video.hub) {
+    S.hub = v.video.hub.code || S.hub;
+    S.hubName = v.video.hub.name || S.hubName;
+  } else if (v.video) {
+    S.hub = "";
+    S.hubName = "";
+  }
+  S.download = Boolean(meta.download);
+  S.vertical = Boolean(meta.vertical);
+  if (v.scheduled_at) {
+    const d = new Date(v.scheduled_at);
+    if (!Number.isNaN(d.getTime()) && d.getTime() > Date.now()) {
+      S.when = "later";
+      S.whenAt = isoLocal(d);
+    }
+  }
+  const audience = Array.isArray(v.audience) ? v.audience : [];
+  audience.forEach((rule) => {
+    if (!rule || rule.mode === "exclude") return;
+    if (rule.kind === "country") S.countries.push(rule.value);
+    if (rule.kind === "language") S.langs.push(rule.value);
+    if (rule.kind === "entity") S.people.push(rule.value);
+  });
+  const levels = audience.filter((r) => r && r.kind === "level").map((r) => Number(r.value)).filter((n) => !Number.isNaN(n));
+  if (levels.length) {
+    S.lvMin = Math.min(...levels);
+    S.lvMax = Math.max(...levels);
+  }
+  return true;
+}
+
+function showState({ title, text, action = "" }) {
+  const host = $("[data-ved-state]");
+  if (!host) return;
+  host.hidden = false;
+  host.innerHTML = `
+    <div class="vempty">
+      <span class="vempty__icon">${icon("lock")}</span>
+      <h2>${esc(title)}</h2>
+      <p>${esc(text)}</p>
+      ${action}
+    </div>`;
+  if (el.shell) el.shell.hidden = true;
+  if (el.foot) el.foot.hidden = true;
+}
+
+/* ================================================================== */
+/* events                                                             */
+/* ================================================================== */
+/**
+ * The still that comes with a link. YouTube hands one over; every other host
+ * does not, so an automatic picture is dropped when the source leaves YouTube
+ * — but a picture the member chose or uploaded is never touched.
+ */
+function syncAutoThumb() {
+  if (S.thumbChosen) return false;
+  const auto = autoThumb(S.embed);
+  if (auto) {
+    if (S.thumb === auto) return false;
+    S.thumb = auto;
+    S.thumbAuto = true;
+    return true;
+  }
+  if (S.thumbAuto) {
+    S.thumb = "";
+    S.thumbAuto = false;
+    return true;
+  }
+  return false;
+}
+
+/** The oEmbed endpoints that answer a browser without a key. */
+const OEMBED = {
+  tiktok: (url) => `https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`,
+  pinterest: (url) => `https://www.pinterest.com/oembed.json?url=${encodeURIComponent(url)}`,
+  vimeo: (url) => `https://vimeo.com/api/oembed.json?url=${encodeURIComponent(url)}`,
+  dailymotion: (url) => `https://www.dailymotion.com/services/oembed?url=${encodeURIComponent(url)}&format=json`,
+  reddit: (url) => `https://www.reddit.com/oembed?url=${encodeURIComponent(url)}`,
+};
+
+/**
+ * Some hosts will hand a still to anyone who asks nicely (oEmbed). We ask
+ * once per link, with a short leash, and say nothing when the answer is no —
+ * Facebook and Drive insist on a token, and a network that blocks the call
+ * must not break the page.
+ */
+async function stillFromHost(url) {
+  const kind = sourceKind(url);
+  const build = OEMBED[kind];
+  if (!build) return "";
+  let timer = null;
+  try {
+    const controller = typeof AbortController === "function" ? new AbortController() : null;
+    if (controller) timer = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(build(url), { signal: controller ? controller.signal : undefined });
+    if (!res || !res.ok) return "";
+    const data = await res.json();
+    const still = String(data?.thumbnail_url || data?.thumbnail || data?.image || "");
+    return /^https?:\/\//i.test(still) ? still : "";
+  } catch {
+    return "";
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+function paintSourceNote() {
+  const note = $("[data-ved-source-note]");
+  if (!note) return;
+  const value = S.embed.trim();
+  if (!value) {
+    note.hidden = true;
+    return;
+  }
+  note.hidden = false;
+  if (!/^https?:\/\//i.test(value)) {
+    note.innerHTML = `${icon("info")} <span>A link starts with http:// or https://</span>`;
+    return;
+  }
+  const kind = sourceKind(value);
+  if (kind === "file") {
+    note.innerHTML = `${icon("check")} <span>A file we can play here${S.download ? " — and download" : ""}</span>`;
+    return;
+  }
+  if (kind === "pinterest" && !pinterestId(value)) {
+    note.innerHTML = `${icon("info")} <span>A short Pinterest link — a full /pin/ address frames better</span>`;
+    return;
+  }
+  if (kind === "reddit" && !redditPath(value)) {
+    note.innerHTML = `${icon("info")} <span>A Reddit short link — the full thread address frames better</span>`;
+    return;
+  }
+  const label = HOSTS[kind] || "Embed";
+  note.innerHTML = `${icon("check")} <span>${esc(label)} — it plays inside the frame${kind === "youtube" ? ", and the thumbnail comes with it" : ""}</span>`;
+}
+
+/**
+ * The player, in the editor. A member should see what they are publishing
+ * before they publish it — a file plays in a <video>, everything else in the
+ * frame the host allows, and the still we already have becomes the poster.
+ */
+function paintPlayer() {
+  const host = $("[data-ved-player]");
+  if (!host) return;
+  const value = S.embed.trim();
+  const usable = value && /^https?:\/\//i.test(value) && !/^\./.test(value);
+  if (!usable) {
+    host.hidden = true;
+    host.innerHTML = "";
+    return;
+  }
+  host.hidden = false;
+  const poster = S.thumb || autoThumb(value);
+  if (isFile(value)) {
+    host.innerHTML = `<video controls playsinline preload="metadata"${poster ? ` poster="${esc(poster)}"` : ""} src="${esc(value)}"></video>`;
+    return;
+  }
+  const src = embedUrl(value);
+  host.innerHTML = `<iframe src="${esc(src)}" title="The video, before it is published" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+}
+
+/* ================================================================== */
+/* files: a picture or a video, from the machine                      */
+/* ================================================================== */
+const IMAGE_TYPES = /^image\/(png|jpeg|webp|gif)$/;
+const VIDEO_TYPES = /^video\/(mp4|webm|ogg|quicktime)$/;
+
+function fileNote(text, tone = "") {
+  const note = $("[data-ved-file-note]");
+  if (!note) return;
+  note.hidden = !text;
+  note.textContent = text || "";
+  note.style.color = tone === "error" ? "var(--red, #e5484d)" : "";
+}
+
+/** A small file straight to storage, with the percentage on the page. */
+function uploadFile(file, folder, note) {
+  return new Promise((resolve, reject) => {
+    const ext = (file.name.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const name = `${folder}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const path = `users/${folder}/${name}`;
+    let request;
+    try {
+      request = new XMLHttpRequest();
+    } catch {
+      reject(new Error("This browser cannot upload."));
+      return;
+    }
+    request.open("POST", `${SUPABASE.url}/storage/v1/object/source/${path}`);
+    request.setRequestHeader("apikey", SUPABASE.publishableKey);
+    request.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+    request.setRequestHeader("x-upsert", "true");
+    if (request.upload && note) {
+      request.upload.onprogress = (event) => {
+        if (!event.lengthComputable) return;
+        note(`Uploading… ${Math.round((event.loaded / event.total) * 100)}%`);
+      };
+    }
+    request.onload = () => {
+      if (request.status >= 200 && request.status < 300) {
+        resolve(storageUrl(path));
+        return;
+      }
+      reject(new Error(String(request.responseText || `HTTP ${request.status}`).slice(0, 120)));
+    };
+    request.onerror = () => reject(new Error("The upload did not reach the server."));
+    request.send(file);
+  });
+}
+
+async function uploadThumbnail(file) {
+  if (!file) return;
+  if (!IMAGE_TYPES.test(file.type)) {
+    toast({ title: "That is not a picture", message: "PNG, JPEG, WEBP or GIF.", tone: "error" });
+    return;
+  }
+  if (file.size > 4 * 1024 * 1024) {
+    toast({ title: "Too large", message: "4 MB at most.", tone: "error" });
+    return;
+  }
+  try {
+    const url = await uploadFile(file, "posts");
+    S.thumb = url;
+    S.thumbChosen = true;
+    S.thumbAuto = false;
+    paintThumb();
+    paintPreview();
+    paintPlayer();
+    paintStatus();
+    scheduleDraft();
+    toast({ title: "Picture uploaded", message: "", tone: "success", iconName: "image" });
+  } catch (error) {
+    toast({ title: "Upload failed", message: error?.message || "Try again.", tone: "error" });
+  }
+}
+
+async function uploadVideoFile(file) {
+  if (!file) return;
+  if (!VIDEO_TYPES.test(file.type)) {
+    fileNote("MP4, WEBM, OGG or MOV — those are the files a browser can play.", "error");
+    return;
+  }
+  if (file.size > 50 * 1024 * 1024) {
+    fileNote("50 MB at most here. A longer film belongs on a host — paste its link.", "error");
+    return;
+  }
+  const button = $("[data-ved-file-btn]");
+  if (button) button.disabled = true;
+  fileNote("Uploading… 0%");
+  try {
+    const url = await uploadFile(file, "videos", (text) => fileNote(text));
+    el.embed.value = url;
+    el.embed.dispatchEvent(new Event("input"));
+    fileNote(`${file.name} · ${(file.size / (1024 * 1024)).toFixed(1)} MB — in the site's storage`);
+    toast({ title: "File uploaded", message: "The link is in the field above.", tone: "success", iconName: "check" });
+  } catch (error) {
+    fileNote(error?.message || "The upload failed. Paste a link instead.", "error");
+    toast({ title: "Upload failed", message: error?.message || "Paste a link instead.", tone: "error" });
+  } finally {
+    if (button) button.disabled = false;
+    scheduleDraft();
+  }
+}
+
+/* ================================================================== */
+/* the draft on this device                                           */
+/* ================================================================== */
+const DRAFT_KEY = "1w.videos.draft";
+let draftTimer = null;
+
+function draftFields() {
+  return {
+    code: S.code,
+    savedAt: new Date().toISOString(),
+    embed: S.embed,
+    title: S.title,
+    desc: S.desc,
+    tags: S.tags,
+    thumb: S.thumb,
+    vis: S.vis,
+    when: S.when,
+    whenAt: S.whenAt,
+    countries: S.countries,
+    langs: S.langs,
+    lvMin: S.lvMin,
+    lvMax: S.lvMax,
+    followers: S.followers,
+    people: S.people,
+    language: S.language,
+    age: S.age,
+    download: S.download,
+    vertical: S.vertical,
+    hub: S.hub,
+  };
+}
+
+function writeDraft() {
+  try {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(draftFields()));
+    paintDraftNote();
+  } catch {
+    /* storage blocked — the form still holds everything */
+  }
+}
+
+function scheduleDraft() {
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(writeDraft, 900);
+}
+
+function readDraft() {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const draft = JSON.parse(raw);
+    if (!draft) return null;
+    if (!draft.title && !draft.embed) return null;
+    if ((draft.code || "") !== (S.code || "")) return null;
+    return draft;
+  } catch {
+    return null;
+  }
+}
+
+function clearDraft() {
+  clearTimeout(draftTimer);
+  try {
+    localStorage.removeItem(DRAFT_KEY);
+  } catch {
+    /* nothing to clear */
+  }
+  paintDraftNote();
+}
+
+function restoreDraft(draft) {
+  S.embed = draft.embed || "";
+  S.title = draft.title || "";
+  S.desc = draft.desc || "";
+  S.tags = Array.isArray(draft.tags) ? draft.tags.slice(0, 12) : [];
+  S.thumb = draft.thumb || "";
+  S.vis = draft.vis || "general";
+  S.when = draft.when || "now";
+  S.whenAt = draft.whenAt || "";
+  S.countries = Array.isArray(draft.countries) ? draft.countries : [];
+  S.langs = Array.isArray(draft.langs) ? draft.langs : [];
+  S.lvMin = Number(draft.lvMin) || 1;
+  S.lvMax = Number(draft.lvMax) || 10;
+  S.followers = Boolean(draft.followers);
+  S.people = Array.isArray(draft.people) ? draft.people : [];
+  S.language = draft.language || "en";
+  S.age = draft.age || "none";
+  S.download = Boolean(draft.download);
+  S.vertical = Boolean(draft.vertical);
+  S.hub = draft.hub || S.hub;
+}
+
+function paintDraftNote() {
+  const host = $("[data-ved-draft-note]");
+  if (!host) return;
+  let at = "";
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    const kept = raw ? JSON.parse(raw) : null;
+    if (kept && kept.savedAt) at = new Date(kept.savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    at = "";
+  }
+  host.hidden = !at;
+  host.textContent = at ? `kept on this device · ${at}` : "";
+}
+
+function bind() {
+  contents = createContents($("[data-ved-toc]"), {
+    empty: "This form has no sections yet.",
+    onJump: jumpToSection,
+  });
+
+  /* the source */
+  let stillTimer = null;
+  el.embed.addEventListener("input", () => {
+    S.embed = el.embed.value;
+    syncAutoThumb();
+    paintSourceNote();
+    paintPlayer();
+    paintThumb();
+    paintPreview();
+    paintStatus();
+    scheduleDraft();
+
+    /* one look, half a second after the typing stops */
+    clearTimeout(stillTimer);
+    const asked = S.embed.trim();
+    if (!asked || S.thumbChosen || S.thumb) return;
+    stillTimer = setTimeout(async () => {
+      const still = await stillFromHost(asked);
+      if (!still || S.thumbChosen || S.thumb || S.embed.trim() !== asked) return;
+      S.thumb = still;
+      S.thumbAuto = true;
+      paintThumb();
+      paintPreview();
+      paintPlayer();
+      scheduleDraft();
+    }, 500);
+  });
+
+  $("[data-ved-detect]")?.addEventListener("click", () => {
+    const value = el.embed.value.trim();
+    if (!value) {
+      el.embed.focus();
+      return;
+    }
+    if (!/^https?:\/\//i.test(value)) {
+      toast({ title: "That is not a link", message: "Start it with http:// or https://", tone: "error" });
+      return;
+    }
+    S.embed = value;
+    const auto = autoThumb(value);
+    if (auto) {
+      S.thumb = auto;
+      toast({ title: "Link read", message: "The thumbnail came from the video itself.", tone: "success", iconName: "image" });
+    } else {
+      toast({ title: "Link read", message: isFile(value) ? "A file we can play here." : "An embed we can frame.", tone: "success", iconName: "link" });
+    }
+    paintAll();
+  });
+
+  /* dropping a link on the page */
+  const drop = $("[data-ved-drop]");
+  if (drop) {
+    ["dragenter", "dragover"].forEach((name) =>
+      drop.addEventListener(name, (event) => {
+        event.preventDefault();
+        drop.classList.add("is-over");
+      })
+    );
+    ["dragleave", "drop"].forEach((name) =>
+      drop.addEventListener(name, () => drop.classList.remove("is-over"))
+    );
+    drop.addEventListener("drop", (event) => {
+      event.preventDefault();
+      const file = event.dataTransfer.files && event.dataTransfer.files[0];
+      if (file) {
+        uploadVideoFile(file);
+        return;
+      }
+      const uri = event.dataTransfer.getData("text/uri-list") || event.dataTransfer.getData("text/plain");
+      if (uri && /^https?:\/\//i.test(uri.trim())) {
+        el.embed.value = uri.trim();
+        el.embed.dispatchEvent(new Event("input"));
+        const auto = autoThumb(uri);
+        if (auto) {
+          S.thumb = auto;
+          paintThumb();
+          paintPreview();
+        }
+        toast({ title: "Link dropped", message: "Check the title and the thumbnail below.", tone: "success", iconName: "check" });
+      } else {
+        toast({
+          title: "A link, not a file",
+          message: "Videos live on a host — paste the link to the file or the platform.",
+          tone: "error",
+          iconName: "info",
+          duration: 5200,
+        });
+      }
+    });
+  }
+
+  /* title / description / tags */
+  el.title.addEventListener("input", () => {
+    S.title = el.title.value;
+    paintCounters();
+    paintPreview();
+    paintStatus();
+  });
+  el.desc.addEventListener("input", () => {
+    S.desc = el.desc.value;
+    paintCounters();
+  });
+
+  el.tagInput.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== ",") return;
+    event.preventDefault();
+    addTag(el.tagInput.value);
+    el.tagInput.value = "";
+  });
+  el.tagInput.addEventListener("blur", () => {
+    if (!el.tagInput.value.trim()) return;
+    addTag(el.tagInput.value);
+    el.tagInput.value = "";
+  });
+
+  /* thumbnail */
+  el.thumb.addEventListener("input", () => {
+    S.thumb = el.thumb.value.trim();
+    S.thumbChosen = Boolean(S.thumb);
+    S.thumbAuto = false;
+    paintThumb();
+    paintPreview();
+    paintPlayer();
+    scheduleDraft();
+  });
+  $("[data-ved-thumb-auto]")?.addEventListener("click", () => {
+    const auto = autoThumb(S.embed);
+    if (!auto) {
+      toast({
+        title: "No still to take",
+        message: "Only YouTube hands over a picture. Upload one for the other hosts.",
+        tone: "error",
+        iconName: "info",
+      });
+      return;
+    }
+    S.thumb = auto;
+    S.thumbAuto = true;
+    S.thumbChosen = false;
+    paintThumb();
+    paintPreview();
+    paintPlayer();
+    scheduleDraft();
+  });
+  $("[data-ved-thumb-clear]")?.addEventListener("click", () => {
+    S.thumb = "";
+    S.thumbChosen = false;
+    S.thumbAuto = false;
+    paintThumb();
+    paintPreview();
+    paintPlayer();
+    scheduleDraft();
+  });
+
+  /* a picture from the machine */
+  const thumbButton = $("[data-ved-thumb-upload]");
+  const thumbFile = $("[data-ved-thumb-file]");
+  thumbButton?.addEventListener("click", () => thumbFile?.click());
+  thumbFile?.addEventListener("change", () => {
+    const file = thumbFile.files && thumbFile.files[0];
+    if (file) uploadThumbnail(file);
+    thumbFile.value = "";
+  });
+
+  /* a file from the machine, as the video itself */
+  const fileButton = $("[data-ved-file-btn]");
+  const videoFile = $("[data-ved-file]");
+  fileButton?.addEventListener("click", () => videoFile?.click());
+  videoFile?.addEventListener("change", () => {
+    const file = videoFile.files && videoFile.files[0];
+    if (file) uploadVideoFile(file);
+    videoFile.value = "";
+  });
+
+  /* anything typed is a draft within a second */
+  [el.title, el.desc, el.thumb, el.embed].forEach((input) => input?.addEventListener("input", scheduleDraft));
+  el.shell.addEventListener("change", scheduleDraft);
+  el.shell.addEventListener("click", (event) => {
+    if (event.target.closest("[data-vis], [data-when], [data-age]")) scheduleDraft();
+  });
+
+  /* a member may paste the link anywhere on the page */
+  document.addEventListener("paste", (event) => {
+    if (S.embed.trim()) return;
+    const target = event.target;
+    if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+    const data = event.clipboardData;
+    const text = data ? String(data.getData("text/plain") || "").trim() : "";
+    if (!text || !/^https?:\/\//i.test(text)) return;
+    event.preventDefault();
+    el.embed.value = text;
+    el.embed.dispatchEvent(new Event("input"));
+    const auto = autoThumb(text);
+    if (auto && !S.thumbChosen && S.thumb !== auto) {
+      S.thumb = auto;
+      S.thumbAuto = true;
+      paintThumb();
+      paintPreview();
+      paintPlayer();
+    }
+    toast({ title: "Link pasted", message: "The video is in the form.", tone: "success", iconName: "check" });
+  });
+
+  /* Ctrl/Cmd+Enter publishes, from anywhere on the page */
+  document.addEventListener("keydown", (event) => {
+    if (!(event.ctrlKey || event.metaKey) || event.key !== "Enter") return;
+    event.preventDefault();
+    save(S.when === "later" ? "scheduled" : "published");
+  });
+
+  /* extras */
+  $("[data-ved-vertical]")?.addEventListener("change", (event) => {
+    S.vertical = event.target.checked;
+  });
+  $("[data-ved-download]")?.addEventListener("change", (event) => {
+    S.download = event.target.checked;
+  });
+
+  /* visibility + audience */
+  el.shell.addEventListener("click", (event) => {
+    const vis = event.target.closest("[data-vis]");
+    if (vis) {
+      setVisibility(vis.getAttribute("data-vis"));
+      return;
+    }
+    const when = event.target.closest("[data-when]");
+    if (when) {
+      S.when = when.getAttribute("data-when");
+      paintWhen();
+      paintPreview();
+      paintStatus();
+      return;
+    }
+    const age = event.target.closest("[data-age]");
+    if (age) {
+      S.age = age.getAttribute("data-age");
+      paintAge();
+      return;
+    }
+    const tagRemove = event.target.closest("[data-ved-tag-remove]");
+    if (tagRemove) {
+      S.tags.splice(Number(tagRemove.getAttribute("data-ved-tag-remove")), 1);
+      paintTags();
+      paintCounters();
+      paintStatus();
+      return;
+    }
+    const personRemove = event.target.closest("[data-ved-person-remove]");
+    if (personRemove) {
+      S.people.splice(Number(personRemove.getAttribute("data-ved-person-remove")), 1);
+      paintPeople();
+      paintStatus();
+      return;
+    }
+    const passRemove = event.target.closest("[data-ved-pass-remove]");
+    if (passRemove) {
+      S.passes.splice(Number(passRemove.getAttribute("data-ved-pass-remove")), 1);
+      paintPasses();
+      return;
+    }
+    const countryRemove = event.target.closest("[data-ved-country-remove]");
+    if (countryRemove) {
+      S.countries.splice(Number(countryRemove.getAttribute("data-ved-country-remove")), 1);
+      paintCountries();
+      paintStatus();
+      return;
+    }
+    const langRemove = event.target.closest("[data-ved-lang-remove]");
+    if (langRemove) {
+      S.langs.splice(Number(langRemove.getAttribute("data-ved-lang-remove")), 1);
+      paintCountries();
+      paintStatus();
+      return;
+    }
+    if (event.target.closest("[data-ved-person-add]")) {
+      const input = $("[data-ved-person-input]");
+      const who = String((input && input.value) || "").trim().replace(/^@?/, "@");
+      if (!who || who === "@") return;
+      if (S.people.some((p) => p.toLowerCase() === who.toLowerCase())) return;
+      S.people.push(who.startsWith("@") ? who : `@${who}`);
+      if (input) input.value = "";
+      paintPeople();
+      paintStatus();
+      return;
+    }
+    if (event.target.closest("[data-ved-pass-add]")) {
+      const input = $("[data-ved-pass-input]");
+      const pass = String((input && input.value) || "").trim();
+      if (pass.length < 4) {
+        toast({ title: "Too short", message: "A password needs four characters at least.", tone: "error", duration: 3200 });
+        return;
+      }
+      if (!S.passes.includes(pass)) S.passes.push(pass.slice(0, 60));
+      if (input) input.value = "";
+      paintPasses();
+      paintStatus();
+      return;
+    }
+    if (event.target.closest("[data-ved-pass-gen]")) {
+      const pass = randomPassword();
+      S.passes.push(pass);
+      paintPasses();
+      paintStatus();
+      toast({ title: "Password made", message: pass, tone: "info", iconName: "key", duration: 9000 });
+      return;
+    }
+  });
+
+  $("[data-ved-save]")?.addEventListener("click", () => save("draft"));
+  $("[data-ved-publish]")?.addEventListener("click", () => save(S.when === "now" ? "published" : "scheduled"));
+
+  $("[data-ved-followers]")?.addEventListener("change", (event) => {
+    if (event.target.checked) {
+      S.followers = true;
+      S.vis = "followers";
+      paintVisibility();
+      paintPreview();
+    } else {
+      S.followers = false;
+      S.vis = "limited";
+      paintVisibility();
+      paintPreview();
+    }
+    paintStatus();
+  });
+
+  $("[data-ved-country-sel]")?.addEventListener("change", (event) => {
+    const name = event.target.value;
+    event.target.value = "";
+    if (!name) return;
+    if (!S.countries.includes(name)) S.countries.push(name);
+    paintCountries();
+    paintStatus();
+  });
+  $("[data-ved-lang-sel]")?.addEventListener("change", (event) => {
+    const code = event.target.value;
+    event.target.value = "";
+    if (!code) return;
+    if (!S.langs.includes(code)) S.langs.push(code);
+    paintCountries();
+    paintStatus();
+  });
+  $("[data-ved-lv-min]")?.addEventListener("input", (event) => {
+    S.lvMin = Number(event.target.value) || 0;
+    paintStatus();
+  });
+  $("[data-ved-lv-max]")?.addEventListener("input", (event) => {
+    S.lvMax = Number(event.target.value) || 0;
+    paintStatus();
+  });
+  $("[data-ved-when-input]")?.addEventListener("change", (event) => {
+    S.whenAt = event.target.value;
+    paintWhen();
+    paintPreview();
+    paintStatus();
+  });
+  $("[data-ved-hub]")?.addEventListener("change", (event) => {
+    S.hub = event.target.value || "";
+    const hub = S.hubs.find((h) => h.code === S.hub);
+    S.hubName = hub ? hub.name : "";
+    paintHub();
+    paintPreview();
+    paintStatus();
+    scheduleDraft();
+    /* the desk's own rail moves with this picker */
+    if (EMBED) document.dispatchEvent(new CustomEvent("ved:hub", { detail: { code: S.hub, from: "editor" } }));
+  });
+
+  el.lang.addEventListener("change", () => {
+    S.language = el.lang.value;
+    paintPreview();
+  });
+}
+
+/* ================================================================== */
+/* boot                                                               */
+/* ================================================================== */
+async function boot() {
+  S.token = sessionToken();
+  el.shell = $("[data-ved-shell]");
+  el.foot = $("[data-ved-foot]");
+  el.embed = $("[data-ved-embed]");
+  el.title = $("[data-ved-title]");
+  el.desc = $("[data-ved-desc]");
+  el.tagInput = $("[data-ved-tag-input]");
+  el.thumb = $("[data-ved-thumb]");
+  el.lang = $("[data-ved-lang]");
+
+  if (!S.token || !getMember()) {
+    showState({
+      title: "Sign in to publish",
+      text: "A video belongs to a member — sign in first, then come back to this page.",
+      action: `<a class="btn btn--primary btn--sm" href="login.html?next=video-editor.html">${icon("login")} Sign in</a>`,
+    });
+    return;
+  }
+
+  fillSelects();
+  el.shell.hidden = false;
+  el.foot.hidden = false;
+
+  /* a link from the studio (`video-editor.html?studio=IDST100001`) preselects it,
+     and so does the desk, which names its hub on the body */
+  const wantedHub = (new URLSearchParams(location.search).get("studio") || "").trim().toUpperCase();
+  if (wantedHub) S.hub = wantedHub;
+  if (EMBED) {
+    const handed = (document.body.dataset.vedHubcode || "").trim().toUpperCase();
+    if (handed) S.hub = handed;
+    /* the rail on the left of the desk changes the hub without touching the picker */
+    document.addEventListener("ved:hub", (event) => {
+      const code = String((event.detail && event.detail.code) || "").trim().toUpperCase();
+      if (code === S.hub) return;
+      S.hub = code;
+      const hub = S.hubs.find((h) => h.code === code);
+      S.hubName = hub ? hub.name : "";
+      paintHub();
+      paintPreview();
+      paintStatus();
+      scheduleDraft();
+    });
+  }
+
+  await loadHubs();
+
+  const code = new URLSearchParams(location.search).get("id");
+  if (code) {
+    const heading = $("[data-ved-heading]");
+    if (heading) heading.textContent = "Edit a video";
+    const ok = await loadExisting(code);
+    if (!ok) return;
+  } else {
+    const draft = readDraft();
+    if (draft) {
+      restoreDraft(draft);
+      toast({ title: "Draft restored", message: "The last thing you wrote here is back.", tone: "info", iconName: "file" });
+    }
+  }
+
+  /* write the loaded values into the form */
+  el.title.value = S.title;
+  el.desc.value = S.desc;
+  el.embed.value = S.embed;
+  el.thumb.value = S.thumb;
+  el.lang.value = LANGUAGES.some(([c]) => c === S.language) ? S.language : "en";
+  const vertical = $("[data-ved-vertical]");
+  if (vertical) vertical.checked = S.vertical;
+  const download = $("[data-ved-download]");
+  if (download) download.checked = S.download;
+  const lvMin = $("[data-ved-lv-min]");
+  if (lvMin) lvMin.value = String(S.lvMin);
+  const lvMax = $("[data-ved-lv-max]");
+  if (lvMax) lvMax.value = String(S.lvMax);
+  if (S.embed) el.embed.dispatchEvent(new Event("input"));
+
+  bind();
+  paintAll();
+  paintDraftNote();
+
+  if (!S.code) {
+    el.title.focus();
+  }
+}
+
+boot();

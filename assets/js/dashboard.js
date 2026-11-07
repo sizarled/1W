@@ -1,0 +1,3501 @@
+/**
+ * dashboard.html — the member dashboard.
+ * ------------------------------------------------------------------
+ * One server call, `member_dashboard(token)`, returns everything the page
+ * needs (member, ban + trial state, codes, devices, notifications, prefs,
+ * lists, reports, prizes, points, history). The browser never reads the
+ * tables directly and never sees a hash, a token or another member's row.
+ *
+ * Three states are gated before any tool is drawn:
+ *   active    → the full dashboard
+ *   inactive  → activation message + «Activate account» + log out
+ *   expired   → renewal message + log out
+ *   banned    → ban reason + «Request trial» + log out
+ *               ... then «date will be set soon» → «Go to trial» + warning
+ *               ... then permanently closed, log out only
+ */
+
+import { rpc } from "./data.js";
+import { LEVELS, levelInfo, rowFor as levelRow, unlockOffer, unlockFee } from "./levels.js";
+import {
+  qs,
+  qsa,
+  esc,
+  num,
+  formatDate,
+  timeAgo,
+  avatarPlaceholder,
+  tilePlaceholder,
+  enableDragScroll,
+  scrollRail,
+} from "./utils.js";
+import { hydrateIcons, icon } from "./icons.js";
+import { toast } from "./ui.js";
+import { setMember, signOut, sessionToken, clearSessionToken } from "./session.js";
+import { createEdgeRail } from "./edge.js?v=20261116b";
+import { brand } from "./brands.js";
+
+/* ================================================================== */
+/* vocabulary                                                          */
+/* ================================================================== */
+const POINTS_PER_USD = 100;
+
+const NOTIFY_SOURCES = [
+  { key: "messages", label: "Messages", text: "Direct messages and support replies. Always on.", locked: true },
+  { key: "court", label: "Court", text: "Trial dates, verdicts and bans. Always on.", locked: true },
+  { key: "movies", label: "Movies", text: "New releases matching your lists." },
+  { key: "series", label: "Series", text: "New seasons and episodes." },
+  { key: "channels", label: "Channels", text: "IPTV playlists added to your packages." },
+  { key: "videos", label: "Videos", text: "Uploads from the creators you follow." },
+  { key: "podcasts", label: "Podcasts", text: "New episodes in your queue." },
+  { key: "images", label: "Images", text: "Galleries and collections." },
+  { key: "articles", label: "Articles", text: "Long reads from the writers you follow." },
+  { key: "reviews", label: "Reviews", text: "Replies to your reviews and ratings." },
+  { key: "answers", label: "Q&A", text: "Answers to your questions." },
+  { key: "documents", label: "Documents", text: "Library files and updates." },
+  { key: "store", label: "Store", text: "Orders, shipping and price drops." },
+  { key: "auction", label: "Auction", text: "Outbid warnings and closing lots." },
+  { key: "points", label: "Points", text: "Points earned, spent and expiring." },
+  { key: "prizes", label: "Prizes", text: "New draws and results." },
+  { key: "payments", label: "Payments", text: "Transfer status changes." },
+  { key: "reports", label: "Reports", text: "Decisions on reports you filed." },
+];
+
+const LIST_TYPES = [
+  { key: "movies", label: "Movies", media: "movie" },
+  { key: "series", label: "Series", media: "tv" },
+  { key: "channels", label: "Channels", media: "channel" },
+  { key: "podcasts", label: "Podcasts", media: "podcast" },
+  { key: "articles", label: "Articles", media: "article" },
+  { key: "answers", label: "Answers", media: "answer" },
+  { key: "documents", label: "Documents", media: "document" },
+  { key: "images", label: "Images", media: "image" },
+];
+
+const HISTORY_TYPES = [
+  { key: "all", label: "All" },
+  ...LIST_TYPES.map((t) => ({ key: t.key, label: t.label })),
+  { key: "videos", label: "Videos" },
+  { key: "products", label: "Products" },
+  { key: "profiles", label: "Profiles" },
+];
+
+const VIEW_META = {
+  overview: ["Overview", "Membership, points, codes and the devices linked to them."],
+  notifications: ["Notifications", "Everything the platform told you, with per-section switches."],
+  codes: ["Codes", "Six-digit viewing codes and the devices they are bound to."],
+  iptv: ["IPTV", "M3U and Xtream playlists shared with your account."],
+  favorites: ["Favorites", "What you saved while browsing."],
+  later: ["Watch later", "A queue that follows you between devices."],
+  complete: ["Completed", "Everything you finished watching, reading or listening to."],
+  reports: ["Reports", "Reports you filed and reports against your content."],
+  court: ["Court", "Trials where you are a party, and the verdicts."],
+  points: ["Points", "Balance, earn methods and the full ledger."],
+  level: ["Level", "Your rank, what unlocks next and what it takes."],
+  payments: ["Payments", "Points to money, bank details and transfer status."],
+  prizes: ["Prizes", "Draws you can join and what you already won."],
+  history: ["Viewing history", "Every title, channel and page you opened."],
+  analytics: ["Analytics", "How other people engage with your content."],
+  creator: ["Creator management", "The studios and spaces you own."],
+  publisher: ["Publisher management", "Servers, cinemas and libraries you publish."],
+  advertiser: ["Advertising campaigns", "Point budgets, placements and results."],
+  "settings-site": ["Website settings", "Language, country and skin."],
+  "settings-profile": ["Profile settings", "Name, bio, avatar, cover and privacy."],
+  "settings-account": ["Account settings", "Email, password, phone, recovery and activation."],
+  "settings-platforms": ["Platforms", "The API keys your account publishes with — sealed on the server."],
+};
+
+/* Account settings — the networks a member can link, and what each one can do.
+   `chat` providers can really carry a recovery code; `oauth` ones need an OAuth
+   app per network and say so instead of pretending to connect. */
+const IDENTITY_PROVIDERS = [
+  { key: "telegram", label: "Telegram", kind: "chat", text: "The recovery code arrives in a chat you control." },
+  { key: "whatsapp", label: "WhatsApp", kind: "chat", text: "Verified by a 6-character code sent to your number." },
+  { key: "google", label: "Google", kind: "oauth", text: "Sign-in with Google." },
+  { key: "facebook", label: "Facebook", kind: "oauth", text: "Sign-in with Facebook." },
+  { key: "x", label: "X", kind: "oauth", text: "Sign-in with X." },
+  { key: "pinterest", label: "Pinterest", kind: "oauth", text: "Sign-in with Pinterest." },
+  { key: "reddit", label: "Reddit", kind: "oauth", text: "Sign-in with Reddit." },
+  { key: "tiktok", label: "TikTok", kind: "oauth", text: "Sign-in with TikTok." },
+];
+
+const state = {
+  data: null,
+  account: null,
+  pending: null,
+  poll: 0,
+  view: "overview",
+  popFilter: "hour",
+  popOpen: false,
+  tabs: { codes: "codes", iptv: "m3u", notif: "list", lists: "movies", history: "all" },
+  notifWindow: "today",
+  custom: { from: "", to: "" },
+  busy: false,
+  tmdb: new Map(),
+  /* the API keys panel: null until the first answer, so it can say "loading" */
+  apiKeys: null,
+  apiPlatforms: [],
+  apiError: "",
+  apiEdit: null,
+  apiBusy: false,
+  /* the creator pages: the hubs behind the seven rows, asked once per visit */
+  creator: { hubs: [], limits: {}, level: 1, loaded: false, loading: false, error: "" },
+  /* the publisher program: the seat, the links, the counters */
+  program: { me: null, loaded: false, tried: false, loading: false, error: "" },
+};
+
+const token = sessionToken();
+
+/* ================================================================== */
+/* boot                                                                */
+/* ================================================================== */
+export async function initDashboard() {
+  if (!qs("[data-dsh]")) return;
+
+  if (!token) {
+    goToLogin();
+    return;
+  }
+
+  wireChrome();
+  hearOauth();
+
+  let data = null;
+  try {
+    data = await rpc("member_dashboard", { p_token: token });
+  } catch (error) {
+    console.warn("[1World] dashboard:", error.message);
+  }
+
+  if (!data || data.ok !== true) {
+    clearSessionToken();
+    signOut();
+    goToLogin();
+    return;
+  }
+
+  state.data = data;
+  if (data.member) setMember(data.member);
+  state.account = await loadAccount();
+
+  paintIdentity();
+  paintSideState();
+  paintGate();
+  revealAdminDesk();
+}
+
+/**
+ * The control panel (`panel.html`) is reached from the Administration group.
+ * Whether that group is real is the table's answer, not a guess from the
+ * member's level: `site_admin()` is the same door the panel asks.
+ */
+async function revealAdminDesk() {
+  const group = qs("[data-admin-group]");
+  if (!group || !group.hidden || !token) return;
+  const staff = await rpc("site_admin", { p_token: token }).catch(() => false);
+  if (staff === true) group.hidden = false;
+}
+
+function goToLogin() {
+  const next = "dashboard.html";
+  location.replace(`login.html?next=${encodeURIComponent(next)}`);
+}
+
+async function reload() {
+  if (!token) return goToLogin();
+  const data = await rpc("member_dashboard", { p_token: token }).catch(() => null);
+  if (!data || data.ok !== true) {
+    clearSessionToken();
+    signOut();
+    goToLogin();
+    return;
+  }
+  state.data = data;
+  state.account = await loadAccount();
+  paintIdentity();
+  paintGate();
+  revealAdminDesk();
+}
+
+/** The account card: identity, security and the linked recovery accounts. */
+async function loadAccount() {
+  const account = await rpc("member_account", { p_token: token }).catch(() => null);
+  return account && account.ok === true ? account : null;
+}
+
+/* ================================================================== */
+/* header + sidebar chrome                                             */
+/* ================================================================== */
+function wireChrome() {
+  const dsh = qs("[data-dsh]");
+  dsh.addEventListener("click", onClick);
+  dsh.addEventListener("change", onChange);
+
+  qsa("[data-rail-dir]").forEach((btn) => {
+    btn.addEventListener("click", () => scrollRail(qs("[data-rail]"), Number(btn.dataset.railDir)));
+  });
+
+  enableDragScroll(qs("[data-rail]"));
+
+  document.addEventListener("click", (event) => {
+    if (!state.popOpen) return;
+    if (event.target.closest(".dsh-bell-wrap")) return;
+    closePopover();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    if (closeUnlock()) return;
+    if (state.popOpen) closePopover();
+  });
+
+  window.addEventListener("hashchange", () => {
+    const key = (location.hash || "").replace("#", "");
+    if (key && VIEW_META[key] && key !== state.view) setView(key, { silent: true });
+  });
+}
+
+function paintIdentity() {
+  const member = state.data.member || {};
+  const name = member.username || "member";
+  const avatar = member.avatar_url || avatarPlaceholder(name);
+
+  qsa("[data-me-avatar], [data-side-avatar]").forEach((el) => {
+    el.innerHTML = `<img src="${esc(avatar)}" alt="" width="44" height="44" loading="lazy" />`;
+  });
+
+  qsa("[data-me-username], [data-side-username]").forEach((el) => {
+    el.textContent = name.startsWith("@") ? name : `@${name}`;
+  });
+
+  qsa("[data-me-id], [data-side-id]").forEach((el) => {
+    el.textContent = member.member_id || "—";
+  });
+
+  /* the avatar and the username open the member's own profile */
+  const handle = member.username || "";
+  const profileHref = handle ? `profile.html?u=${encodeURIComponent(handle)}` : "profile.html";
+  qsa("[data-me-link], [data-side-profile]").forEach((link) => {
+    link.setAttribute("href", profileHref);
+    link.setAttribute("title", `Open ${handle || "your profile"}`);
+  });
+
+  const status = qs("[data-side-status]");
+  if (status) {
+    const value = String(member.status || "").toLowerCase();
+    status.textContent = value ? value : "";
+    status.dataset.state = value;
+    status.hidden = !value;
+  }
+
+  const admin = isAdmin(member);
+  const group = qs("[data-admin-group]");
+  if (group) group.hidden = !admin;
+
+  const unread = (state.data.notifications || []).filter((n) => !n.read).length;
+  const dot = qs("[data-bell-dot]");
+  if (dot) dot.hidden = unread === 0;
+  const count = qs("[data-nav-unread]");
+  if (count) {
+    count.textContent = unread > 99 ? "99+" : String(unread);
+    count.hidden = unread === 0;
+  }
+}
+
+function isAdmin(member) {
+  const role = String(member.account_status || "").toLowerCase();
+  return ["admin", "moderator", "owner", "staff"].includes(role) || Number(member.level || 1) >= 8;
+}
+
+/* ================================================================== */
+/* gates                                                               */
+/* ================================================================== */
+function gateKey() {
+  const d = state.data;
+  const member = d.member || {};
+  const status = String(member.status || "inactive").toLowerCase();
+  const court = d.court || {};
+  const active = court.active;
+  const ban = d.ban || {};
+
+  if (status === "banned") {
+    if (ban.permanent || (active && active.decision === "uphold")) return "closed";
+    if (active && active.status === "scheduled") return "scheduled";
+    if (active && active.status === "requested") return "requested";
+    return "banned";
+  }
+  if (status === "expired") return "expired";
+  if (status !== "active") return "inactive";
+  return "active";
+}
+
+function paintGate() {
+  const key = gateKey();
+  const main = qs("[data-main]");
+  const dsh = qs("[data-dsh]");
+  const side = qs("[data-dsh-side]");
+  const rail = qs("[data-rail-wrap]");
+
+  closePopover();
+
+  if (key === "active") {
+    dsh.dataset.state = "active";
+    if (side) side.hidden = false;
+    if (rail) rail.hidden = false;
+    setEdgeTabVisible(true);
+    const pending = initialView();
+    setView(pending, { first: true });
+    return;
+  }
+
+  dsh.dataset.state = key;
+  if (side) side.hidden = true;
+  if (rail) rail.hidden = true;
+  setEdgeTabVisible(false);
+  main.innerHTML = "";
+  main.append(gateNode(key));
+  hydrateIcons(main);
+
+  if (key === "inactive") {
+    const member = state.data.member || {};
+    const link = qs("[data-gate-activate]", main);
+    // an account that was activated before gets the two doors on that page
+    const again = Boolean(member.account_activated_at);
+    if (link) {
+      link.href = `activated.html?member=${encodeURIComponent(member.member_id || "")}${again ? "&mode=reactivate" : ""}`;
+      const label = link.querySelector("span");
+      if (label) label.textContent = again ? "Re-activate or upgrade" : "Activate account";
+      link.dataset.mode = again ? "reactivate" : "activate";
+    }
+    const created = member.created_at ? new Date(member.created_at) : null;
+    const note = qs("[data-gate-deadline]", main);
+    if (note && created && !Number.isNaN(created.getTime())) {
+      const deadline = new Date(created.getTime() + 30 * 86400000);
+      note.hidden = false;
+      note.textContent = `Accounts that stay inactive until ${formatDate(deadline)} are banned automatically.`;
+    }
+  }
+
+  if (key === "banned" || key === "closed" || key === "requested" || key === "scheduled") {
+    const ban = state.data.ban || {};
+    const court = (state.data.court || {}).active || {};
+    const reason = qs("[data-gate-ban-reason]", main);
+    if (reason) reason.textContent = ban.reason || "No reason was recorded.";
+    const by = qs("[data-gate-ban-by]", main);
+    if (by) by.textContent = ban.by ? `@${String(ban.by).replace(/^@/, "")}` : "the moderation team";
+    const meta = qs("[data-gate-ban-meta]", main);
+    if (meta && ban.at) {
+      meta.hidden = false;
+      meta.textContent = `Banned ${formatDate(ban.at)} · permanent: ${ban.permanent ? "yes" : "no"}`;
+    }
+    qsa("[data-gate-case]", main).forEach((el) => {
+      el.textContent = court.case_code || "—";
+    });
+    const why = qs("[data-gate-reason]", main);
+    if (why) why.textContent = court.reason || ban.reason || "—";
+
+    if (key === "scheduled" && court.scheduled_at) {
+      const when = qs("[data-gate-when]", main);
+      if (when) when.textContent = fullDate(court.scheduled_at);
+      const link = qs("[data-gate-court]", main);
+      if (link) link.href = `court.html?id=${encodeURIComponent(court.id)}`;
+    }
+
+    if (key === "closed" && court.decision_note) {
+      const note = qs("[data-gate-decision]", main);
+      if (note) {
+        note.hidden = false;
+        note.textContent = `Court note: ${court.decision_note}`;
+      }
+    }
+  }
+}
+
+function gateNode(key) {
+  const map = {
+    inactive: "dsh-gate-inactive",
+    expired: "dsh-gate-expired",
+    banned: "dsh-gate-banned",
+    requested: "dsh-gate-requested",
+    scheduled: "dsh-gate-scheduled",
+    closed: "dsh-gate-closed",
+  };
+  const tpl = qs(`#${map[key]}`);
+  if (!tpl) return document.createTextNode("");
+  return tpl.content.cloneNode(true);
+}
+
+/* ================================================================== */
+/* routing                                                             */
+/* ================================================================== */
+function initialView() {
+  const key = (location.hash || "").replace("#", "");
+  return VIEW_META[key] ? key : "overview";
+}
+
+function setView(key, { first = false, silent = false } = {}) {
+  if (!VIEW_META[key]) key = "overview";
+  state.view = key;
+
+  qsa("[data-nav] [data-goto]").forEach((btn) => {
+    btn.classList.toggle("is-on", btn.dataset.goto === key);
+  });
+
+  if (!first && !silent) {
+    try {
+      window.history.replaceState(null, "", `#${key}`);
+    } catch {
+      /* file:// or a locked-down browser */
+    }
+  }
+
+  const main = qs("[data-main]");
+  main.innerHTML = "";
+  main.append(renderView(key));
+  hydrateIcons(main);
+  wireView(key, main);
+
+  if (!first) {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+}
+
+function renderView(key) {
+  const wrap = document.createElement("div");
+  wrap.className = "dsh-view";
+  wrap.dataset.view = key;
+  const [title, sub] = VIEW_META[key];
+  const banner = reopenBanner(key);
+  wrap.innerHTML = `
+    ${banner}
+    <header class="dsh-hero">
+      <div>
+        <h1 class="dsh-hero__title">${esc(title)}</h1>
+        <p class="dsh-hero__sub">${esc(sub)}</p>
+      </div>
+      <div class="dsh-hero__actions">${heroActions(key)}</div>
+    </header>
+    ${viewBody(key)}
+  `;
+  return wrap;
+}
+
+function reopenBanner(key) {
+  if (key !== "overview") return "";
+  const court = state.data.court || {};
+  const history = (court.history || []).find((c) => c.decision === "unban");
+  if (!history) return "";
+  return `<div class="dsh-note"><i data-icon="scale"></i><span><strong>Reopened by court decision.</strong>
+    Case <b>${esc(history.case_code)}</b> lifted the ban${
+      history.decided_at ? ` on ${esc(formatDate(history.decided_at))}` : ""
+    }. Everything is available again.</span></div>`;
+}
+
+function heroActions(key) {
+  if (key === "codes") return `<button class="dsh-btn dsh-btn--sm" type="button" data-tab="codes" data-tab-value="devices"><i data-icon="monitor"></i>Linked devices</button>`;
+  if (key === "notifications") return `<a class="dsh-btn dsh-btn--sm" href="notifications.html"><i data-icon="external"></i>Open full page</a>`;
+  if (key === "points") return `<a class="dsh-btn dsh-btn--sm" href="index.html#membership"><i data-icon="zap"></i>Buy points</a>`;
+  if (key === "prizes") return `<a class="dsh-btn dsh-btn--sm" href="prizes.html"><i data-icon="gift"></i>All prizes</a>`;
+  if (key === "history") return `<a class="dsh-btn dsh-btn--sm" href="watch.html"><i data-icon="play"></i>Continue watching</a>`;
+  return "";
+}
+
+/* ================================================================== */
+/* views                                                               */
+/* ================================================================== */
+function viewBody(key) {
+  switch (key) {
+    case "overview":
+      return overviewView();
+    case "notifications":
+      return notificationsView();
+    case "codes":
+      return codesView();
+    case "iptv":
+      return iptvView();
+    case "favorites":
+    case "later":
+    case "complete":
+      return listView(key);
+    case "reports":
+      return reportsView();
+    case "court":
+      return courtView();
+    case "points":
+      return pointsView();
+    case "level":
+      return levelView();
+    case "payments":
+      return paymentsView();
+    case "prizes":
+      return prizesView();
+    case "history":
+      return historyView();
+    case "analytics":
+      return analyticsView();
+    case "creator":
+      return creatorView();
+    case "publisher":
+      return publisherView();
+    case "advertiser":
+      return advertiserView();
+    case "settings-site":
+      return settingsSiteView();
+    case "settings-profile":
+      return settingsProfileView();
+    case "settings-account":
+      return settingsAccountView();
+    case "settings-platforms":
+      return settingsPlatformsView();
+    default:
+      return overviewView();
+  }
+}
+
+/* ---------------------------------------------------------------- */
+/* overview                                                          */
+/* ---------------------------------------------------------------- */
+function overviewView() {
+  const o = state.data.overview || {};
+  const member = state.data.member || {};
+  const codes = state.data.codes || [];
+  const devices = state.data.devices || [];
+  const joined = o.joined_at ? new Date(o.joined_at) : null;
+  const days = joined && !Number.isNaN(joined.getTime()) ? Math.max(1, Math.round((Date.now() - joined.getTime()) / 86400000)) : 0;
+
+  return `
+    <div class="dsh-grid">
+      ${stat("crown", "Membership", `${cap(o.membership || "free")}`, o.membership_expires_at ? `Until ${formatDate(o.membership_expires_at)}` : "No expiry date")}
+      ${stat("clock", "Member for", `${num(days)} ${days === 1 ? "day" : "days"}`, `Since ${formatDate(o.joined_at)}`)}
+      ${stat("zap", "Points available", num(o.points_available || 0), `≈ ${usd(o.points_available)}`)}
+      ${stat("minus", "Points spent", num(o.points_spent || 0), "Across orders, prizes and boosts")}
+      ${stat("sparkle", "Points earned", num(o.points_total || 0), "Lifetime, all sources")}
+      ${stat("clock", "Watch time", `${num(o.watch_minutes || 0)} min`, "Verified playback only")}
+    </div>
+
+    <section class="dsh-card">
+      <div class="dsh-card__head">
+        <h2 class="dsh-card__title">Your viewing codes</h2>
+        <button class="dsh-btn dsh-btn--sm" type="button" data-goto="codes"><i data-icon="plus"></i>Manage codes</button>
+      </div>
+      ${
+        codes.length
+          ? `<div class="dsh-grid">${codes
+              .slice(0, 6)
+              .map(
+                (c) => `<div class="dsh-stat">
+                  <span class="dsh-stat__label">${esc(c.months)} ${c.months === 1 ? "month" : "months"} · ${esc(ageLabel(c.age))}</span>
+                  <p class="dsh-stat__value dsh-code">${esc(c.code)}</p>
+                  <p class="dsh-stat__meta">${c.device_name || c.device_mac ? `Bound to ${esc(c.device_name || c.device_mac)}` : "Not bound to a device yet"}</p>
+                </div>`
+              )
+              .join("")}</div>`
+          : empty("lock", "No codes yet", "Create a six-digit code and bind it to one device. Codes stop working when the account is not active.", "Create a code", "codes")
+      }
+    </section>
+
+    <section class="dsh-card">
+      <div class="dsh-card__head">
+        <h2 class="dsh-card__title">Linked devices</h2>
+        <span class="dsh-chip">${devices.length} ${devices.length === 1 ? "device" : "devices"}</span>
+      </div>
+      ${
+        devices.length
+          ? `<div class="dsh-table-wrap"><table class="dsh-table">
+              <thead><tr><th>Device</th><th>MAC</th><th>Code</th><th>Last used</th></tr></thead>
+              <tbody>${devices
+                .slice(0, 5)
+                .map(
+                  (d) => `<tr><td><strong>${esc(deviceName(d))}</strong></td><td class="dsh-mono">${esc(d.device_id)}</td>
+                    <td class="dsh-code">${esc(d.code || "—")}</td><td>${esc(timeAgo(d.last_used_at) || "—")}</td></tr>`
+                )
+                .join("")}</tbody>
+            </table></div>`
+          : empty("monitor", "No device linked", "A code binds to the first device that uses it, or to the MAC you set when you create it.", "Manage devices", "codes")
+      }
+    </section>
+
+    <section class="dsh-card">
+      <div class="dsh-card__head"><h2 class="dsh-card__title">Account</h2></div>
+      <dl class="dsh-kv">
+        <div><dt>Full name</dt><dd>${esc(member.full_name || "—")}</dd></div>
+        <div><dt>Username</dt><dd>${esc(member.username || "—")}</dd></div>
+        <div><dt>Member ID</dt><dd>${esc(member.member_id || "—")}</dd></div>
+        <div><dt>Email</dt><dd>${esc(member.email || "—")}</dd></div>
+        <div><dt>Phone</dt><dd>${esc(member.phone_number || "—")}</dd></div>
+        <div><dt>Level</dt><dd>${esc(levelInfo({ points: o.points_total || 0, membership: o.membership || "free", unlocked: (state.data.member || {}).level_unlocked }).badge)}</dd></div>
+        <div><dt>Last sign-in</dt><dd>${esc(member.last_login_at ? formatDate(member.last_login_at, { hour: "2-digit", minute: "2-digit" }) : "—")}</dd></div>
+      </dl>
+    </section>
+  `;
+}
+
+/* ---------------------------------------------------------------- */
+/* notifications                                                     */
+/* ---------------------------------------------------------------- */
+function notificationsView() {
+  const items = state.data.notifications || [];
+  const tab = state.tabs.notif;
+
+  return `
+    <div class="dsh-tabs" role="tablist">
+      <button class="dsh-tab ${tab === "list" ? "is-on" : ""}" type="button" data-tab="notif" data-tab-value="list">All notifications</button>
+      <button class="dsh-tab ${tab === "settings" ? "is-on" : ""}" type="button" data-tab="notif" data-tab-value="settings">Settings</button>
+    </div>
+    ${tab === "list" ? notificationList(items) : notificationSettings()}
+  `;
+}
+
+function notificationList(items) {
+  const filtered = items.filter((n) => inWindow(n.created_at, state.notifWindow, state.custom));
+  return `
+    <div class="dsh-card">
+      <div class="dsh-card__head">
+        <h2 class="dsh-card__title">${filtered.length} ${filtered.length === 1 ? "notification" : "notifications"}</h2>
+        <span class="dsh-chip">${items.filter((n) => !n.read).length} unread</span>
+      </div>
+      <div class="dsh-tabs" role="group" aria-label="Filter by date">
+        ${[
+          ["hour", "Last hour"],
+          ["today", "Today"],
+          ["yesterday", "Yesterday"],
+          ["week", "This week"],
+          ["month", "This month"],
+          ["year", "This year"],
+          ["all", "All time"],
+          ["custom", "Custom"],
+        ]
+          .map(
+            ([key, label]) =>
+              `<button class="dsh-tab ${state.notifWindow === key ? "is-on" : ""}" type="button" data-window="${key}">${label}</button>`
+          )
+          .join("")}
+      </div>
+      ${
+        state.notifWindow === "custom"
+          ? `<form class="dsh-form" data-custom-range>
+              <div class="dsh-field"><label for="nf-from">From</label><input class="dsh-input" id="nf-from" type="date" name="from" value="${esc(state.custom.from)}" /></div>
+              <div class="dsh-field"><label for="nf-to">To</label><input class="dsh-input" id="nf-to" type="date" name="to" value="${esc(state.custom.to)}" /></div>
+              <div class="dsh-field"><button class="dsh-btn" type="submit"><i data-icon="filter"></i>Apply range</button></div>
+            </form>`
+          : ""
+      }
+      <div style="margin-top:.7rem">
+        ${
+          filtered.length
+            ? `<div class="dsh-table-wrap"><table class="dsh-table">
+                <thead><tr><th>Source</th><th>Title</th><th>Message</th><th>When</th><th></th></tr></thead>
+                <tbody>${filtered
+                  .map(
+                    (n) => `<tr data-notif="${esc(n.id)}" data-unread="${n.read ? 0 : 1}">
+                      <td><span class="dsh-chip" data-tone="${n.read ? "off" : "on"}">${esc(n.source || "system")}</span></td>
+                      <td><strong>${esc(n.title || "Notification")}</strong></td>
+                      <td>${esc(n.subject || "")}</td>
+                      <td>${esc(timeAgo(n.created_at))}</td>
+                      <td><div class="dsh-table__actions">
+                        ${n.read ? "" : `<button class="dsh-btn dsh-btn--sm" type="button" data-notif-read="${esc(n.id)}"><i data-icon="check"></i>Read</button>`}
+                      </div></td>
+                    </tr>`
+                  )
+                  .join("")}</tbody>
+              </table></div>`
+            : empty("bell", "Nothing in this window", "Try another date filter or open the full notifications page.", "Open full page", "notifications-page")
+        }
+      </div>
+    </div>
+  `;
+}
+
+function notificationSettings() {
+  const prefs = state.data.prefs || {};
+  return `
+    <div class="dsh-note"><i data-icon="info"></i><span>
+      Messages and Court can never be switched off — they carry decisions about your account.
+    </span></div>
+    <div class="dsh-grid dsh-grid--2">
+      ${NOTIFY_SOURCES.map((s) => {
+        const on = s.locked ? true : prefs[s.key] !== false;
+        return `<label class="dsh-switch" data-locked="${s.locked ? 1 : 0}">
+          <span class="dsh-switch__text"><strong>${esc(s.label)}</strong><span>${esc(s.text)}</span></span>
+          <input type="checkbox" data-source="${esc(s.key)}" ${on ? "checked" : ""} ${s.locked ? "disabled" : ""} />
+        </label>`;
+      }).join("")}
+    </div>
+  `;
+}
+
+/* ---------------------------------------------------------------- */
+/* codes + devices                                                   */
+/* ---------------------------------------------------------------- */
+function codesView() {
+  const tab = state.tabs.codes;
+  return `
+    <div class="dsh-tabs" role="tablist">
+      <button class="dsh-tab ${tab === "codes" ? "is-on" : ""}" type="button" data-tab="codes" data-tab-value="codes">Codes</button>
+      <button class="dsh-tab ${tab === "devices" ? "is-on" : ""}" type="button" data-tab="codes" data-tab-value="devices">Linked devices</button>
+    </div>
+    ${tab === "codes" ? codesPanel() : devicesPanel()}
+  `;
+}
+
+function codesPanel() {
+  const codes = state.data.codes || [];
+  const devices = state.data.devices || [];
+  return `
+    <section class="dsh-card">
+      <div class="dsh-card__head"><h2 class="dsh-card__title">New code</h2></div>
+      <form class="dsh-form" data-code-form>
+        <div class="dsh-field">
+          <label for="c-code">Six-digit code</label>
+          <div class="dsh-inline">
+            <input class="dsh-input dsh-code" id="c-code" name="code" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" placeholder="••••••" autocomplete="off" />
+            <button class="dsh-btn dsh-btn--sm" type="button" data-code-gen>Generate</button>
+          </div>
+        </div>
+        <div class="dsh-field">
+          <label for="c-months">Duration</label>
+          <select class="dsh-select" id="c-months" name="months">
+            <option value="1">1 month</option>
+            <option value="3">3 months</option>
+            <option value="6">6 months</option>
+            <option value="12">12 months</option>
+          </select>
+        </div>
+        <div class="dsh-field">
+          <label for="c-age">Age rating</label>
+          <select class="dsh-select" id="c-age" name="age">
+            <option value="none">No rating</option>
+            <option value="13">13+</option>
+            <option value="16">16+</option>
+            <option value="18">18+</option>
+          </select>
+        </div>
+        <div class="dsh-field">
+          <label for="c-device">Device</label>
+          <select class="dsh-select" id="c-device" name="device">
+            <option value="">No device (binds on first use)</option>
+            ${devices
+              .map((d) => `<option value="${esc(d.device_id)}">${esc(deviceName(d))} · ${esc(d.device_id)}</option>`)
+              .join("")}
+            <option value="__new">Another MAC address…</option>
+          </select>
+        </div>
+        <div class="dsh-field" data-new-mac hidden>
+          <label for="c-mac">MAC address</label>
+          <input class="dsh-input dsh-mono" id="c-mac" name="mac" placeholder="AA:BB:CC:DD:EE:FF" autocomplete="off" />
+        </div>
+        <div class="dsh-field">
+          <label for="c-name">Device name</label>
+          <input class="dsh-input" id="c-name" name="deviceName" placeholder="Living room TV" autocomplete="off" />
+        </div>
+        <div class="dsh-field">
+          <button class="dsh-btn dsh-btn--primary" type="submit"><i data-icon="plus"></i>Create code</button>
+        </div>
+      </form>
+      <p class="dsh-help" style="margin-top:.6rem">
+        One code belongs to one device. A code without a device binds to the last device that used it.
+      </p>
+    </section>
+
+    <section class="dsh-card">
+      <div class="dsh-card__head">
+        <h2 class="dsh-card__title">Your codes</h2>
+        <span class="dsh-chip">${codes.length}</span>
+      </div>
+      ${
+        codes.length
+          ? `<div class="dsh-table-wrap"><table class="dsh-table">
+              <thead><tr><th>Code</th><th>Duration</th><th>Age</th><th>Device</th><th>Expires</th><th>Status</th><th></th></tr></thead>
+              <tbody>${codes
+                .map(
+                  (c) => `<tr>
+                    <td><span class="dsh-code">${esc(c.code)}</span></td>
+                    <td>${esc(c.months)} ${c.months === 1 ? "month" : "months"}</td>
+                    <td>${esc(ageLabel(c.age))}</td>
+                    <td>${c.device_mac ? `<span class="dsh-mono">${esc(c.device_mac)}</span>${c.device_name ? `<br><span class="dsh-help">${esc(c.device_name)}</span>` : ""}` : '<span class="dsh-chip" data-tone="off">Free</span>'}</td>
+                    <td>${esc(formatDate(c.expires_at))}</td>
+                    <td><span class="dsh-chip" data-tone="${c.status === "active" ? "on" : "off"}">${esc(c.status)}</span></td>
+                    <td><div class="dsh-table__actions">
+                      <button class="dsh-btn dsh-btn--sm" type="button" data-copy="${esc(c.code)}" title="Copy"><i data-icon="file"></i>Copy</button>
+                      <button class="dsh-btn dsh-btn--sm" type="button" data-download="${esc(c.id)}" title="Download"><i data-icon="download"></i></button>
+                      <button class="dsh-btn dsh-btn--sm" type="button" data-share="${esc(c.id)}" title="Share"><i data-icon="share"></i></button>
+                      <button class="dsh-btn dsh-btn--sm" type="button" data-code-action="${esc(c.id)}" data-action="unlink" title="Unlink device"><i data-icon="unlock"></i></button>
+                      <button class="dsh-btn dsh-btn--sm dsh-btn--danger" type="button" data-code-action="${esc(c.id)}" data-action="delete" title="Delete code"><i data-icon="trash"></i></button>
+                    </div></td>
+                  </tr>`
+                )
+                .join("")}</tbody>
+            </table></div>`
+          : empty("lock", "No codes yet", "Generate a code or type your own six digits, choose a duration and an age rating, then bind it to a device.", "", "")
+      }
+    </section>
+  `;
+}
+
+function devicesPanel() {
+  const devices = state.data.devices || [];
+  return `
+    <section class="dsh-card">
+      <div class="dsh-card__head">
+        <h2 class="dsh-card__title">Linked devices</h2>
+        <span class="dsh-chip">${devices.length}</span>
+      </div>
+      ${
+        devices.length
+          ? `<div class="dsh-table-wrap"><table class="dsh-table">
+              <thead><tr><th>Device</th><th>MAC</th><th>Code</th><th>Linked</th><th>Status</th><th></th></tr></thead>
+              <tbody>${devices
+                .map(
+                  (d) => `<tr>
+                    <td><strong>${esc(deviceName(d))}</strong></td>
+                    <td class="dsh-mono">${esc(d.device_id)}</td>
+                    <td class="dsh-code">${esc(d.code || "—")}</td>
+                    <td>${esc(formatDate(d.first_used_at))}</td>
+                    <td><span class="dsh-chip" data-tone="${d.code ? "on" : "off"}">${d.code ? "Linked" : "Unlinked"}</span></td>
+                    <td><div class="dsh-table__actions">
+                      <button class="dsh-btn dsh-btn--sm dsh-btn--danger" type="button" data-device-delete="${esc(d.id)}"><i data-icon="trash"></i>Remove</button>
+                    </div></td>
+                  </tr>`
+                )
+                .join("")}</tbody>
+            </table></div>`
+          : empty("monitor", "No device linked yet", "Devices appear here the first time a code is used, or when you bind a code to a MAC.")
+      }
+    </section>
+  `;
+}
+
+/* ---------------------------------------------------------------- */
+/* IPTV                                                              */
+/* ---------------------------------------------------------------- */
+function iptvView() {
+  const tab = state.tabs.iptv;
+  const packages = []; // packages live in e-server; the dashboard only lists them
+  return `
+    <div class="dsh-note"><i data-icon="info"></i><span>
+      Playlists are published by administrators and moderators. Members add their own packages from
+      <b>e-server</b>; the dashboard only shows what is already shared with this account.
+    </span></div>
+    <div class="dsh-tabs" role="tablist">
+      <button class="dsh-tab ${tab === "m3u" ? "is-on" : ""}" type="button" data-tab="iptv" data-tab-value="m3u">M3U</button>
+      <button class="dsh-tab ${tab === "xtream" ? "is-on" : ""}" type="button" data-tab="iptv" data-tab-value="xtream">Xtream</button>
+    </div>
+    ${
+      packages.length
+        ? ""
+        : empty(
+            "broadcast",
+            tab === "m3u" ? "No M3U package yet" : "No Xtream package yet",
+            tab === "m3u"
+              ? "An M3U package brings a name, a playlist URL, an EPG URL, a free or premium plan, a status, a downloadable file and its channels."
+              : "An Xtream package brings a server URL, username, password, playlist and EPG URLs, a free or premium plan and its channels."
+          )
+    }
+  `;
+}
+
+/* ---------------------------------------------------------------- */
+/* favorites / later / completed                                     */
+/* ---------------------------------------------------------------- */
+function listView(kind) {
+  const payloadKey = kind === "favorites" ? "favorite" : kind === "later" ? "later" : "complete";
+  const all = ((state.data.lists || {})[payloadKey] || []);
+  const tab = state.tabs.lists;
+  const type = LIST_TYPES.find((t) => t.key === tab) || LIST_TYPES[0];
+  const items = all.filter((row) => String(row.media_type || "").toLowerCase() === type.media);
+
+  return `
+    <div class="dsh-tabs" role="tablist">
+      ${LIST_TYPES.map(
+        (t) =>
+          `<button class="dsh-tab ${tab === t.key ? "is-on" : ""}" type="button" data-tab="lists" data-tab-value="${t.key}">${t.label}</button>`
+      ).join("")}
+    </div>
+    ${
+      items.length
+        ? `<div class="dsh-tiles">${items
+            .map(
+              (row) => `<article class="dsh-tile" data-list-row="${esc(row.id)}">
+                <div class="dsh-tile__art ${artClass(type.media)}">
+                  ${
+                    row.poster
+                      ? `<img src="${esc(row.poster)}" alt="" loading="lazy" />`
+                      : `<img src="${esc(tilePlaceholder(type.label, Number(row.tmdb_id) || row.id))}" alt="" loading="lazy" />`
+                  }
+                </div>
+                <h3 class="dsh-tile__title">${esc(row.title || `${type.label.replace(/s$/, "")} #${row.tmdb_id || ""}`)}</h3>
+                <p class="dsh-tile__meta">${esc(formatDate(row.created_at))}</p>
+                <div class="dsh-tile__actions">
+                  <a class="dsh-btn dsh-btn--sm" href="${esc(row.link || openLink(type.media, row.tmdb_id))}"><i data-icon="play"></i>Open</a>
+                  <button class="dsh-btn dsh-btn--sm" type="button" data-share-row="${esc(row.id)}"><i data-icon="share"></i></button>
+                  <button class="dsh-btn dsh-btn--sm dsh-btn--danger" type="button" data-list-remove="${esc(row.id)}"><i data-icon="trash"></i></button>
+                </div>
+              </article>`
+            )
+            .join("")}</div>`
+        : empty(
+            "bookmark",
+            `No ${type.label.toLowerCase()} here yet`,
+            kind === "complete"
+              ? "Titles you finish show up here with their poster and title."
+              : `Save ${type.label.toLowerCase()} while you browse and they will appear in this tab.`
+          )
+    }
+  `;
+}
+
+/* ---------------------------------------------------------------- */
+/* reports                                                           */
+/* ---------------------------------------------------------------- */
+function reportsView() {
+  const rows = state.data.reports || [];
+  return `
+    ${
+      rows.length
+        ? `<div class="dsh-table-wrap"><table class="dsh-table">
+            <thead><tr><th>Report</th><th>Target</th><th>Filed by</th><th>Reason</th><th>Decision</th><th>Created</th><th>Updated</th></tr></thead>
+            <tbody>${rows
+              .map(
+                (r) => `<tr>
+                  <td class="dsh-mono">${esc(String(r.id).slice(0, 8))}</td>
+                  <td>${r.tmdb_id ? `TMDB #${esc(r.tmdb_id)}` : esc(String(r.link_id || "—").slice(0, 8))}</td>
+                  <td>${r.mine ? "<strong>You</strong>" : "Another member"}</td>
+                  <td>${esc(r.reason || "—")}${r.details ? `<br><span class="dsh-help">${esc(r.details)}</span>` : ""}</td>
+                  <td><span class="dsh-chip" data-tone="${r.status === "valid" ? "on" : "off"}">${esc(statusLabel(r.status))}</span></td>
+                  <td>${esc(formatDate(r.created_at))}</td>
+                  <td>—</td>
+                </tr>`
+              )
+              .join("")}</tbody>
+          </table></div>`
+        : empty(
+            "flag",
+            "No reports",
+            "Reports you file — and reports other members file against your content — are listed here with their decision."
+          )
+    }
+  `;
+}
+
+/* ---------------------------------------------------------------- */
+/* court                                                             */
+/* ---------------------------------------------------------------- */
+function courtView() {
+  const court = state.data.court || {};
+  const active = court.active;
+  const history = court.history || [];
+  const member = state.data.member || {};
+
+  return `
+    ${
+      active
+        ? `<section class="dsh-card">
+            <div class="dsh-card__head">
+              <h2 class="dsh-card__title">Case ${esc(active.case_code)}</h2>
+              <span class="dsh-chip" data-tone="${active.status === "scheduled" ? "on" : "off"}">${esc(cap(active.status))}</span>
+            </div>
+            <dl class="dsh-kv">
+              <div><dt>Reason</dt><dd>${esc(active.reason || "—")}</dd></div>
+              <div><dt>Your role</dt><dd>Defendant (content owner)</dd></div>
+              <div><dt>Judge</dt><dd>A platform moderator</dd></div>
+              <div><dt>Hearing</dt><dd>${esc(active.scheduled_at ? fullDate(active.scheduled_at) : "Date to be set")}</dd></div>
+              <div><dt>Decision</dt><dd>${esc(active.decision ? cap(active.decision) : "Pending")}</dd></div>
+            </dl>
+            ${
+              active.status === "scheduled"
+                ? `<p class="dsh-gate__warn"><i data-icon="info"></i><span>Missing the hearing makes the ban permanent.</span></p>`
+                : ""
+            }
+            <div class="dsh-hero__actions" style="margin-top:.8rem">
+              ${
+                active.status === "scheduled"
+                  ? `<a class="dsh-btn dsh-btn--primary" href="court.html?id=${encodeURIComponent(active.id)}"><i data-icon="gavel"></i>Enter court</a>`
+                  : `<button class="dsh-btn" type="button" data-court-refresh><i data-icon="refresh"></i>Refresh status</button>`
+              }
+            </div>
+          </section>`
+        : `<section class="dsh-card">
+            <div class="dsh-card__head"><h2 class="dsh-card__title">No open case</h2></div>
+            <p class="dsh-card__hint">${
+              member.status === "banned"
+                ? "You can request a trial from the ban notice."
+                : "Cases appear here when you are a party: judge, defendant (content owner) or plaintiff (reporter)."
+            }</p>
+          </section>`
+    }
+
+    <section class="dsh-card">
+      <div class="dsh-card__head"><h2 class="dsh-card__title">Verdict history</h2></div>
+      ${
+        history.length
+          ? `<div class="dsh-table-wrap"><table class="dsh-table">
+              <thead><tr><th>Case</th><th>Reason</th><th>Decision</th><th>Note</th><th>Decided</th></tr></thead>
+              <tbody>${history
+                .map(
+                  (c) => `<tr><td class="dsh-mono">${esc(c.case_code)}</td><td>${esc(c.reason || "—")}</td>
+                    <td><span class="dsh-chip" data-tone="${c.decision === "unban" ? "on" : "off"}">${esc(c.decision ? cap(c.decision) : "Open")}</span></td>
+                    <td>${esc(c.decision_note || "—")}</td><td>${esc(c.decided_at ? formatDate(c.decided_at) : "—")}</td></tr>`
+                )
+                .join("")}</tbody>
+            </table></div>`
+          : empty("scale", "No verdicts yet", "Every case you take part in is archived here with the decision and the court note.")
+      }
+    </section>
+  `;
+}
+
+/* ---------------------------------------------------------------- */
+/* points                                                            */
+/* ---------------------------------------------------------------- */
+function pointsView() {
+  const o = state.data.overview || {};
+  const ledger = state.data.points_ledger || [];
+  const earned = ledger.filter((l) => l.delta > 0);
+  const spent = ledger.filter((l) => l.delta < 0);
+  const bySource = {};
+  earned.forEach((l) => {
+    bySource[l.source || "other"] = (bySource[l.source || "other"] || 0) + l.delta;
+  });
+
+  return `
+    <div class="dsh-grid">
+      ${stat("zap", "Available", num(o.points_available || 0), usd(o.points_available))}
+      ${stat("minus", "Spent", num(o.points_spent || 0), usd(o.points_spent))}
+      ${stat("sparkle", "Total earned", num(o.points_total || 0), usd(o.points_total))}
+    </div>
+
+    <section class="dsh-card">
+      <div class="dsh-card__head"><h2 class="dsh-card__title">Add points</h2></div>
+      <div class="dsh-grid dsh-grid--2">
+        <div>
+          <p class="dsh-card__hint">Buy points from the membership page, or redeem a serial key from a reseller.</p>
+          <a class="dsh-btn dsh-btn--primary" href="index.html#membership" style="margin-top:.5rem"><i data-icon="cart"></i>Buy points on Patreon</a>
+        </div>
+        <form class="dsh-form" data-serial-form>
+          <div class="dsh-field dsh-field--wide">
+            <label for="serial">Serial key</label>
+            <div class="dsh-inline">
+              <input class="dsh-input" id="serial" name="serial" placeholder="XXXX-XXXX-XXXX" autocomplete="off" />
+              <button class="dsh-btn" type="submit"><i data-icon="check"></i>Redeem</button>
+            </div>
+          </div>
+        </form>
+      </div>
+      <p class="dsh-help" style="margin-top:.5rem">Serials are checked against the point key table on the server, one redemption per key.</p>
+    </section>
+
+    <section class="dsh-card">
+      <div class="dsh-card__head"><h2 class="dsh-card__title">How you earn</h2></div>
+      ${
+        Object.keys(bySource).length
+          ? `<div class="dsh-grid">${Object.entries(bySource)
+              .map(([source, value]) => stat("zap", cap(source), `+${num(value)}`, usd(value)))
+              .join("")}</div>`
+          : `<p class="dsh-card__hint">Watch minutes, reviews, answers and referrals add to this breakdown once you start earning.</p>`
+      }
+    </section>
+
+    <section class="dsh-card">
+      <div class="dsh-card__head">
+        <h2 class="dsh-card__title">Ledger</h2>
+        <span class="dsh-chip">${earned.length} earned · ${spent.length} spent</span>
+      </div>
+      ${
+        ledger.length
+          ? `<div class="dsh-table-wrap"><table class="dsh-table">
+              <thead><tr><th>Change</th><th>Reason</th><th>Source</th><th>Balance</th><th>When</th></tr></thead>
+              <tbody>${ledger
+                .slice(0, 40)
+                .map(
+                  (l) => `<tr><td><strong>${l.delta > 0 ? "+" : ""}${num(l.delta)}</strong></td>
+                    <td>${esc(l.reason || "—")}</td><td>${esc(l.source || "—")}</td>
+                    <td>${esc(num(l.balance_after))}</td><td>${esc(formatDate(l.created_at, { hour: "2-digit", minute: "2-digit" }))}</td></tr>`
+                )
+                .join("")}</tbody>
+            </table></div>`
+          : empty("zap", "No point movement yet", "Every earn and spend is written here with its balance after the change.")
+      }
+    </section>
+  `;
+}
+
+/* ---------------------------------------------------------------- */
+/* level                                                             */
+/* ---------------------------------------------------------------- */
+function levelView() {
+  const o = state.data.overview || {};
+  const info = levelInfo({
+    points: o.points_total || 0,
+    membership: o.membership || "free",
+    /* the level the member paid for with «Unlock now» */
+    unlocked: (state.data.member || {}).level_unlocked,
+  });
+  const offer = unlockOffer(info, o.points_available || 0);
+  const current = info.row;
+  const next = info.next;
+
+  const checks = [
+    ["Account activated", String((state.data.member || {}).status) === "active"],
+    ["Level 1 points collected", info.points >= 10],
+    ["Membership active", Boolean(o.membership) && String(o.membership) !== "free"],
+    ["Email confirmed", Boolean((state.data.member || {}).email)],
+    ["Phone added", Boolean((state.data.member || {}).phone_number)],
+    ["Profile picture", Boolean((state.data.member || {}).avatar_url)],
+    ["First viewing code", (state.data.codes || []).length > 0],
+  ];
+
+  const rows = LEVELS.map((row) => {
+    const mine = info.level === row.level || (info.level === "max" && row.level === "max");
+    const reached = row.level === "max" ? info.level === "max" : info.level !== "max" && info.level >= row.level;
+    const canBuy = Boolean(offer) && row.level !== "max" && row.level === offer.level;
+    const state_ = mine ? "Current" : reached ? "Unlocked" : canBuy ? "Ready" : "Locked";
+    const buyCell = canBuy
+      ? `<button class="dsh-btn dsh-btn--sm dsh-unlock" type="button" data-level-unlock="${row.level}"
+           ${offer.affordable ? "" : "disabled"}
+           title="Pay ${num(offer.fee)} points to unlock LV${offer.level}0${offer.affordable ? "" : ` — ${num(offer.missing)} short`}">
+           <i data-icon="key"></i>Unlock now</button>`
+      : "";
+    return `<tr>
+      <td><strong>${row.level === "max" ? "LVMax" : `LV${row.level}0`}</strong></td>
+      <td>${esc(row.name)}</td>
+      <td>${row.level === "max" ? `${num(row.points)}+` : num(row.points)}</td>
+      <td>${esc(row.membership.join(" / "))}${row.months ? ` · ${row.months} mo` : ""}</td>
+      <td>${row.quotas.tasks === Infinity ? "—" : num(row.quotas.tasks)}</td>
+      <td>${row.quotas.content === Infinity ? "unlimited" : `${num(row.quotas.content)} / day`}</td>
+      <td>${row.quotas.server === Infinity ? "unlimited" : `${num(row.quotas.server)} / day`}</td>
+      <td><span class="dsh-chip" data-tone="${mine || reached || canBuy ? "on" : "off"}">${state_}</span></td>
+      <td class="dsh-table__act">${buyCell}</td>
+    </tr>`;
+  }).join("");
+
+  return `
+    <div class="dsh-grid">
+      ${stat("crown", "Current level", `${info.badge} · ${current.name}`, `${num(info.points)} points lifetime`)}
+      ${
+        info.capped
+          ? stat("lock", "Membership cap", info.capBadge, `${esc(o.membership || "free")} membership is the ceiling`)
+          : next
+            ? stat("sparkle", "Next level", `LV${next.level}0 · ${next.name}`, `${num(info.toNext)} points to go`)
+            : stat("sparkle", "Next level", "LVMax", "No ceiling left")
+      }
+    </div>
+
+    <section class="dsh-card">
+      <div class="dsh-card__head">
+        <h2 class="dsh-card__title">Progress inside ${info.level === "max" ? "LVMax" : `level ${info.level}`}</h2>
+        <span class="dsh-chip">${info.progressPct}%</span>
+      </div>
+      <div class="dsh-progress" role="progressbar" aria-valuenow="${info.progressPct}" aria-valuemin="0" aria-valuemax="100"><span style="width:${info.progressPct}%"></span></div>
+      <p class="dsh-card__hint">
+        ${
+          info.capped
+            ? `You are held at <strong>${info.capBadge}</strong> by your ${esc(o.membership || "free")} membership. The points stay in your account — a higher membership lifts the ceiling and the level is granted straight away.`
+            : next
+              ? `${num(info.toNext)} more points reach <strong>LV${next.level}0</strong> (${esc(next.name)}), and the level is taken with <strong>Unlock now</strong> — the badge digit, the 5 in LV85, is the tens of percent already earned towards it.`
+              : "You are at the top of the ladder."
+        }
+      </p>
+      <p class="dsh-card__hint">${esc(current.summary)}</p>
+      <ul class="dsh-list">
+        ${current.rights.map((right) => `<li><i data-icon="check"></i> ${esc(right)}</li>`).join("")}
+      </ul>
+    </section>
+
+    <section class="dsh-card">
+      <div class="dsh-card__head">
+        <h2 class="dsh-card__title">The ladder</h2>
+        <span class="dsh-chip">points decide the level · membership decides the ceiling</span>
+      </div>
+      <div class="dsh-table-wrap"><table class="dsh-table">
+        <thead><tr><th>Badge</th><th>Name</th><th>Points</th><th>Membership</th><th>Tasks</th><th>Publish</th><th>Servers</th><th>Status</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
+      <p class="dsh-card__hint">A level is granted when it is <strong>paid for</strong>: the points below it have to be reached first, then the level's own points leave your balance. Card: Free LV30 · Silver LV50 · Gold LV80 · Diamond open above LV80.</p>
+      ${
+        offer
+          ? `<p class="dsh-card__hint">LV${offer.level}0 is earned — <strong>Unlock now</strong> asks for <strong>${num(offer.fee)} points</strong> from your balance (${num(offer.balance)} available). ${offer.affordable ? "The payment is open." : `Top up ${num(offer.missing)} points and it opens.`}</p>`
+          : next
+            ? `<p class="dsh-card__hint">${num(info.toNext)} more points and <strong>LV${next.level}0</strong> can be unlocked${info.capped ? ` — after the membership ceiling (${info.capBadge}) is lifted` : ""}.</p>`
+            : ""
+      }
+    </section>
+
+    <section class="dsh-card">
+      <div class="dsh-card__head"><h2 class="dsh-card__title">Criteria</h2></div>
+      <div class="dsh-grid">
+        ${checks
+          .map(
+            ([label, done]) => `<div class="dsh-switch">
+              <span class="dsh-switch__text"><strong>${esc(label)}</strong></span>
+              <span class="dsh-chip" data-tone="${done ? "on" : "off"}">${done ? "Done" : "Pending"}</span>
+            </div>`
+          )
+          .join("")}
+      </div>
+    </section>
+  `;
+}
+
+/* ---------------------------------------------------------------- */
+/* payments                                                          */
+/* ---------------------------------------------------------------- */
+function paymentsView() {
+  const o = state.data.overview || {};
+  const available = Number(o.points_available || 0);
+  return `
+    <div class="dsh-wallet">
+      <div><span>Points</span><strong>${num(available)}</strong></div>
+      <div><span>Rate</span><strong>100 pts = $1</strong></div>
+      <div><span>Value</span><strong>${usd(available)}</strong></div>
+      <div><span>Minimum transfer</span><strong>$10</strong></div>
+    </div>
+
+    <section class="dsh-card">
+      <div class="dsh-card__head"><h2 class="dsh-card__title">Request a transfer</h2></div>
+      <div class="dsh-grid dsh-grid--2">
+        <form class="dsh-form" data-payout-form>
+          <div class="dsh-field">
+            <label for="p-amount">Points to convert</label>
+            <input class="dsh-input" id="p-amount" name="amount" type="number" min="0" step="100" value="${Math.min(available, 1000)}" />
+          </div>
+          <div class="dsh-field">
+            <label>You receive</label>
+            <output class="dsh-input dsh-code" data-payout-out>${usd(Math.min(available, 1000))}</output>
+          </div>
+          <div class="dsh-field">
+            <label for="p-method">Payout method</label>
+            <select class="dsh-select" id="p-method" name="method">
+              <option value="bank">Bank transfer</option>
+              <option value="paypal">PayPal</option>
+              <option value="mastercard">MasterCard</option>
+              <option value="visa">Visa</option>
+            </select>
+          </div>
+          <div class="dsh-field">
+            <button class="dsh-btn dsh-btn--primary" type="submit"><i data-icon="bank"></i>Submit request</button>
+          </div>
+        </form>
+        <div>
+          <p class="dsh-card__hint">Transfers follow a fixed chain, and every step is written to a second audit table.</p>
+          <div class="dsh-tabs" style="margin-top:.5rem;flex-wrap:wrap">
+            ${["Submitted", "Seen", "Reviewed", "Approved", "Sent", "Received"]
+              .map((s) => `<span class="dsh-chip" data-tone="off">${s}</span>`)
+              .join("")}
+          </div>
+          <p class="dsh-help" style="margin-top:.5rem">Rejected requests can be appealed and re-reviewed once.</p>
+        </div>
+      </div>
+      <p class="dsh-note" style="margin-top:.7rem"><i data-icon="info"></i><span>
+        Transfers open with the payment tables. The balance and the rate above are live; no transfer row is written yet.
+      </span></p>
+    </section>
+
+    <section class="dsh-card">
+      <div class="dsh-card__head"><h2 class="dsh-card__title">e-Bank wallet</h2></div>
+      <p class="dsh-card__hint">Points moved into the wallet can be spent inside the platform without a minimum. Moving them back to a bank account follows the threshold above.</p>
+      <div class="dsh-wallet" style="margin-top:.6rem">
+        <div><span>Wallet</span><strong>${usd(0)}</strong></div>
+        <div><span>In points</span><strong>0</strong></div>
+      </div>
+    </section>
+  `;
+}
+
+/* ---------------------------------------------------------------- */
+/* prizes                                                            */
+/* ---------------------------------------------------------------- */
+function prizesView() {
+  const prizes = state.data.prizes || [];
+  return prizes.length
+    ? `<div class="dsh-tiles">${prizes
+        .map(
+          (p) => `<article class="dsh-tile">
+            <div class="dsh-tile__art">
+              <img src="${esc(p.image || tilePlaceholder("Prize", Number(String(p.prize_code).replace(/\D/g, "")) || 1))}" alt="" loading="lazy" />
+            </div>
+            <h3 class="dsh-tile__title">${esc(p.title)}</h3>
+            <p class="dsh-tile__meta">Ends ${esc(formatDate(p.ends_at))} · ${num(p.points)} pts</p>
+            <div class="dsh-tile__actions">
+              <a class="dsh-btn dsh-btn--sm" href="prize.html?id=${encodeURIComponent(p.id)}"><i data-icon="gift"></i>Open</a>
+            </div>
+          </article>`
+        )
+        .join("")}</div>`
+    : empty("gift", "No prize open", "Available, joined and won prizes appear here with their thumbnail and end date.");
+}
+
+/* ---------------------------------------------------------------- */
+/* history                                                           */
+/* ---------------------------------------------------------------- */
+function historyView() {
+  const rows = state.data.history || [];
+  const tab = state.tabs.history;
+  const filtered = tab === "all" ? rows : rows.filter((r) => guessType(r.media_type) === tab);
+
+  return `
+    <div class="dsh-tabs" role="tablist">
+      ${HISTORY_TYPES.map(
+        (t) => `<button class="dsh-tab ${tab === t.key ? "is-on" : ""}" type="button" data-tab="history" data-tab-value="${t.key}">${t.label}</button>`
+      ).join("")}
+    </div>
+    <div class="dsh-tabs" role="group" aria-label="Filter by date">
+      ${[
+        ["today", "Today"],
+        ["week", "This week"],
+        ["month", "This month"],
+        ["year", "This year"],
+        ["all", "All time"],
+      ]
+        .map(
+          ([key, label]) =>
+            `<button class="dsh-tab ${state.notifWindow === key ? "is-on" : ""}" type="button" data-window="${key}">${label}</button>`
+        )
+        .join("")}
+    </div>
+    ${
+      filtered.length
+        ? `<div class="dsh-table-wrap"><table class="dsh-table">
+            <thead><tr><th>Title</th><th>Type</th><th>Watched</th><th>Minutes</th><th></th></tr></thead>
+            <tbody>${filtered
+              .map(
+                (h) => `<tr>
+                  <td><strong data-hist-title="${esc(h.tmdb_id)}">${esc(guessType(h.media_type) === "channels" ? "Channel" : "Title")} #${esc(h.tmdb_id || "—")}</strong>
+                    ${h.season ? `<span class="dsh-help">S${esc(h.season)}${h.episode ? ` · E${esc(h.episode)}` : ""}</span>` : ""}</td>
+                  <td><span class="dsh-chip">${esc(cap(guessType(h.media_type)))}</span></td>
+                  <td>${esc(formatDate(h.watched_at, { hour: "2-digit", minute: "2-digit" }))}</td>
+                  <td>${esc(num(h.minutes))}</td>
+                  <td><div class="dsh-table__actions"><a class="dsh-btn dsh-btn--sm" href="${esc(openLink(h.media_type, h.tmdb_id))}"><i data-icon="play"></i>Open</a></div></td>
+                </tr>`
+              )
+              .join("")}</tbody>
+          </table></div>`
+        : empty("clock", "Nothing watched yet in this filter", "Playback writes to your history with the exact date, time and minutes watched.")
+    }
+  `;
+}
+
+/* ---------------------------------------------------------------- */
+/* staged sections                                                   */
+/* ---------------------------------------------------------------- */
+function analyticsView() {
+  return `
+    <div class="dsh-grid">
+      ${stat("users", "Viewers", "—", "Unique people who opened your content")}
+      ${stat("globe", "Countries", "—", "Where they watched from")}
+      ${stat("clock", "Watch minutes", "—", "Verified playback")}
+      ${stat("eye", "Impressions", "—", "Times your content was shown")}
+      ${stat("target", "Clicks", "—", "Opens from a listing")}
+      ${stat("cart", "Sales", "—", "Store and auction orders")}
+    </div>
+    <div class="dsh-note"><i data-icon="info"></i><span>
+      Analytics reads from the visitor and playback tables for the content you own. The section is staged:
+      the metric layout, the per-section tabs (movies, series, channels, videos, podcasts, images, articles,
+      answers, documents, store, auction) and the time filters are ready, the aggregation lands in the next build step.
+    </span></div>
+    <section class="dsh-card">
+      <div class="dsh-card__head"><h2 class="dsh-card__title">Audience</h2></div>
+      <dl class="dsh-kv">
+        <div><dt>Country</dt><dd>—</dd></div>
+        <div><dt>Language</dt><dd>—</dd></div>
+        <div><dt>Age</dt><dd>—</dd></div>
+        <div><dt>Visits</dt><dd>—</dd></div>
+        <div><dt>Bank</dt><dd>${usd(0)}</dd></div>
+      </dl>
+    </section>
+  `;
+}
+
+/* ================================================================== */
+/* creator pages                                                       */
+/* ================================================================== */
+
+/**
+ * The seven creator pages a member owns, in the order the dashboard shows
+ * them. `kind` is the hub kind in the tables; `section`/`tab` the studio and the
+ * tab that create the page and hold its content.
+ */
+const CREATOR_SURFACES = [
+  { surface: "e-Studio", kind: "channel", section: "studio", tab: "videos", icon: "tv", use: "Films, series and videos" },
+  { surface: "e-Server", kind: "server", section: "server", tab: "channels", icon: "monitor", use: "IPTV playlists and channels" },
+  { surface: "e-Blog", kind: "blog", section: "blog", tab: "articles", icon: "article", use: "Articles and long reads" },
+  { surface: "e-Gallery", kind: "gallery", section: "gallery", tab: "images", icon: "image", use: "Images and collections" },
+  { surface: "e-Space", kind: "space", section: "space", tab: "questions", icon: "help", use: "Community posts" },
+  { surface: "e-Library", kind: "library", section: "library", tab: "books", icon: "database", use: "Documents and books" },
+  { surface: "e-Cinema", kind: "cinema", section: "cinema", tab: "films", icon: "film", use: "Curated screenings" },
+];
+
+const VIS_WORDS = { public: "Public", exclusive: "Exclusive", private: "Private" };
+
+/** The studio door that creates a page: its section, its first tab, the form. */
+function studioDoor(surface) {
+  return `creator.html?section=${encodeURIComponent(surface.section)}&tab=${encodeURIComponent(surface.tab)}&new=1`;
+}
+
+/** The studio door that edits one hub — `settings` edits the page itself. */
+function hubDoor(hub, surface, tab) {
+  const params = new URLSearchParams({ section: surface.section, hub: hub.id, tab: tab || "settings" });
+  return `creator.html?${params.toString()}`;
+}
+
+/** A hub's public page: a blog has its own page, every other hub has one. */
+function hubPublicDoor(hub) {
+  const code = hub.code || hub.id;
+  return hub.kind === "blog"
+    ? `blog.html?studio=${encodeURIComponent(code)}`
+    : `creator.html?studio=${encodeURIComponent(code)}`;
+}
+
+/** One created page: its state, its numbers and the doors into it. */
+function hubLine(hub, surface) {
+  const meta = [
+    `${num(Number(hub.published) || 0)} published`,
+    `${num(Number(hub.drafts) || 0)} draft${Number(hub.drafts) === 1 ? "" : "s"}`,
+    `${num(Number(hub.subscribers) || 0)} subscriber${Number(hub.subscribers) === 1 ? "" : "s"}`,
+    VIS_WORDS[hub.visibility] || "Public",
+  ];
+  return `
+    <li class="dsh-hub">
+      <div class="dsh-hub__head">
+        <span class="dsh-chip" data-tone="${hub.status === "hidden" ? "off" : "on"}">${hub.status === "hidden" ? "Hidden" : "Live"}</span>
+        <strong>${esc(hub.name || "Untitled")}</strong>
+        ${hub.code ? `<code class="dsh-hub__code">${esc(hub.code)}</code>` : ""}
+      </div>
+      <p class="dsh-hub__meta">${esc(meta.join(" · "))}</p>
+      <div class="dsh-table__actions">
+        <a class="dsh-btn dsh-btn--sm" href="${esc(hubDoor(hub, surface))}"><i data-icon="settings"></i>Edit page</a>
+        <a class="dsh-btn dsh-btn--ghost dsh-btn--sm" href="${esc(hubDoor(hub, surface, surface.tab))}"><i data-icon="${esc(surface.icon)}"></i>Content</a>
+        <a class="dsh-btn dsh-btn--ghost dsh-btn--sm" href="${esc(hubPublicDoor(hub))}"><i data-icon="external"></i>Open</a>
+      </div>
+    </li>`;
+}
+
+/** One table row per surface: every page of that kind, or the door to create it. */
+function creatorRow(surface) {
+  const c = state.creator;
+  const hubs = (c.hubs || []).filter((hub) => hub.kind === surface.kind);
+  const usedIn = (c.limits || {})[surface.kind] || null;
+  const limit = usedIn ? Number(usedIn.limit) || 0 : 0;
+
+  let status;
+  if (!c.loaded) {
+    status = c.error
+      ? `<span class="dsh-chip" data-tone="off">Not loaded</span>`
+      : `<span class="dsh-hub__meta">Checking your pages…</span>`;
+  } else if (hubs.length) {
+    status = `<ul class="dsh-hubs">${hubs.map((hub) => hubLine(hub, surface)).join("")}</ul>`;
+  } else {
+    status = `<span class="dsh-chip" data-tone="off">Not created</span>`;
+  }
+
+  let action;
+  if (!c.loaded) {
+    action = `<a class="dsh-btn dsh-btn--sm" href="${esc(studioDoor(surface))}"><i data-icon="plus"></i>Create</a>`;
+  } else if (!limit || hubs.length < limit) {
+    action = `<a class="dsh-btn dsh-btn--sm" href="${esc(studioDoor(surface))}"><i data-icon="plus"></i>${hubs.length ? "Add another" : "Create"}</a>`;
+    if (limit) action += `<span class="dsh-hub__meta">${esc(num(hubs.length))} / ${esc(num(limit))}</span>`;
+  } else {
+    action = `<span class="dsh-chip" data-tone="off">${esc(num(limit))} of ${esc(num(limit))}</span>`;
+  }
+
+  return `<tr data-surface-row="${esc(surface.kind)}">
+    <td><span class="dsh-surface"><i data-icon="${esc(surface.icon)}"></i><strong>${esc(surface.surface)}</strong></span></td>
+    <td>${esc(surface.use)}</td>
+    <td>${status}</td>
+    <td data-surface-create><div class="dsh-table__actions">${action}</div></td>
+  </tr>`;
+}
+
+/** The table, with the one message that says why it is empty when it is. */
+function creatorTable() {
+  const c = state.creator;
+  const notice = c.error
+    ? `<div class="dsh-empty">
+        <i data-icon="lock"></i>
+        <p class="dsh-empty__title">Your pages could not be listed</p>
+        <p class="dsh-empty__text">The studio did not answer. Check the connection and try again — the doors below still open.</p>
+        <button class="dsh-btn dsh-btn--sm" type="button" data-creator-retry><i data-icon="refresh"></i>Try again</button>
+      </div>`
+    : "";
+  return `${notice}
+  <div class="dsh-table-wrap"><table class="dsh-table">
+    <thead><tr><th>Surface</th><th>For</th><th>Status</th><th></th></tr></thead>
+    <tbody>${CREATOR_SURFACES.map(creatorRow).join("")}</tbody>
+  </table></div>`;
+}
+
+/**
+ * Creator management: the seven pages, created and edited from here.
+ *
+ * The rows are the hubs of `creator_hubs_list` — a page that exists carries its
+ * name, code, visibility and counts with two doors (edit the page, write its
+ * content); a page that does not exist carries the door that creates it. The
+ * content itself is written in the studio at `creator.html`, one tab per kind.
+ */
+function creatorView() {
+  return `
+    <div class="dsh-note"><i data-icon="info"></i><span>
+      Every creator page is created and edited from this table — name, description, logo, cover,
+      category, niches and visibility. The content of a page is written in the studio:
+      <b>creator.html</b> opens the same seven sections, one tab per kind of content.
+    </span></div>
+    <div class="dsh-grid" data-creator-stats>${creatorStats()}</div>
+    <section class="dsh-card">
+      <div class="dsh-card__head">
+        <h2 class="dsh-card__title">Your creator pages</h2>
+        <a class="dsh-btn dsh-btn--sm" href="creator.html?section=studio"><i data-icon="settings"></i>Open the studio</a>
+      </div>
+      <div data-creator-table>${creatorTable()}</div>
+    </section>
+    <section class="dsh-card">
+      <div class="dsh-card__head"><h2 class="dsh-card__title">Where the content lives</h2></div>
+      <dl class="dsh-kv">
+        ${CREATOR_SURFACES.map((s) => `<div><dt>${esc(s.surface)}</dt><dd class="dsh-mono dsh-door">creator.html?section=${esc(s.section)}&tab=${esc(s.tab)}</dd></div>`).join("")}
+      </dl>
+      <p class="dsh-help" style="margin-top:.6rem">A page is the hub — its name, its look, its audience. The tab above is where its content is written, and every table there is a studio table.</p>
+    </section>
+  `;
+}
+
+/**
+ * Asking the studio for the member's hubs. One call, once per visit; the table
+ * repaints in place so the rest of the view never waits on it.
+ */
+async function loadCreatorPages({ force = false } = {}) {
+  const c = state.creator;
+  if (c.loading) return;
+  if (c.loaded && !force) return;
+  c.loading = true;
+  c.error = "";
+  let res = null;
+  try {
+    res = await rpc("creator_hubs_list", { p_token: token });
+  } catch {
+    res = null;
+  }
+  c.loading = false;
+  if (!res || res.ok !== true) {
+    c.error = res?.error || "network";
+    c.loaded = false;
+  } else {
+    c.loaded = true;
+    c.hubs = Array.isArray(res.hubs) ? res.hubs : [];
+    c.limits = res.limits || {};
+    c.level = Number(res.level) || 1;
+  }
+  if (state.view !== "creator") return;
+  const host = qs("[data-creator-table]");
+  if (host) {
+    host.innerHTML = creatorTable();
+    hydrateIcons(host);
+  }
+  refreshCreatorStats();
+}
+
+/** The four numbers above the table, repainted with the same answer. */
+function refreshCreatorStats() {
+  const host = qs("[data-creator-stats]");
+  if (host) host.innerHTML = creatorStats();
+}
+
+function creatorStats() {
+  const hubs = state.creator.hubs || [];
+  const sum = (key) => hubs.reduce((total, hub) => total + (Number(hub[key]) || 0), 0);
+  const drafts = sum("drafts");
+  return [
+    stat("sparkle", "Pages created", `${num(hubs.length)} / ${CREATOR_SURFACES.length}`, hubs.length ? "One hub per page" : "Nothing created yet"),
+    stat("upload", "Published items", num(sum("published")), `${num(drafts)} draft${drafts === 1 ? "" : "s"} waiting`),
+    stat("users", "Subscribers", num(sum("subscribers")), "Across every page"),
+    stat("clock", "Watch minutes", num(sum("minutes")), "Counted from the audience"),
+  ].join("");
+}
+
+function wireCreator(root) {
+  /* the retry appears after the first answer, so the door listens on the view */
+  root.addEventListener("click", (event) => {
+    if (event.target.closest("[data-creator-retry]")) loadCreatorPages({ force: true });
+  });
+  loadCreatorPages();
+}
+
+/* ================================================================== */
+/* the Publisher program                                              */
+/* ================================================================== */
+
+/**
+ * Publisher management is the program, not a page of hubs.
+ *
+ * A publisher works *outside* the site: a channel, a newsletter, a group, a
+ * blog of their own. They carry 1World with a link of their own and are paid in
+ * points for the people the link brings — `publisher_me` carries the seat, the
+ * links and the counters, and `publisher.html` is where the links are made.
+ */
+const PUBLISHER_VALUES = [
+  ["A click through a link", "—", "Counted, nothing owed"],
+  ["The visitor makes an account", "50", "points"],
+  ["The account is activated", "250", "points"],
+  ["The account takes a membership", "1,000", "points"],
+];
+
+function publisherStats() {
+  const me = state.program.me || {};
+  const seat = me.publisher || null;
+  const totals = me.totals || {};
+  return [
+    stat("sparkle", "Publisher code", seat ? seat.code : "—", seat ? (seat.status === "paused" ? "Paused" : "Active seat") : "Not joined yet"),
+    stat("external", "Clicks", num(Number(totals.clicks) || 0), "Through every link"),
+    stat("users", "Sign-ups", num(Number(totals.signups) || 0), "People who stayed"),
+    stat("gem", "Points earned", num(Number(totals.points) || 0), seat ? `${num(Number(seat.points) || 0)} from ${num(Number(seat.links) || 0)} link(s)` : "Nothing yet"),
+  ].join("");
+}
+
+function publisherView() {
+  const me = state.program.me || {};
+  const seat = me.publisher || null;
+  const links = Array.isArray(me.links) ? me.links : [];
+  const busy = state.program.loading && !state.program.loaded;
+
+  const notice = state.program.error
+    ? `<div class="dsh-empty">
+        <i data-icon="lock"></i>
+        <p class="dsh-empty__title">The program did not answer</p>
+        <p class="dsh-empty__text">Check the connection and try again — the desk still opens.</p>
+        <button class="dsh-btn dsh-btn--sm" type="button" data-program-retry><i data-icon="refresh"></i>Try again</button>
+      </div>`
+    : "";
+
+  const linkRows = links.length
+    ? `<div class="dsh-table-wrap"><table class="dsh-table">
+        <thead><tr><th>Link</th><th>Points to</th><th>Clicks</th><th>Sign-ups</th><th>Points</th><th></th></tr></thead>
+        <tbody>${links
+          .map(
+            (link) => `<tr>
+              <td><strong>${esc(link.label || link.code)}</strong><br /><code class="dsh-hub__code">${esc(link.code)}</code></td>
+              <td>${esc(link.hub_name || "The whole site")}</td>
+              <td>${esc(num(Number(link.clicks) || 0))}</td>
+              <td>${esc(num(Number(link.signups) || 0))}</td>
+              <td>${esc(num(Number(link.points) || 0))}</td>
+              <td><a class="dsh-btn dsh-btn--sm" href="publisher.html?tab=links"><i data-icon="link"></i>Open</a></td>
+            </tr>`
+          )
+          .join("")}</tbody>
+      </table></div>`
+    : busy
+      ? `<p class="dsh-help">Reading your links…</p>`
+      : `<p class="dsh-help">${seat ? "No link yet — one for the whole site is enough to start." : "Join the program to get a code and your first link."}</p>`;
+
+  return `
+    <div class="dsh-note"><i data-icon="info"></i><span>
+      A publisher works outside 1World: a channel, a newsletter, a group, a blog of their own. Take a link, carry a
+      blog, a library, a studio or a whole film to your own audience, and earn points for the people who arrive —
+      <b>${PUBLISHER_VALUES[1][1]}</b> per sign-up, <b>${PUBLISHER_VALUES[2][1]}</b> per activation,
+      <b>${PUBLISHER_VALUES[3][1]}</b> per membership.
+    </span></div>
+    ${notice}
+    <div class="dsh-grid" data-program-stats>${publisherStats()}</div>
+    <section class="dsh-card">
+      <div class="dsh-card__head">
+        <h2 class="dsh-card__title">The program</h2>
+        <a class="dsh-btn dsh-btn--sm" href="publisher.html">${seat ? "Your links" : "Join the program"}<i data-icon="arrowRight"></i></a>
+      </div>
+      <div class="dsh-table-wrap"><table class="dsh-table">
+        <thead><tr><th>Conversion</th><th>Points</th><th></th></tr></thead>
+        <tbody>${PUBLISHER_VALUES.map(
+          ([what, points, meta]) => `<tr>
+            <td><strong>${esc(what)}</strong></td>
+            <td>${esc(points)}</td>
+            <td>${esc(meta)}</td>
+          </tr>`
+        ).join("")}</tbody>
+      </table></div>
+      <p class="dsh-help" style="margin-top:.6rem">100 points = $1, as everywhere on the site. Points land in the
+      member ledger the moment the server records the conversion; a browser cannot mint them.</p>
+    </section>
+    <section class="dsh-card">
+      <div class="dsh-card__head">
+        <h2 class="dsh-card__title">Your links</h2>
+        <span class="dsh-chip">${esc(num(links.length))}</span>
+      </div>
+      <div data-program-links>${linkRows}</div>
+    </section>
+    <section class="dsh-card">
+      <div class="dsh-card__head"><h2 class="dsh-card__title">Two kinds of publisher</h2></div>
+      <dl class="dsh-kv">
+        <div><dt>Publisher (this program)</dt><dd class="dsh-door">outside the site · points per conversion</dd></div>
+        <div><dt>Writing inside a hub</dt><dd class="dsh-door">creator.html?section=publishers · the owners who let you in</dd></div>
+      </dl>
+      <p class="dsh-help" style="margin-top:.6rem">A member can be both: the program pays for the audience you bring,
+      a hub seat is where you write. The search in <b>creator.html</b> lists the second kind too.</p>
+    </section>`;
+}
+
+/**
+ * One call, once per visit, then the numbers repaint in place.
+ */
+async function loadProgram({ force = false } = {}) {
+  const c = state.program;
+  if (c.loading) return;
+  if (c.tried && !force) return;
+  c.tried = true;
+  c.loading = true;
+  c.error = "";
+  let res = null;
+  try {
+    res = await rpc("publisher_me", { p_token: token || "" });
+  } catch {
+    res = null;
+  }
+  c.loading = false;
+  if (!res || res.ok !== true) {
+    c.error = "network";
+  } else {
+    c.loaded = true;
+    c.me = res;
+  }
+  /* the notice and the retry live in the section, so the section is redrawn */
+  if (state.view !== "publisher") return;
+  setView("publisher", { silent: true });
+}
+
+function wireProgram(root) {
+  root.addEventListener("click", (event) => {
+    if (event.target.closest("[data-program-retry]")) loadProgram({ force: true });
+  });
+  loadProgram();
+}
+
+function advertiserView() {
+  return `
+    <div class="dsh-note"><i data-icon="info"></i><span>
+      A campaign carries a name, a point budget, the placement pages (every e-* surface), an audience,
+      a country, a language, a duration and a launch/pause switch. Results are read back from the same
+      tables as Analytics.
+    </span></div>
+    <div class="dsh-grid">
+      ${stat("target", "Active campaigns", "0", "Nothing running")}
+      ${stat("zap", "Budget in use", "0 pts", usd(0))}
+      ${stat("eye", "Impressions", "0", "All campaigns")}
+      ${stat("cart", "Conversions", "0", "Clicks that led to an order")}
+    </div>
+    ${empty("target", "No campaign yet", "Campaigns are created from this section once the advertising tables are live.", "", "")}
+  `;
+}
+
+/* ---------------------------------------------------------------- */
+/* settings                                                          */
+/* ---------------------------------------------------------------- */
+const SKINS = ["Facebook", "Instagram", "YouTube", "TikTok", "WhatsApp", "Telegram", "iOS", "Android", "macOS", "Windows 10", "Windows 8", "Windows 7"];
+function settingsSiteView() {
+  let theme = "dark";
+  let lang = "en";
+  try {
+    theme = JSON.parse(localStorage.getItem("1w.theme") || '"dark"');
+    lang = JSON.parse(localStorage.getItem("1w.lang") || '"en"');
+  } catch {
+    /* storage blocked */
+  }
+  const country = state.data.member.country || "";
+
+  return `
+    <section class="dsh-card">
+      <div class="dsh-card__head"><h2 class="dsh-card__title">Language, country and skin</h2></div>
+      <form class="dsh-form" data-site-form>
+        <div class="dsh-field">
+          <label for="s-lang">Language</label>
+          <select class="dsh-select" id="s-lang" name="lang">
+            ${["en:English", "ar:العربية", "fr:Français", "es:Español", "de:Deutsch", "pt:Português", "tr:Türkçe"]
+              .map((pair) => {
+                const [code, label] = pair.split(":");
+                return `<option value="${code}" ${lang === code ? "selected" : ""}>${label}</option>`;
+              })
+              .join("")}
+          </select>
+        </div>
+        <div class="dsh-field">
+          <label for="s-country">Country</label>
+          <input class="dsh-input" id="s-country" name="country" value="${esc(country)}" placeholder="Auto-detected" />
+        </div>
+        <div class="dsh-field">
+          <label for="s-theme">Theme</label>
+          <select class="dsh-select" id="s-theme" name="theme">
+            <option value="system" ${theme === "system" ? "selected" : ""}>Follow the system</option>
+            <option value="dark" ${theme === "dark" ? "selected" : ""}>Dark</option>
+            <option value="light" ${theme === "light" ? "selected" : ""}>Light</option>
+          </select>
+        </div>
+        <div class="dsh-field"><button class="dsh-btn dsh-btn--primary" type="submit"><i data-icon="check"></i>Save</button></div>
+      </form>
+      <p class="dsh-help" style="margin-top:.5rem">Country fills itself from the visitor lookup; you can override it here.</p>
+    </section>
+
+    <section class="dsh-card">
+      <div class="dsh-card__head"><h2 class="dsh-card__title">Skins</h2><span class="dsh-chip">${SKINS.length}</span></div>
+      <div class="dsh-tabs" style="flex-wrap:wrap">
+        ${SKINS.map((s) => `<button class="dsh-tab" type="button" data-skin="${esc(s)}">${esc(s)}</button>`).join("")}
+      </div>
+      <p class="dsh-help" style="margin-top:.5rem">A skin changes the shape of components, not your data. The current build ships one skin per family.</p>
+    </section>
+  `;
+}
+
+function settingsProfileView() {
+  const member = state.data.member || {};
+  return `
+    <section class="dsh-card">
+      <div class="dsh-card__head"><h2 class="dsh-card__title">Public profile</h2></div>
+      <form class="dsh-form" data-profile-form>
+        <div class="dsh-field dsh-field--wide">
+          <label for="pf-name">Display name</label>
+          <input class="dsh-input" id="pf-name" name="full_name" value="${esc(member.full_name || "")}" />
+        </div>
+        <div class="dsh-field dsh-field--wide">
+          <label for="pf-bio">Bio</label>
+          <input class="dsh-input" id="pf-bio" name="bio" placeholder="One line about you" />
+        </div>
+        <div class="dsh-field">
+          <label for="pf-avatar">Avatar URL</label>
+          <input class="dsh-input" id="pf-avatar" name="avatar_url" value="${esc(member.avatar_url || "")}" placeholder="source/users/avatar.jpg" />
+        </div>
+        <div class="dsh-field">
+          <label for="pf-cover">Cover URL</label>
+          <input class="dsh-input" id="pf-cover" name="cover_url" value="${esc(member.cover_url || "")}" />
+        </div>
+        <div class="dsh-field">
+          <label for="pf-visible">Profile visibility</label>
+          <select class="dsh-select" id="pf-visible" name="visibility">
+            <option value="public">Public</option>
+            <option value="hidden">Hidden</option>
+          </select>
+        </div>
+        <div class="dsh-field">
+          <label for="pf-follow">Who can follow</label>
+          <select class="dsh-select" id="pf-follow" name="follow">
+            <option value="open">Anyone</option>
+            <option value="approve">Ask me first</option>
+          </select>
+        </div>
+        <div class="dsh-field"><button class="dsh-btn dsh-btn--primary" type="submit"><i data-icon="check"></i>Save profile</button></div>
+      </form>
+      <p class="dsh-note" style="margin-top:.7rem"><i data-icon="info"></i><span>
+        Profile writes land with the profile service; until then this form is a preview of the fields and saves nothing.
+      </span></p>
+    </section>
+  `;
+}
+
+function settingsAccountView() {
+  const member = state.data.member || {};
+  const account = state.account || {};
+  const identity = account.member || {};
+  const security = account.security || {};
+  const linked = Array.isArray(account.identities) ? account.identities : [];
+  const byKey = new Map(linked.map((row) => [row.provider, row]));
+  const ready = account.providers || {};
+  const verified = linked.filter((row) => row.status === "verified");
+  const membership = (state.data.overview || {}).membership || member.membership || "free";
+
+  const recoveryChannels = ["email", ...verified.map((row) => labelForIdentity(row.provider))];
+
+  return `
+    ${
+      state.account
+        ? ""
+        : `<div class="dsh-note" role="status"><i data-icon="info"></i><span>
+             The account card could not be loaded.
+             <button class="dsh-btn dsh-btn--sm" type="button" data-acct-retry>Try again</button>
+           </span></div>`
+    }
+
+    <section class="dsh-card">
+      <div class="dsh-card__head">
+        <h2 class="dsh-card__title">Identity</h2>
+        <span class="dsh-chip">${esc(cap(member.status || identity.status || "member"))}</span>
+      </div>
+      <dl class="dsh-kv">
+        <div><dt>Member ID</dt><dd><b class="dsh-mono">${esc(member.member_id || identity.member_id || "—")}</b></dd></div>
+        <div><dt>Username</dt><dd>${esc(member.username || identity.username || "—")} <span class="dsh-chip" data-tone="off">locked</span></dd></div>
+        <div><dt>Email</dt><dd>${esc(member.email || identity.email || "—")} <span class="dsh-chip" data-tone="off">fixed</span></dd></div>
+        <div><dt>Phone</dt><dd>${esc(member.phone_number || identity.phone_number || "—")}</dd></div>
+        <div><dt>Status</dt><dd>${esc(cap(member.status || identity.status || ""))}</dd></div>
+        <div><dt>Membership</dt><dd>${esc(cap(membership))}</dd></div>
+      </dl>
+      <p class="dsh-card__note">
+        The email on the account is the address you signed up with and it cannot be changed here.
+        A recovery code always goes to it — and to every chat you link below.
+      </p>
+    </section>
+
+    <section class="dsh-card">
+      <div class="dsh-card__head"><h2 class="dsh-card__title">Security</h2></div>
+      <form class="dsh-form dsh-form--account" data-acct-password novalidate>
+        <label class="dsh-field">
+          <span>Current password</span>
+          <input class="dsh-input" type="password" name="current" autocomplete="current-password" required />
+        </label>
+        <label class="dsh-field">
+          <span>New password</span>
+          <input class="dsh-input" type="password" name="password" autocomplete="new-password" minlength="8" required />
+        </label>
+        <label class="dsh-field">
+          <span>Repeat it</span>
+          <input class="dsh-input" type="password" name="confirm" autocomplete="new-password" minlength="8" required />
+        </label>
+        <p class="dsh-form__error" data-acct-error role="alert" hidden></p>
+        <div class="dsh-form__actions">
+          <button class="dsh-btn" type="submit"><i data-icon="key"></i>Change password</button>
+          <span class="dsh-form__hint">8 characters or more. Every other signed-in device is signed out.</span>
+        </div>
+      </form>
+
+      <div class="dsh-grid dsh-grid--2">
+        <div class="dsh-switch">
+          <span class="dsh-switch__text">
+            <strong>Email</strong>
+            <span>Fixed on the account — it is the address you signed up with.</span>
+          </span>
+          <span class="dsh-chip" data-tone="off">Locked</span>
+        </div>
+        <div class="dsh-switch">
+          <span class="dsh-switch__text">
+            <strong>Recovery code</strong>
+            <span>One-time code, 30 minutes, replaced after every use. Goes to ${esc(recoveryChannels.join(" + "))}.</span>
+          </span>
+          <a class="dsh-btn dsh-btn--sm" href="rest.html"><i data-icon="lock"></i>Recover</a>
+        </div>
+        <div class="dsh-switch">
+          <span class="dsh-switch__text">
+            <strong>Upgrade membership</strong>
+            <span>Premium, family and creator plans.</span>
+          </span>
+          <a class="dsh-btn dsh-btn--sm" href="index.html#membership"><i data-icon="crown"></i>Upgrade</a>
+        </div>
+        <div class="dsh-switch">
+          <span class="dsh-switch__text">
+            <strong>Linked accounts</strong>
+            <span>${verified.length ? `${verified.length} linked — the code also lands there` : "None yet — the code only reaches your email"}</span>
+          </span>
+          <span class="dsh-chip" data-tone="${verified.length ? "on" : "off"}">${verified.length ? `${verified.length} linked` : "Email only"}</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="dsh-card">
+      <div class="dsh-card__head">
+        <h2 class="dsh-card__title">Recovery accounts</h2>
+        <span class="dsh-chip">${verified.length}/${IDENTITY_PROVIDERS.length} linked</span>
+      </div>
+      <p class="dsh-card__note">
+        Link an account you control and the recovery code reaches it as well as your email — a dead
+        mailbox then costs you nothing. Telegram and WhatsApp deliver today; the rest need an OAuth app.
+      </p>
+      <div class="dsh-grid dsh-grid--2">
+        ${IDENTITY_PROVIDERS.map((provider) => identityRow(provider, byKey.get(provider.key), ready[provider.key] === true)).join("")}
+      </div>
+      ${pendingPanel()}
+    </section>
+  `;
+}
+
+function labelForIdentity(key) {
+  const row = IDENTITY_PROVIDERS.find((provider) => provider.key === key);
+  return row ? row.label : cap(key || "");
+}
+
+/** One network: what it is, what it can do, and one button. */
+function identityRow(provider, row, ready) {
+  const status = row?.status || "off";
+  const canChat = provider.kind === "chat";
+  const handle = row?.handle ? ` · ${esc(row.handle)}` : "";
+  const dot = status === "verified" ? "var(--text)" : status === "pending" ? "var(--muted)" : "var(--faint)";
+  const note =
+    status === "verified"
+      ? `Linked${handle}${canChat ? " — recovery codes arrive here" : " — a second door into the account"}`
+      : status === "pending"
+        ? provider.kind === "oauth"
+          ? "Waiting for the provider"
+          : "Waiting for the code"
+        : provider.kind === "oauth"
+          ? ready
+            ? `${provider.text} The provider opens in a small window.`
+            : `${provider.text} Needs an OAuth app.`
+          : provider.text;
+
+  const action =
+    status === "verified"
+      ? `<button class="dsh-btn dsh-btn--sm dsh-btn--ghost" type="button" data-identity-unlink="${provider.key}">Disconnect</button>`
+      : provider.kind === "oauth"
+        ? ready
+          ? `<button class="dsh-btn dsh-btn--sm" type="button" data-identity-start="${provider.key}"><i data-icon="link"></i>Connect</button>`
+          : `<button class="dsh-btn dsh-btn--sm" type="button" disabled title="Needs an OAuth app (client id + secret)">Unavailable</button>`
+        : `<button class="dsh-btn dsh-btn--sm" type="button" data-identity-start="${provider.key}"><i data-icon="link"></i>Connect</button>`;
+
+  return `<div class="dsh-switch" data-identity="${provider.key}">
+    <span class="dsh-switch__text">
+      <strong>
+        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${dot};margin-right:.45rem"></span>
+        <span class="dsh-brand">${brand(provider.key, "dsh-brand__svg")}</span>${esc(provider.label)}
+      </strong>
+      <span>${note}</span>
+    </span>
+    ${action}
+  </div>`;
+}
+
+/** The instructions for the link that is in flight — a deep link, or a code box. */
+function pendingPanel() {
+  const pending = state.pending;
+  if (!pending) return "";
+
+  if (pending.provider === "telegram") {
+    const bot = String(pending.url || "").replace(/^https:\/\/t\.me\//i, "").split("?")[0] || "the 1World bot";
+    return `<div class="dsh-note" data-identity-panel>
+      <i data-icon="send"></i>
+      <span>
+        <strong>Open the bot and press Start.</strong>
+        <a class="dsh-btn dsh-btn--sm" href="${esc(pending.url)}" target="_blank" rel="noopener">@${esc(bot)}</a>
+        <span class="dsh-pending__code dsh-mono">${esc(pending.code || "")}</span>
+        The link carries this code; the panel updates by itself when the bot answers.
+        <button class="dsh-btn dsh-btn--sm" type="button" data-acct-retry><i data-icon="refresh"></i>Check now</button>
+      </span>
+    </div>`;
+  }
+
+  if (pending.provider !== "whatsapp") {
+    const label = labelForIdentity(pending.provider);
+    return `<div class="dsh-note" data-identity-panel>
+      <i data-icon="external"></i>
+      <span>
+        <strong>Finish with ${esc(label)}.</strong>
+        <a class="dsh-btn dsh-btn--sm" href="${esc(pending.url)}" target="_blank" rel="opener">Open ${esc(label)}</a>
+        The provider signs you in and sends you straight back. This panel updates by itself.
+        <button class="dsh-btn dsh-btn--sm" type="button" data-acct-retry><i data-icon="refresh"></i>Check now</button>
+      </span>
+    </div>`;
+  }
+
+  return `<div class="dsh-note" data-identity-panel>
+    <i data-icon="smartphone"></i>
+    <span>
+      <strong>Code sent to ${esc(pending.masked_phone || "your WhatsApp")}.</strong>
+      <form class="dsh-pending__form" data-identity-verify="whatsapp">
+        <input class="dsh-input dsh-mono" name="code" placeholder="ABC123" maxlength="6" autocomplete="one-time-code" />
+        <button class="dsh-btn dsh-btn--sm" type="submit">Verify</button>
+      </form>
+      <button class="dsh-btn dsh-btn--sm dsh-btn--ghost" type="button" data-acct-retry>Start over</button>
+    </span>
+  </div>`;
+}
+
+function settingsPlatformsView() {
+  const platforms = Array.isArray(state.apiPlatforms) ? state.apiPlatforms : [];
+  const keys = Array.isArray(state.apiKeys) ? state.apiKeys : [];
+  const editing = state.apiEdit ? keys.find((row) => row.id === state.apiEdit) : null;
+  const limit = state.apiLimit || 40;
+
+  if (state.apiKeys === null) {
+    return `
+      <section class="dsh-card">
+        <div class="dsh-card__head"><h2 class="dsh-card__title">API keys</h2></div>
+        <p class="dsh-card__hint">${
+          state.apiError
+            ? `${esc(state.apiError)} <button class="dsh-btn dsh-btn--sm" type="button" data-key-retry>Try again</button>`
+            : "Reading your keys…"
+        }</p>
+      </section>`;
+  }
+
+  const rows = keys
+    .map((row) => {
+      const label = row.label || "—";
+      const added = row.updated_at || row.created_at;
+      return `<tr>
+        <td><strong>${esc(platformLabel(row.platform))}</strong><span class="dsh-cell__sub">${esc(row.platform)}</span></td>
+        <td>${esc(label)}</td>
+        <td><code class="dsh-key">••••${esc(row.tail || "····")}</code></td>
+        <td><span class="dsh-chip" data-tone="${row.status === "active" ? "on" : "off"}">${
+          row.status === "active" ? "Active" : "Revoked"
+        }</span></td>
+        <td>${esc(formatDate(added))}</td>
+        <td><div class="dsh-table__actions">
+          <button class="dsh-btn dsh-btn--sm" type="button" data-key-replace="${esc(row.id)}"><i data-icon="refresh"></i>Replace</button>
+          <button class="dsh-btn dsh-btn--sm" type="button" data-key-remove="${esc(row.id)}"><i data-icon="trash"></i>Remove</button>
+        </div></td>
+      </tr>`;
+    })
+    .join("");
+
+  return `
+    <div class="dsh-note"><i data-icon="shield"></i><span>
+      A key is sealed before it is stored and <strong>never sent back</strong> — the table shows the last
+      four characters, so even a stolen session cannot read one. Replacing a key overwrites the stored
+      copy; removing it deletes the row.
+    </span></div>
+
+    <section class="dsh-card">
+      <div class="dsh-card__head">
+        <h2 class="dsh-card__title">${editing ? `Replace the ${esc(platformLabel(editing.platform))} key` : "Add a key"}</h2>
+        <span class="dsh-chip">${num(keys.length)} / ${num(limit)}</span>
+      </div>
+      <form class="dsh-form" data-key-form>
+        <div class="dsh-field">
+          <label for="k-platform">Platform</label>
+          <select class="dsh-select" id="k-platform" name="platform" ${editing ? "disabled" : ""}>
+            ${platforms
+              .map(
+                (p) =>
+                  `<option value="${esc(p.slug)}" ${
+                    (editing ? editing.platform : state.apiLastPlatform) === p.slug ? "selected" : ""
+                  }>${esc(p.label)}</option>`
+              )
+              .join("")}
+          </select>
+        </div>
+        <div class="dsh-field">
+          <label for="k-label">Label</label>
+          <input class="dsh-input" id="k-label" name="label" maxlength="40" placeholder="Main channel" autocomplete="off" value="${esc(
+            editing ? editing.label : ""
+          )}" />
+        </div>
+        <div class="dsh-field dsh-field--wide">
+          <label for="k-key">API key</label>
+          <input class="dsh-input" id="k-key" name="key" type="password" autocomplete="off" spellcheck="false"
+                 placeholder="paste the key the platform gave you" />
+        </div>
+        <div class="dsh-form__actions">
+          <button class="dsh-btn dsh-btn--primary" type="submit" ${state.apiBusy ? "disabled" : ""}>
+            <i data-icon="${editing ? "refresh" : "plus"}"></i>${editing ? "Replace key" : "Store key"}
+          </button>
+          ${
+            editing
+              ? `<button class="dsh-btn" type="button" data-key-cancel>Cancel</button>`
+              : ""
+          }
+          <span class="dsh-form__hint">At least 8 characters, no spaces. Only you can replace or remove it.</span>
+        </div>
+      </form>
+    </section>
+
+    <section class="dsh-card">
+      <div class="dsh-card__head">
+        <h2 class="dsh-card__title">Stored keys</h2>
+        <span class="dsh-chip">${num(keys.length)}</span>
+      </div>
+      ${
+        keys.length
+          ? `<div class="dsh-table-wrap"><table class="dsh-table">
+              <thead><tr><th>Platform</th><th>Label</th><th>Key</th><th>Status</th><th>Updated</th><th></th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table></div>`
+          : `<p class="dsh-card__hint">No key yet. Pick a platform above and paste the key it issued you — the revoke-or-replace controls appear here once it is stored.</p>`
+      }
+    </section>
+  `;
+}
+
+/** A slug the server sent, or the slug itself when the list has not arrived. */
+function platformLabel(slug) {
+  const row = (state.apiPlatforms || []).find((p) => p.slug === slug);
+  return row ? row.label : String(slug || "");
+}
+
+/* ================================================================== */
+/* wiring                                                              */
+/* ================================================================== */
+const SIDE_KEY = "1w.dsh.side";
+
+/* the menu folds into an icon rail; the header keeps its geometry either way */
+function setSideCollapsed(collapsed) {
+  const dsh = qs("[data-dsh]");
+  if (!dsh) return;
+  dsh.dataset.side = collapsed ? "collapsed" : "open";
+  qsa("[data-side-toggle]").forEach((btn) => {
+    btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    btn.setAttribute("aria-label", collapsed ? "Unfold the menu" : "Fold the menu");
+    btn.setAttribute("title", collapsed ? "Unfold the menu" : "Fold the menu");
+  });
+  try {
+    localStorage.setItem(SIDE_KEY, collapsed ? "collapsed" : "open");
+  } catch {
+    /* storage may be blocked — the state still applies for this page */
+  }
+}
+
+/* the pin (edge.js) drives the panel: pinned it stays out, unpinned it waits
+   on the screen edge and floats back in over the content */
+let sideRail = null;
+
+function paintSideState() {
+  if (!sideRail) {
+    const panel = qs("[data-dsh-side]");
+    if (!panel) return;
+    sideRail = createEdgeRail({
+      panel,
+      tab: qs("[data-side-edge]"),
+      root: qs("[data-dsh]"),
+      pinSelector: "[data-side-pin]",
+      defaultPinned: true,
+      // the floating panel is always the full menu, never the folded rail
+      onPin: () => setSideCollapsed(false),
+    });
+  }
+  sideRail.sync();
+
+  let saved = "";
+  try {
+    saved = localStorage.getItem(SIDE_KEY) || "";
+  } catch {
+    saved = "";
+  }
+  setSideCollapsed(saved === "collapsed");
+}
+
+function setEdgeTabVisible(visible) {
+  const tab = qs("[data-side-edge]");
+  if (tab) tab.hidden = !visible;
+}
+
+/* ---------------------------------------------------------------- */
+/* unlock now — pay the level's own points from the balance          */
+/* ---------------------------------------------------------------- */
+function openUnlock(level) {
+  closeUnlock();
+  const o = state.data.overview || {};
+  const row = levelRow(level);
+  const fee = unlockFee(level);
+  const available = Number(o.points_available || 0);
+
+  const wrap = document.createElement("div");
+  wrap.className = "dsh-modal";
+  wrap.setAttribute("data-level-modal", "");
+  wrap.innerHTML = `
+    <div class="dsh-modal__card" role="dialog" aria-modal="true" aria-labelledby="dsh-unlock-title">
+      <div class="dsh-modal__head">
+        <h2 class="dsh-modal__title" id="dsh-unlock-title">Unlock LV${level}0</h2>
+        <button class="dsh-icon-btn" type="button" data-level-cancel aria-label="Close"><i data-icon="close"></i></button>
+      </div>
+      <p class="dsh-modal__text">
+        Advancing to <strong>LV${level}0 · ${esc(row.name)}</strong> asks for
+        <strong>${num(fee)} points</strong>. Your balance holds <strong>${num(available)}</strong> points${
+          available >= fee ? "" : ` — <strong>${num(fee - available)}</strong> short`
+        }.
+      </p>
+      <p class="dsh-modal__hint">
+        The points are paid from your balance; your lifetime total keeps them, so the level stays yours.
+      </p>
+      <div class="dsh-modal__actions">
+        <button class="dsh-btn dsh-btn--ghost" type="button" data-level-cancel>Not now</button>
+        ${
+          available >= fee
+            ? `<button class="dsh-btn" type="button" data-level-pay="${level}"><i data-icon="key"></i>Pay ${num(fee)} points</button>`
+            : `<a class="dsh-btn" href="index.html#membership"><i data-icon="zap"></i>Buy ${num(fee - available)} points</a>`
+        }
+      </div>
+    </div>`;
+
+  /* the dialog lives on <body> and handles its own clicks */
+  wrap.addEventListener("click", (event) => {
+    if (event.target.closest("[data-level-cancel]")) {
+      event.preventDefault();
+      closeUnlock();
+      return;
+    }
+    const pay = event.target.closest("[data-level-pay]");
+    if (pay) {
+      event.preventDefault();
+      payUnlock(Number(pay.dataset.levelPay), pay);
+      return;
+    }
+    if (event.target === wrap) closeUnlock();
+  });
+
+  document.body.append(wrap);
+  document.body.classList.add("dsh-modal-open");
+  hydrateIcons(wrap);
+  qs("[data-level-pay]", wrap)?.focus?.();
+}
+
+function closeUnlock() {
+  const wrap = qs("[data-level-modal]");
+  if (!wrap) return false;
+  wrap.remove();
+  document.body.classList.remove("dsh-modal-open");
+  return true;
+}
+
+async function payUnlock(level, button) {
+  const fee = unlockFee(level);
+  if (button) button.disabled = true;
+  try {
+    const res = await rpc("level_unlock", { p_token: token, p_level: level });
+    if (!res || res.ok !== true) {
+      const reason = res?.error || "unknown";
+      const text =
+        reason === "points"
+          ? `You need ${num(res.fee)} points and hold ${num(res.balance)}.`
+          : reason === "cap"
+            ? `Your ${res.membership || "current"} membership stops at LV${Number(res.cap) * 10}.`
+            : reason === "already"
+              ? "That level is already yours."
+              : reason === "step"
+                ? "Levels are unlocked one rung at a time."
+                : "The level could not be unlocked.";
+      toast({ tone: "error", title: "Unlock now", message: text });
+      if (button) button.disabled = false;
+      return;
+    }
+    closeUnlock();
+    toast({
+      tone: "level",
+      title: `Level up — you are now LV${level}0`,
+      message: `${num(fee)} points paid — ${num(res.balance)} left in your balance.`,
+    });
+    await reload();
+  } catch (error) {
+    if (button) button.disabled = false;
+    toast({ tone: "error", title: "Unlock now", message: error.message });
+  }
+}
+
+function onClick(event) {
+  const dsh = qs("[data-dsh]");
+
+  const goto = event.target.closest("[data-goto]");
+  if (goto && dsh.contains(goto)) {
+    event.preventDefault();
+    closePopover();
+    if (goto.hasAttribute("data-pop-settings")) state.tabs.notif = "settings";
+    setView(goto.dataset.goto);
+    return;
+  }
+
+  if (event.target.closest("[data-bell]")) {
+    event.preventDefault();
+    togglePopover();
+    return;
+  }
+
+  const popFilter = event.target.closest("[data-pop-filter]");
+  if (popFilter) {
+    state.popFilter = popFilter.dataset.popFilter;
+    paintPopover();
+    return;
+  }
+
+  if (event.target.closest("[data-logout]")) {
+    event.preventDefault();
+    logout();
+    return;
+  }
+
+  if (event.target.closest("[data-level-modal]")) return;
+
+  const unlock = event.target.closest("[data-level-unlock]");
+  if (unlock) {
+    event.preventDefault();
+    openUnlock(Number(unlock.dataset.levelUnlock));
+    return;
+  }
+
+  const pay = event.target.closest("[data-level-pay]");
+  if (pay) {
+    event.preventDefault();
+    payUnlock(Number(pay.dataset.levelPay), pay);
+    return;
+  }
+
+  if (event.target.closest("[data-level-cancel]")) {
+    event.preventDefault();
+    closeUnlock();
+    return;
+  }
+
+  if (event.target.matches("[data-level-modal]")) {
+    event.preventDefault();
+    closeUnlock();
+    return;
+  }
+
+  if (event.target.closest("[data-side-toggle]")) {
+    event.preventDefault();
+    setSideCollapsed(true);
+    return;
+  }
+
+  if (event.target.closest("[data-side-open]")) {
+    event.preventDefault();
+    setSideCollapsed(false);
+    return;
+  }
+
+  if (event.target.closest("[data-court-request]")) {
+    requestTrial();
+    return;
+  }
+
+  if (event.target.closest("[data-court-refresh]")) {
+    reload().then(() => toast({ title: "Court", message: "Case status refreshed." }));
+    return;
+  }
+
+  const tab = event.target.closest("[data-tab]");
+  if (tab) {
+    state.tabs[tab.dataset.tab] = tab.dataset.tabValue;
+    setView(state.view, { silent: true });
+    return;
+  }
+
+  const win = event.target.closest("[data-window]");
+  if (win) {
+    state.notifWindow = win.dataset.window;
+    setView(state.view, { silent: true });
+    return;
+  }
+
+  if (event.target.closest("[data-code-gen]")) {
+    const input = qs("#c-code");
+    if (input) input.value = String(Math.floor(100000 + Math.random() * 900000));
+    return;
+  }
+
+  const codeAction = event.target.closest("[data-code-action]");
+  if (codeAction) {
+    codeActionAction(codeAction.dataset.codeAction, codeAction.dataset.action);
+    return;
+  }
+
+  const deviceDelete = event.target.closest("[data-device-delete]");
+  if (deviceDelete) {
+    removeDevice(deviceDelete.dataset.deviceDelete);
+    return;
+  }
+
+  const copy = event.target.closest("[data-copy]");
+  if (copy) {
+    copyText(copy.dataset.copy);
+    return;
+  }
+
+  const download = event.target.closest("[data-download]");
+  if (download) {
+    downloadCode(download.dataset.download);
+    return;
+  }
+
+  const share = event.target.closest("[data-share]");
+  if (share) {
+    shareCode(share.dataset.share);
+    return;
+  }
+
+  const remove = event.target.closest("[data-list-remove]");
+  if (remove) {
+    removeListRow(remove.dataset.listRemove);
+    return;
+  }
+
+  const readBtn = event.target.closest("[data-notif-read]");
+  if (readBtn) {
+    markRead(readBtn.dataset.notifRead);
+    return;
+  }
+
+  const skin = event.target.closest("[data-skin]");
+  if (skin) {
+    toast({ title: "Skin", message: `${skin.dataset.skin} skin will arrive with the theme packs.` });
+    return;
+  }
+
+  const surface = event.target.closest("[data-surface]");
+  if (surface) {
+    toast({ title: surface.dataset.surface, message: "Creation form opens with the creator service." });
+    return;
+  }
+
+  const platform = event.target.closest("[data-platform]");
+  if (platform) {
+    toast({ title: `${platform.dataset.platform} API`, message: "Enter the API code from the platform. It stays on the server." });
+    return;
+  }
+}
+
+function onChange(event) {
+  const source = event.target.closest("[data-source]");
+  if (source) {
+    savePref(source.dataset.source, source.checked, source);
+    return;
+  }
+
+  if (event.target.closest("#c-device")) {
+    const value = qs("#c-device").value;
+    const mac = qs("[data-new-mac]");
+    if (mac) mac.hidden = value !== "__new";
+  }
+}
+
+function wireView(key, root) {
+  if (key === "settings-account") wireAccount(root);
+  if (key === "settings-platforms") wirePlatforms(root);
+  if (key === "creator") wireCreator(root);
+  if (key === "publisher") wireProgram(root);
+
+  const form = qs("[data-code-form]", root);
+  if (form) {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      createCode(form);
+    });
+  }
+
+  const custom = qs("[data-custom-range]", root);
+  if (custom) {
+    custom.addEventListener("submit", (event) => {
+      event.preventDefault();
+      state.custom = { from: qs("#nf-from").value, to: qs("#nf-to").value };
+      setView(state.view, { silent: true });
+    });
+  }
+
+  const serial = qs("[data-serial-form]", root);
+  if (serial) {
+    serial.addEventListener("submit", (event) => {
+      event.preventDefault();
+      toast({ title: "Serial", message: "Serial redemption opens with the point key table." });
+    });
+  }
+
+  const payout = qs("[data-payout-form]", root);
+  if (payout) {
+    const amount = qs("#p-amount", root);
+    const out = qs("[data-payout-out]", root);
+    if (amount && out) {
+      amount.addEventListener("input", () => {
+        out.textContent = usd(Number(amount.value || 0));
+      });
+    }
+    payout.addEventListener("submit", (event) => {
+      event.preventDefault();
+      toast({ title: "Transfer", message: "Transfers open with the payment service." });
+    });
+  }
+
+  const site = qs("[data-site-form]", root);
+  if (site) {
+    site.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const data = new FormData(site);
+      const theme = String(data.get("theme") || "dark");
+      try {
+        localStorage.setItem("1w.theme", JSON.stringify(theme));
+        localStorage.setItem("1w.lang", JSON.stringify(String(data.get("lang") || "en")));
+      } catch {
+        /* storage blocked */
+      }
+      if (theme === "dark" || theme === "light") document.documentElement.dataset.theme = theme;
+      if (theme === "system") {
+        const light = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches;
+        document.documentElement.dataset.theme = light ? "light" : "dark";
+      }
+      toast({ title: "Saved", message: "Language, country and theme updated." });
+    });
+  }
+
+  const profile = qs("[data-profile-form]", root);
+  if (profile) {
+    profile.addEventListener("submit", (event) => {
+      event.preventDefault();
+      toast({ title: "Profile", message: "Profile saves arrive with the profile service." });
+    });
+  }
+
+  if (key === "history") enrichHistory(root);
+}
+
+/* ================================================================== */
+/* account settings                                                    */
+/* ================================================================== */
+function wireAccount(root) {
+  const password = qs("[data-acct-password]", root);
+  if (password) {
+    password.addEventListener("submit", (event) => {
+      event.preventDefault();
+      changePassword(password);
+    });
+  }
+
+  qsa("[data-acct-retry]", root).forEach((btn) =>
+    btn.addEventListener("click", () => refreshAccount())
+  );
+
+  qsa("[data-identity-start]", root).forEach((btn) =>
+    btn.addEventListener("click", () => startIdentity(btn.dataset.identityStart, btn))
+  );
+
+  qsa("[data-identity-unlink]", root).forEach((btn) =>
+    btn.addEventListener("click", () => unlinkIdentity(btn.dataset.identityUnlink, btn))
+  );
+
+  qsa("[data-identity-verify]", root).forEach((form) =>
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      verifyIdentity(form.dataset.identityVerify, form);
+    })
+  );
+}
+
+async function changePassword(form) {
+  if (state.busy) return;
+  const data = new FormData(form);
+  const current = String(data.get("current") || "");
+  const next = String(data.get("password") || "");
+  const again = String(data.get("confirm") || "");
+  const error = qs("[data-acct-error]", form);
+  const say = (message) => {
+    if (!error) return;
+    error.hidden = !message;
+    error.textContent = message || "";
+  };
+  say("");
+
+  if (next.length < 8) return say("Use at least 8 characters.");
+  if (next !== again) return say("The two new passwords are not the same.");
+  if (next === current) return say("The new password is the one you are already using.");
+
+  state.busy = true;
+  const button = qs("button[type=submit]", form);
+  if (button) button.disabled = true;
+  const result = await rpc("member_change_password", {
+    p_token: token,
+    p_current: current,
+    p_password: next,
+  }).catch(() => null);
+  state.busy = false;
+  if (button) button.disabled = false;
+
+  if (!result || result.ok !== true) {
+    const why = {
+      current: "That is not your current password.",
+      password: "The new password must be 8–72 characters.",
+      same: "The new password is the old one.",
+      session: "Your session ended — sign in again.",
+    };
+    return say(why[result?.error] || "The password could not be changed.");
+  }
+
+  form.reset();
+  toast({
+    tone: "success",
+    title: "Password changed",
+    message: result.closed_sessions
+      ? `${num(result.closed_sessions)} other session${result.closed_sessions === 1 ? "" : "s"} signed out.`
+      : "No other session was open.",
+  });
+}
+
+async function startIdentity(provider, button) {
+  if (!provider || state.busy) return;
+
+  // A window opened inside the click handler survives the popup blocker; the
+  // address is filled in once the server has minted it.
+  const kind = IDENTITY_PROVIDERS.find((row) => row.key === provider)?.kind;
+  let popup = null;
+  if (kind === "oauth") {
+    try {
+      popup = window.open("", `1world-oauth-${provider}`, "width=560,height=720");
+    } catch {
+      popup = null;
+    }
+  }
+
+  state.busy = true;
+  if (button) button.disabled = true;
+  const result = await rpc("member_identity_start", {
+    p_token: token,
+    p_provider: provider,
+  }).catch(() => null);
+  state.busy = false;
+  if (button) button.disabled = false;
+
+  if (!result || result.ok !== true) {
+    const why = {
+      oauth: "This network needs an OAuth app (client id, secret, redirect URI) before it can be linked.",
+      whatsapp_not_configured: "WhatsApp is not configured on this site yet — the Cloud API token has to be added first.",
+      phone: "The phone on your account cannot be read as an international number.",
+      session: "Your session ended — sign in again.",
+      provider: "That network is not known.",
+    };
+    try {
+      popup?.close();
+    } catch {
+      // a window we cannot reach is a window we cannot close
+    }
+    toast({ tone: "error", title: "Connect", message: why[result?.error] || "The account could not be linked." });
+    return;
+  }
+
+  if (popup && result.url) {
+    try {
+      popup.location.href = String(result.url);
+    } catch {
+      popup = null;
+    }
+  }
+
+  if (provider === "telegram") {
+    state.pending = { provider, url: result.url, code: result.code };
+    toast({
+      tone: "success",
+      title: "One step left",
+      message: "Open the bot and press Start — the code is already in the link.",
+    });
+    setView("settings-account", { silent: true });
+    watchLink("telegram");
+    return;
+  }
+
+  if (result.url && provider !== "telegram") {
+    state.pending = { provider, url: result.url };
+    toast({
+      tone: "info",
+      title: `Continue with ${labelForIdentity(provider)}`,
+      message: "The provider's window takes it from here; this card updates when you come back.",
+    });
+    setView("settings-account", { silent: true });
+    watchLink(provider);
+    return;
+  }
+
+  if (provider === "whatsapp") {
+    state.pending = { provider, masked_phone: result.masked_phone };
+    toast({
+      tone: "success",
+      title: "Code sent",
+      message: `Check WhatsApp on ${result.masked_phone} and type the code here.`,
+    });
+    setView("settings-account", { silent: true });
+  }
+}
+
+async function verifyIdentity(provider, form) {
+  if (!provider || state.busy) return;
+  const code = String(new FormData(form).get("code") || "").trim().toUpperCase();
+  if (code.length < 4) {
+    toast({ tone: "error", title: "Verify", message: "Type the code exactly as it arrived." });
+    return;
+  }
+
+  state.busy = true;
+  const button = qs("button[type=submit]", form);
+  if (button) button.disabled = true;
+  const result = await rpc("member_identity_verify", {
+    p_token: token,
+    p_provider: provider,
+    p_code: code,
+  }).catch(() => null);
+  state.busy = false;
+  if (button) button.disabled = false;
+
+  if (!result || result.ok !== true) {
+    const why = {
+      code: "That code is not the one we sent.",
+      expired: "The code expired — start again.",
+      not_started: "Start the link first, then type the code.",
+      session: "Your session ended — sign in again.",
+    };
+    toast({ tone: "error", title: "Verify", message: why[result?.error] || "The code could not be verified." });
+    return;
+  }
+
+  state.pending = null;
+  toast({
+    tone: "success",
+    title: `${labelForIdentity(provider)} linked`,
+    message: "The recovery code also arrives there now.",
+  });
+  await refreshAccount();
+}
+
+async function unlinkIdentity(provider, button) {
+  if (!provider || state.busy) return;
+  state.busy = true;
+  if (button) button.disabled = true;
+  const result = await rpc("member_identity_unlink", { p_token: token, p_provider: provider }).catch(() => null);
+  state.busy = false;
+  if (button) button.disabled = false;
+
+  if (!result || result.ok !== true) {
+    toast({ tone: "error", title: "Disconnect", message: "The account was not disconnected." });
+    return;
+  }
+  state.pending = null;
+  toast({ tone: "info", title: "Disconnected", message: `${labelForIdentity(provider)} no longer receives recovery codes.` });
+  await refreshAccount();
+}
+
+/** Reloads the account card without reloading the whole dashboard. */
+async function refreshAccount() {
+  state.account = await loadAccount();
+  const pending = state.pending;
+  if (pending) {
+    const row = (state.account?.identities || []).find((entry) => entry.provider === pending.provider);
+    if (row?.status === "verified") {
+      state.pending = null;
+      clearInterval(state.poll);
+      toast({
+        tone: "success",
+        title: `${labelForIdentity(pending.provider)} linked`,
+        message:
+          pending.provider === "telegram" || pending.provider === "whatsapp"
+            ? "Recovery codes also arrive there now."
+            : "You can sign in with it from now on.",
+      });
+    }
+  }
+  if (state.view === "settings-account") setView("settings-account", { silent: true });
+}
+
+/* ================================================================== */
+/* API keys — the Platforms panel                                      */
+/* ================================================================== */
+const API_MESSAGES = {
+  session: "Your session ended. Sign in again.",
+  platform: "Pick a platform from the list.",
+  short: "A key is at least 8 characters — that looks cut short.",
+  long: "That key is longer than 512 characters.",
+  space: "A key has no spaces: paste it as one word.",
+  label: "You already store a key for that platform under that label.",
+  limit: "Forty keys is the ceiling. Remove one first.",
+  not_found: "That row is gone. Reload the page.",
+  config: "The key vault is not configured on the server.",
+  default: "The key could not be saved.",
+};
+
+/** One call fills the panel: the accepted platforms, and the masked rows. */
+async function loadApiKeys() {
+  state.apiError = "";
+  const result = await rpc("member_api_keys", { p_token: token }).catch((error) => {
+    console.warn("[1World] api keys:", error.message);
+    return null;
+  });
+
+  if (!result || result.ok !== true) {
+    state.apiKeys = null;
+    state.apiError =
+      result && result.error === "session"
+        ? "Your session ended — sign in again."
+        : "The keys could not be loaded.";
+  } else {
+    state.apiPlatforms = Array.isArray(result.platforms) ? result.platforms : [];
+    state.apiLimit = Number(result.limit) || 40;
+    state.apiKeys = Array.isArray(result.keys) ? result.keys : [];
+  }
+
+  if (state.view === "settings-platforms") setView("settings-platforms", { silent: true });
+}
+
+async function saveApiKey(form) {
+  if (state.apiBusy) return;
+
+  const platform = String(qs('[name="platform"]', form)?.value || "").trim();
+  const label = String(qs('[name="label"]', form)?.value || "").trim().slice(0, 40);
+  const key = String(qs('[name="key"]', form)?.value || "").trim();
+
+  const why = !platform
+    ? "Pick a platform first."
+    : key.length < 8
+      ? API_MESSAGES.short
+      : /\s/.test(key)
+        ? API_MESSAGES.space
+        : key.length > 512
+          ? API_MESSAGES.long
+          : "";
+  if (why) {
+    toast({ tone: "error", title: "Key not saved", message: why });
+    return;
+  }
+
+  state.apiBusy = true;
+  const button = qs('[type="submit"]', form);
+  if (button) button.disabled = true;
+
+  const result = await rpc("member_api_key_save", {
+    p_token: token,
+    p_id: state.apiEdit || null,
+    p_platform: platform,
+    p_label: label,
+    p_key: key,
+  }).catch(() => null);
+
+  state.apiBusy = false;
+
+  if (!result || result.ok !== true) {
+    toast({
+      tone: "error",
+      title: "Key not saved",
+      message: API_MESSAGES[result && result.error] || API_MESSAGES.default,
+    });
+    if (button) button.disabled = false;
+    return;
+  }
+
+  const row = result.key || {};
+  const list = (Array.isArray(state.apiKeys) ? state.apiKeys : []).slice();
+  const at = list.findIndex((entry) => entry.id === row.id);
+  if (at >= 0) list[at] = row;
+  else list.unshift(row);
+  state.apiKeys = list;
+  state.apiEdit = null;
+  state.apiLastPlatform = row.platform;
+
+  toast({
+    tone: "success",
+    title: "Key stored",
+    message: `${platformLabel(row.platform)} — ••••${row.tail || "????"}. It stays sealed on the server.`,
+  });
+  setView("settings-platforms", { silent: true });
+}
+
+async function removeApiKey(id) {
+  const row = (state.apiKeys || []).find((entry) => entry.id === id);
+  if (!row || state.apiBusy) return;
+  if (!window.confirm(`Remove the ${platformLabel(row.platform)} key? Anything using it stops working.`)) return;
+
+  state.apiBusy = true;
+  const result = await rpc("member_api_key_delete", { p_token: token, p_id: id }).catch(() => null);
+  state.apiBusy = false;
+
+  if (!result || result.ok !== true) {
+    toast({ tone: "error", title: "Key not removed", message: "The row is still there — try again." });
+    return;
+  }
+
+  state.apiKeys = (state.apiKeys || []).filter((entry) => entry.id !== id);
+  if (state.apiEdit === id) state.apiEdit = null;
+  toast({ tone: "info", title: "Key removed", message: "The row and the sealed key are gone." });
+  setView("settings-platforms", { silent: true });
+}
+
+/** "Replace" loads the row into the form; the platform cannot be swapped. */
+function replaceApiKey(id) {
+  const row = (state.apiKeys || []).find((entry) => entry.id === id);
+  if (!row) return;
+  state.apiEdit = id;
+  setView("settings-platforms", { silent: true });
+  qs("#k-key")?.focus();
+}
+
+function wirePlatforms(root) {
+  if (state.apiKeys === null && !state.apiError) loadApiKeys();
+
+  const form = qs("[data-key-form]", root);
+  if (form) {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      saveApiKey(form);
+    });
+  }
+
+  qsa("[data-key-retry]", root).forEach((btn) =>
+    btn.addEventListener("click", () => {
+      state.apiError = "";
+      loadApiKeys();
+    })
+  );
+  qsa("[data-key-cancel]", root).forEach((btn) =>
+    btn.addEventListener("click", () => {
+      state.apiEdit = null;
+      setView("settings-platforms", { silent: true });
+    })
+  );
+  qsa("[data-key-replace]", root).forEach((btn) =>
+    btn.addEventListener("click", () => replaceApiKey(btn.dataset.keyReplace))
+  );
+  qsa("[data-key-remove]", root).forEach((btn) =>
+    btn.addEventListener("click", () => removeApiKey(btn.dataset.keyRemove))
+  );
+}
+
+/** Watches one link, for about a minute, then stops. */
+function watchLink(provider) {
+  clearInterval(state.poll);
+  let ticks = 0;
+  state.poll = setInterval(async () => {
+    ticks += 1;
+    if (ticks > 12 || state.view !== "settings-account" || state.pending?.provider !== provider) {
+      clearInterval(state.poll);
+      return;
+    }
+    const account = await loadAccount();
+    if (!account) return;
+    state.account = account;
+    const hit = (account.identities || []).find(
+      (row) => row.provider === provider && row.status === "verified"
+    );
+    if (hit) {
+      clearInterval(state.poll);
+      state.pending = null;
+      toast({
+        tone: "success",
+        title: `${labelForIdentity(provider)} linked`,
+        message:
+          provider === "telegram" || provider === "whatsapp"
+            ? "Recovery codes also arrive there now."
+            : "You can sign in with it from now on.",
+      });
+    }
+    if (state.view === "settings-account") setView("settings-account", { silent: true });
+  }, 5000);
+}
+
+/** The callback page in the popup says what happened; this is the listener. */
+function hearOauth() {
+  window.addEventListener("message", (event) => {
+    const note = event?.data;
+    if (!note || note.type !== "1world-oauth") return;
+    if (note.ok === false) {
+      toast({
+        tone: "error",
+        title: "Not linked",
+        message: String(note.detail || "The provider did not finish the link."),
+      });
+      state.pending = null;
+      if (state.view === "settings-account") setView("settings-account", { silent: true });
+      return;
+    }
+    refreshAccount();
+  });
+}
+
+/* ================================================================== */
+/* actions                                                             */
+/* ================================================================== */
+async function createCode(form) {
+  if (state.busy) return;
+  const data = new FormData(form);
+  const code = String(data.get("code") || "").trim();
+  const device = String(data.get("device") || "");
+  const mac = device === "__new" ? String(data.get("mac") || "").trim() : device;
+
+  state.busy = true;
+  const btn = qs("button[type=submit]", form);
+  if (btn) btn.disabled = true;
+
+  const result = await rpc("member_code_create", {
+    p_token: token,
+    p_code: code || null,
+    p_months: Number(data.get("months") || 1),
+    p_age: String(data.get("age") || "none"),
+    p_device_mac: mac || null,
+    p_device_name: String(data.get("deviceName") || "").trim() || null,
+  }).catch(() => null);
+
+  state.busy = false;
+  if (btn) btn.disabled = false;
+
+  const errors = {
+    session: "Your session ended. Sign in again.",
+    inactive: "Your account must be active before a code can be created.",
+    code_format: "A code is exactly six digits.",
+    code_taken: "That code already exists. Generate another.",
+    months: "Choose 1, 3, 6 or 12 months.",
+    age: "Choose a valid age rating.",
+    server: "We could not create the code. Try again.",
+  };
+
+  if (!result || result.ok !== true) {
+    toast({ title: "Code not created", message: errors[(result && result.error) || "server"] });
+    return;
+  }
+
+  toast({ title: "Code created", message: `${result.code.code} · ${result.code.months} months` });
+  await reload();
+  setView("codes");
+}
+
+async function codeActionAction(id, action) {
+  if (action === "delete" && !window.confirm("Delete this code? Devices using it lose access.")) return;
+  const result = await rpc("member_code_action", { p_token: token, p_code_id: id, p_action: action }).catch(() => null);
+  if (!result || result.ok !== true) {
+    toast({ title: "Not changed", message: "The code could not be updated." });
+    return;
+  }
+  toast({ title: action === "unlink" ? "Device unlinked" : "Code deleted", message: "" });
+  await reload();
+  setView("codes");
+}
+
+async function removeDevice(id) {
+  if (!window.confirm("Remove this device? Its code becomes free and can bind again.")) return;
+  const result = await rpc("member_device_delete", { p_token: token, p_device_id: id }).catch(() => null);
+  if (!result || result.ok !== true) {
+    toast({ title: "Not removed", message: "The device could not be removed." });
+    return;
+  }
+  toast({ title: "Device removed", message: "" });
+  await reload();
+  setView("codes");
+}
+
+async function savePref(source, enabled, input) {
+  const result = await rpc("member_notify_set", { p_token: token, p_source: source, p_enabled: enabled }).catch(() => null);
+  if (!result || result.ok !== true) {
+    if (input) input.checked = !enabled;
+    toast({ title: "Not saved", message: result && result.error === "locked" ? "Messages and Court stay on." : "Try again." });
+    return;
+  }
+  state.data.prefs = { ...(state.data.prefs || {}), [source]: enabled };
+  toast({ title: enabled ? "Notifications on" : "Notifications off", message: cap(source) });
+}
+
+async function markRead(id) {
+  const result = await rpc("member_notify_read", { p_token: token, p_id: id }).catch(() => null);
+  if (!result || result.ok !== true) return;
+  state.data.notifications = (state.data.notifications || []).map((n) => (n.id === id ? { ...n, read: true } : n));
+  paintIdentity();
+  paintPopover();
+  if (state.view === "notifications") setView("notifications", { silent: true });
+}
+
+async function removeListRow(id) {
+  const result = await rpc("member_list_remove", { p_token: token, p_list_id: Number(id) }).catch(() => null);
+  if (!result || result.ok !== true) {
+    toast({ title: "Not removed", message: "Try again." });
+    return;
+  }
+  const lists = state.data.lists || {};
+  Object.keys(lists).forEach((key) => {
+    lists[key] = (lists[key] || []).filter((row) => String(row.id) !== String(id));
+  });
+  setView(state.view, { silent: true });
+  toast({ title: "Removed", message: "" });
+}
+
+async function requestTrial() {
+  const result = await rpc("member_court_request", { p_token: token }).catch(() => null);
+  if (!result || result.ok !== true) {
+    toast({
+      title: "Request not sent",
+      message:
+        result && result.error === "permanent"
+          ? "A permanent ban cannot be appealed."
+          : "The court could not take the request right now.",
+    });
+    return;
+  }
+  toast({ title: "Trial requested", message: "The court will set a date and notify you." });
+  await reload();
+}
+
+function logout() {
+  const done = () => {
+    clearSessionToken();
+    signOut();
+    location.replace("login.html");
+  };
+  if (token) {
+    rpc("member_logout", { p_token: token }).then(done).catch(done);
+    return;
+  }
+  done();
+}
+
+/* ================================================================== */
+/* popover                                                             */
+/* ================================================================== */
+function togglePopover() {
+  if (state.popOpen) return closePopover();
+  state.popOpen = true;
+  const bell = qs("[data-bell]");
+  const pop = qs("[data-pop]");
+  if (bell) bell.setAttribute("aria-expanded", "true");
+  if (pop) pop.hidden = false;
+  paintPopover();
+}
+
+function closePopover() {
+  state.popOpen = false;
+  const bell = qs("[data-bell]");
+  const pop = qs("[data-pop]");
+  if (bell) bell.setAttribute("aria-expanded", "false");
+  if (pop) pop.hidden = true;
+}
+
+function paintPopover() {
+  const list = qs("[data-pop-list]");
+  if (!list) return;
+
+  qsa("[data-pop-filter]").forEach((btn) => {
+    btn.classList.toggle("is-on", btn.dataset.popFilter === state.popFilter);
+  });
+
+  const items = (state.data.notifications || [])
+    .filter((n) => inWindow(n.created_at, state.popFilter, state.custom))
+    .slice(0, 8);
+
+  if (!items.length) {
+    list.innerHTML = `<p class="dsh-pop__empty">Nothing new in this window.</p>`;
+    return;
+  }
+
+  list.innerHTML = items
+    .map(
+      (n) => `<button class="dsh-pop__item" type="button" data-notif-read="${esc(n.id)}" data-unread="${n.read ? 0 : 1}" style="text-align:left;width:100%">
+        <strong>${esc(n.title || "Notification")}</strong>
+        <span>${esc(n.subject || "")}</span>
+        <time>${esc(timeAgo(n.created_at))} · ${esc(n.source || "system")}</time>
+      </button>`
+    )
+    .join("");
+  hydrateIcons(list);
+}
+
+/* ================================================================== */
+/* helpers                                                             */
+/* ================================================================== */
+function stat(iconName, label, value, meta) {
+  return `<div class="dsh-stat">
+    <span class="dsh-stat__label">${icon(iconName, "ico")}${esc(label)}</span>
+    <p class="dsh-stat__value">${esc(value)}</p>
+    <p class="dsh-stat__meta">${esc(meta || "")}</p>
+  </div>`;
+}
+
+function empty(iconName, title, text, actionLabel = "", action = "") {
+  const actionHtml = actionLabel
+    ? action === "codes"
+      ? `<button class="dsh-btn dsh-btn--sm" type="button" data-goto="codes"><i data-icon="plus"></i>${esc(actionLabel)}</button>`
+      : action === "notifications-page"
+        ? `<a class="dsh-btn dsh-btn--sm" href="notifications.html">${esc(actionLabel)}</a>`
+        : action
+          ? `<button class="dsh-btn dsh-btn--sm" type="button" data-goto="${esc(action)}">${esc(actionLabel)}</button>`
+          : ""
+    : "";
+  return `<div class="dsh-empty">
+    <i data-icon="${esc(iconName)}"></i>
+    <p class="dsh-empty__title">${esc(title)}</p>
+    <p class="dsh-empty__text">${esc(text)}</p>
+    ${actionHtml}
+  </div>`;
+}
+
+function cap(value) {
+  const text = String(value || "");
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : "";
+}
+
+function usd(points) {
+  const value = Number(points || 0) / POINTS_PER_USD;
+  return `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function ageLabel(age) {
+  if (!age || age === "none") return "No rating";
+  return `${age}+`;
+}
+
+function fullDate(value) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("en-US", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function deviceName(row) {
+  return row.device_name || row.device_id || "Device";
+}
+
+function statusLabel(status) {
+  const map = {
+    pending: "Pending",
+    under_review: "Under review",
+    valid: "Valid",
+    rejected: "Rejected",
+    closed: "Closed",
+  };
+  return map[String(status || "").toLowerCase()] || cap(status || "Pending");
+}
+
+function artClass(media) {
+  if (media === "channel" || media === "image") return "dsh-tile__art--square";
+  if (media === "movie" || media === "tv") return "";
+  return "dsh-tile__art--wide";
+}
+
+function guessType(media) {
+  const value = String(media || "").toLowerCase();
+  if (["movie", "movies", "film"].includes(value)) return "movies";
+  if (["tv", "series", "episode"].includes(value)) return "series";
+  if (["channel", "channels", "live"].includes(value)) return "channels";
+  if (["podcast", "podcasts", "audio"].includes(value)) return "podcasts";
+  if (["article", "articles", "post"].includes(value)) return "articles";
+  if (["answer", "answers", "question"].includes(value)) return "answers";
+  if (["document", "documents", "book"].includes(value)) return "documents";
+  if (["image", "images", "picture"].includes(value)) return "images";
+  if (["video", "videos"].includes(value)) return "videos";
+  if (["product", "products", "store"].includes(value)) return "products";
+  return "profiles";
+}
+
+function openLink(media, id) {
+  const type = guessType(media);
+  if (type === "movies") return `watch.html?movie=${encodeURIComponent(id || "")}`;
+  if (type === "series") return `watch.html?series=${encodeURIComponent(id || "")}`;
+  if (type === "channels") return "iptv.html";
+  if (!id) return "index.html";
+  return `search.html?q=${encodeURIComponent(id)}`;
+}
+
+function inWindow(value, windowKey, custom = {}) {
+  if (!value) return false;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+  const now = new Date();
+  const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diff = now.getTime() - date.getTime();
+
+  switch (windowKey) {
+    case "hour":
+      return diff <= 3600e3;
+    case "today":
+      return date >= startOfDay(now);
+    case "yesterday": {
+      const start = startOfDay(now);
+      const before = new Date(start.getTime() - 86400e3);
+      return date >= before && date < start;
+    }
+    case "week":
+      return diff <= 7 * 86400e3;
+    case "month":
+      return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+    case "year":
+      return date.getFullYear() === now.getFullYear();
+    case "custom": {
+      const from = custom.from ? new Date(custom.from) : null;
+      const to = custom.to ? new Date(custom.to) : null;
+      if (to) to.setHours(23, 59, 59, 999);
+      if (from && !Number.isNaN(from.getTime()) && date < from) return false;
+      if (to && !Number.isNaN(to.getTime()) && date > to) return false;
+      return true;
+    }
+    case "all":
+    default:
+      return true;
+  }
+}
+
+function copyText(text) {
+  const done = () => toast({ title: "Copied", message: String(text) });
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(String(text)).then(done).catch(() => fallbackCopy(text, done));
+    return;
+  }
+  fallbackCopy(text, done);
+}
+
+function fallbackCopy(text, done) {
+  const area = document.createElement("textarea");
+  area.value = String(text);
+  area.setAttribute("readonly", "");
+  area.style.position = "fixed";
+  area.style.opacity = "0";
+  document.body.appendChild(area);
+  area.select();
+  try {
+    document.execCommand("copy");
+  } catch {
+    /* nothing else to try */
+  }
+  area.remove();
+  done();
+}
+
+function codeById(id) {
+  return (state.data.codes || []).find((c) => String(c.id) === String(id));
+}
+
+function codeText(row) {
+  if (!row) return "";
+  return [
+    "1World viewing code",
+    `Code: ${row.code}`,
+    `Duration: ${row.months} ${row.months === 1 ? "month" : "months"}`,
+    `Age rating: ${ageLabel(row.age)}`,
+    row.device_mac ? `Device: ${row.device_name || "Device"} (${row.device_mac})` : "Device: not bound yet",
+    `Expires: ${row.expires_at ? formatDate(row.expires_at) : "—"}`,
+    `Member: ${(state.data.member || {}).member_id || ""}`,
+  ].join("\n");
+}
+
+function downloadCode(id) {
+  const row = codeById(id);
+  if (!row) return;
+  try {
+    const blob = new Blob([codeText(row)], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `1world-code-${row.code}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  } catch {
+    copyText(codeText(row));
+  }
+}
+
+function shareCode(id) {
+  const row = codeById(id);
+  if (!row) return;
+  const text = codeText(row);
+  if (navigator.share) {
+    navigator.share({ title: "1World viewing code", text }).catch(() => {});
+    return;
+  }
+  copyText(text);
+}
+
+/* history titles: enrich from TMDB when the row is a movie or a series */
+async function enrichHistory(root) {
+  const rows = state.data.history || [];
+  const wanted = rows.filter((r) => ["movies", "series"].includes(guessType(r.media_type)) && r.tmdb_id).slice(0, 12);
+  if (!wanted.length) return;
+
+  let key = "";
+  try {
+    const config = await import("./config.js");
+    key = (config.TMDB && (config.TMDB.apiKey || config.TMDB.key)) || "";
+  } catch {
+    key = "";
+  }
+  if (!key) return;
+
+  await Promise.all(
+    wanted.map(async (row) => {
+      const type = guessType(row.media_type) === "movies" ? "movie" : "tv";
+      const cacheKey = `${type}:${row.tmdb_id}`;
+      try {
+        let title = state.tmdb.get(cacheKey);
+        if (!title) {
+          const res = await fetch(`https://api.themoviedb.org/3/${type}/${row.tmdb_id}?api_key=${key}&language=en-US`);
+          if (!res.ok) return;
+          const json = await res.json();
+          title = json.title || json.name || "";
+          state.tmdb.set(cacheKey, title);
+        }
+        if (!title) return;
+        qsa(`[data-hist-title="${row.tmdb_id}"]`, root).forEach((el) => {
+          el.textContent = title;
+        });
+      } catch {
+        /* offline — the id stays as the label */
+      }
+    })
+  );
+}
+
+initDashboard();

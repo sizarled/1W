@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Publish a video — 1World Web</title>
+    <meta name="description" content="Publish a video: the link, the title, the thumbnail, who may see it, and when." />
+    <meta name="theme-color" content="#060607" />
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="assets/css/base.css?v=20261116a" />
+    <link rel="stylesheet" href="assets/css/layout.css?v=20261116a" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261116b" />
+    <link rel="stylesheet" href="assets/css/video.css?v=20261116a" />
+    <script>
+      /* apply the saved theme (or the OS preference) before first paint */
+      (function () {
+        try {
+          var saved = JSON.parse(localStorage.getItem("1w.theme") || "null");
+          var theme =
+            saved === "light" || saved === "dark"
+              ? saved
+              : window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
+                ? "light"
+                : "dark";
+          document.documentElement.dataset.theme = theme;
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute("content", theme === "light" ? "#f4f4f5" : "#060607");
+        } catch (e) {}
+      })();
+    </script>
+    <script type="module" src="assets/js/app.js?v=20261116e"></script>
+    <script type="module" src="assets/js/video-editor.js?v=20261116f"></script>
+  </head>
+  <body data-page="videoEditor" data-title="Publish a video">
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div data-site-header></div>
+    <div data-site-sidebar></div>
+
+    <main class="site-main vids" id="main">
+      <div class="wrap">
+        <header class="vids__head">
+          <div class="vids__intro">
+            <p class="eyebrow"><span class="eyebrow__dot"></span>Member videos</p>
+            <h1 class="vids__title" data-ved-heading>Publish a video</h1>
+            <p class="vids__sub">
+              One link, one title, one thumbnail. Then choose who may see it — everyone, an exclusive audience, or
+              the people you name with a password of your own.
+            </p>
+          </div>
+          <div class="vids__acts">
+            <a class="btn btn--ghost btn--sm" href="videos.html"><i data-icon="arrowLeft"></i> All videos</a>
+            <a class="btn btn--quiet btn--sm" href="creator.html" data-ved-studio><i data-icon="dashboard"></i> Creator studio</a>
+          </div>
+        </header>
+
+        <!-- sign-in / error state -->
+        <div data-ved-state hidden></div>
+
+        <div class="ved" data-ved-shell hidden>
+          <!-- ========================================================== -->
+          <!-- the main column                                            -->
+          <!-- ========================================================== -->
+          <div class="ved__col">
+            <!-- the form's own contents --------------------------------- -->
+            <section class="vcard-box" data-ved-toc-box>
+              <div class="vcard-box__head">
+                <h2 class="vcard-box__title">Contents</h2>
+                <span class="vcount" data-ved-toc-count></span>
+              </div>
+              <div class="toc" data-ved-toc></div>
+              <p class="vhint">Every section of this form, in order — press one to go there.</p>
+            </section>
+
+            <!-- source ------------------------------------------------- -->
+            <section class="vcard-box">
+              <div class="vcard-box__head">
+                <h2 class="vcard-box__title">The video</h2>
+                <span class="vcount" data-ved-source-badge></span>
+              </div>
+
+              <div class="vdrop" data-ved-drop>
+                <span class="vdrop__icon"><i data-icon="upload"></i></span>
+                <b>Drop the link here</b>
+                <small>YouTube, Vimeo or a direct .mp4 link. Dropping a link from another tab works too.</small>
+              </div>
+
+              <div class="vsrc">
+                <div class="vsrc__row">
+                  <input class="input" type="url" data-ved-embed placeholder="https://www.youtube.com/watch?v=…  or  https://…/film.mp4" aria-label="Video link" spellcheck="false" />
+                  <button class="btn btn--ghost btn--sm" type="button" data-ved-detect><i data-icon="sparkle"></i> Read it</button>
+                </div>
+                <div class="vsrc__row">
+                  <button class="btn btn--ghost btn--sm" type="button" data-ved-file-btn><i data-icon="upload"></i> Upload a file</button>
+                  <span class="vhint" style="flex:1 1 220px">A file up to 50 MB goes to the site's storage and the link is filled in for you.</span>
+                  <input type="file" accept="video/mp4,video/webm,video/ogg,video/quicktime" data-ved-file hidden />
+                </div>
+                <p class="vsrc__found" data-ved-source-note hidden></p>
+                <p class="vhint" data-ved-file-note hidden></p>
+
+                <!-- the picture, before it is published -->
+                <div class="vplay" data-ved-player hidden></div>
+              </div>
+            </section>
+
+            <!-- title / description / tags ----------------------------- -->
+            <section class="vcard-box">
+              <div class="vcard-box__head">
+                <h2 class="vcard-box__title">How it reads</h2>
+              </div>
+              <label class="field">
+                <span style="display: flex; justify-content: space-between; gap: 1rem">
+                  <span>Title</span>
+                  <span class="vcount" data-ved-title-count>0 / 150</span>
+                </span>
+                <input class="input" type="text" data-ved-title maxlength="200" placeholder="A title that says what the video is" />
+              </label>
+              <label class="field">
+                <span style="display: flex; justify-content: space-between; gap: 1rem">
+                  <span>Description</span>
+                  <span class="vcount" data-ved-desc-count>0 / 5000</span>
+                </span>
+                <textarea class="textarea" rows="6" data-ved-desc maxlength="5000" placeholder="What happens in it, and why should someone watch to the end?"></textarea>
+              </label>
+              <div class="field">
+                <label for="vedTagInput" style="display: flex; justify-content: space-between; gap: 1rem">
+                  <span>Tags</span>
+                  <span class="vcount" data-ved-tag-count>0 / 12</span>
+                </label>
+                <input class="input" id="vedTagInput" type="text" data-ved-tag-input maxlength="40" placeholder="Type a tag and press Enter" autocomplete="off" />
+                <div class="vtaglist" data-ved-tags></div>
+                <p class="vhint">The first tag is the field the video is filed under; the rest help people find it.</p>
+              </div>
+            </section>
+
+            <!-- extras ------------------------------------------------- -->
+            <section class="vcard-box">
+              <div class="vcard-box__head">
+                <h2 class="vcard-box__title">Extra choices</h2>
+              </div>
+              <div class="vstack">
+                <label class="vcheck">
+                  <input type="checkbox" data-ved-vertical />
+                  <span>
+                    A vertical video
+                    <small>For Shorts, Reels and phone-first recordings.</small>
+                  </span>
+                </label>
+                <label class="vcheck">
+                  <input type="checkbox" data-ved-download />
+                  <span>
+                    Let members download the file
+                    <small>The button only appears when the source is a real file, never for a YouTube or Vimeo link.</small>
+                  </span>
+                </label>
+              </div>
+            </section>
+          </div>
+
+          <!-- ========================================================== -->
+          <!-- the side column                                            -->
+          <!-- ========================================================== -->
+          <aside class="ved__side">
+            <!-- live preview ------------------------------------------- -->
+            <section class="vcard-box">
+              <div class="vcard-box__head">
+                <h2 class="vcard-box__title">Live preview</h2>
+                <span class="badge" data-ved-preview-badge>Draft</span>
+              </div>
+              <div class="vprev__media" data-ved-preview-media>
+                <div class="vprev__ph"><i data-icon="film"></i></div>
+              </div>
+              <p class="vprev__title" data-ved-preview-title>No title yet</p>
+              <p class="vprev__meta" data-ved-preview-meta>Public · English</p>
+              <p class="vprev__meta" data-ved-preview-time>Publishing now</p>
+              <p class="vprev__meta vprev__studio" data-ved-preview-studio hidden></p>
+            </section>
+
+            <!-- which studio it goes into ------------------------------ -->
+            <section class="vcard-box" data-ved-hub-wrap>
+              <div class="vcard-box__head">
+                <h2 class="vcard-box__title">Where it goes</h2>
+                <span class="vcount" data-ved-hub-count></span>
+              </div>
+              <div class="vstack">
+                <label class="field">
+                  <span>Studio</span>
+                  <select class="select" data-ved-hub aria-describedby="vedHubNote">
+                    <option value="">My own feed — no studio</option>
+                  </select>
+                </label>
+                <p class="vhint" id="vedHubNote" data-ved-hub-note></p>
+                <a class="btn btn--quiet btn--sm" href="creator.html?section=studio" data-ved-hub-link hidden>
+                  <i data-icon="dashboard"></i> Open the studio
+                </a>
+              </div>
+            </section>
+
+            <!-- thumbnail ---------------------------------------------- -->
+            <section class="vcard-box">
+              <div class="vcard-box__head">
+                <h2 class="vcard-box__title">Thumbnail</h2>
+                <span class="vcount">16:9</span>
+              </div>
+              <div class="vthumb__box" data-ved-thumb-box>No picture yet</div>
+              <p class="vhint" data-ved-thumb-hint></p>
+              <input class="input" type="url" data-ved-thumb placeholder="https://…/still.jpg" aria-label="Thumbnail link" spellcheck="false" />
+              <div class="vthumb__btns">
+                <button class="btn btn--ghost btn--sm" type="button" data-ved-thumb-upload><i data-icon="upload"></i> Upload</button>
+                <button class="btn btn--ghost btn--sm" type="button" data-ved-thumb-auto><i data-icon="sparkle"></i> From the video</button>
+                <button class="btn btn--quiet btn--sm" type="button" data-ved-thumb-clear><i data-icon="trash"></i> Remove</button>
+              </div>
+              <input class="input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" data-ved-thumb-file hidden />
+            </section>
+
+            <!-- visibility --------------------------------------------- -->
+            <section class="vcard-box">
+              <div class="vcard-box__head">
+                <h2 class="vcard-box__title">Who sees it</h2>
+              </div>
+              <div class="vstack">
+                <div class="vseg" data-ved-vis role="group" aria-label="Visibility">
+                  <button class="vseg__btn is-on" type="button" data-vis="general">Public</button>
+                  <button class="vseg__btn" type="button" data-vis="limited">Exclusive</button>
+                  <button class="vseg__btn" type="button" data-vis="private">Private</button>
+                </div>
+                <p class="vhint" data-ved-vis-hint>
+                  Everyone, except the people you exclude. No account, no condition.
+                </p>
+
+                <!-- exclusive audience -->
+                <div class="vstack" data-ved-audience hidden>
+                  <details class="vadv">
+                    <summary><i data-icon="users"></i> The audience</summary>
+                    <div class="vadv__body">
+                      <label class="field">
+                        <span>Country</span>
+                        <select class="select" data-ved-country-sel>
+                          <option value="">Add a country…</option>
+                        </select>
+                      </label>
+                      <div class="vtaglist" data-ved-countries></div>
+
+                      <label class="field">
+                        <span>Language</span>
+                        <select class="select" data-ved-lang-sel>
+                          <option value="">Add a language…</option>
+                        </select>
+                      </label>
+                      <div class="vtaglist" data-ved-langs></div>
+
+                      <div class="field">
+                        <span>Account level</span>
+                        <div class="vgrid2">
+                          <input class="input" type="number" min="0" max="10" step="1" value="1" data-ved-lv-min aria-label="Lowest level" />
+                          <input class="input" type="number" min="0" max="10" step="1" value="10" data-ved-lv-max aria-label="Highest level" />
+                        </div>
+                        <p class="vhint">Both ends count. Level 1 up to 10 is every member.</p>
+                      </div>
+
+                      <label class="vcheck">
+                        <input type="checkbox" data-ved-followers />
+                        <span>
+                          Followers only
+                          <small>Anyone who follows you, and nobody else. This replaces the rules above.</small>
+                        </span>
+                      </label>
+                    </div>
+                  </details>
+                </div>
+
+                <!-- private list -->
+                <div class="vstack" data-ved-private hidden>
+                  <label class="field">
+                    <span>Nominated members</span>
+                    <div class="vsrc__row">
+                      <input class="input" type="text" data-ved-person-input placeholder="@username or a member code" spellcheck="false" />
+                      <button class="btn btn--ghost btn--sm" type="button" data-ved-person-add><i data-icon="plus"></i> Add</button>
+                    </div>
+                  </label>
+                  <div class="vtaglist" data-ved-people></div>
+                  <p class="vhint">They see it whatever else is set. Everyone else meets a closed door.</p>
+                </div>
+
+                <!-- passwords: both private and exclusive may ask -->
+                <details class="vadv" data-ved-pass-wrap hidden>
+                  <summary><i data-icon="key"></i> Join passwords</summary>
+                  <div class="vadv__body">
+                    <label class="field">
+                      <span>A password</span>
+                      <div class="vsrc__row">
+                        <input class="input" type="text" data-ved-pass-input placeholder="at least 4 characters" autocomplete="off" spellcheck="false" />
+                        <button class="btn btn--ghost btn--sm" type="button" data-ved-pass-add><i data-icon="plus"></i> Add</button>
+                      </div>
+                    </label>
+                    <div class="vtaglist" data-ved-passes></div>
+                    <div>
+                      <button class="btn btn--quiet btn--sm" type="button" data-ved-pass-gen><i data-icon="refresh"></i> Generate one</button>
+                    </div>
+                    <p class="vhint">Stored as a hash — nobody, not even you, can read it back. One password per door.</p>
+                  </div>
+                </details>
+              </div>
+            </section>
+
+            <!-- timing ------------------------------------------------- -->
+            <section class="vcard-box">
+              <div class="vcard-box__head">
+                <h2 class="vcard-box__title">When</h2>
+              </div>
+              <div class="vstack">
+                <div class="vseg" data-ved-when role="group" aria-label="When to publish">
+                  <button class="vseg__btn is-on" type="button" data-when="now">Now</button>
+                  <button class="vseg__btn" type="button" data-when="1h">+1 hour</button>
+                  <button class="vseg__btn" type="button" data-when="1d">+1 day</button>
+                  <button class="vseg__btn" type="button" data-when="1w">+1 week</button>
+                  <button class="vseg__btn" type="button" data-when="later">Pick…</button>
+                </div>
+                <label class="field" data-ved-when-date hidden>
+                  <span>Date and time</span>
+                  <input class="input" type="datetime-local" data-ved-when-input />
+                </label>
+                <p class="vhint" data-ved-when-hint>It goes out the moment you publish.</p>
+              </div>
+            </section>
+
+            <!-- language + age ----------------------------------------- -->
+            <section class="vcard-box">
+              <div class="vcard-box__head">
+                <h2 class="vcard-box__title">Details</h2>
+              </div>
+              <div class="vstack">
+                <label class="field">
+                  <span>Language</span>
+                  <select class="select" data-ved-lang></select>
+                </label>
+                <div class="field">
+                  <span>Age</span>
+                  <div class="vseg" data-ved-age role="group" aria-label="Age rating">
+                    <button class="vseg__btn is-on" type="button" data-age="none">All</button>
+                    <button class="vseg__btn" type="button" data-age="3">3+</button>
+                    <button class="vseg__btn" type="button" data-age="6">6+</button>
+                    <button class="vseg__btn" type="button" data-age="13">13+</button>
+                    <button class="vseg__btn" type="button" data-age="16">16+</button>
+                    <button class="vseg__btn" type="button" data-age="18">18+</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </div>
+    </main>
+
+    <!-- sticky bar -->
+    <div class="vfoot" data-ved-foot hidden>
+      <div class="vfoot__in">
+        <span class="vfoot__state">
+          <span class="vfoot__dot" data-ved-dot></span>
+          <span data-ved-status>Add a link and a title to begin</span>
+          <span class="vcount" data-ved-draft-note hidden></span>
+        </span>
+        <div class="vfoot__acts">
+          <button class="btn btn--ghost btn--sm" type="button" data-ved-save><i data-icon="check"></i> Save draft</button>
+          <button class="btn btn--primary" type="button" data-ved-publish><i data-icon="upload"></i> Publish</button>
+        </div>
+      </div>
+    </div>
+
+    <div data-site-footer></div>
+  </body>
+</html>
