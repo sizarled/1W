@@ -1,17 +1,20 @@
 /**
- * Publisher desk smoke test — publisher.html and the editor embedded in it.
+ * Publisher smoke test — publisher.html, the program and its links.
  *
  *   node tools/publisher-smoke.mjs
  *
- * Pass 1 — signed out: the desk asks for a session, and so does the editor.
- * Pass 2 — signed in, approved nowhere: the desk says how a publisher is made.
- * Pass 3 — a publisher: the rail, the hub in the URL, and the real editor
- *          (the whole form) standing inside the page, pointed at that hub.
- * Pass 4 — publishing stays on the desk: the payload names the hub, the video
- *          goes out live, the form comes back clean and the list shows it.
- * Pass 5 — the two tabs, the rail switching the editor, and the URL following.
- * Pass 6 — deep links: ?studio= picks the hub, ?id= opens one to edit.
- * Pass 7 — what the files must carry (the editor's markup, the flag, the CSS).
+ * The page is the program for creators **outside** the site: the seat, the
+ * links, the conversions, the pay table. The desk is gone from it — an owner's
+ * publisher writes in creator.html, which is where the content of a hub is
+ * made — and this test holds the page to that.
+ *
+ * Pass 1 — signed out: the program is readable, the seat asks for a session.
+ * Pass 2 — the link builder knows the hubs this member writes in.
+ * Pass 3 — joining, and the seat that comes back with a code.
+ * Pass 4 — the links: built, sent upper-cased, and removed.
+ * Pass 5 — a guest reads the program and is offered both ways in.
+ * Pass 6 — an old ?studio= link is handed to the creator page.
+ * Pass 7 — what the files must carry, and what they must not.
  */
 import { JSDOM } from "jsdom";
 import { readFileSync } from "node:fs";
@@ -184,245 +187,71 @@ function programFetch(href, opts = {}) {
   return reply([]);
 }
 
+
 /* ================================================================== */
 /* pass 1 — signed out                                                */
 /* ================================================================== */
 {
-  const { document, errors, window } = boot("publisher.html", {
-    fetchImpl: () => reply({ ok: false, error: "session" }),
-  });
-  await import(`file://${join(root, "assets/js/video-editor.js")}?p1`);
+  const { document, errors, calls, window } = boot("publisher.html", { fetchImpl: () => reply([]) });
   await import(`file://${join(root, "assets/js/publisher.js")}?p1`);
-  await wait(140);
+  await wait(160);
 
-  const state = document.querySelector("[data-pub-state]");
-  expect("out: the desk is hidden", document.querySelector("[data-pub-shell]").hidden === true);
-  expect("out: the desk asks for a session", /Sign in to publish/i.test(state.textContent), state.textContent.trim().slice(0, 60));
-  expect("out: and offers the way in", Boolean(state.querySelector('a[href="login.html?next=publisher.html"]')), state.innerHTML.slice(0, 120));
+  expect("out: the program is the first room", document.querySelector('[data-pub-viewpanel="program"]').hidden === false);
+  expect("out: the seat asks for a session", Boolean(document.querySelector('[data-pub-seat] a[href="login.html?next=publisher.html"]')), document.querySelector("[data-pub-seat]").innerHTML.slice(0, 120));
+  expect("out: and offers the way in from the register too", Boolean(document.querySelector('[data-pub-seat] a[href="register.html?next=publisher.html"]')));
+  expect("out: the guest is asked for the program, not for hubs", calls.some((c) => fnName(c.href) === "publisher_me") && !calls.some((c) => fnName(c.href) === "publisher_hubs"), calls.map((c) => fnName(c.href)).join(","));
+  expect("out: there is no desk to open", !document.querySelector("[data-pub-shell]") && !document.querySelector('[data-pub-viewpanel="desk"]'));
+  expect("out: the page says where a hub is written", Boolean(document.querySelector(".pub__elsewhere a[href=\"creator.html\"]")), document.querySelector(".pub__elsewhere")?.innerHTML.slice(0, 100));
   expect("out: no errors", errors.length === 0, errors.join(" | "));
   window.close();
 }
 
 /* ================================================================== */
-/* pass 2 — signed in, approved nowhere                               */
+/* pass 2 — the link builder and the hubs it offers                   */
 /* ================================================================== */
 {
-  const { document, errors, calls, window } = boot("publisher.html", {
+  programSeat = { code: "IDPB100042", status: "active", channel: "The Casablanca Letter", place: "Casablanca", audience: 4200, note: "", created_at: new Date().toISOString() };
+  programLinks = [];
+  const { document, calls, errors, window } = boot("publisher.html", {
     storage: signedIn,
     fetchImpl: (href) => {
-      const fn = fnName(href);
-      if (fn === "publisher_hubs") return reply({ ok: true, hubs: [] });
-      return reply([]);
+      if (fnName(href) === "publisher_hubs") {
+        return reply({ ok: true, hubs: [
+          { id: "hub-1", code: "IDCN100006", kind: "cinema", name: "Cinema Seven", role: "publisher" },
+          { id: "hub-2", code: "IDST100001", kind: "channel", name: "Hello Studio", role: "staff" },
+        ] });
+      }
+      return programFetch(href);
     },
   });
-  await import(`file://${join(root, "assets/js/video-editor.js")}?p2`);
   await import(`file://${join(root, "assets/js/publisher.js")}?p2`);
-  await wait(140);
+  await wait(200);
 
-  const state = document.querySelector("[data-pub-state]");
-  expect("none: the server was asked for the hubs", calls.some((c) => fnName(c.href) === "publisher_hubs"), calls.map((c) => fnName(c.href)).join(","));
-  expect("none: the desk stays closed", document.querySelector("[data-pub-shell]").hidden === true);
-  expect("none: it says no hub has approved the member", /No hub has approved you yet/i.test(state.textContent), state.textContent.trim().slice(0, 70));
-  expect("none: and where a hub is found", Boolean(state.querySelector('a[href="creator.html"]')), state.innerHTML.slice(0, 140));
-  expect("none: no errors", errors.length === 0, errors.join(" | "));
+  expect("hubs: the member's hubs are asked for", calls.some((c) => fnName(c.href) === "publisher_hubs"), calls.map((c) => fnName(c.href)).join(","));
+  const select = document.querySelector('[data-pub-link-form-el] [name="hub"]');
+  expect("hubs: the builder offers them", Boolean(select) && select.options.length === 3, select ? String(select.options.length) : "no select");
+  expect("hubs: the whole site first", /register\.html/.test(select?.options[0]?.textContent || ""), select?.options[0]?.textContent);
+  expect("hubs: then a hub by its name and code", /Cinema Seven · IDCN100006/.test(select?.options[1]?.textContent || ""), select?.options[1]?.textContent);
+  expect("hubs: no errors", errors.length === 0, errors.join(" | "));
   window.close();
 }
 
 /* ================================================================== */
-/* pass 3 — the publisher's desk, editor included                     */
-/* ================================================================== */
-let deskCalls = null;
-let savedPayload = null;
-let saved = false;
-
-function deskFetch(href) {
-  const fn = fnName(href);
-  if (fn === "publisher_hubs") return reply({ ok: true, hubs: [CINEMA, STUDIO] });
-  if (fn === "video_mine") {
-    const rows = [videoRow()];
-    if (saved) rows.unshift(videoRow({ code: "PST-001050", title: "A new film", counters: { impressions: 0 } }));
-    return reply({ ok: true, rows });
-  }
-  if (fn === "video_save") {
-    saved = true;
-    savedPayload = null;
-    return reply({
-      ok: true,
-      status: "published",
-      code: "PST-001050",
-      video: videoRow({ code: "PST-001050", title: "A new film", video: { meta: { age: "none" }, embed: "https://example.com/new.mp4", hub: { code: "IDCN100006", kind: "cinema", name: "Cinema Seven" } } }),
-    });
-  }
-  if (fn === "video_get") return reply({ ok: true, video: videoRow({ title: "The port at night" }) });
-  return reply([]);
-}
-
-{
-  const { document, errors, calls, window } = boot("publisher.html", { storage: signedIn, fetchImpl: deskFetch });
-  deskCalls = calls;
-  await import(`file://${join(root, "assets/js/video-editor.js")}?p3`);
-  await import(`file://${join(root, "assets/js/publisher.js")}?p3`);
-  await wait(220);
-
-  const shell = document.querySelector("[data-pub-shell]");
-  expect("desk: it opens", shell.hidden === false);
-  const hubs = document.querySelectorAll("[data-pub-hub]");
-  expect("desk: the rail holds both hubs", hubs.length === 2, String(hubs.length));
-  expect("desk: the first is the selected one", hubs[0].getAttribute("aria-pressed") === "true", hubs[0].getAttribute("aria-pressed"));
-  expect("desk: the rail names the role", /Publisher/.test(hubs[0].textContent), hubs[0].textContent.replace(/\s+/g, " ").trim());
-  expect("desk: the second says staff", /Staff/.test(hubs[1].textContent), hubs[1].textContent.replace(/\s+/g, " ").trim());
-  expect("desk: the hub rides on the body", document.body.dataset.vedHubcode === "IDCN100006", document.body.dataset.vedHubcode);
-  expect("desk: the URL says where", /studio=IDCN100006/.test(window.location.search), window.location.search);
-
-  /* the editor is the real thing, not a thinner copy */
-  expect("editor: the form stands in the page", Boolean(document.querySelector("[data-ved-shell]")) && document.querySelector("[data-ved-shell]").hidden === false);
-  ["[data-ved-embed]", "[data-ved-title]", "[data-ved-desc]", "[data-ved-tag-input]", "[data-ved-thumb]", "[data-ved-vis]", '[data-vis="private"]', "[data-ved-when]", '[data-when="later"]', "[data-ved-lang]", "[data-age]", "[data-ved-pass-add]", "[data-ved-person-add]", "[data-ved-publish]", "[data-ved-save]"].forEach((sel) => {
-    expect(`editor: ${sel} is here`, Boolean(document.querySelector(sel)));
-  });
-  expect("editor: the file input is here", Boolean(document.querySelector("[data-ved-file]")));
-  const deskRows = [...document.querySelectorAll("[data-ved-toc] [data-toc]")];
-  expect("editor: the desk carries the contents rail too", deskRows.length === 9, String(deskRows.length));
-  expect(
-    "editor: listing the same sections",
-    /The video/.test(deskRows[0]?.textContent || "") && deskRows.some((row) => /Who sees it/.test(row.textContent)),
-    deskRows.map((row) => row.textContent.trim()).join(" | ")
-  );
-  const hubSelect = document.querySelector("[data-ved-hub]");
-  expect("editor: the picker points at the desk's hub", hubSelect.value === "IDCN100006", hubSelect.value);
-  expect("editor: and offers no stray own-feed", !/My own feed/.test(hubSelect.textContent), hubSelect.textContent.trim().slice(0, 80));
-  expect("editor: the preview says where it goes", /Cinema Seven/.test(document.querySelector("[data-ved-preview-studio]")?.textContent || ""), document.querySelector("[data-ved-preview-studio]")?.textContent);
-  expect("editor: no errors", errors.length === 0, errors.join(" | "));
-  window.close();
-}
-
-/* ================================================================== */
-/* pass 4 — publishing stays on the desk                              */
-/* ================================================================== */
-{
-  saved = false;
-  const { document, errors, calls, window } = boot("publisher.html", { storage: signedIn, fetchImpl: deskFetch });
-  await import(`file://${join(root, "assets/js/video-editor.js")}?p4`);
-  await import(`file://${join(root, "assets/js/publisher.js")}?p4`);
-  await wait(220);
-
-  const embed = document.querySelector("[data-ved-embed]");
-  const title = document.querySelector("[data-ved-title]");
-  embed.value = "https://www.youtube.com/watch?v=abc12345678";
-  embed.dispatchEvent(new window.Event("input", { bubbles: true }));
-  title.value = "A new film";
-  title.dispatchEvent(new window.Event("input", { bubbles: true }));
-  await wait(40);
-
-  const publish = document.querySelector("[data-ved-publish]");
-  expect("publish: the bar is ready", publish.disabled === false, publish.disabled);
-  const before = window.location.href;
-  publish.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
-  await wait(220);
-
-  const call = lastCall(calls, "video_save");
-  const payload = (call && call.body && call.body.p_payload) || {};
-  expect("publish: video_save was called", Boolean(call), calls.map((c) => fnName(c.href)).join(","));
-  expect("publish: it names the hub", payload.hub === "IDCN100006", JSON.stringify(payload.hub));
-  expect("publish: it goes out live", payload.status === "published", JSON.stringify(payload.status));
-  expect("publish: with the link and the title", payload.embed === "https://www.youtube.com/watch?v=abc12345678" && payload.title === "A new film", JSON.stringify({ embed: payload.embed, title: payload.title }));
-  expect("publish: the page did not navigate", window.location.href === before, window.location.href);
-
-  const flash = document.querySelector("[data-pub-flash]");
-  expect("publish: the desk says what landed", flash.hidden === false && /A new film/.test(flash.textContent), flash.textContent.trim().slice(0, 80));
-  expect("publish: with a way to open it", Boolean(flash.querySelector('a[href="video.html?id=PST-001050"]')), flash.innerHTML.slice(0, 140));
-  expect("publish: the form came back clean", document.querySelector("[data-ved-title]").value === "", document.querySelector("[data-ved-title]").value);
-  expect("publish: and the hub stayed", document.querySelector("[data-ved-hub]").value === "IDCN100006", document.querySelector("[data-ved-hub]").value);
-  expect("publish: the list was re-read", calls.filter((c) => fnName(c.href) === "video_mine").length >= 2, String(calls.filter((c) => fnName(c.href) === "video_mine").length));
-  expect("publish: no errors", errors.length === 0, errors.join(" | "));
-  window.close();
-}
-
-/* ================================================================== */
-/* pass 5 — the tabs and the rail                                     */
-/* ================================================================== */
-{
-  saved = false;
-  const { document, errors, window } = boot("publisher.html", { storage: signedIn, fetchImpl: deskFetch });
-  await import(`file://${join(root, "assets/js/video-editor.js")}?p5`);
-  await import(`file://${join(root, "assets/js/publisher.js")}?p5`);
-  await wait(220);
-
-  const mineTab = document.querySelector('[data-pub-tab="mine"]');
-  mineTab.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
-  await wait(60);
-  expect("tabs: the list is shown", document.querySelector('[data-pub-panel="mine"]').hidden === false);
-  expect("tabs: the editor is put away", document.querySelector('[data-pub-panel="new"]').hidden === true);
-  expect("tabs: the body records it", document.body.dataset.pubTab === "mine", document.body.dataset.pubTab);
-  expect("tabs: only this hub's videos", document.querySelectorAll("[data-pub-list] .pubrow").length === 1, String(document.querySelectorAll("[data-pub-list] .pubrow").length));
-  const row = document.querySelector("[data-pub-list] .pubrow");
-  expect("tabs: a row names its video", /The port at night/.test(row.textContent), row.textContent.replace(/\s+/g, " ").trim().slice(0, 80));
-  expect("tabs: it offers open and edit", Boolean(row.querySelector('a[href="video.html?id=PST-001010"]')) && Boolean(row.querySelector('a[href^="publisher.html?studio=IDCN100006&id=PST-001010"]')), row.innerHTML.slice(0, 160));
-
-  /* the rail moves the editor */
-  document.querySelectorAll("[data-pub-hub]")[1].dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
-  await wait(80);
-  expect("rail: the editor follows the rail", document.querySelector("[data-ved-hub]").value === "IDST100001", document.querySelector("[data-ved-hub]").value);
-  expect("rail: the URL follows too", /studio=IDST100001/.test(window.location.search), window.location.search);
-  expect("rail: the list empties with the hub", Boolean(document.querySelector("[data-pub-list] .pub__none")), document.querySelector("[data-pub-list]").textContent.replace(/\s+/g, " ").trim().slice(0, 80));
-  expect("rail: no errors", errors.length === 0, errors.join(" | "));
-  window.close();
-}
-
-/* ================================================================== */
-/* pass 6 — deep links                                                */
-/* ================================================================== */
-{
-  const { document, calls, errors, window } = boot("publisher.html", {
-    url: "publisher.html?studio=IDST100001",
-    storage: signedIn,
-    fetchImpl: deskFetch,
-  });
-  await import(`file://${join(root, "assets/js/video-editor.js")}?p6`);
-  await import(`file://${join(root, "assets/js/publisher.js")}?p6`);
-  await wait(240);
-  expect("link: ?studio= picks a hub that is not the first", document.querySelector("[data-ved-hub]").value === "IDST100001", document.querySelector("[data-ved-hub]").value);
-  expect("link: the rail agrees", document.querySelectorAll("[data-pub-hub]")[1].getAttribute("aria-pressed") === "true");
-  expect("link: no errors on a linked hub", errors.length === 0, errors.join(" | "));
-  window.close();
-}
-
-{
-  const { document, calls, errors, window } = boot("publisher.html", {
-    url: "publisher.html?studio=IDCN100006&id=PST-001010",
-    storage: signedIn,
-    fetchImpl: deskFetch,
-  });
-  await import(`file://${join(root, "assets/js/video-editor.js")}?p6b`);
-  await import(`file://${join(root, "assets/js/publisher.js")}?p6b`);
-  await wait(260);
-  expect("edit: the video is fetched", calls.some((c) => fnName(c.href) === "video_get"), calls.map((c) => fnName(c.href)).join(","));
-  expect("edit: the heading says edit", /Edit a video/.test(document.querySelector("[data-ved-heading]").textContent), document.querySelector("[data-ved-heading]").textContent);
-  expect("edit: the fields are filled", document.querySelector("[data-ved-title]").value === "The port at night", document.querySelector("[data-ved-title]").value);
-  expect("edit: the hub is still the desk's", document.querySelector("[data-ved-hub]").value === "IDCN100006", document.querySelector("[data-ved-hub]").value);
-  expect("edit: no errors", errors.length === 0, errors.join(" | "));
-  window.close();
-}
-
-/* ================================================================== */
-/* pass 8 — the program                                               */
+/* pass 3 — joining the program                                       */
 /* ================================================================== */
 {
   programSeat = null;
   programLinks = [];
   const { document, calls, errors, window } = boot("publisher.html", { storage: signedIn, fetchImpl: programFetch });
-  await import(`file://${join(root, "assets/js/video-editor.js")}?p8a`);
-  await import(`file://${join(root, "assets/js/publisher.js")}?p8a`);
-  await wait(220);
+  await import(`file://${join(root, "assets/js/publisher.js")}?p3`);
+  await wait(200);
 
   expect("program: the seat is asked on boot", calls.some((c) => fnName(c.href) === "publisher_me"), calls.map((c) => fnName(c.href)).join(","));
-  expect("program: the program is the first room", document.querySelector('[data-pub-viewpanel="program"]').hidden === false);
-  expect("program: the desk waits behind its tab", document.querySelector('[data-pub-viewpanel="desk"]').hidden === true);
   expect("program: four numbers", document.querySelectorAll("[data-pub-stats] .pstat").length === 4, String(document.querySelectorAll("[data-pub-stats] .pstat").length));
   expect("program: no code before joining", /Join to get one/.test(document.querySelector("[data-pub-stats]").textContent), document.querySelector("[data-pub-stats]").textContent.trim().slice(0, 60));
   expect("program: the pay table is drawn from the server", /50[\s\S]*250[\s\S]*1,000/.test(document.querySelector('[data-pub-viewpanel="program"]').textContent), "values");
   expect("program: the join form is offered", Boolean(document.querySelector("[data-pub-join]")));
 
-  /* joining */
   calls.length = 0;
   const form = document.querySelector("[data-pub-join]");
   form.querySelector('[name="channel"]').value = "The Casablanca Letter";
@@ -441,13 +270,14 @@ function deskFetch(href) {
   window.close();
 }
 
+/* ================================================================== */
+/* pass 4 — the links                                                 */
+/* ================================================================== */
 {
-  /* a seat, and the links it builds */
   programSeat = { code: "IDPB100042", status: "active", channel: "The Casablanca Letter", place: "Casablanca", audience: 4200, note: "", created_at: new Date(Date.now() - 30 * 864e5).toISOString() };
   programLinks = [];
   const { document, calls, window, errors } = boot("publisher.html", { url: "publisher.html?tab=links", storage: signedIn, fetchImpl: programFetch });
-  await import(`file://${join(root, "assets/js/video-editor.js")}?p8b`);
-  await import(`file://${join(root, "assets/js/publisher.js")}?p8b`);
+  await import(`file://${join(root, "assets/js/publisher.js")}?p4`);
   await wait(240);
 
   expect("links: ?tab=links opens the links", document.querySelector('[data-pub-viewpanel="links"]').hidden === false);
@@ -459,15 +289,14 @@ function deskFetch(href) {
   form.querySelector('[name="label"]').value = "Instagram bio";
   form.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
   await wait(260);
-  const saved = lastCall(calls, "publisher_link_save");
-  expect("links: the save goes out", Boolean(saved), calls.map((c) => fnName(c.href)).join(","));
-  expect("links: a blank hub is the whole site", saved && String(saved.body.p_hub) === "", JSON.stringify(saved && saved.body));
+  const savedLink = lastCall(calls, "publisher_link_save");
+  expect("links: the save goes out", Boolean(savedLink), calls.map((c) => fnName(c.href)).join(","));
+  expect("links: a blank hub is the whole site", savedLink && String(savedLink.body.p_hub) === "", JSON.stringify(savedLink && savedLink.body));
   expect("links: the row is drawn", /Instagram bio/.test(document.querySelector("[data-pub-links]").textContent), document.querySelector("[data-pub-links]").textContent.trim().slice(0, 80));
   expect("links: with its URL", /register\.html\?ref=K7M2QP4X/.test(document.querySelector("[data-pub-links]").textContent), "url");
   expect("links: and its counters", /clicks[\s\S]*sign-ups[\s\S]*points/.test(document.querySelector("[data-pub-links]").textContent), "counters");
   expect("links: the count badge follows", document.querySelector("[data-pub-link-count]").textContent === "1", document.querySelector("[data-pub-link-count]").textContent);
 
-  /* a hub code in the box points the link at that hub */
   calls.length = 0;
   const form2 = document.querySelector("[data-pub-link-form-el]");
   form2.querySelector('[name="hubcode"]').value = "idbl100003";
@@ -476,7 +305,6 @@ function deskFetch(href) {
   const saved2 = lastCall(calls, "publisher_link_save");
   expect("links: a typed code is sent upper-cased", saved2 && saved2.body.p_hub === "IDBL100003", JSON.stringify(saved2 && saved2.body));
 
-  /* removing one */
   calls.length = 0;
   document.querySelector("[data-pub-link-del]").dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
   await wait(240);
@@ -485,16 +313,19 @@ function deskFetch(href) {
   window.close();
 }
 
+/* ================================================================== */
+/* pass 5 — a guest                                                   */
+/* ================================================================== */
 {
-  /* a visitor with no session still reads what the program is */
   programSeat = null;
   programLinks = [];
-  const { document, window } = boot("publisher.html", { fetchImpl: (href) => {
-    if (fnName(href) === "publisher_me") return reply({ ok: true, member: null, publisher: null, links: [], conversions: [], totals: { clicks: 0, signups: 0, points: 0 }, values: PROGRAM_VALUES });
-    return reply([]);
-  } });
-  await import(`file://${join(root, "assets/js/video-editor.js")}?p8c`);
-  await import(`file://${join(root, "assets/js/publisher.js")}?p8c`);
+  const { document, window } = boot("publisher.html", {
+    fetchImpl: (href) => {
+      if (fnName(href) === "publisher_me") return reply({ ok: true, member: null, publisher: null, links: [], conversions: [], totals: { clicks: 0, signups: 0, points: 0 }, values: PROGRAM_VALUES });
+      return reply([]);
+    },
+  });
+  await import(`file://${join(root, "assets/js/publisher.js")}?p5`);
   await wait(200);
   expect("guest: the program is readable", document.querySelector('[data-pub-viewpanel="program"]').hidden === false);
   expect("guest: the seat asks them to sign in", Boolean(document.querySelector('[data-pub-seat] a[href="login.html?next=publisher.html"]')), document.querySelector("[data-pub-seat]").innerHTML.slice(0, 100));
@@ -503,24 +334,50 @@ function deskFetch(href) {
 }
 
 /* ================================================================== */
+/* pass 6 — an old ?studio= link belongs to the creator page          */
+/* ================================================================== */
+{
+  const { document, window } = boot("publisher.html", {
+    url: "publisher.html?studio=IDCN100006",
+    storage: signedIn,
+    fetchImpl: () => reply([]),
+  });
+  /* jsdom refuses real navigation: a writable stand-in records it instead */
+  const sent = [];
+  globalThis.location = {
+    search: "?studio=IDCN100006",
+    href: "http://localhost/publisher.html?studio=IDCN100006",
+    pathname: "/publisher.html",
+    replace: (url) => sent.push(String(url)),
+  };
+  await import(`file://${join(root, "assets/js/publisher.js")}?p6`);
+  await wait(160);
+
+  expect("handoff: the link is handed over", sent.length === 1, sent.join(","));
+  expect("handoff: to the creator page, with the hub", sent[0] === "creator.html?studio=IDCN100006", sent[0]);
+  expect("handoff: and nothing is drawn under it", document.querySelector("[data-pub-stats]").innerHTML === "", document.querySelector("[data-pub-stats]").innerHTML.slice(0, 80));
+  window.close();
+}
+
+/* ================================================================== */
 /* pass 7 — the files themselves                                      */
 /* ================================================================== */
 {
   const html = readFileSync(join(root, "publisher.html"), "utf8");
-  const editor = readFileSync(join(root, "assets/js/video-editor.js"), "utf8");
   const page = readFileSync(join(root, "assets/js/publisher.js"), "utf8");
   const css = readFileSync(join(root, "assets/css/publisher.css"), "utf8");
-
-  expect("files: the page embeds the flag", /data-ved-embed="1"/.test(html), "body");
-  expect("files: it carries the editor's own markup", /data-ved-shell/.test(html) && /data-ved-publish/.test(html) && /data-ved-thumb-file/.test(html));
-  expect("files: it loads the editor module", /assets\/js\/video-editor\.js\?v=/.test(html));
-  expect("files: and its own", /assets\/js\/publisher\.js\?v=/.test(html) && /assets\/css\/publisher\.css\?v=/.test(html));
-  expect("files: the editor knows the desk", /vedEmbed === "1"/.test(editor) && /publisher_hubs/.test(editor));
-  expect("files: and never carries a publish away from it", /ved:published/.test(editor));
-  expect("files: the desk asks the publisher's door", /rpc\("publisher_hubs"/.test(page), "publisher_hubs");
-  expect("files: the CSS dresses the rail and the rows", /\.pub__rail/.test(css) && /\.pubrow/.test(css) && /\.pub__tabs/.test(css));
   const creator = readFileSync(join(root, "assets/js/creator.js"), "utf8");
-  expect("files: the hub page hands a publisher their desk", /data-crp-desk/.test(creator) && /publisher\.html\?studio=/.test(creator));
+
+  expect("files: the page does not load the video editor", !/assets\/js\/video-editor\.js/.test(html));
+  expect("files: and carries none of its markup", !/data-ved-shell/.test(html) && !/data-ved-publish/.test(html) && !/data-ved-thumb-file/.test(html));
+  expect("files: no desk flag on the body", !/data-ved-embed/.test(html) && !/data-pub-tab/.test(html));
+  expect("files: the two rooms are the program and the links", /data-pub-viewpanel="program"/.test(html) && /data-pub-viewpanel="links"/.test(html) && !/data-pub-viewpanel="desk"/.test(html));
+  expect("files: it loads its own module", /assets\/js\/publisher\.js\?v=/.test(html) && /assets\/css\/publisher\.css\?v=/.test(html));
+  expect("files: the page asks for the publisher's door only", /rpc\("publisher_me"/.test(page) && /rpc\("publisher_hubs"/.test(page) && !/video_/.test(page), "publisher_hubs");
+  expect("files: no desk is left in the module", !/data-pub-shell/.test(page) && !/\[data-pub-hub\]/.test(page) && !/ved:published/.test(page));
+  expect("files: the CSS dresses no rail", !/\.pub__rail/.test(css) && !/\.pubrow/.test(css) && !/\.pub__tabs/.test(css) && /\.pub__elsewhere/.test(css));
+  expect("files: the hub page hands a publisher the writing room", /data-crp-room/.test(creator) && /creator\.html\?section=/.test(creator));
+  expect("files: and no longer sends them to the desk", !/publisher\.html\?studio=/.test(creator));
 }
 
 /* ------------------------------------------------------------------ */

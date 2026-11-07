@@ -1176,8 +1176,9 @@ says plainly that a video is written over there. `openEditor("video")` navigates
 form, so no path — old markup, a keyboard, a link — can bring the table form back.
 
 The table editor keeps one job, and a video is not it either: **a video is published only from the
-editor — `video-editor.html` for the owner and the staff, the same editor embedded in
-`publisher.html` for a publisher the hub approved** (see *The publisher's desk* below). The public
+editor** — `video-editor.html`, which a member the owner approved as a publisher of the hub may use
+too (`video_save`'s guard accepts them), so a publisher's video is written in the editor like
+everybody else's, with the studio chosen in its picker. The public
 hub page's *Write in this hub* form
 used to offer Video among the kinds a publisher could hand in; it does not any more. The list is
 podcast and playlist for a studio or a server, article for a blog, and **nothing for a cinema** —
@@ -1379,13 +1380,17 @@ writing inside somebody else's hub. **This page is for the other kind: the creat
 outside 1World** — a channel, a newsletter, a Telegram group, a blog of their own — and carries the
 site's blogs, libraries, studios and films to an audience that never comes here.
 
-`publisher.html` has three rooms:
+`publisher.html` has two rooms, and only these:
 
 | Room | What it holds |
 | --- | --- |
 | **The program** | what it is, the three steps, the pay table, and the seat: a code `IDPB100042`-style, where you publish, from where, how many people read you |
 | **Your links** | one link per hub or one for the whole site, each with its URL, clicks, sign-ups and points — plus the conversions table |
-| **Publish into a hub** | the older half, unchanged: the video editor, for a member an owner let in |
+
+There is **no third room**. The page used to embed the video editor and call itself *the publisher's
+desk*; that is not what this page is for. A member an owner lets into a hub writes in `creator.html`
+(see *Two publishers, two pages* below), and a `?studio=` link that used to open the desk here is now
+handed straight to `creator.html?studio=<code>`.
 
 What a conversion is worth, server-side:
 
@@ -1414,53 +1419,43 @@ code, the clicks, the sign-ups and the points as four numbers, the pay table, th
 and the two kinds of publisher spelled out so nobody confuses the seat in someone's blog with the
 program.
 
-#### The desk — the editor inside `publisher.html`
+#### Two publishers, two pages
 
-The third room is the older half, and an approved publisher is not a guest of the studio: they have
-the **real editor**, not a thinner copy of it. `publisher.html` embeds `video-editor.html`'s own form —
-the link with drag & drop and the whole host list, the thumbnail (upload / picture / from the video),
-the title and description counters, the tags, the language, the age, the visibility with its
-exclusive rules and its private list and passwords, the schedule, the autosaved draft, the sticky
-bar and <kbd>Ctrl/Cmd</kbd>+<kbd>Enter</kbd> — because it is the same markup and the same module:
-`<body data-ved-embed="1">` tells `video-editor.js` it is embedded, and it then
+The word covers two different people and they no longer share a room.
 
-| instead of | on the desk |
-| --- | --- |
-| listing the hubs the member owns or staffs (`creator_hubs_list`) | listing the hubs that may take their videos: owned, staffed, **or approved as a publisher** (`publisher_hubs`) |
-| offering "my own feed — no studio" | offering the hubs themselves — a publisher publishes *somewhere* |
-| navigating to `videos.html#/v/<code>` after a publish | staying put: `ved:published` hands the new video to the page, the form comes back clean for the next one |
+**The publisher outside the site** is `publisher.html`: the program, the seat with its public code,
+the links they carry into their own channel and the points those links pay. It is two rooms — *the
+program* and *your links* — and nothing else. The editor that used to be embedded in it as a third
+room, *the publisher's desk*, is gone: the page no longer loads `video-editor.js`, carries none of
+its markup, and no longer deep-links a hub (`?studio=`, `?id=`).
 
-Around the editor the page carries the rail of those hubs (name, kind, code, their video count, and
-whether the member is staff or a publisher there), the two tabs **New video** and **Your videos
-here**, and that list — `video_mine`, filtered to the selected hub, with the status, the visibility,
-the views and the date, and *Open* / *Edit here* (`publisher.html?studio=<code>&id=<code>` opens that
-video in the embedded editor). A member with no hub yet gets a sentence and two ways out instead of
-an editor pointed at nothing. The hub page hands every approved publisher the door: **The
-publisher's desk** (`data-crp-desk`).
+**The publisher inside the site** — the member an owner admits into `creator_hubs.publishers` —
+writes in **`creator.html`**, which is where the content of a hub is made, and the owner's hub is
+listed there beside their own. The page reads the `role` the server puts on every hub
+(`owner` · `staff` · `publisher`) and narrows the room for the third one:
 
-**Publishing there is live.** `video_save`'s `hub_role` guard used to accept only the owner or the
-staff; it now also accepts a member whose code is in `creator_hubs.publishers` — the owner's approval
-*is* the review, so a publisher's video goes into the hub the moment they press Publish, under their
-name, with the visibility and the schedule they chose. Everything else still stands: the hub must
-exist, and its kind must be able to hold a video.
+| | owner and staff | publisher |
+| --- | --- | --- |
+| the tables | every tab | the tables only — no management, no seats, no subscribers, no categories |
+| the rows | every row | the hub's published rows, plus **their own** drafts (`mine` on each row) |
+| a new row | draft or live | a **draft**, always — `creator_item_save` answers `seat` for `p_publish` |
+| an article | the writing room publishes it | the same room, opened with `draft: true`: *Send to the owner* |
+| the hub itself | settings, staff, VIP, the door | nothing: the settings tab is not drawn and `?tab=settings` falls back to the tables |
+| deleting | any row | their own draft (`creator_item_delete`) |
 
-| Function | Answers |
-| --- | --- |
-| `publisher_hubs(token)` | the hubs that may take this member's videos — `{id, code, kind, name, logo_url, cover_url, visibility, role: staff\|publisher, published, drafts, mine}` |
+The owner publishes what arrives, from the same tables: a publisher's draft is a `draft` row, and
+`creator_item_status` — which still answers only to `creator_hub_manage` — is how it goes out.
 
-DDL + functions: `tools/sql/publisher-desk.sql` — **applied**, and exercised on the real database in a
-block that rolled itself back: a member who owned nothing asked the desk and got an empty list, and
-`video_save` refused their hub with `hub_role`; the owner then approved them into a cinema
-(`IDCN100006`), the desk listed it as `role: publisher`, and the same call wrote a **published**
-video into that hub (`{ok:true, status:"published", code:"PST-001034", hub:"IDCN100006"}`) while a hub
-that never approved them still answered `hub_role`. `tools/publisher-smoke.mjs` (107 checks) runs the
-page end to end in jsdom: the program asked on boot and the seat taken (the payload carries where the
-member publishes and their audience), the code and the four numbers following it, a link made for the
-whole site and one pointed at a typed hub code, its row with the URL and counters, the removal, the
-conversions table, the guest seeing the program and both ways in — then the desk: signed out,
-approved nowhere, the rail and the editor's picker agreeing, the full form present, a publish that
-names the hub and stays on the page, the clean form, the two tabs, the rail retargeting the editor,
-and both deep links (`?studio=`, `?id=`).
+DDL: `tools/sql/creator-seats.sql` — five patches, each rewriting the definition it finds (so it keeps
+whatever the function grew since) and safe to run twice. **Applied** to the live project and exercised
+on a real hub: member `ID100015` was put in `IDBL100003`'s `publishers`, `creator_hubs_list` listed the
+blog with `role: "publisher"`, `creator_items` returned its two published rows with `mine: false`,
+`creator_item_save` with `p_publish: true` answered `{ok:false, error:"seat"}` and with `false` wrote a
+`draft`, `creator_item_get` opened it and `creator_item_delete` removed it — while another member's row
+answered `not_found`. The seat and the test session were removed afterwards. `tools/publisher-smoke.mjs`
+(52 checks) holds `publisher.html` to the program alone and follows an old `?studio=` link to
+`creator.html?studio=<code>`; `tools/creator-smoke.mjs` (399 checks) walks a publisher's seat room by
+room and re-checks that the owner's page did not change.
 
 DDL + functions: `tools/sql/creator-requests.sql` — **applied**, and exercised on the real database:
 a member asked to advertise (banner, 500 points) and to publish in a hub, the owner read both in
@@ -1542,8 +1537,8 @@ only the public film. The test hubs, items and sessions were removed afterwards.
 
 Two screens that used to be placeholders are now live, dressed in the site's own tokens rather than
 the mock's: **`videos.html`** (the feed and the player, one page, `#/v/<code>` for a single video)
-and **`video-editor.html`** (publishing) — and, for a member an owner approved as a publisher,
-**`publisher.html`**, which is that same editor embedded in the publisher's own desk.
+and **`video-editor.html`** (publishing). An owner's publisher publishes a video from that same
+editor — `video_save` accepts them — and writes everything else in `creator.html`.
 
 Neither invents a table. A member video is a row of `posts` with `content_type = 'video'` — the same
 row likes, comments, reports and reach already live on — plus one column of its own,
@@ -2378,8 +2373,8 @@ node tools/dashboard-smoke.mjs   # 236 checks: the five gates, rail, popover, co
 node tools/sidebar-smoke.mjs     # 93 checks: the edge, the pin, Escape, the mobile drawer, the dashboard menu
 node tools/panel-smoke.mjs       # 90 checks: the desk's three states, the rows, the switch, the dialog, the shelf
 node tools/court-smoke.mjs       # 115 checks: the four steps, uploads, both doors, the court room
-node tools/creator-smoke.mjs     # 374 checks: the search (owners + publishers), the studio, the editors
-node tools/publisher-smoke.mjs   # 107 checks: the program, the seat, the links, and the desk under them
+node tools/creator-smoke.mjs     # 399 checks: the search (owners + publishers), the studio, the editors, a publisher's seat
+node tools/publisher-smoke.mjs   # 52 checks: the program, the seat, the links, and the hand-off to the creator page
 node tools/iptv-smoke.mjs        # 43 checks: the playlists, the groups, the page, the deep links
 node tools/activated-smoke.mjs   # 35 checks: hidden panels, image link, ad pause, code return
 node tools/rest-smoke.mjs        # 32 checks: the three steps, the link, the device path, the .txt
@@ -2796,9 +2791,9 @@ assets/js/icons.js          line icon set + brand glyphs (brands.js)
 assets/js/blocks.js         blocked people/media cache used by every list
 assets/css/video.css        member videos: the feed, the player, the publish page
 assets/js/videos.js         videos.html: feed, watch screen, comments, reactions
-assets/js/video-editor.js   video-editor.html: the publish form and video_save (embedded by publisher.html)
-assets/js/publisher.js       publisher.html: the program (seat, links, conversions) and the desk
-assets/css/publisher.css    the desk around the embedded editor
+assets/js/video-editor.js   video-editor.html: the publish form and video_save (embedable: <body data-ved-embed="1">)
+assets/js/publisher.js       publisher.html: the program only — the seat, the links, the conversions
+assets/css/publisher.css    that page: the pay table, the seat, the link rows
 assets/css/article.css      member articles: the index, the reader, the writing page
 assets/js/articles.js       articles.html: the index, the search, the shelves
 assets/js/article.js        article.html: one piece, the two doors, the comments

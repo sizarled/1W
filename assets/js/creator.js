@@ -398,6 +398,33 @@ function currentHub() {
   return state.hubs.find((h) => h.id === state.hub) || null;
 }
 
+/* ------------------------------------------------------------------ */
+/* the seat this member holds in the hub that is open                 */
+/* ------------------------------------------------------------------ */
+/*
+ * `creator_hubs_list` answers with a `role` on every hub:
+ *
+ *   owner      it is theirs — settings, seats, the numbers, publishing
+ *   staff      their code is in the hub's `staff` — the same, except deleting it
+ *   publisher  an owner let them in — they write here, and the owner publishes
+ *
+ * A publisher is the only one whose room is narrower: the tables, and no
+ * management under them. That is the whole difference, and it is decided once,
+ * here, so nothing else has to ask twice.
+ */
+function seatOf(hub) {
+  if (!hub) return "owner";
+  if (hub.role === "owner" || hub.role === "staff" || hub.role === "publisher") return hub.role;
+  return hub.owned === false ? "staff" : "owner";
+}
+
+const isSeatPublisher = (hub) => seatOf(hub === undefined ? currentHub() : hub) === "publisher";
+
+/* the tabs a publisher gets: the tables, and nothing that manages the hub */
+function tabsOf(section) {
+  return isSeatPublisher() ? section.tabs.filter((tab) => tab.type === "list") : section.tabs;
+}
+
 const visLabel = (v) => ({ public: "Public", exclusive: "Exclusive", private: "Private" }[v] || "Public");
 
 /* ------------------------------------------------------------------ */
@@ -675,13 +702,20 @@ function renderTop() {
   if (hint) {
     const full = Number(limit.limit) && Number(limit.used) >= Number(limit.limit);
     hint.classList.toggle("is-full", Boolean(full));
-    hint.textContent = `${limit.used || hubs.length} of ${limit.limit || "—"} ${section.noun}s on your level · level ${state.level}`;
+    hint.textContent = isSeatPublisher()
+      ? `You publish in this ${section.noun} · ${seatOf(currentHub()) === "publisher" ? "the owner publishes what you write" : "you own it"}`
+      : `${limit.used || hubs.length} of ${limit.limit || "—"} ${section.noun}s on your level · level ${state.level}`;
   }
 
   const menu = el("[data-cr-add-menu]");
   if (menu) {
+    /* a publisher writes content here; a category and a new hub are the
+       owner's, so they are not in their menu */
+    const entries = isSeatPublisher()
+      ? section.add.filter((entry) => !entry.category)
+      : section.add;
     menu.innerHTML = [
-      ...section.add.map(
+      ...entries.map(
         (entry) =>
           entry.category
             ? `<button class="cr-drop__item" type="button" data-cr-add="category"><i data-icon="filter"></i> Category</button>`
@@ -689,8 +723,8 @@ function renderTop() {
               ? `<a class="cr-drop__item" href="${esc(withHub(entry.href))}"><i data-icon="${esc(entry.icon || KIND_ICON[entry.kind] || "plus")}"></i> ${esc(entry.label)}${entry.note ? ` <span class="cr-drop__note">${esc(entry.note)}</span>` : ""}</a>`
               : `<button class="cr-drop__item" type="button" data-cr-add="${esc(entry.kind)}" data-draft="${entry.draft ? "1" : "0"}"><i data-icon="${esc(KIND_ICON[entry.kind] || "plus")}"></i> ${esc(entry.label)}${entry.note ? ` <span class="cr-drop__note">${esc(entry.note)}</span>` : ""}</button>`
       ),
-      `<span class="cr-drop__sep"></span>`,
-      `<button class="cr-drop__item" type="button" data-cr-add="hub"><i data-icon="plus"></i> New ${esc(section.noun)}</button>`,
+      isSeatPublisher() ? "" : `<span class="cr-drop__sep"></span>`,
+      isSeatPublisher() ? "" : `<button class="cr-drop__item" type="button" data-cr-add="hub"><i data-icon="plus"></i> New ${esc(section.noun)}</button>`,
     ].join("");
     hydrateIcons(menu);
   }
@@ -715,7 +749,7 @@ function renderHubHead() {
     <span class="cr-hubhead__logo">${logo}</span>
     <div class="cr-hubhead__id">
       <span class="cr-hubhead__name">${esc(hub.name)}</span>
-      <span class="cr-hubhead__sub">${esc(hub.field || "No field yet")}${hub.niches?.length ? ` · ${esc(hub.niches.join(", "))}` : ""}${hub.owned === false ? " · staff access" : ""}</span>
+      <span class="cr-hubhead__sub">${esc(hub.field || "No field yet")}${hub.niches?.length ? ` · ${esc(hub.niches.join(", "))}` : ""}${isSeatPublisher(hub) ? " · publisher seat" : hub.owned === false ? " · staff access" : ""}</span>
     </div>
     <div class="cr-hubhead__stats">
       <span class="cr-pill" data-tone="${esc(hub.visibility)}"><i data-icon="shield"></i>${esc(visLabel(hub.visibility))}</span>
@@ -735,7 +769,7 @@ function renderTabs() {
   const section = sectionOf(state.section);
   const host = el("[data-cr-tabs]");
   if (!host) return;
-  host.innerHTML = section.tabs
+  host.innerHTML = tabsOf(section)
     .map(
       (tab) =>
         `<button class="cr-tab ${state.tab === tab.key ? "is-on" : ""}" type="button" role="tab" aria-selected="${state.tab === tab.key}" data-cr-tab="${esc(tab.key)}">${esc(tab.label)}</button>`
@@ -753,7 +787,8 @@ function renderView() {
   if (state.view === "creator") return renderCreatorPage(host);
   if (state.view === "hubview") return renderHubPage(host);
   const section = sectionOf(state.section);
-  const tab = section.tabs.find((t) => t.key === state.tab) || section.tabs[0];
+  const tabs = tabsOf(section);
+  const tab = tabs.find((t) => t.key === state.tab) || tabs[0];
 
   if (state.view === "editor" && state.editor) return renderEditor(host);
 
@@ -864,8 +899,17 @@ function editorKindOf(row) {
   return (row && EDITOR_SOURCES[row.source]) || "";
 }
 
+/* what a publisher may do with a row: their own draft is theirs to edit and
+   drop; somebody else's item only opens. Publishing and closing are the
+   owner's, so they are not offered here at all. */
+const PUBLISHER_READ_ACTIONS = ["open", "preview", "link", "share"];
+
 function actionMenu(row, tab) {
-  const actions = isEditorRow(row) ? ["open", "link", "delete"] : tab.actions || [];
+  let actions = isEditorRow(row) ? ["open", "link", "delete"] : tab.actions || [];
+  if (isSeatPublisher()) {
+    actions = actions.filter((action) => action !== "publish" && action !== "close");
+    if (row.mine === false) actions = actions.filter((action) => PUBLISHER_READ_ACTIONS.includes(action));
+  }
   const items = actions
     .map((action) => {
       const [label, ico] = ACTION_LABEL[action] || [action, "dots"];
@@ -908,6 +952,7 @@ function renderList(host, hub, tab) {
       <div class="cr-bar__left">
         <span class="cr-bar__title">${esc(tab.label)}</span>
         <span class="cr-bar__count">${rows.length} shown · ${esc(num(counts.all || 0))} in this ${esc(sectionOf(state.section).noun)}</span>
+        ${isSeatPublisher() ? `<span class="cr-pill" data-tone="publisher" data-cr-seat="publisher"><i data-icon="article"></i>Publisher seat · the owner publishes</span>` : ""}
       </div>
       <div class="cr-bar__right">
         ${
@@ -935,7 +980,9 @@ function renderList(host, hub, tab) {
         state.search ? "Nothing matches this search" : `No ${tab.label.toLowerCase()} yet`,
         state.search
           ? "Clear the search, or add something new."
-          : tab.cta
+          : isSeatPublisher()
+            ? "Nothing of yours here yet. “Add content” opens a draft; the owner publishes it."
+            : tab.cta
             ? tab.cta.action === "article"
               ? "An article is written in the article editor — the rich text, the cover, the audience, the reader preview — and it lands here with its numbers as soon as it is published."
               : "A video is written in the video editor — the player, the thumbnail, the audience — and it lands here with its numbers as soon as it is published."
@@ -1637,11 +1684,13 @@ function renderEditor(host) {
       </div>
 
       <div class="cr-editor__foot">
-        <span class="cr-save__state" data-item-state></span>
+        <span class="cr-save__state" data-item-state>${
+          isSeatPublisher() ? esc(`${currentHub()?.name || "This hub"} is not yours — your draft waits for its owner.`) : ""
+        }</span>
         <div class="cr-editor__actions">
           ${draft.id ? `<button class="dsh-btn dsh-btn--sm dsh-btn--danger" type="button" data-cr-item-delete="${esc(draft.id)}"><i data-icon="trash"></i> Delete</button>` : ""}
           <button class="dsh-btn dsh-btn--sm" type="button" data-cr-item-save><i data-icon="check"></i> Save draft</button>
-          <button class="dsh-btn dsh-btn--primary dsh-btn--sm" type="button" data-cr-item-publish><i data-icon="upload"></i> Publish</button>
+          ${isSeatPublisher() ? "" : `<button class="dsh-btn dsh-btn--primary dsh-btn--sm" type="button" data-cr-item-publish><i data-icon="upload"></i> Publish</button>`}
         </div>
       </div>
     </div>`;
@@ -1666,7 +1715,8 @@ async function loadHubs({ keepSelection = false } = {}) {
 
 async function loadTab() {
   const section = sectionOf(state.section);
-  const tab = section.tabs.find((t) => t.key === state.tab) || section.tabs[0];
+  const tabs = tabsOf(section);
+  const tab = tabs.find((t) => t.key === state.tab) || tabs[0];
   const hub = currentHub();
   state.search = "";
   if (!hub) return;
@@ -2765,10 +2815,14 @@ function participationBlock(hub, view) {
   } else if (!request || request.status !== "pending") {
     acts.push(`<button class="dsh-btn dsh-btn--sm" type="button" data-crp-join="publisher"><i data-icon="article"></i> Request to publish</button>`);
   }
-  /* an approved publisher has a page of their own: the editor itself, embedded,
-     writing straight into this hub — that is where a video comes from here */
-  if (can.publish && role === "visitor" && hub.code) {
-    acts.push(`<a class="dsh-btn dsh-btn--sm" href="publisher.html?studio=${esc(hub.code)}" data-crp-desk><i data-icon="upload"></i> The publisher's desk</a>`);
+  /* an approved publisher writes in the creator page — the room for this kind
+     of hub, with its tables, its drafts and its editors. The owner publishes
+     what they send; publisher.html is the program for people outside the site. */
+  if (can.publish && role === "visitor") {
+    const slug = hubInfo(hub.kind).slug;
+    acts.push(
+      `<a class="dsh-btn dsh-btn--sm" href="creator.html?section=${encodeURIComponent(slug)}&hub=${encodeURIComponent(hub.id)}" data-crp-room><i data-icon="upload"></i> The writing room</a>`
+    );
   }
   if (can.advertise) {
     acts.push(`<button class="dsh-btn dsh-btn--sm" type="button" data-crp-ad="${esc(hub.id)}"><i data-icon="target"></i> Place an ad</button>`);
@@ -3452,11 +3506,20 @@ function openWriter({ id = "", kind = "article" } = {}) {
     where.textContent = asking
       ? `${state.writer.id ? "Editing a question in" : "Asking in"} ${hub.name} · ${hub.code}`
       : `${state.writer.id ? "Editing an article in" : "Writing in"} ${hub.name} · ${hub.code}`;
+    if (isSeatPublisher(hub)) where.textContent += " — the owner publishes it";
   }
   document.body.dataset.crWriter = "1";
   document.dispatchEvent(
     new CustomEvent("ae:open", {
-      detail: { id: state.writer.id, hub: hub.code, hubName: hub.name, field: hub.field || "", kind: state.writer.kind },
+      detail: {
+        id: state.writer.id,
+        hub: hub.code,
+        hubName: hub.name,
+        field: hub.field || "",
+        kind: state.writer.kind,
+        /* an owner's publisher hands the piece over — the owner publishes it */
+        draft: isSeatPublisher(hub),
+      },
     })
   );
   try {
@@ -3542,6 +3605,9 @@ function itemPayload(publish) {
 async function saveItem(publish) {
   const draft = state.editor;
   if (!draft || state.busy) return;
+  /* a publisher seat writes a draft; the owner is the one who publishes it */
+  const seatDraft = isSeatPublisher() && Boolean(publish);
+  if (seatDraft) publish = false;
   const node = el("[data-item-state]");
   const say = (text, tone = "") => {
     if (!node) return;
@@ -3589,8 +3655,13 @@ async function saveItem(publish) {
   }
 
   toast({
-    title: row.status === "published" ? "Published" : "Draft saved",
-    message: row.status === "published" ? `“${row.title}” is live.` : "Only you can see it until it is published.",
+    title: row.status === "published" ? "Published" : seatDraft ? "Sent to the owner" : "Draft saved",
+    message:
+      row.status === "published"
+        ? `“${row.title}” is live.`
+        : seatDraft
+          ? `The owner of ${currentHub()?.name || "the hub"} publishes it from their studio.`
+          : "Only you can see it until it is published.",
     iconName: "check",
   });
   state.view = "list";
@@ -3600,6 +3671,15 @@ async function saveItem(publish) {
 }
 
 async function setItemStatus(id, status) {
+  /* publishing and closing a row are the owner's decisions */
+  if (isSeatPublisher()) {
+    toast({
+      title: "The owner publishes",
+      message: `${currentHub()?.name || "This hub"} is not yours — your draft goes to whoever runs it.`,
+      tone: "error",
+    });
+    return;
+  }
   let res = null;
   try {
     res = await rpc("creator_item_status", { p_token: state.token, p_id: id, p_status: status });
@@ -4292,7 +4372,9 @@ async function boot() {
     state.hub = first ? first.id : null;
   }
   const wantedTab = params.get("tab");
-  state.tab = section.tabs.some((tab) => tab.key === wantedTab) ? wantedTab : section.tabs[0].key;
+  /* a publisher seat has no management tab to land on — the URL may ask */
+  const tabsHere = tabsOf(section);
+  state.tab = tabsHere.some((tab) => tab.key === wantedTab) ? wantedTab : tabsHere[0].key;
 
   showShell();
   hideAdminChrome(false);

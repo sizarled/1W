@@ -103,6 +103,9 @@ const S = {
   when: "now",
   whenAt: "",
   status: "draft",
+  /* an owner's publisher writes here, and the owner publishes: nothing this
+     room saves goes out by itself */
+  draftOnly: false,
   busy: false,
   mine: [],
   fields: [],
@@ -487,7 +490,14 @@ function paintPlace() {
 
 function paintWhen() {
   const seg = $("[data-e-when]");
+  if (seg && S.draftOnly) {
+    seg.hidden = true;
+    const at = $("[data-e-when-at]");
+    if (at) at.hidden = true;
+    return;
+  }
   if (seg) {
+    seg.hidden = false;
     qsa("[data-when]", seg).forEach((btn) => {
       const on = btn.getAttribute("data-when") === S.when;
       btn.classList.toggle("is-active", on);
@@ -759,7 +769,11 @@ function paintStatus() {
   if (publish) {
     publish.disabled = S.busy;
     const askLabel = isQuestion() ? (S.code ? "Save and publish" : "Ask the question") : S.code ? "Save and publish" : "Publish";
-    publish.innerHTML = S.place === "help" ? `${icon("send")} Send for review` : `${icon("upload")} ${askLabel}`;
+    publish.innerHTML = S.draftOnly
+      ? `${icon("send")} Send to the owner`
+      : S.place === "help"
+        ? `${icon("send")} Send for review`
+        : `${icon("upload")} ${askLabel}`;
   }
   const draft = $("[data-e-draft]");
   if (draft) draft.disabled = S.busy;
@@ -903,6 +917,8 @@ function payload(status) {
 
 /** What the publish button means, in one place: the keyboard gets the same. */
 function publishStatus() {
+  /* a publisher's seat hands the piece over; the owner publishes it */
+  if (S.draftOnly) return "draft";
   if (S.place === "help") return "pending";
   return S.when === "later" ? "scheduled" : "published";
 }
@@ -962,7 +978,14 @@ async function save(status) {
   loadMine();
 
   if (S.status === "draft") {
-    toast({ title: "Draft saved", message: "It is under “In your name”, on this page and on the index.", tone: "success", iconName: "check" });
+    toast({
+      title: S.draftOnly ? "Sent to the owner" : "Draft saved",
+      message: S.draftOnly
+        ? `${S.hubName || "The owner"} has it — they publish it from their studio.`
+        : "It is under “In your name”, on this page and on the index.",
+      tone: "success",
+      iconName: "check",
+    });
     if (EMBED) {
       document.dispatchEvent(new CustomEvent("ae:drafted", { detail: { code: S.code, title: S.title, hub: S.hub, kind: docKind } }));
       return;
@@ -1080,6 +1103,7 @@ async function startEmbedded(detail = {}) {
   S.hub = String(detail.hub || "").trim().toUpperCase();
   S.hubName = String(detail.hubName || "").trim();
   S.hubField = String(detail.field || "").trim();
+  S.draftOnly = detail.draft === true;
 
   const state = $("[data-e-state]");
   if (state) state.hidden = true;

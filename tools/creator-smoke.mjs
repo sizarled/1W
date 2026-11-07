@@ -282,6 +282,7 @@ function stubFetch(url, opts = {}) {
   }
 
   if (href.includes("/rpc/creator_item_save")) {
+    scenario.savedItemSave = body;
     if (scenario.itemSaveError) return reply({ ok: false, error: scenario.itemSaveError });
     const id = body.p_id || `item-new-${(scenario.items || []).length + 1}`;
     const row = item({
@@ -1197,9 +1198,9 @@ async function main() {
 
   c10.click(c10.qs("[data-crp-write]"));
   await c10.wait(200);
-  const desk = c10.qs("[data-crp-desk]");
-  expect("desk: an approved publisher is handed their own page", Boolean(desk), "no desk link");
-  expect("desk: which carries this hub's code", desk && desk.getAttribute("href") === "publisher.html?studio=IDST100001", desk && desk.getAttribute("href"));
+  const room = c10.qs("[data-crp-room]");
+  expect("room: an approved publisher is handed the creator page", Boolean(room), "no room link");
+  expect("room: which opens this hub in its own rooms", room && room.getAttribute("href") === "creator.html?section=studio&hub=IDST100001", room && room.getAttribute("href"));
   expect("write: the form opens", Boolean(c10.qs("[data-crp-write-form]")));
   const kindOpts = c10.qsa("[data-write-kind] option").map((o) => String(o.value || o.textContent || "").trim());
   expect("write: the kinds are the hub's — podcast and playlist", kindOpts.join(",") === "podcast,playlist", kindOpts.join(","));
@@ -1248,8 +1249,8 @@ async function main() {
   await c10b.wait(300);
   expect("cinema: the hub opens", /Cinema Seven/.test(c10b.text(".crp-hubhero__name")), c10b.text(".crp-hubhero__name"));
   expect("cinema: an approved publisher gets no write button", !c10b.qs("[data-crp-write]"), c10b.text(".crp-hubhero"));
-  const desk10b = c10b.qs("[data-crp-desk]");
-  expect("cinema: but the desk is where their films come from", desk10b && desk10b.getAttribute("href") === "publisher.html?studio=IDCN100006", desk10b && desk10b.getAttribute("href"));
+  const room10b = c10b.qs("[data-crp-room]");
+  expect("cinema: and the room is where the hub is opened", room10b && room10b.getAttribute("href") === "creator.html?section=cinema&hub=IDCN100006", room10b && room10b.getAttribute("href"));
   expect("cinema: no errors", c10b.errors.length === 0, c10b.errors.join(" | "));
   c10b.window.close();
 
@@ -1878,10 +1879,96 @@ scenario = {
   expect("question: nothing threw", q.errors.length === 0, q.errors.join(" | "));
 }
 
+
+/* ================================================================== */
+/* a publisher's seat — somebody else's hub, written in this page     */
+/* ================================================================== */
+/*
+ * The member an owner admits is not the owner: the tables are theirs to fill,
+ * the management under them is not, and nothing they write goes out by itself —
+ * the owner publishes it. All of it is decided from the `role` the server puts
+ * on the hub, so the whole pass rides on that one field.
+ */
+async function seatPass() {
+  const seatHub = hub({ id: "hub-lib", kind: "library", name: "The Shelf", owned: false, role: "publisher", subscribers: 41 });
+  scenario = {
+    hubs: [seatHub],
+    items: [
+      item({ id: "lib-1", kind: "book", title: "A book by the owner", status: "published", mine: false }),
+      item({ id: "lib-2", kind: "book", title: "My draft", status: "draft", mine: true }),
+    ],
+    categories: [{ id: "cat-1", name: "Watch Movies", level: 1, parent: null, items: 1 }],
+  };
+
+  const s = await boot(60, { search: "?section=library&hub=hub-lib" });
+  await s.wait(420);
+
+  expect("seat: the hub opens with the member's row", /The Shelf/.test(s.text("[data-cr-hubhead]")), s.text("[data-cr-hubhead]").slice(0, 90));
+  expect("seat: the header says which seat it is", /publisher seat/i.test(s.text("[data-cr-hubhead]")), s.text("[data-cr-hubhead]").slice(0, 120));
+
+  const tabs = s.qsa("[data-cr-tab]").map((btn) => btn.getAttribute("data-cr-tab"));
+  expect("seat: the tables are there", tabs.join(",") === "books,documents", tabs.join(","));
+  expect("seat: no management tab", !tabs.some((key) => ["settings", "participants", "subscribers", "categories"].includes(key)), tabs.join(","));
+  expect("seat: the bar says who publishes", /Publisher seat/i.test(s.text("[data-cr-view]")), s.text(".cr-bar").slice(0, 140));
+
+  /* the add menu: content, and no management */
+  s.click(s.qs("[data-cr-add-toggle]"));
+  await s.wait(80);
+  const adds = s.qsa("[data-cr-add-menu] [data-cr-add]").map((btn) => btn.getAttribute("data-cr-add"));
+  expect("seat: content can be added", adds.includes("book") && adds.includes("document"), adds.join(","));
+  expect("seat: but no category", !adds.includes("category"), adds.join(","));
+  expect("seat: and no new library", !adds.includes("hub"), adds.join(","));
+
+  /* somebody else's published row only opens; the member's own draft is theirs */
+  const foreign = [...s.qsa('[data-row="lib-1"] [data-cr-act]')].map((btn) => btn.getAttribute("data-cr-act"));
+  expect("seat: another's row is read only", foreign.length > 0 && foreign.every((act) => ["open", "preview", "link", "share"].includes(act)), foreign.join(","));
+  const own = [...s.qsa('[data-row="lib-2"] [data-cr-act]')].map((btn) => btn.getAttribute("data-cr-act"));
+  expect("seat: their own draft can be edited", own.includes("edit"), own.join(","));
+  expect("seat: and never published from the table", !own.includes("publish"), own.join(","));
+
+  /* the editor writes a draft, and offers no publish */
+  s.click(s.qs('[data-cr-add="book"]'));
+  await s.wait(160);
+  expect("seat: the item editor opens", Boolean(s.qs("[data-item-title]")));
+  expect("seat: no publish button", !s.qs("[data-cr-item-publish]"), "a publish button is there");
+  expect("seat: the save is a draft save", Boolean(s.qs("[data-cr-item-save]")));
+  expect("seat: the foot says whose hub it is", /is not yours/i.test(s.text("[data-item-state]")), s.text("[data-item-state]"));
+
+  scenario.savedItemSave = null;
+  s.type(s.qs("[data-item-title]"), "A book for the shelf");
+  s.click(s.qs("[data-cr-item-save]"));
+  await s.wait(360);
+  expect("seat: the draft is sent", Boolean(scenario.savedItemSave), "no save");
+  expect("seat: as a draft, never live", scenario.savedItemSave && scenario.savedItemSave.p_publish === false, JSON.stringify(scenario.savedItemSave && scenario.savedItemSave.p_publish));
+  expect("seat: into the hub that let them in", scenario.savedItemSave && scenario.savedItemSave.p_hub === "hub-lib", String(scenario.savedItemSave && scenario.savedItemSave.p_hub));
+  expect("seat: no errors", s.errors.length === 0, s.errors.join(" | "));
+  s.window.close();
+
+  /* a management tab cannot be reached through the address bar either */
+  scenario = { hubs: [hub({ id: "hub-lib", kind: "library", name: "The Shelf", owned: false, role: "publisher" })], items: [] };
+  const deep = await boot(61, { search: "?section=library&hub=hub-lib&tab=settings" });
+  await deep.wait(340);
+  expect("seat: ?tab=settings falls back to the tables", /Books/.test(deep.text(".cr-tab.is-on")), deep.text(".cr-tab.is-on"));
+  expect("seat: no settings form was drawn", !deep.qs("[data-settings]"), "a settings form is there");
+  expect("seat: no errors on the deep link", deep.errors.length === 0, deep.errors.join(" | "));
+  deep.window.close();
+
+  /* the owner is untouched: the same page, the same tabs */
+  scenario = { hubs: [hub({ id: "hub-own", kind: "library", name: "My Shelf" })], items: [item({ id: "own-1", kind: "book", title: "My book" })] };
+  const owner = await boot(62, { search: "?section=library&hub=hub-own" });
+  await owner.wait(340);
+  const ownerTabs = owner.qsa("[data-cr-tab]").map((btn) => btn.getAttribute("data-cr-tab"));
+  expect("owner: every tab is still there", ownerTabs.includes("settings") && ownerTabs.includes("subscribers"), ownerTabs.join(","));
+  expect("owner: no publisher seat is claimed", !/Publisher seat/i.test(owner.text("[data-cr-view]")), owner.text(".cr-bar").slice(0, 120));
+  expect("owner: no errors", owner.errors.length === 0, owner.errors.join(" | "));
+  owner.window.close();
+}
+
 /* ------------------------------------------------------------------ */
 /* results                                                             */
 /* ------------------------------------------------------------------ */
 await main();
+await seatPass();
 const failed = checks.filter((c) => !c.ok);
 checks.forEach((c) => {
   console.log(`${c.ok ? "ok  " : "FAIL"}  ${c.name}${c.ok || !c.detail ? "" : ` — ${c.detail}`}`);

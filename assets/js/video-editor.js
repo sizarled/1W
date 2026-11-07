@@ -104,12 +104,14 @@ const $ = (sel) => qs(sel);
 const el = {};
 let contents = null;
 
-/* publisher.html embeds this editor — the same form, the same call, the same
-   rules — rather than keeping a second, thinner one for publishers. The page
-   says so on <body data-ved-embed="1">, and names the hub it has selected on
-   <body data-ved-hub="IDCN100006">. In that mode the desk's list of hubs comes
-   from `publisher_hubs` (the hubs an owner approved this member into), and a
-   publish never carries the member off the page. */
+/* The form can also be embedded, so a page can lend it a hub instead of
+   keeping a second, thinner editor of its own: the host says so on
+   <body data-ved-embed="1"> and names the hub it picked on
+   <body data-ved-hub="IDCN100006">. In that mode the list of hubs comes from
+   `publisher_hubs` (the hubs an owner approved this member into, or their own
+   and the ones they staff), and a publish never carries the member off the
+   page. No page embeds it today — `publisher.html` is the program alone and a
+   publisher writes in `creator.html` — but the mode is part of the editor. */
 const EMBED = document.body.dataset.vedEmbed === "1";
 
 /* ================================================================== */

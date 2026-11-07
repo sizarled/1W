@@ -498,6 +498,12 @@
   border-color: transparent;
 }
 
+/* a publisher seat — somebody else's hub, written and not published */
+.cr-pill[data-tone="publisher"] {
+  border-style: dashed;
+  color: var(--text-2);
+}
+
 /* tabs -------------------------------------------------------------- */
 .cr-tabs {
   display: flex;

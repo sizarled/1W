@@ -1,191 +1,16 @@
 /* ==================================================================
-   publisher.html — the publisher's desk
+   publisher.html — the publisher program
    ------------------------------------------------------------------
-   The editor inside this page is video-editor.html's own markup, and
-   assets/css/video.css styles every part of it. Only the desk around it —
-   the rail of hubs, the two tabs, the list of what was published — is here.
+   Two rooms: the program (the seat, what a conversion pays) and the
+   links (the builder, the list with its counters, the conversions).
+   Monochrome, like the rest of the site.
+
+   A publisher *inside* the site is not this page: a hub an owner let
+   them into is written in creator.html, and assets/css/creator.css is
+   where that room is drawn.
    ================================================================== */
 
-.pub {
-  display: grid;
-  grid-template-columns: minmax(232px, 288px) minmax(0, 1fr);
-  gap: clamp(0.9rem, 1.8vw, 1.6rem);
-  align-items: start;
-}
-
-@media (max-width: 1040px) {
-  .pub {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-/* ---- the rail ---------------------------------------------------- */
-.pub__rail {
-  display: flex;
-  flex-direction: column;
-  gap: 0.7rem;
-  padding: 0.9rem;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface);
-  position: sticky;
-  top: calc(var(--header-h) + 0.9rem);
-}
-
-@media (max-width: 1040px) {
-  .pub__rail {
-    position: static;
-  }
-}
-
-.pub__railhead {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-
-.pub__railtitle {
-  margin: 0;
-  font-size: 0.86rem;
-  font-weight: 650;
-  letter-spacing: 0.01em;
-}
-
-.pub__hubs {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-
-.pub__hub {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.6rem;
-  width: 100%;
-  padding: 0.5rem 0.55rem;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: background 0.18s var(--ease), border-color 0.18s var(--ease);
-}
-
-.pub__hub:hover {
-  background: color-mix(in srgb, var(--text) 5%, transparent);
-}
-
-.pub__hub.is-on {
-  border-color: color-mix(in srgb, var(--text) 20%, transparent);
-  background: color-mix(in srgb, var(--text) 8%, transparent);
-}
-
-.pub__hubmark {
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  overflow: hidden;
-  background: color-mix(in srgb, var(--text) 7%, transparent);
-  color: var(--muted);
-}
-
-.pub__hubmark img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.pub__hubmark svg {
-  width: 16px;
-  height: 16px;
-}
-
-.pub__hubtext {
-  min-width: 0;
-}
-
-.pub__hubname {
-  display: block;
-  font-size: 0.88rem;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.pub__hubmeta {
-  display: block;
-  font-size: 0.7rem;
-  color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.pub__hubrole {
-  padding: 0.1rem 0.4rem;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  font-size: 0.6rem;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.pub__rail .vhint {
-  margin: 0;
-  font-size: 0.74rem;
-  line-height: 1.45;
-  color: var(--faint);
-}
-
-/* ---- the main column --------------------------------------------- */
-.pub__main {
-  min-width: 0;
-}
-
-.pub__tabs {
-  display: flex;
-  gap: 0.25rem;
-  margin-bottom: 0.9rem;
-  border-bottom: 1px solid var(--line);
-}
-
-.pub__tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  padding: 0.6rem 0.8rem;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.pub__tab:hover {
-  color: var(--text);
-}
-
-.pub__tab.is-on {
-  color: var(--text);
-  border-bottom-color: var(--text);
-}
-
-.pub__tab svg {
-  width: 15px;
-  height: 15px;
-}
-
+/* ---- the flash --------------------------------------------------- */
 .pub__flash {
   display: flex;
   align-items: center;
@@ -211,167 +36,11 @@
   text-underline-offset: 2px;
 }
 
-.pub__linkbtn {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--text);
-  font: inherit;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  cursor: pointer;
-}
-
-/* the sticky publish bar belongs to the editor's tab, not to the list */
-body[data-pub-tab="mine"] .vfoot {
-  display: none !important;
-}
-
-/* ---- the list ---------------------------------------------------- */
-.pub__list {
-  display: grid;
-  gap: 0.55rem;
-}
-
-.pubrow {
-  display: grid;
-  grid-template-columns: 116px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.85rem;
-  padding: 0.65rem;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface);
-}
-
-@media (max-width: 760px) {
-  .pubrow {
-    grid-template-columns: 84px minmax(0, 1fr);
-  }
-  .pubrow__acts {
-    grid-column: 1 / -1;
-    justify-content: flex-start;
-  }
-}
-
-.pubrow__thumb {
-  display: grid;
-  place-items: center;
-  aspect-ratio: 16 / 9;
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  background: color-mix(in srgb, var(--text) 6%, transparent);
-  color: var(--faint);
-}
-
-.pubrow__thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.pubrow__thumb svg {
-  width: 20px;
-  height: 20px;
-}
-
-.pubrow__text {
-  min-width: 0;
-}
-
-.pubrow__title {
-  margin: 0 0 0.25rem;
-  font-size: 0.92rem;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.pubrow__meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-  margin: 0;
-  font-size: 0.72rem;
-  color: var(--muted);
-}
-
-.pubrow__badge {
-  padding: 0.05rem 0.4rem;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  font-size: 0.64rem;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-.pubrow__badge[data-status="published"] {
-  color: var(--text);
-  border-color: color-mix(in srgb, var(--text) 24%, transparent);
-}
-
-.pubrow__acts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  justify-content: flex-end;
-}
-
-/* ---- the two empty states ---------------------------------------- */
-.pub__none {
-  display: grid;
-  justify-items: center;
-  gap: 0.4rem;
-  padding: 2.2rem 1rem;
-  border: 1px dashed var(--line);
-  border-radius: var(--radius);
-  text-align: center;
-  color: var(--muted);
-}
-
-.pub__none h3 {
-  margin: 0;
-  font-size: 0.98rem;
-  color: var(--text);
-}
-
-.pub__none p {
-  margin: 0;
-  max-width: 46ch;
-  font-size: 0.8rem;
-  line-height: 1.5;
-}
-
-[data-pub-state] .vempty {
-  display: grid;
-  justify-items: center;
-  gap: 0.5rem;
-  padding: 2rem 1.2rem;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface);
-  text-align: center;
-}
-
-.vempty__acts {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.4rem;
-  margin-top: 0.5rem;
-}
-
-[data-pub-state][data-tone="error"] .vempty__icon {
-  color: var(--text);
-}
-
 /* ==================================================================
-   the Publisher program — the page before the desk
+   the program — the seat, the pay table, the links
    ------------------------------------------------------------------
-   Three rooms (the program, the links, the desk), four numbers, the
-   seat, and the links with their counters. Monochrome, like the rest.
+   Two rooms (the program and the links), four numbers, the seat, and
+   the links with their counters. Monochrome, like the rest.
    ================================================================== */
 
 .pstats {
@@ -409,7 +78,7 @@ body[data-pub-tab="mine"] .vfoot {
   color: var(--muted);
 }
 
-/* ---- the three rooms --------------------------------------------- */
+/* ---- the two rooms ----------------------------------------------- */
 .pub__views {
   display: flex;
   flex-wrap: wrap;
@@ -446,9 +115,10 @@ body[data-pub-tab="mine"] .vfoot {
   display: block;
 }
 
-.pub__desknote {
-  margin: 0 0 0.9rem;
-  max-width: 70ch;
+.pub__elsewhere {
+  margin: 1.1rem 0 0;
+  max-width: 74ch;
+  line-height: 1.6;
 }
 
 /* ---- the program: steps and the pay table ------------------------ */
@@ -668,6 +338,31 @@ body[data-pub-tab="mine"] .vfoot {
   margin: 0.4rem 0 0;
   font-size: 0.78rem;
   color: var(--text);
+}
+
+/* ---- an empty list ----------------------------------------------- */
+.pub__none {
+  display: grid;
+  justify-items: center;
+  gap: 0.4rem;
+  padding: 2.2rem 1rem;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  text-align: center;
+  color: var(--muted);
+}
+
+.pub__none h3 {
+  margin: 0;
+  font-size: 0.98rem;
+  color: var(--text);
+}
+
+.pub__none p {
+  margin: 0;
+  max-width: 46ch;
+  font-size: 0.8rem;
+  line-height: 1.5;
 }
 
 /* ---- the links --------------------------------------------------- */
