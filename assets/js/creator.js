@@ -199,7 +199,7 @@ const SECTIONS = [
     noun: "cinema",
     caps: true,
     tabs: [
-      { key: "films", label: "Films", type: "list", kind: "film", cols: ["item", "vis", "seats", "minutes", "likes", "comments", "act"], actions: ["edit", "link", "delete"] },
+      { key: "movies", label: "Films", type: "list", kind: "film", cols: ["item", "vis", "seats", "minutes", "likes", "comments", "act"], actions: ["edit", "link", "delete"] },
       { key: "episodes", label: "Episodes", type: "list", kind: "episode", cols: ["item", "vis", "seats", "minutes", "likes", "act"], actions: ["edit", "link", "delete"] },
       { key: "playlists", label: "Playlists", type: "list", kind: "playlist", cols: ["item", "vis", "minutes", "likes", "act"], actions: ["edit", "link", "delete"] },
       { key: "videos", label: "Videos", type: "list", kind: "video", cols: ["item", "vis", "minutes", "likes", "comments", "act"], actions: ["edit", "link", "delete"], cta: { label: "Publish a video", href: "video-editor.html", icon: "upload" } },
@@ -4379,7 +4379,10 @@ async function boot() {
     const first = hubsOf(section.kind)[0];
     state.hub = first ? first.id : null;
   }
-  const wantedTab = params.get("tab");
+  /* a cinema's first tab is `movies`; links written before it was named that
+     still ask for `films`, and land on the same table */
+  const TAB_ALIASES = { films: "movies" };
+  const wantedTab = TAB_ALIASES[params.get("tab")] || params.get("tab");
   /* a publisher seat has no management tab to land on — the URL may ask */
   const tabsHere = tabsOf(section);
   state.tab = tabsHere.some((tab) => tab.key === wantedTab) ? wantedTab : tabsHere[0].key;

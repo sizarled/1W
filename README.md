@@ -1004,10 +1004,10 @@ Each one states what it will do instead of pretending to have data.
 ### Your creator pages — created and edited from the dashboard
 
 `dashboard.html#creator` is the only place a creator page is *made* and *named*. It draws seven
-rows — one per page — from **one** call, `creator_hubs_list(token)`, which returns the member's
+tabs — one per page — from **one** call, `creator_hubs_list(token)`, which returns the member's
 hubs and the limit each kind has at their level:
 
-| Surface | For | Kind | Create / content tab |
+| Tab | For | Kind | Where the content lives |
 | --- | --- | --- | --- |
 | e-Studio | Films, series and videos | `channel` | `creator.html?section=studio&tab=videos` |
 | e-Server | IPTV playlists and channels | `server` | `creator.html?section=server&tab=channels` |
@@ -1015,22 +1015,28 @@ hubs and the limit each kind has at their level:
 | e-Gallery | Images and collections | `gallery` | `creator.html?section=gallery&tab=images` |
 | e-Space | Community posts | `space` | `creator.html?section=space&tab=questions` |
 | e-Library | Documents and books | `library` | `creator.html?section=library&tab=books` |
-| e-Cinema | Curated screenings | `cinema` | `creator.html?section=cinema&tab=films` |
+| e-Cinema | Curated screenings | `cinema` | `creator.html?section=cinema&tab=movies` |
 
-A row with no hub shows a dashed **Not created** chip and a **Create** button that carries the
-section, the tab and `new=1` — so `creator.html` opens on that section with the *New studio /
-server / …* form already open (`openNewHub()` at boot). A row that owns hubs lists them: the
-status (`Live` / `Hidden`), the name, the public code (`IDST100001`-style), the counts
-(published, drafts, subscribers) and the visibility, with three doors each — **Edit page**
-(`…&tab=settings`), **Content** (the kind's own tab) and **Open** (the public page: a blog opens
-on `blog.html?studio=<code>`, every other hub on `creator.html?studio=<code>`). At the level's
-limit the button becomes a `1 of 1` chip instead of a seventh form that would be refused.
+One tab, one page. A tab that holds hubs carries their number beside its name, so what exists is
+readable without opening it. The panel under it repeats the page and what it is for, then lists
+the hubs: the status (`Live` / `Hidden`), the name, the public code (`IDST100001`-style), the
+counts (published, drafts, subscribers) and the visibility, with three doors each — **Edit page**
+(`…&tab=settings`), **Content** (the kind's own tab) and **Open** (the public page: a blog opens on
+`blog.html?studio=<code>`, every other hub on `creator.html?studio=<code>`). A page that does not
+exist yet shows a dashed **Not created** chip instead.
+
+The panel's foot says **Where the content lives** — the `creator.html` section and tab that hold
+it — and carries the **Create** / **Add another** button, which walks in with `new=1` so the *New
+studio / server / …* form is already open (`openNewHub()` at boot). At the level's limit the
+button becomes a `1 of 1` chip instead of a seventh form that would be refused. The tabs are a
+real `role="tablist"`: the arrow keys, Home and End walk them.
 
 The content of those pages is **not** written here: it is written in the studio, which opens the
-same seven sections under the same names. The dashboard's second card prints that mapping, and the
-studio's footer links back to `dashboard.html#creator`. If the studio does not answer, the table
-says so and offers **Try again**; the seven rows and their doors keep working, because creating a
-page only needs the URL.
+same seven sections under the same names. A page is the hub — its name, its look, its audience —
+and the tab is where its content is written; every table there is a studio table. (A cinema's
+first tab is `tab=movies`; links written when it was `tab=films` still land on it.) If the studio
+does not answer, the card says so and offers **Try again**; the seven tabs and their doors keep
+working, because creating a page only needs the URL.
 
 ### Account settings — the password, and where a code can find you
 
@@ -1254,7 +1260,7 @@ published (and refused without a media link), an article refused in a studio hub
 categories three deep with the fourth refused (`deep`) and a duplicate refused, a third blog created
 then a fourth refused (`limit`, level 1), staff added by code and an unknown code refused
 (`member`), and the subscriber list reporting a real member with their country.
-`tools/creator-smoke.mjs` (399 checks) runs the studio end to end — an empty studio that creates, configures
+`tools/creator-smoke.mjs` (401 checks) runs the studio end to end — an empty studio that creates, configures
 (private + password + staff), saves, refuses, and deletes a studio; a studio page holding one of each
 hub (tables, columns, action menus, the editor saving a draft then publishing, blog articles vs
 drafts, categories, subscribers, library books); and the `?section=&tab=` deep links — including
@@ -1458,7 +1464,7 @@ blog with `role: "publisher"`, `creator_items` returned its two published rows w
 `draft`, `creator_item_get` opened it and `creator_item_delete` removed it — while another member's row
 answered `not_found`. The seat and the test session were removed afterwards. `tools/publisher-smoke.mjs`
 (52 checks) holds `publisher.html` to the program alone and follows an old `?studio=` link to
-`creator.html?studio=<code>`; `tools/creator-smoke.mjs` (399 checks) walks a publisher's seat room by
+`creator.html?studio=<code>`; `tools/creator-smoke.mjs` (401 checks) walks a publisher's seat room by
 room and re-checks that the owner's page did not change.
 
 DDL + functions: `tools/sql/creator-requests.sql` — **applied**, and exercised on the real database:
@@ -2373,11 +2379,11 @@ browser that already has the old file.
 ### Tests
 
 ```bash
-node tools/dashboard-smoke.mjs   # 236 checks: the five gates, rail, popover, codes, sections, Unlock now, Account settings, creator pages, the Publisher program
+node tools/dashboard-smoke.mjs   # 246 checks: the five gates, rail, popover, codes, sections, Unlock now, Account settings, the seven creator tabs, the Publisher program
 node tools/sidebar-smoke.mjs     # 93 checks: the edge, the pin, Escape, the mobile drawer, the dashboard menu
 node tools/panel-smoke.mjs       # 90 checks: the desk's three states, the rows, the switch, the dialog, the shelf
 node tools/court-smoke.mjs       # 115 checks: the four steps, uploads, both doors, the court room
-node tools/creator-smoke.mjs     # 399 checks: the search (owners + publishers), the studio, the editors, a publisher's seat
+node tools/creator-smoke.mjs     # 401 checks: the search (owners + publishers), the studio, the editors, a publisher's seat
 node tools/publisher-smoke.mjs   # 52 checks: the program, the seat, the links, and the hand-off to the creator page
 node tools/iptv-smoke.mjs        # 43 checks: the playlists, the groups, the page, the deep links
 node tools/activated-smoke.mjs   # 35 checks: hidden panels, image link, ad pause, code return

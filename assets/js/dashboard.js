@@ -96,7 +96,7 @@ const VIEW_META = {
   prizes: ["Prizes", "Draws you can join and what you already won."],
   history: ["Viewing history", "Every title, channel and page you opened."],
   analytics: ["Analytics", "How other people engage with your content."],
-  creator: ["Creator management", "The studios and spaces you own."],
+  creator: ["Creator management", "Seven pages, one tab each — the hub is the page, the tab is its content."],
   publisher: ["Publisher management", "Servers, cinemas and libraries you publish."],
   advertiser: ["Advertising campaigns", "Point budgets, placements and results."],
   "settings-site": ["Website settings", "Language, country and skin."],
@@ -127,7 +127,7 @@ const state = {
   view: "overview",
   popFilter: "hour",
   popOpen: false,
-  tabs: { codes: "codes", iptv: "m3u", notif: "list", lists: "movies", history: "all" },
+  tabs: { codes: "codes", iptv: "m3u", notif: "list", lists: "movies", history: "all", creator: "channel" },
   notifWindow: "today",
   custom: { from: "", to: "" },
   busy: false,
@@ -433,7 +433,7 @@ function initialView() {
   return VIEW_META[key] ? key : "overview";
 }
 
-function setView(key, { first = false, silent = false } = {}) {
+function setView(key, { first = false, silent = false, keepScroll = false } = {}) {
   if (!VIEW_META[key]) key = "overview";
   state.view = key;
 
@@ -455,7 +455,9 @@ function setView(key, { first = false, silent = false } = {}) {
   hydrateIcons(main);
   wireView(key, main);
 
-  if (!first) {
+  /* a tab strip that lives halfway down the page keeps the reader where they
+     were; every other view starts at its top */
+  if (!first && !keepScroll) {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 }
@@ -1421,7 +1423,7 @@ const CREATOR_SURFACES = [
   { surface: "e-Gallery", kind: "gallery", section: "gallery", tab: "images", icon: "image", use: "Images and collections" },
   { surface: "e-Space", kind: "space", section: "space", tab: "questions", icon: "help", use: "Community posts" },
   { surface: "e-Library", kind: "library", section: "library", tab: "books", icon: "database", use: "Documents and books" },
-  { surface: "e-Cinema", kind: "cinema", section: "cinema", tab: "films", icon: "film", use: "Curated screenings" },
+  { surface: "e-Cinema", kind: "cinema", section: "cinema", tab: "movies", icon: "film", use: "Curated screenings" },
 ];
 
 const VIS_WORDS = { public: "Public", exclusive: "Exclusive", private: "Private" };
@@ -1469,25 +1471,24 @@ function hubLine(hub, surface) {
     </li>`;
 }
 
-/** One table row per surface: every page of that kind, or the door to create it. */
-function creatorRow(surface) {
+/** The page the tabs are on — the hub kind, falling back to the first. */
+function creatorSurface() {
+  return CREATOR_SURFACES.find((surface) => surface.kind === state.tabs.creator) || CREATOR_SURFACES[0];
+}
+
+/** One surface's pages, and the door that makes another. */
+function surfaceHubs(surface) {
+  return (state.creator.hubs || []).filter((hub) => hub.kind === surface.kind);
+}
+
+/** The create door, or the count that says the level's ceiling is reached. */
+function surfaceCreate(surface) {
   const c = state.creator;
-  const hubs = (c.hubs || []).filter((hub) => hub.kind === surface.kind);
+  const hubs = surfaceHubs(surface);
   const usedIn = (c.limits || {})[surface.kind] || null;
   const limit = usedIn ? Number(usedIn.limit) || 0 : 0;
-
-  let status;
-  if (!c.loaded) {
-    status = c.error
-      ? `<span class="dsh-chip" data-tone="off">Not loaded</span>`
-      : `<span class="dsh-hub__meta">Checking your pages…</span>`;
-  } else if (hubs.length) {
-    status = `<ul class="dsh-hubs">${hubs.map((hub) => hubLine(hub, surface)).join("")}</ul>`;
-  } else {
-    status = `<span class="dsh-chip" data-tone="off">Not created</span>`;
-  }
-
   let action;
+
   if (!c.loaded) {
     action = `<a class="dsh-btn dsh-btn--sm" href="${esc(studioDoor(surface))}"><i data-icon="plus"></i>Create</a>`;
   } else if (!limit || hubs.length < limit) {
@@ -1497,46 +1498,96 @@ function creatorRow(surface) {
     action = `<span class="dsh-chip" data-tone="off">${esc(num(limit))} of ${esc(num(limit))}</span>`;
   }
 
-  return `<tr data-surface-row="${esc(surface.kind)}">
-    <td><span class="dsh-surface"><i data-icon="${esc(surface.icon)}"></i><strong>${esc(surface.surface)}</strong></span></td>
-    <td>${esc(surface.use)}</td>
-    <td>${status}</td>
-    <td data-surface-create><div class="dsh-table__actions">${action}</div></td>
-  </tr>`;
+  return `<div class="dsh-table__actions" data-surface-create>${action}</div>`;
 }
 
-/** The table, with the one message that says why it is empty when it is. */
-function creatorTable() {
+/** What is inside one surface's tab: its pages, or the word that says none. */
+function surfaceBody(surface) {
   const c = state.creator;
-  const notice = c.error
-    ? `<div class="dsh-empty">
-        <i data-icon="lock"></i>
-        <p class="dsh-empty__title">Your pages could not be listed</p>
-        <p class="dsh-empty__text">The studio did not answer. Check the connection and try again — the doors below still open.</p>
-        <button class="dsh-btn dsh-btn--sm" type="button" data-creator-retry><i data-icon="refresh"></i>Try again</button>
-      </div>`
-    : "";
-  return `${notice}
-  <div class="dsh-table-wrap"><table class="dsh-table">
-    <thead><tr><th>Surface</th><th>For</th><th>Status</th><th></th></tr></thead>
-    <tbody>${CREATOR_SURFACES.map(creatorRow).join("")}</tbody>
-  </table></div>`;
+  if (!c.loaded) {
+    return c.error
+      ? `<span class="dsh-chip" data-tone="off">Not loaded</span>`
+      : `<span class="dsh-hub__meta">Checking your pages…</span>`;
+  }
+  const hubs = surfaceHubs(surface);
+  if (!hubs.length) return `<span class="dsh-chip" data-tone="off">Not created</span>`;
+  return `<ul class="dsh-hubs">${hubs.map((hub) => hubLine(hub, surface)).join("")}</ul>`;
 }
 
 /**
- * Creator management: the seven pages, created and edited from here.
+ * One tab per page. The tab is the page — its name, its look, its audience —
+ * and the panel under it is where that page's content is written, in the
+ * studio, on one section and one tab.
+ */
+function creatorTab(surface) {
+  const on = surface.kind === creatorSurface().kind;
+  const hubs = surfaceHubs(surface);
+  return `<button class="dsh-tab${on ? " is-on" : ""}" type="button" role="tab" id="cr-tab-${esc(surface.kind)}"
+      aria-selected="${on}" aria-controls="cr-panel-${esc(surface.kind)}" tabindex="${on ? "0" : "-1"}"
+      data-tab="creator" data-tab-value="${esc(surface.kind)}">
+      <i data-icon="${esc(surface.icon)}"></i><span>${esc(surface.surface)}</span>
+      ${hubs.length ? `<span class="dsh-tab__n">${esc(num(hubs.length))}</span>` : ""}
+    </button>`;
+}
+
+function creatorPanel(surface) {
+  const on = surface.kind === creatorSurface().kind;
+  return `<section class="dsh-panel" id="cr-panel-${esc(surface.kind)}" role="tabpanel"
+      aria-labelledby="cr-tab-${esc(surface.kind)}" data-surface-row="${esc(surface.kind)}"${on ? "" : " hidden"}>
+    <header class="dsh-panel__head">
+      <span class="dsh-surface"><i data-icon="${esc(surface.icon)}"></i><strong>${esc(surface.surface)}</strong></span>
+      <p class="dsh-panel__use">${esc(surface.use)}</p>
+    </header>
+    <div class="dsh-panel__body">${surfaceBody(surface)}</div>
+    <footer class="dsh-panel__foot">
+      <span class="dsh-panel__where">Where the content lives</span>
+      <a class="dsh-door dsh-panel__door" href="${esc(contentDoor(surface))}"><i data-icon="${esc(surface.icon)}"></i>creator.html?section=${esc(surface.section)}&amp;tab=${esc(surface.tab)}</a>
+      ${surfaceCreate(surface)}
+    </footer>
+  </section>`;
+}
+
+/** The surface's own content door in the studio — no hub, no management tab. */
+function contentDoor(surface) {
+  return `creator.html?section=${encodeURIComponent(surface.section)}&tab=${encodeURIComponent(surface.tab)}`;
+}
+
+/** The message that says why the pages could not be listed, when they could not. */
+function creatorNotice() {
+  const c = state.creator;
+  if (!c.error) return "";
+  return `<div class="dsh-empty">
+      <i data-icon="lock"></i>
+      <p class="dsh-empty__title">Your pages could not be listed</p>
+      <p class="dsh-empty__text">The studio did not answer. Check the connection and try again — the doors below still open.</p>
+      <button class="dsh-btn dsh-btn--sm" type="button" data-creator-retry><i data-icon="refresh"></i>Try again</button>
+    </div>`;
+}
+
+/** The seven tabs and the seven panels under them. */
+function creatorWorkspace() {
+  return `${creatorNotice()}
+    <div class="dsh-tabs dsh-tabs--surfaces" role="tablist" aria-label="Creator pages" data-creator-tabbar>
+      ${CREATOR_SURFACES.map(creatorTab).join("")}
+    </div>
+    <div class="dsh-panels">
+      ${CREATOR_SURFACES.map(creatorPanel).join("")}
+    </div>`;
+}
+
+/**
+ * Creator management: seven pages, one tab each.
  *
- * The rows are the hubs of `creator_hubs_list` — a page that exists carries its
- * name, code, visibility and counts with two doors (edit the page, write its
- * content); a page that does not exist carries the door that creates it. The
- * content itself is written in the studio at `creator.html`, one tab per kind.
+ * A page is the hub — its name, its look, its audience — and it is created and
+ * edited here. Its content is written in the studio: the tab names the one
+ * section and one tab that holds it, and every table there is a studio table.
  */
 function creatorView() {
   return `
     <div class="dsh-note"><i data-icon="info"></i><span>
-      Every creator page is created and edited from this table — name, description, logo, cover,
-      category, niches and visibility. The content of a page is written in the studio:
-      <b>creator.html</b> opens the same seven sections, one tab per kind of content.
+      Every creator page is created and edited from these tabs — name, description, logo, cover,
+      category, niches and visibility. Its content is written in the studio: the tab names the
+      section and the tab that hold it.
     </span></div>
     <div class="dsh-grid" data-creator-stats>${creatorStats()}</div>
     <section class="dsh-card">
@@ -1544,14 +1595,8 @@ function creatorView() {
         <h2 class="dsh-card__title">Your creator pages</h2>
         <a class="dsh-btn dsh-btn--sm" href="creator.html?section=studio"><i data-icon="settings"></i>Open the studio</a>
       </div>
-      <div data-creator-table>${creatorTable()}</div>
-    </section>
-    <section class="dsh-card">
-      <div class="dsh-card__head"><h2 class="dsh-card__title">Where the content lives</h2></div>
-      <dl class="dsh-kv">
-        ${CREATOR_SURFACES.map((s) => `<div><dt>${esc(s.surface)}</dt><dd class="dsh-mono dsh-door">creator.html?section=${esc(s.section)}&tab=${esc(s.tab)}</dd></div>`).join("")}
-      </dl>
-      <p class="dsh-help" style="margin-top:.6rem">A page is the hub — its name, its look, its audience. The tab above is where its content is written, and every table there is a studio table.</p>
+      <div data-creator-table>${creatorWorkspace()}</div>
+      <p class="dsh-help">A page is the hub — its name, its look, its audience. The tab above is where its content is written, and every table there is a studio table.</p>
     </section>
   `;
 }
@@ -1585,7 +1630,7 @@ async function loadCreatorPages({ force = false } = {}) {
   if (state.view !== "creator") return;
   const host = qs("[data-creator-table]");
   if (host) {
-    host.innerHTML = creatorTable();
+    host.innerHTML = creatorWorkspace();
     hydrateIcons(host);
   }
   refreshCreatorStats();
@@ -1614,6 +1659,23 @@ function wireCreator(root) {
   root.addEventListener("click", (event) => {
     if (event.target.closest("[data-creator-retry]")) loadCreatorPages({ force: true });
   });
+
+  /* the seven pages are a tablist, so the arrow keys walk it and keep the focus
+     on the tab that was chosen — the click repaints the view, so the focus is
+     put back on the new one on the next frame */
+  root.addEventListener("keydown", (event) => {
+    if (!event.target.closest("[data-creator-tabbar]")) return;
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    const tabs = [...root.querySelectorAll("[data-creator-tabbar] [data-tab-value]")];
+    const at = tabs.indexOf(event.target.closest("[data-tab-value]"));
+    if (at < 0) return;
+    const to = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (at + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+    event.preventDefault();
+    const kind = tabs[to].dataset.tabValue;
+    tabs[to].click();
+    window.requestAnimationFrame(() => qs(`[data-creator-tabbar] [data-tab-value="${kind}"]`)?.focus());
+  });
+
   loadCreatorPages();
 }
 
@@ -2439,7 +2501,7 @@ function onClick(event) {
   const tab = event.target.closest("[data-tab]");
   if (tab) {
     state.tabs[tab.dataset.tab] = tab.dataset.tabValue;
-    setView(state.view, { silent: true });
+    setView(state.view, { silent: true, keepScroll: tab.dataset.tab === "creator" });
     return;
   }
 

@@ -1525,6 +1525,13 @@ async function passCinema() {
   expect("playlist: two things travel", (scenario.savedMeta?.p_meta?.items || []).length === 2, JSON.stringify(scenario.savedMeta?.p_meta));
   expect("playlist: no errors", s.errors.length === 0, s.errors.join(" | "));
   s.window.close();
+
+  /* the films tab is `movies` now; the older `films` link still lands on it */
+  scenario = { hubs: [hub({ id: "hub-cin", kind: "cinema", name: "Cinema One", field: "Film", viewer_limit: 100 })], items: [item({ id: "f-1", kind: "film", title: "Dune", status: "published", seats: 100, cap: 100 })], categories: [], subscribers: [], seatCap: 100 };
+  const old = await boot("13-films", { search: "?section=cinema&tab=films" });
+  expect("cinema: an old tab=films link lands on the films", /Films/.test(old.text(".cr-tab.is-on")) && /Dune/.test(old.text("[data-cr-view]")), old.text(".cr-tab.is-on"));
+  expect("cinema: and the address is rewritten to movies", /tab=movies/.test(old.window.location.search), old.window.location.search);
+  old.window.close();
 }
 
 /* ------------------------------------------------------------------ */

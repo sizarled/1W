@@ -1258,6 +1258,169 @@
   font-weight: 600;
 }
 
+/* a tab per creator page, and the panel under it -------------------- */
+.dsh-tabs--surfaces {
+  gap: 0.15rem;
+  padding-bottom: 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.dsh-tabs--surfaces .dsh-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-right: 0.4rem;
+  padding: 0.55rem 0.15rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.79rem;
+  font-weight: 600;
+}
+
+.dsh-tabs--surfaces .dsh-tab::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: transparent;
+}
+
+.dsh-tabs--surfaces .dsh-tab:hover {
+  border-color: transparent;
+  color: var(--text);
+}
+
+.dsh-tabs--surfaces .dsh-tab.is-on {
+  background: transparent;
+  color: var(--text);
+}
+
+.dsh-tabs--surfaces .dsh-tab.is-on::after {
+  background: var(--text);
+}
+
+.dsh-tab .ico {
+  width: 13px;
+  height: 13px;
+  opacity: 0.7;
+}
+
+.dsh-tabs--surfaces .dsh-tab.is-on .ico {
+  opacity: 1;
+}
+
+/* how many pages a tab holds — a page that exists says so before it is opened */
+.dsh-tab__n {
+  display: inline-grid;
+  place-items: center;
+  min-width: 17px;
+  height: 16px;
+  padding: 0 0.3rem;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  font-size: 0.58rem;
+  font-weight: 650;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.dsh-tabs--surfaces .dsh-tab.is-on .dsh-tab__n {
+  border-color: var(--line-3);
+  color: var(--text);
+}
+
+.dsh-panels {
+  margin-top: 0.85rem;
+}
+
+/* the sentence that closes the card sits under the panels, not against them */
+.dsh-card > .dsh-help {
+  margin-top: 0.9rem;
+}
+
+.dsh-panel {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.dsh-panel[hidden] {
+  display: none !important;
+}
+
+.dsh-panel__head {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem 0.7rem;
+  flex-wrap: wrap;
+}
+
+.dsh-panel__head .dsh-surface strong {
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.dsh-panel__use {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.dsh-panel__foot [data-surface-create] {
+  margin-left: auto;
+  align-items: center;
+}
+
+.dsh-panel__body {
+  display: grid;
+  gap: 0.5rem;
+}
+
+/* the one line that says where this page's content is written */
+.dsh-panel__foot {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem 0.55rem;
+  flex-wrap: wrap;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--line);
+}
+
+.dsh-panel__where {
+  font-size: 0.58rem;
+  font-weight: 650;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.dsh-door.dsh-panel__door {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.6rem;
+  border: 1px dashed var(--line-2);
+  border-radius: 999px;
+  text-align: left;
+  text-decoration: none;
+  transition: border-color 0.14s ease, color 0.14s ease;
+}
+
+.dsh-door.dsh-panel__door:hover {
+  border-color: var(--line-3);
+  color: var(--text);
+}
+
+.dsh-panel__door .ico {
+  width: 12px;
+  height: 12px;
+  opacity: 0.7;
+}
+
 .dsh-chip {
   display: inline-flex;
   align-items: center;

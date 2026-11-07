@@ -947,6 +947,15 @@ function expect(name, condition, detail = "") {
   expect("creator: the four numbers", p.qsa('[data-creator-stats] .dsh-stat').length === 4);
   expect("creator: pages counted", /3 \/ 7/.test(p.text('[data-view="creator"]')), p.text('[data-creator-stats]'));
 
+  /* one tab per page, one page under the open tab */
+  const tabsOf = (scope) => (scope || p).qsa("[data-creator-tabbar] [data-tab-value]").map((b) => b.dataset.tabValue);
+  expect("creator: the seven tabs", tabsOf().length === 7, String(tabsOf().length));
+  expect("creator: the tabs are the seven pages, in order", tabsOf().join(",") === "channel,server,blog,gallery,space,library,cinema", tabsOf().join(","));
+  expect("creator: the studio tab is open first", /e-Studio/.test(p.text("[data-creator-tabbar] .dsh-tab.is-on")), p.text("[data-creator-tabbar]"));
+  expect("creator: one panel is open", p.qsa("[data-surface-row]:not([hidden])").length === 1 && p.qs('[data-surface-row="channel"]')?.hasAttribute("hidden") === false);
+  expect("creator: a tab says how many pages it holds", /2/.test(p.text('[data-creator-tabbar] [data-tab-value="blog"]')), p.text('[data-creator-tabbar] [data-tab-value="blog"]'));
+  expect("creator: the panel says where the content lives", (p.qs('[data-surface-row="blog"] .dsh-panel__door')?.getAttribute("href") || "") === "creator.html?section=blog&tab=articles", p.qs('[data-surface-row="blog"] .dsh-panel__door')?.getAttribute("href") || "");
+
   /* the studios that exist say their state, their code and their counts */
   const blogs = p.qs('[data-surface-row="blog"]');
   expect("creator: both blogs are listed", p.qsa('[data-surface-row="blog"] .dsh-hub').length === 2);
@@ -974,13 +983,21 @@ function expect(name, condition, detail = "") {
   expect("creator: the gallery's create door", (empty("gallery")[0] || "") === "creator.html?section=gallery&tab=images&new=1", empty("gallery").join(" "));
   expect("creator: the space's create door", (empty("space")[0] || "") === "creator.html?section=space&tab=questions&new=1", empty("space").join(" "));
   expect("creator: the library's create door", (empty("library")[0] || "") === "creator.html?section=library&tab=books&new=1", empty("library").join(" "));
-  expect("creator: the cinema's create door", (empty("cinema")[0] || "") === "creator.html?section=cinema&tab=films&new=1", empty("cinema").join(" "));
+  expect("creator: the cinema's create door", (empty("cinema")[0] || "") === "creator.html?section=cinema&tab=movies&new=1", empty("cinema").join(" "));
 
   /* at the level's limit there is no second studio */
   const studioRow = p.qs('[data-surface-row="channel"] [data-surface-create]');
   expect("creator: the studio at its limit", /1 of 1/.test(studioRow?.textContent || ""), studioRow?.textContent || "");
   expect("creator: no create button at the limit", !studioRow?.querySelector('a[href*="section=studio"]'));
   expect("creator: a blog under the limit can add one", /Add another/.test(p.text('[data-surface-row="blog"] [data-surface-create]')));
+
+  /* the tabs are a tablist: choosing one opens its panel and asks nothing again */
+  p.click(p.qs('[data-creator-tabbar] [data-tab-value="blog"]'));
+  await p.wait(80);
+  expect("creator: the blog tab opens the blog panel", !p.qs('[data-surface-row="blog"]')?.hasAttribute("hidden") && p.qs('[data-surface-row="channel"]')?.hasAttribute("hidden") === true);
+  expect("creator: the strip follows the choice", /e-Blog/.test(p.text("[data-creator-tabbar] .dsh-tab.is-on")), p.text("[data-creator-tabbar] .dsh-tab.is-on"));
+  expect("creator: switching asks the studio nothing", calls.filter((c) => c.includes("creator_hubs_list")).length === 1);
+  expect("creator: the chosen tab is the one tab stop", p.qsa('[data-creator-tabbar] [data-tab-value][tabindex="0"]').length === 1);
   expect("creator: no errors", p.errors.length === 0, p.errors.join(" | "));
   report.pass7 = p.text('[data-view="creator"]').slice(0, 90);
   p.window.close();
