@@ -1719,6 +1719,13 @@ comments. Nothing is invented: no time in the description, no
 chapter list; no links on the studio, no row. A source that plays in its own frame cannot be seeked
 from here, so a chapter there says the time instead of pretending.
 
+**A chapter is a second in the address.** Picking one seeks the frame *and* writes `…&t=840s` at the
+end of the address, the way the reference does, replacing any earlier second rather than stacking one.
+Opening a link that carries `&t=90s` (`?t=90` is read the same) starts the file there — a `<video>`
+seeks, a YouTube frame reloads at `start=90`, a Vimeo frame at `#t=90s` — and the chapter that second
+belongs to is the one marked. The router strips the second before reading the id, so
+`ID=CA4728CD&t=90s` is still `CA4728CD` and an old link opens.
+
 **A video saved before that column existed has no studio on its row**, and it still must not fall
 back to a bare profile: the page then asks which studio the member publishes into — `creator_studio(ref)`
 in the same file, or, when that call is not on the server yet, the `creator_public` call the creator
