@@ -995,6 +995,60 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
   expect("css: the two screens stack on a phone", css.includes("@media (max-width: 1180px)") && css.includes("@media (max-width: 720px)"));
 }
 
+/* ================================================================== */
+/* 17 — the publisher is the studio, when the video went into one      */
+/* ================================================================== */
+{
+  const STUDIO = {
+    id: "hub-1",
+    code: "IDST100001",
+    kind: "channel",
+    name: "Cine Aura",
+    logo_url: "https://example.com/logo.png",
+    visibility: "public",
+    creator: "ID100019",
+  };
+  const studioBoot = (hub) => {
+    const made = boot("videos.html", {
+      hash: "#/h/ID=PST-001032",
+      fetchImpl: (href) => {
+        const fn = fnName(href);
+        if (fn === "video_feed") return reply(FEED);
+        if (fn === "video_mine") return reply({ ok: true, rows: [] });
+        if (fn === "video_get") return reply({ ok: true, locked: false, mine: false, video: card({ code: "PST-001032" }), related: [], more: [] });
+        if (fn === "video_hub") return reply({ ok: true, hub });
+        if (fn === "post_comments") return reply({ comments: [], count: 0 });
+        return reply([]);
+      },
+    });
+    return made;
+  };
+
+  const withStudio = studioBoot(STUDIO);
+  await import(`file://${join(root, "assets/js/videos.js")}?p=studio1`);
+  await wait(120);
+  const doc = withStudio.document;
+  expect("studio: the question was asked for the video's studio", withStudio.calls.some((c) => fnName(c.href) === "video_hub"), withStudio.calls.map((c) => fnName(c.href)).join(" "));
+  expect("studio: the studio is named as the publisher", doc.querySelector(".vhost__name")?.textContent === "Cine Aura", doc.querySelector(".vhost__name")?.textContent);
+  expect("studio: the publisher block says it is a studio", doc.querySelector("[data-v-host]")?.getAttribute("data-v-host") === "studio", doc.querySelector("[data-v-host]")?.getAttribute("data-v-host"));
+  expect(
+    "studio: the name opens the studio with its creator",
+    doc.querySelector("[data-v-studio]")?.getAttribute("href") === "creator.html?studio=IDST100001&creator=ID100019",
+    doc.querySelector("[data-v-studio]")?.getAttribute("href")
+  );
+  expect("studio: the mark is the studio's logo", doc.querySelector("[data-v-studio] img")?.getAttribute("src") === "https://example.com/logo.png", doc.querySelector("[data-v-studio]")?.innerHTML.slice(0, 60));
+  expect("studio: the code and the member are under it", /Studio/.test(doc.querySelector(".vhost__meta")?.textContent || "") && /IDST100001/.test(doc.querySelector(".vhost__meta")?.textContent || "") && /Jhon/.test(doc.querySelector(".vhost__meta")?.textContent || ""), doc.querySelector(".vhost__meta")?.textContent);
+  expect("studio: the member's profile is still one click away", /creator\.html\?creator=/.test(doc.querySelector(".vhost__meta a")?.getAttribute("href") || ""), doc.querySelector(".vhost__meta a")?.getAttribute("href"));
+
+  const noStudio = studioBoot(null);
+  await import(`file://${join(root, "assets/js/videos.js")}?p=studio2`);
+  await wait(120);
+  const nd = noStudio.document;
+  expect("studio: with no studio the member publishes", nd.querySelector(".vhost__name")?.textContent === "Jhon", nd.querySelector(".vhost__name")?.textContent);
+  expect("studio: and the block says member", nd.querySelector("[data-v-host]")?.getAttribute("data-v-host") === "member");
+  expect("studio: no studio mark is drawn", !nd.querySelector("[data-v-studio]"));
+}
+
 /* ------------------------------------------------------------------ */
 const failed = checks.filter((c) => !c.ok);
 checks.forEach((c) => {

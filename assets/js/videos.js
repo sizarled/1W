@@ -27,7 +27,7 @@ import { qs, qsa, esc, num, compact, timeAgo, debounce } from "./utils.js";
 import { icon } from "./icons.js";
 import { toast } from "./ui.js";
 import { sessionToken, getMember } from "./session.js";
-import { parseRoute, videoUrl, orientationOf, ORIENTATIONS } from "./media.js";
+import { parseRoute, videoUrl, orientationOf, creatorUrl, ORIENTATIONS } from "./media.js";
 
 const PAGE = 24;
 
@@ -53,6 +53,8 @@ const state = {
   reaction: null,
   key: "",
   orientation: "h",
+  /* the studio the video was published into, when it has one */
+  hub: null,
   view: "browse",
 };
 
@@ -533,11 +535,25 @@ function watchMarkup(v, res) {
 
         ${res.locked ? "" : actionsMarkup(v)}
 
-        <div class="vhost">
-          ${avatarTag({ avatar: host.avatar, name: host.name || host.username }, "vav vav--lg")}
+        <div class="vhost"${state.hub && state.hub.name ? ' data-v-host="studio"' : ' data-v-host="member"'}>
+          ${
+            /* a video published into a studio is published by the studio: its
+               logo, its name and its code lead, and the member is the line
+               under it — the profile is still one click away */
+            state.hub && state.hub.name
+              ? `<a class="vhost__logo" href="${esc(creatorUrl(state.hub.code, state.hub.creator || host.id))}" data-v-studio="${esc(state.hub.code || "")}" aria-label="${esc(state.hub.name)}">
+                   ${state.hub.logo_url ? `<img src="${esc(state.hub.logo_url)}" alt="" width="48" height="48" />` : `<span aria-hidden="true">${esc(initialsOf(state.hub.name))}</span>`}
+                 </a>`
+              : avatarTag({ avatar: host.avatar, name: host.name || host.username }, "vav vav--lg")
+          }
           <div class="vhost__id">
-            <p class="vhost__name">${esc(host.name || host.username || "A member")}</p>
-            <p class="vhost__meta">${host.username ? esc(host.username) + " · " : ""}${esc(num(host.followers || 0))} followers</p>
+            ${
+              state.hub && state.hub.name
+                ? `<p class="vhost__name"><a href="${esc(creatorUrl(state.hub.code, state.hub.creator || host.id))}">${esc(state.hub.name)}</a></p>
+                   <p class="vhost__meta"><span class="vhost__kind">${esc(hubKindWord(state.hub.kind))}</span>${state.hub.code ? ` · ${esc(state.hub.code)}` : ""} · by <a href="${esc(creatorUrl("", host.id))}">${esc(host.name || host.username || "a member")}</a></p>`
+                : `<p class="vhost__name">${esc(host.name || host.username || "A member")}</p>
+                   <p class="vhost__meta">${host.username ? esc(host.username) + " · " : ""}${esc(num(host.followers || 0))} followers</p>`
+            }
           </div>
           ${
             signedIn() && host.id !== (getMember() || {}).id
@@ -599,6 +615,7 @@ async function openWatch(code, orientation) {
   state.view = "watch";
   state.code = code;
   state.orientation = orientationOf(orientation);
+  state.hub = null;
   state.comments = null;
   state.canComment = false;
   state.reaction = null;
@@ -609,6 +626,9 @@ async function openWatch(code, orientation) {
       <div class="vsk" style="height:120px"></div>
     </div></div>`;
   window.scrollTo({ top: 0, behavior: "auto" });
+
+  /* the studio travels beside the video: one call each, neither waits */
+  const hubPromise = rpc("video_hub", { p_ref: code }).catch(() => null);
 
   let res = null;
   try {
@@ -632,6 +652,11 @@ async function openWatch(code, orientation) {
     return;
   }
 
+  /* the studio that published it — from the reply when it carries one, from
+     the call beside it otherwise */
+  const hubReply = await hubPromise;
+  const inline = (res && (res.hub || (res.video && res.video.hub))) || null;
+  state.hub = inline && inline.name ? inline : hubReply && hubReply.ok && hubReply.hub && hubReply.hub.name ? hubReply.hub : null;
   state.video = res.video || null;
   state.related = Array.isArray(res.related) ? res.related : [];
   state.more = Array.isArray(res.more) ? res.more : [];
@@ -679,6 +704,32 @@ function showBrowse() {
   }
   if (browseEl()) browseEl().hidden = false;
   document.title = "Videos — 1World Web";
+}
+
+/** "Studio One" → "SO" — the letters a logo-less studio stands on. */
+function initialsOf(name) {
+  return String(name || "")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((word) => word[0] || "")
+    .join("")
+    .toUpperCase();
+}
+
+/** The word a hub kind is called by, on the page. */
+function hubKindWord(kind) {
+  return (
+    {
+      channel: "Studio",
+      server: "Server",
+      cinema: "Cinema",
+      blog: "Blog",
+      space: "Space",
+      library: "Library",
+      gallery: "Gallery",
+    }[String(kind || "").toLowerCase()] || "Studio"
+  );
 }
 
 function route() {
