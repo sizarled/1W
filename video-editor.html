@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="assets/css/base.css?v=20261116a" />
     <link rel="stylesheet" href="assets/css/layout.css?v=20261116a" />
     <link rel="stylesheet" href="assets/css/components.css?v=20261116b" />
-    <link rel="stylesheet" href="assets/css/video.css?v=20261117a" />
+    <link rel="stylesheet" href="assets/css/video.css?v=20261118b" />
     <script>
       /* apply the saved theme (or the OS preference) before first paint */
       (function () {
@@ -33,7 +33,7 @@
       })();
     </script>
     <script type="module" src="assets/js/app.js?v=20261116e"></script>
-    <script type="module" src="assets/js/video-editor.js?v=20261116f"></script>
+    <script type="module" src="assets/js/video-editor.js?v=20261118b"></script>
   </head>
   <body data-page="videoEditor" data-title="Publish a video">
     <a class="skip-link" href="#main">Skip to content</a>
@@ -170,13 +170,17 @@
                 <h2 class="vcard-box__title">Live preview</h2>
                 <span class="badge" data-ved-preview-badge>Draft</span>
               </div>
-              <div class="vprev__media" data-ved-preview-media>
+              <!-- the card is the door: once it has a code it opens the video's own page -->
+              <a class="vprev__media" data-ved-preview-media data-ved-preview-open target="_blank" rel="noopener noreferrer"
+                 aria-label="Open the video's page" aria-disabled="true">
                 <div class="vprev__ph"><i data-icon="film"></i></div>
-              </div>
+                <span class="vprev__open" aria-hidden="true"><i data-icon="external"></i> Watch</span>
+              </a>
               <p class="vprev__title" data-ved-preview-title>No title yet</p>
               <p class="vprev__meta" data-ved-preview-meta>Public · English</p>
               <p class="vprev__meta" data-ved-preview-time>Publishing now</p>
               <p class="vprev__meta vprev__studio" data-ved-preview-studio hidden></p>
+              <p class="vprev__note" data-ved-preview-hint>Publish it to watch it — a draft has no page yet.</p>
             </section>
 
             <!-- which studio it goes into ------------------------------ -->

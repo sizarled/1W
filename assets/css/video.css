@@ -1617,3 +1617,63 @@
 .vcard[data-orientation="v"] .vcard__thumb {
   aspect-ratio: 9 / 16;
 }
+
+/* the live preview is the door to the video's own page */
+.vprev__media {
+  display: block;
+  position: relative;
+  color: inherit;
+  text-decoration: none;
+}
+
+.vprev__media[aria-disabled="true"] {
+  cursor: default;
+}
+
+.vprev__media[href] {
+  cursor: pointer;
+}
+
+.vprev__open {
+  position: absolute;
+  left: 50%;
+  bottom: 0.55rem;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.28rem 0.65rem;
+  border-radius: 999px;
+  background: var(--surface-inv);
+  color: var(--bg);
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  opacity: 0;
+  transition: opacity 0.18s var(--ease-out);
+}
+
+.vprev__open svg {
+  width: 0.78rem;
+  height: 0.78rem;
+}
+
+.vprev__media[href]:hover .vprev__open,
+.vprev__media[href]:focus-visible .vprev__open {
+  opacity: 1;
+}
+
+.vprev__media[href]:focus-visible {
+  outline: 2px solid var(--muted);
+  outline-offset: 3px;
+}
+
+.vprev__note {
+  margin: 0.45rem 0 0;
+  font-size: 0.74rem;
+  line-height: 1.45;
+  color: var(--faint);
+}
+
+.vprev__note[hidden] {
+  display: none;
+}

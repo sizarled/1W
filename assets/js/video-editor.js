@@ -19,6 +19,7 @@
  * video_get, and the payload carries the code back.
  */
 import { rpc } from "./data.js";
+import { videoUrl } from "./media.js";
 import { qs, qsa, esc } from "./utils.js";
 import { icon } from "./icons.js";
 import { toast } from "./ui.js";
@@ -203,6 +204,28 @@ function paintPreview() {
     studio.innerHTML = S.hub
       ? `${icon("tv")} <span>in ${esc(name)}</span>`
       : "";
+  }
+
+  /* the preview card is the door: a saved video opens its own page, and the
+     shape it was saved with is the address it gets — `#/v/` for a vertical */
+  const open = $("[data-ved-preview-open]");
+  if (open) {
+    const canOpen = Boolean(S.code) && S.status !== "draft";
+    if (canOpen) {
+      open.setAttribute("href", videoUrl(S.code, S.vertical ? "v" : "h"));
+      open.setAttribute("aria-disabled", "false");
+      open.removeAttribute("hidden");
+    } else {
+      open.removeAttribute("href");
+      open.setAttribute("aria-disabled", "true");
+    }
+    const hint = $("[data-ved-preview-hint]");
+    if (hint) {
+      hint.hidden = canOpen;
+      hint.textContent = S.code
+        ? "Publish it to watch it — a draft has no page yet."
+        : "Save it once: the card then opens the video's page.";
+    }
   }
 
   const badge = $("[data-ved-preview-badge]");

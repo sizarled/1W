@@ -1634,10 +1634,15 @@ present in `video_mine`; a like opened the composer and a comment landed; a save
 `passwords` key left the existing password in place. The test rows were removed afterwards (three demo
 videos from the Blender open movies remain in the feed).
 
-Test: `node tools/video-smoke.mjs` — **255/255** (feed, sort, search, watch, reaction→comment, a locked
+Test: `node tools/video-smoke.mjs` — **260/260** (feed, sort, search, watch, reaction→comment, a locked
 door and its password, a missing video, the editor signed out and in, the payload of a publish, of an
 exclusive rule set and of a private list, the player and the sixteen host cases, the oEmbed stills, the
 studio picker, the contents rail, and the forwarding page).
+
+**The live preview is a door.** Once the video has been saved, the preview card in the editor opens
+the video's own page in a new tab — `videos.html#/h/ID=<code>`, or `#/v/` when **vertical** was
+ticked — so the editor is never lost. A draft has no page yet: the card carries no link and says so
+under itself.
 
 **The form carries its own contents too.** A video form is nine sections long — the source, the words,
 the extras, the live preview, the studio, the thumbnail, the audience, the moment, the details — so it
@@ -1984,7 +1989,7 @@ the editors need**, each pinned to a name pattern and a set of extensions (`user
 | `node tools/rte-smoke.mjs` | **45/45** (every command, links, insertion, history, paste, drop, keys, toolbar state) |
 | `node tools/article-smoke.mjs` | **281/281** |
 | `node tools/blog-smoke.mjs` | **82/82** (the address, the closed door, the hero, the home, a section, the search, the plain cover) |
-| `node tools/video-smoke.mjs` | **255/255** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
+| `node tools/video-smoke.mjs` | **260/260** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
 | `node tools/media-smoke.mjs` | **89/89** (the address book, the three pages, the portrait stage, the locked item, the shelves) |
 
 ### The six OAuth apps — one checklist each

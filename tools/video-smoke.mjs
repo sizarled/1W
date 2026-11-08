@@ -391,6 +391,10 @@ async function editor(tag) {
   title.dispatchEvent(new window.Event("input", { bubbles: true }));
   await wait();
   expect("editor: the preview carries the title", document.querySelector("[data-ved-preview-title]")?.textContent === "A first video");
+  /* the card is the door — but only once the video has a page */
+  const doorDraft = document.querySelector("[data-ved-preview-open]");
+  expect("editor: an unsaved card has no door", !doorDraft?.getAttribute("href") && doorDraft?.getAttribute("aria-disabled") === "true", doorDraft?.getAttribute("href"));
+  expect("editor: and the card says why", !document.querySelector("[data-ved-preview-hint]")?.hidden);
   expect("editor: the counter counts", document.querySelector("[data-ved-title-count]")?.textContent === "13 / 150", document.querySelector("[data-ved-title-count]")?.textContent);
   expect("editor: with both it is ready", document.querySelector("[data-ved-publish]")?.disabled === false);
 
@@ -419,6 +423,11 @@ async function editor(tag) {
   expect("editor: the tags are the main keywords", Array.isArray(payload.tags) && payload.tags.join(",") === "animation,editing", JSON.stringify(payload.tags));
   expect("editor: a YouTube source is named", payload.meta?.source === "youtube", JSON.stringify(payload.meta));
   expect("editor: a public one sends no password key at all", payload.passwords === undefined, JSON.stringify(payload.passwords));
+  /* published: the card now opens the video in the watch page */
+  const door = document.querySelector("[data-ved-preview-open]");
+  expect("editor: a published card opens the watch page", door?.getAttribute("href") === "videos.html#/h/ID=PST-001100", door?.getAttribute("href"));
+  expect("editor: in a new tab, so the editor is not lost", door?.getAttribute("target") === "_blank" && /noopener/.test(door?.getAttribute("rel") || ""), door?.getAttribute("rel"));
+  expect("editor: the hint steps aside", document.querySelector("[data-ved-preview-hint]")?.hidden === true);
   expect("editor: no audience on a public one", Array.isArray(payload.audience) && payload.audience.length === 0);
 }
 
