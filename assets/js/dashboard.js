@@ -169,7 +169,14 @@ export async function initDashboard() {
     console.warn("[1World] dashboard:", error.message);
   }
 
-  if (!data || data.ok !== true) {
+  /* a call that failed is not a session that ended: only an answer that says
+     so signs the member out — otherwise a flaky moment would ask them to log
+     in again on a page they were already inside */
+  if (!data) {
+    toast({ title: "The server did not answer", message: "Your session is untouched. Try again in a moment.", tone: "error", iconName: "refresh" });
+    return;
+  }
+  if (data.ok !== true) {
     clearSessionToken();
     signOut();
     goToLogin();
@@ -206,7 +213,11 @@ function goToLogin() {
 async function reload() {
   if (!token) return goToLogin();
   const data = await rpc("member_dashboard", { p_token: token }).catch(() => null);
-  if (!data || data.ok !== true) {
+  if (!data) {
+    toast({ title: "The server did not answer", message: "Your session is untouched. Try again in a moment.", tone: "error", iconName: "refresh" });
+    return;
+  }
+  if (data.ok !== true) {
     clearSessionToken();
     signOut();
     goToLogin();

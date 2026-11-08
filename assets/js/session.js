@@ -93,36 +93,54 @@ export function signOut() {
 /* server session token                                                */
 /* ------------------------------------------------------------------ */
 const SESSION_KEY = "1w.session";
+const SESSION_UNTIL = "1w.session.until";
 let sessionTokenMemory = "";
 
-/**
- * The login page trades the password for a session token. The token is kept
- * in localStorage when "stay signed in" was chosen (30 days) and in
- * sessionStorage otherwise (the server expires it after 12 hours).
- */
+/* A sign-in is one thing, not one per tab. "Stay signed in" keeps the token for
+   thirty days and no box keeps it for twelve hours (the server's own limit) —
+   but either way it lives in `localStorage`, because `sessionStorage` is a
+   per-tab store: a link opened in a new tab, or a page that was already open,
+   would never see it and would ask a signed-in member to sign in again. */
+const REMEMBER_MS = 30 * 24 * 3600 * 1000;
+const SESSION_MS = 12 * 3600 * 1000;
+
 export function setSessionToken(token, remember = false) {
   if (!token) return;
   sessionTokenMemory = token;
   try {
-    if (remember) {
-      localStorage.setItem(SESSION_KEY, token);
-      sessionStorage.removeItem(SESSION_KEY);
-    } else {
-      sessionStorage.setItem(SESSION_KEY, token);
-      localStorage.removeItem(SESSION_KEY);
-    }
+    localStorage.setItem(SESSION_KEY, token);
+    localStorage.setItem(SESSION_UNTIL, String(Date.now() + (remember ? REMEMBER_MS : SESSION_MS)));
+    /* older builds wrote the tab-only token here — clearing it keeps one copy */
+    sessionStorage.removeItem(SESSION_KEY);
   } catch {
     /* storage blocked — the token still lives in memory for this page */
   }
 }
 
 export function sessionToken() {
-  if (sessionTokenMemory) return sessionTokenMemory;
   try {
-    return sessionStorage.getItem(SESSION_KEY) || localStorage.getItem(SESSION_KEY) || "";
-  } catch {
+    const stored = localStorage.getItem(SESSION_KEY);
+    if (stored) {
+      const until = Number(localStorage.getItem(SESSION_UNTIL) || 0);
+      if (until && until < Date.now()) {
+        clearSessionToken();
+        return "";
+      }
+      return stored;
+    }
+    sessionTokenMemory = "";
+    /* one store, one session: `sessionStorage` is read nowhere, because a token
+       kept there is invisible to every other tab and every other page */
     return "";
+  } catch {
+    /* storage blocked — the token set on this page still works for it */
+    return sessionTokenMemory;
   }
+}
+
+/** True when a page can talk to the server as a member (used by the UI). */
+export function signedIn() {
+  return Boolean(sessionToken());
 }
 
 export function clearSessionToken() {
@@ -130,6 +148,7 @@ export function clearSessionToken() {
   try {
     sessionStorage.removeItem(SESSION_KEY);
     localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(SESSION_UNTIL);
   } catch {
     /* nothing to clear */
   }

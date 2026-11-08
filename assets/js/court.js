@@ -34,7 +34,12 @@ async function boot() {
   }
 
   const data = await rpc("member_court_history", { p_token: token }).catch(() => null);
-  if (!data || data.ok !== true) {
+  /* a failed call is not a dead session */
+  if (!data) {
+    toast({ title: "The court did not answer", message: "Your session is untouched. Try again in a moment.", tone: "error", iconName: "refresh" });
+    return;
+  }
+  if (data.ok !== true) {
     clearSessionToken();
     signOut();
     location.replace("login.html?next=court.html");

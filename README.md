@@ -1634,6 +1634,15 @@ present in `video_mine`; a like opened the composer and a comment landed; a save
 `passwords` key left the existing password in place. The test rows were removed afterwards (three demo
 videos from the Blender open movies remain in the feed).
 
+**One sign-in, every page.** The token lived in `sessionStorage` whenever "stay signed in" was not
+ticked, and `sessionStorage` is per tab: a link opened in a new tab, or a page that was already open,
+never saw it and asked a signed-in member to sign in again. There is now one store —
+`localStorage["1w.session"]` with `1w.session.until` beside it (twelve hours, or thirty days when the
+box was ticked) — read by every page and every tab, and dropped the moment it is past. Two other
+ways a session ended by accident are gone too: a call that *failed* (a flaky moment) no longer signs
+anyone out — only an answer that says the session is dead does (`dashboard.html`, `activated.html`,
+`court.html`).
+
 **The studio publishes, not the profile.** A video saved into a studio carries `posts.hub_id`, and
 the watch screen shows that studio as the publisher: its mark, its name (opening
 `creator.html?studio=<code>&creator=<owner>`), its kind and its code, with the member named under it
@@ -2503,6 +2512,7 @@ browser that already has the old file.
 ### Tests
 
 ```bash
+node tools/session-smoke.mjs     # 15 checks: one token in localStorage, seen by the next page, dropped when expired
 node tools/dashboard-smoke.mjs   # 272 checks: the five gates, rail, popover, codes, sections, Unlock now, Account settings, the seven creator tabs, the management pane, the Publisher program
 node tools/sidebar-smoke.mjs     # 93 checks: the edge, the pin, Escape, the mobile drawer, the dashboard menu
 node tools/panel-smoke.mjs       # 90 checks: the desk's three states, the rows, the switch, the dialog, the shelf

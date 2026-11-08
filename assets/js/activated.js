@@ -96,7 +96,12 @@ async function boot() {
   }
 
   const data = await rpc("member_activation_state", { p_token: token }).catch(() => null);
-  if (!data || data.ok !== true) {
+  /* only the server saying the session is dead ends it — a failed call does not */
+  if (!data) {
+    paintReachError(root);
+    return;
+  }
+  if (data.ok !== true) {
     clearSessionToken();
     signOut();
     location.replace("login.html?next=activated.html");
@@ -178,6 +183,21 @@ function paint(root) {
   }
 
   hydrateIcons(root);
+}
+
+/** The server is unreachable — the session is not lost, so say so plainly. */
+function paintReachError(root) {
+  if (!root) return;
+  root.innerHTML = `
+    <section class="act-state">
+      <span class="act-state__icon"><i data-icon="refresh"></i></span>
+      <h1 class="act-state__title">The server did not answer</h1>
+      <p class="act-state__text">Your session is untouched — nothing was signed out. Try again in a moment.</p>
+      <div class="act-state__acts">
+        <button class="btn btn--primary btn--sm" type="button" data-act-retry><i data-icon="refresh"></i> Try again</button>
+      </div>
+    </section>`;
+  root.querySelector("[data-act-retry]")?.addEventListener("click", () => location.reload());
 }
 
 function paintGuest(root) {
