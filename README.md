@@ -1634,7 +1634,7 @@ present in `video_mine`; a like opened the composer and a comment landed; a save
 `passwords` key left the existing password in place. The test rows were removed afterwards (three demo
 videos from the Blender open movies remain in the feed).
 
-Test: `node tools/video-smoke.mjs` — **254/254** (feed, sort, search, watch, reaction→comment, a locked
+Test: `node tools/video-smoke.mjs` — **255/255** (feed, sort, search, watch, reaction→comment, a locked
 door and its password, a missing video, the editor signed out and in, the payload of a publish, of an
 exclusive rule set and of a private list, the player and the sixteen host cases, the oEmbed stills, the
 studio picker, the contents rail, and the forwarding page).
@@ -1685,6 +1685,53 @@ studio's *Videos* table listed it as `source: video-editor` with `items`/`publis
 **without** the key kept the studio, `hub: ''` cleared it (the column read null), and the three refusals
 answered `hub`, `hub_kind` (a blog) and `hub_role` (a studio owned by another member). The test rows,
 the temporary studio and the session were removed afterwards.
+
+### The address book — one grammar for every piece of content
+
+`assets/js/media.js` is the only module that knows how a thing is addressed. A page asks it for a
+link; a page hands it a hash; nothing else spells a media URL by hand.
+
+| What | Address |
+| --- | --- |
+| A studio and whose page of it | `creator.html?studio=IDST100001&creator=ID100019` |
+| A horizontal video | `videos.html#/h/ID=video001032` |
+| A vertical one | `videos.html#/v/ID=video001032` |
+| A podcast | `audio.html#/p/ID=podcast001032` |
+| A song | `audio.html#/m/ID=song001032` |
+| A playlist of videos | `playlist.html#/videos/ID=playlist001032` |
+| A playlist of podcasts | `playlist.html#/podcasts/ID=playlist001032` |
+| A playlist of songs | `playlist.html#/songs/ID=playlist001032` |
+
+- **`studio` and `creator` are two different ids.** `studio` is the hub (`IDST100001`), `creator`
+  is the member whose content it is (`ID100019`). Both are optional and both are carried: the hub
+  page opened with both shows a chip naming the creator and scopes the items to them; opened with
+  only `studio` it is the whole hub, and opened with only `creator` it is that member's page.
+- **`h` and `v` are shapes, `p` and `m` are kinds.** `h` is a 16:9 piece and `v` is a 9:16 one —
+  the watch screen narrows to a portrait stage rather than letterboxing a tall video into a wide
+  frame. `p` is a podcast, `m` is a song.
+- **`ID=` is always there.** The id after it is the item's code — the first eight hex digits of its
+  uuid, the same `code` every table shows — so a link survives a rename. `#/v/CA4728CD` (the older
+  address of a plain video) still opens, and a bare `#/<code>` opens the video page.
+- **The shelf is part of the playlist's address**, so a playlist opens on the right list without
+  asking. A row on it opens with the shape it has: a landscape video row goes to `#/h/`, a vertical
+  one to `#/v/`, a podcast to `audio.html#/p/`, a song to `audio.html#/m/`.
+- **A row in a studio table is a door, and so is a card on a hub page**: the copy-link action writes
+  the address above, never a guess.
+
+`audio.html` and `playlist.html` are real pages now — both were "Page in build" shells. The audio
+page is a cover, a byline that names the hub, a transport (play/pause, ±15 s, seek, volume), and a
+queue of the same kind; a locked item still shows its cover and its name and asks for the door
+instead of the file. The playlist page is a hero, three shelves, and numbered rows. Their two calls
+are in `tools/sql/media-pages.sql` — `audio_get(token, ref, kind)` and
+`playlist_get(token, ref, shelf)` — plus `song` added to the kind check and a `media_item(code)`
+lookup. An item is readable exactly when `creator_hub_view` would have shown it: the hub's door and
+the item's own visibility both decide, and a closed one returns `locked` with the name and no file.
+
+Test: `node tools/media-smoke.mjs` — **89/89**: the grammar writes the four shapes and reads back the
+six addresses (plus the legacy ones), the video page turns portrait for `#/v/`, the audio page asks
+for the right kind and draws its queue with both ids on the byline, a locked item shows the gate and
+no player, and the playlist page lights the shelf in its address and gives a landscape row `#/h/`
+and a vertical one `#/v/`.
 
 ### Member articles — the index, the reader and the writing page
 
@@ -1930,7 +1977,8 @@ the editors need**, each pinned to a name pattern and a set of extensions (`user
 | `node tools/rte-smoke.mjs` | **45/45** (every command, links, insertion, history, paste, drop, keys, toolbar state) |
 | `node tools/article-smoke.mjs` | **281/281** |
 | `node tools/blog-smoke.mjs` | **82/82** (the address, the closed door, the hero, the home, a section, the search, the plain cover) |
-| `node tools/video-smoke.mjs` | **254/254** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
+| `node tools/video-smoke.mjs` | **255/255** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
+| `node tools/media-smoke.mjs` | **89/89** (the address book, the three pages, the portrait stage, the locked item, the shelves) |
 
 ### The six OAuth apps — one checklist each
 
@@ -2405,6 +2453,7 @@ node tools/sidebar-smoke.mjs     # 93 checks: the edge, the pin, Escape, the mob
 node tools/panel-smoke.mjs       # 90 checks: the desk's three states, the rows, the switch, the dialog, the shelf
 node tools/court-smoke.mjs       # 115 checks: the four steps, uploads, both doors, the court room
 node tools/creator-smoke.mjs     # 363 checks: the search (owners + publishers), the tables, the editors, a publisher's seat
+node tools/media-smoke.mjs       # 89 checks: the address book, videos.html#/h|v/, audio.html#/p|m/, playlist.html#/videos|podcasts|songs/
 node tools/publisher-smoke.mjs   # 52 checks: the program, the seat, the links, and the hand-off to the creator page
 node tools/iptv-smoke.mjs        # 43 checks: the playlists, the groups, the page, the deep links
 node tools/activated-smoke.mjs   # 35 checks: hidden panels, image link, ad pause, code return

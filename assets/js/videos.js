@@ -3,8 +3,12 @@
  * ------------------------------------------------------------------
  * Two screens in one page:
  *
- *   #/            the feed — search, a field, a sort, and the cards
- *   #/v/<code>    one video — the player, the publisher, the comments
+ *   #/                the feed — search, a field, a sort, and the cards
+ *   #/h/ID=<code>     one horizontal video — the player, the publisher, the comments
+ *   #/v/ID=<code>     one vertical one — the same page, a portrait stage
+ *
+ * The address grammar lives in media.js, one module for all four shapes;
+ * this page only reads it.
  *
  * Everything comes from the posts layer the rest of the site already
  * uses, so likes, comments and reports stay in one place:
@@ -23,6 +27,7 @@ import { qs, qsa, esc, num, compact, timeAgo, debounce } from "./utils.js";
 import { icon } from "./icons.js";
 import { toast } from "./ui.js";
 import { sessionToken, getMember } from "./session.js";
+import { parseRoute, videoUrl, orientationOf, ORIENTATIONS } from "./media.js";
 
 const PAGE = 24;
 
@@ -47,6 +52,7 @@ const state = {
   canComment: false,
   reaction: null,
   key: "",
+  orientation: "h",
   view: "browse",
 };
 
@@ -135,7 +141,7 @@ function cardMarkup(row) {
       : "";
 
   return `
-    <a class="vcard" href="#/v/${esc(v.code || v.id)}" data-v-open="${esc(v.code || v.id)}">
+    <a class="vcard" href="${esc(videoUrl(v.code || v.id, v.orientation))}" data-v-open="${esc(v.code || v.id)}" data-orientation="${esc(orientationOf(v.orientation))}">
       <div class="vcard__media">
         ${
           v.thumbnail
@@ -170,7 +176,7 @@ function cardMarkup(row) {
 function rowMarkup(row) {
   const v = row || {};
   return `
-    <a class="vrow" href="#/v/${esc(v.code || v.id)}" data-v-open="${esc(v.code || v.id)}">
+    <a class="vrow" href="${esc(videoUrl(v.code || v.id, v.orientation))}" data-v-open="${esc(v.code || v.id)}">
       <span class="vrow__media">
         ${
           v.thumbnail
@@ -446,7 +452,7 @@ function commentsMarkup() {
 
   const composer = !signedIn()
     ? `<div class="vcomposer">
-         <p class="vcomposer__note">${icon("user")} <span><a href="login.html?next=${encodeURIComponent(`videos.html#/v/${state.code}`)}">Sign in</a> to join the conversation.</span></p>
+         <p class="vcomposer__note">${icon("user")} <span><a href="login.html?next=${encodeURIComponent(videoUrl(state.code, state.orientation))}">Sign in</a> to join the conversation.</span></p>
        </div>`
     : !canComment
       ? `<div class="vcomposer">
@@ -505,7 +511,7 @@ function watchMarkup(v, res) {
   const desc = String(v.description || "").trim();
 
   return `
-    <div class="vwatch">
+    <div class="vwatch" data-orientation="${state.orientation}">
       <div class="vwatch__main">
         <a class="vback" href="#" data-v-back>${icon("arrowLeft")} All videos</a>
 
@@ -583,7 +589,7 @@ function watchMarkup(v, res) {
     </div>`;
 }
 
-async function openWatch(code) {
+async function openWatch(code, orientation) {
   const host = watchEl();
   if (!host) return;
   if (!code) {
@@ -592,12 +598,13 @@ async function openWatch(code) {
   }
   state.view = "watch";
   state.code = code;
+  state.orientation = orientationOf(orientation);
   state.comments = null;
   state.canComment = false;
   state.reaction = null;
   if (browseEl()) browseEl().hidden = true;
   host.hidden = false;
-  host.innerHTML = `<div class="vwatch"><div class="vwatch__main">
+  host.innerHTML = `<div class="vwatch" data-orientation="${state.orientation}"><div class="vwatch__main">
       <div class="vsk" style="aspect-ratio:16/9"></div>
       <div class="vsk" style="height:120px"></div>
     </div></div>`;
@@ -611,7 +618,7 @@ async function openWatch(code) {
   }
 
   if (!res || res.ok !== true) {
-    host.innerHTML = `<div class="vwatch"><div class="vwatch__main">
+    host.innerHTML = `<div class="vwatch" data-orientation="${state.orientation}"><div class="vwatch__main">
         <a class="vback" href="#" data-v-back>${icon("arrowLeft")} All videos</a>
         ${emptyState({
           title: res && res.error === "not_found" ? "That video is gone" : "The video did not load",
@@ -630,7 +637,7 @@ async function openWatch(code) {
   state.more = Array.isArray(res.more) ? res.more : [];
   state.key = "";
 
-  host.innerHTML = `<div class="vwatch"><div class="vwatch__main">
+  host.innerHTML = `<div class="vwatch" data-orientation="${state.orientation}"><div class="vwatch__main">
       <div class="vsk" style="aspect-ratio:16/9"></div>
     </div></div>`;
 
@@ -675,9 +682,8 @@ function showBrowse() {
 }
 
 function route() {
-  const hash = String(location.hash || "").replace(/^#!?\/?/, "");
-  const match = hash.match(/^v\/([\w.-]+)/);
-  if (match) openWatch(decodeURIComponent(match[1]));
+  const next = parseRoute(location.hash);
+  if (next.surface === "videos" && next.id) openWatch(next.id, next.orientation || "h");
   else showBrowse();
 }
 
@@ -849,7 +855,7 @@ function bindWatch() {
     }
 
     if (event.target.closest("[data-v-share]")) {
-      const url = `${location.origin}${location.pathname}#/v/${state.code}`;
+      const url = `${location.origin}${location.pathname}${videoUrl(state.code, state.orientation).replace(/^videos\.html/, "")}`;
       if (signedIn()) {
         rpc("post_reshare", { p_token: state.token, p_ref: state.code }).then((res) => {
           if (res && res.ok) toast({ title: res.reshared ? "Reshared to your feed" : "Reshare taken back", tone: "success", iconName: "share" });

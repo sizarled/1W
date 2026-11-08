@@ -186,7 +186,9 @@ const lastCall = (calls, fn) => [...calls].reverse().find((c) => fnName(c.href) 
   expect("feed: field chips + all", document.querySelectorAll("[data-v-field]").length === 3, document.querySelectorAll("[data-v-field]").length);
   expect("feed: the first chip is all fields", document.querySelector("[data-v-field]")?.classList.contains("is-active"));
   expect("feed: a card carries its title", cards[0]?.textContent.includes("Big Buck Bunny"));
-  expect("feed: a card links by code", cards[0]?.getAttribute("href") === "#/v/PST-001010", cards[0]?.getAttribute("href"));
+  /* the address book names the shape: `#/h/ID=<code>` is a landscape piece */
+  expect("feed: a card links by code", cards[0]?.getAttribute("href") === "videos.html#/h/ID=PST-001010", cards[0]?.getAttribute("href"));
+  expect("feed: the card is marked landscape", cards[0]?.getAttribute("data-orientation") === "h", cards[0]?.getAttribute("data-orientation"));
   expect("feed: the guests gets the sign-in door", document.querySelector("[data-v-publish]")?.getAttribute("href") === "login.html?next=video-editor.html");
   expect("feed: no shelf without a member", document.querySelector("[data-v-yours]")?.hidden === true);
   expect("feed: nothing threw", errors.length === 0, errors.join(" | "));

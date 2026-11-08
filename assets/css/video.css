@@ -1591,3 +1591,29 @@
     animation: none;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* a vertical video keeps its own shape                               */
+/* ------------------------------------------------------------------ */
+/* `videos.html#/v/ID=…` is a 9:16 piece: the stage turns portrait and
+   the column narrows around it, so the player is never letterboxed into
+   a landscape frame it does not belong in. `#/h/ID=…` is untouched. */
+.vwatch[data-orientation="v"] .vplayer {
+  aspect-ratio: 9 / 16;
+  max-width: min(420px, 100%);
+  margin-inline: auto;
+}
+
+.vwatch[data-orientation="v"] .vplayer iframe,
+.vwatch[data-orientation="v"] .vplayer video,
+.vwatch[data-orientation="v"] .vplayer img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* the card in the feed says which shape it is before it is opened */
+.vcard[data-orientation="v"] .vthumb,
+.vcard[data-orientation="v"] .vcard__thumb {
+  aspect-ratio: 9 / 16;
+}

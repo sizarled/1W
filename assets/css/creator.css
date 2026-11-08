@@ -3273,3 +3273,15 @@ a.crp-ad:hover {
 .cr-hubhead__name {
   overflow-wrap: anywhere;
 }
+
+/* a card on a hub page opens the thing it shows */
+.crp-item__open {
+  color: inherit;
+  text-decoration: none;
+}
+
+.crp-item:hover .crp-item__open {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--text) 35%, transparent);
+  text-underline-offset: 3px;
+}

@@ -25,6 +25,7 @@
  *   creator_item_save / _status / _del  the editor
  */
 import { rpc } from "./data.js";
+import { mediaUrl } from "./media.js";
 import { qs, qsa, esc, num, timeAgo } from "./utils.js";
 import { hydrateIcons } from "./icons.js";
 import { toast } from "./ui.js";
@@ -356,6 +357,8 @@ const state = {
   participants: null,
   ads: null,
   directory: { q: "", role: "", kind: "", country: "", sort: "subscribers", rows: [], countries: [], count: 0, owners: 0, publishers: 0, loading: false, error: "" },
+  /* `?studio=<studio>&creator=<creator>` — the hub, and whose page of it */
+  scope: { studio: "", creator: "" },
 };
 
 const el = (sel, root = document) => qs(sel, root);
@@ -2041,7 +2044,16 @@ function renderHubPage(host) {
     ? `<img src="${esc(hub.logo_url)}" alt="" width="72" height="72" />`
     : `<span aria-hidden="true">${esc(initials(hub.name))}</span>`;
   const role = hub.role || "visitor";
-  const manageSection = hubInfo(hub.kind).slug;
+  /* `?creator=` scopes the page to one creator's content; without it the page
+     is the whole hub, which is what an unadorned link opens */
+  const scopeCreator = String((state.scope && state.scope.creator) || "").trim();
+  const scoped = scopeCreator
+    ? items.filter((item) => {
+        const who = item.creator || item.creator_id || item.member_id || item.owner_id || "";
+        return !who || String(who) === scopeCreator;
+      })
+    : items;
+  const manageHref = `dashboard.html#creator&manage=${encodeURIComponent(hub.id || "")}`;
 
   const body = view.locked
     ? `
@@ -2067,8 +2079,8 @@ function renderHubPage(host) {
       </div>`
     : `
       ${
-        items.length
-          ? `<div class="crp-items">${items.map(itemCard).join("")}</div>`
+        scoped.length
+          ? `<div class="crp-items">${scoped.map(itemCard).join("")}</div>`
           : emptyBlock(info.icon, "Nothing published yet", `This ${esc(info.noun)} has no item in the open. Subscribe and come back.`)
       }`;
 
@@ -2096,8 +2108,8 @@ function renderHubPage(host) {
             }
             ${
               role === "owner" || role === "staff"
-                ? `<a class="dsh-btn dsh-btn--sm" href="creator.html?section=${encodeURIComponent(manageSection)}&hub=${encodeURIComponent(hub.id)}"><i data-icon="settings"></i> Manage</a>
-                   <a class="dsh-btn dsh-btn--sm" href="creator.html?section=${encodeURIComponent(manageSection)}&hub=${encodeURIComponent(hub.id)}&tab=participants"><i data-icon="users"></i> Requests</a>`
+                ? `<a class="dsh-btn dsh-btn--sm" href="${esc(manageHref)}" data-crp-manage><i data-icon="settings"></i> Manage</a>
+                   <a class="dsh-btn dsh-btn--sm" href="${esc(manageHref)}" data-crp-requests><i data-icon="users"></i> Requests</a>`
                 : ""
             }
             <button class="dsh-btn dsh-btn--primary dsh-btn--sm" type="button" data-crp-sub="${esc(hub.id)}" data-on="${hub.subscribed ? "1" : "0"}" ${hub.can_subscribe === false && !hub.subscribed ? "disabled aria-disabled=\"true\"" : ""}>
@@ -2114,6 +2126,11 @@ function renderHubPage(host) {
           ${statPill("clock", hub.minutes, "min")}
           ${statPill("thumbUp", hub.likes, "likes")}
           ${hub.niches?.length ? `<span class="crp-tag">${esc(hub.niches.join(" · "))}</span>` : ""}
+          ${
+            scopeCreator
+              ? `<a class="cr-pill" data-crp-scope="${esc(scopeCreator)}" href="creator.html?studio=${encodeURIComponent(hub.code || "")}" title="This page is shown for one creator — open the whole hub"><i data-icon="user"></i>${esc(scopeCreator)}</a>`
+              : ""
+          }
         </div>
         ${hub.description ? `<p class="crp-hubhero__desc">${esc(hub.description)}</p>` : ""}
       </header>
@@ -2132,12 +2149,15 @@ function itemCard(row) {
     ? `<img class="crp-item__thumb" src="${esc(row.thumbnail)}" alt="" loading="lazy" />`
     : `<span class="crp-item__thumb is-plain" aria-hidden="true"><i data-icon="${esc(KIND_ICON[row.kind] || "file")}"></i></span>`;
   const date = row.published_at ? dateOf(row.published_at) : "";
+  /* the card opens the thing itself, at the address media.js gives it */
+  const href = mediaUrl(row);
+  const title = esc(row.title || "Untitled");
   return `
-    <article class="crp-item" data-crp-item="${esc(row.id || "")}">
+    <article class="crp-item" data-crp-item="${esc(row.id || "")}"${href ? ` data-crp-href="${esc(href)}"` : ""}>
       ${thumb}
       <div class="crp-item__body">
         <p class="crp-item__kind"><i data-icon="${esc(info.icon)}"></i>${esc(KIND_LABEL[row.kind] || info.label)}${row.visibility && row.visibility !== "public" ? ` · ${esc(visLabel(row.visibility))}` : ""}</p>
-        <h3 class="crp-item__title">${esc(row.title || "Untitled")}</h3>
+        <h3 class="crp-item__title">${href ? `<a class="crp-item__open" href="${esc(href)}">${title}</a>` : title}</h3>
         ${row.summary ? `<p class="crp-item__summary">${esc(row.summary)}</p>` : ""}
         ${
           (row.meta?.quality || []).length
@@ -3078,9 +3098,11 @@ async function deleteItem(id) {
 }
 
 async function copyLink(row) {
-  const section = sectionOf(state.section);
-  const page = { channel: "video", blog: "article", space: "question", library: "document", gallery: "picture" }[section.key] || "article";
-  const url = `${location.origin || "https://1world.example"}/${page}.html?id=${encodeURIComponent(row.code || row.id)}`;
+  /* one address book: videos, audio, playlists and the rest keep the shape
+     media.js gives them, so a copied link opens the same thing the row opens */
+  const kind = { channel: "video", blog: "article", space: "question", library: "document", gallery: "image" }[sectionOf(state.section).key] || "article";
+  const path = mediaUrl({ ...row, kind: row.kind || kind }) || `article.html?id=${encodeURIComponent(row.code || row.id)}`;
+  const url = `${location.origin || "https://1world.example"}${location.pathname.replace(/[^/]*$/, "")}${path}`;
   try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(url);
@@ -3570,7 +3592,11 @@ async function boot() {
     }
     if (creatorParam) {
       state.creatorRef = creatorParam;
-      if (studioParam || hubParam) return openHub(studioParam || hubParam);
+      /* `?studio=<studio>&creator=<creator>` — the studio, and whose page of it */
+      if (studioParam || hubParam) {
+        state.scope = { studio: String(studioParam || ""), creator: String(creatorParam) };
+        return openHub(studioParam || hubParam);
+      }
       return openCreator(creatorParam);
     }
     if (studioParam || hubParam) return openHub(studioParam || hubParam);
