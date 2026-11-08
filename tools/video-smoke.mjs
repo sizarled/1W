@@ -1202,14 +1202,38 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
   expect("publisher: the button knows the studio", cd.querySelector("[data-v-subscribe]")?.getAttribute("data-v-subscribe") === "hub-1", cd.querySelector("[data-v-subscribe]")?.getAttribute("data-v-subscribe"));
   expect("publisher: Take action opens a menu", cd.querySelector(".vmenu > summary")?.textContent.includes("Take action"), cd.querySelector(".vmenu > summary")?.textContent);
   const items = [...cd.querySelectorAll(".vmenu__item")].map((node) => node.textContent.trim());
-  expect("publisher: the menu holds the five actions", items.length === 5, items.join(" | "));
-  expect("publisher: it can open the studio", cd.querySelectorAll('.vmenu__item[href="creator.html?studio=IDST100001&creator=ID100019"]').length === 2, String(cd.querySelectorAll(".vmenu__item[href]").length));
+  /* the six a viewer acts with: follow, join, message, share, report, block */
+  expect("publisher: the menu holds the six actions", items.length === 7, items.join(" | "));
+  expect("publisher: follow, join, message, share, copy, report, block", /Follow/.test(items[0]) && /Join/.test(items[1]) && /Message/.test(items[2]) && /Share/.test(items[3]) && /Report/.test(items[5]) && /Block/.test(items[6]), items.join(" | "));
+  expect("publisher: the block row is the last, and marked", cd.querySelectorAll(".vmenu__item")[6]?.classList.contains("vmenu__item--danger"));
   cd.querySelector("[data-v-subscribe]").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
   await wait(80);
   expect("publisher: the subscription is sent", lastCall(studioCard.calls, "creator_subscribe")?.body.p_hub === "hub-1", JSON.stringify(lastCall(studioCard.calls, "creator_subscribe")?.body));
   expect("publisher: the button says so", /Subscribed/.test(cd.querySelector("[data-v-subscribe]")?.textContent || ""), cd.querySelector("[data-v-subscribe]")?.textContent);
   /* the card writes the count the way the rest of the site does: 746K */
   expect("publisher: and the count moves", cd.querySelector(".vhost__stats b")?.textContent === "746K", cd.querySelector(".vhost__stats b")?.textContent);
+
+  /* message: a dialog, then the inbox call */
+  cd.querySelector("[data-v-message]").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await wait(60);
+  expect("publisher: the message opens a dialog", Boolean(cd.querySelector("[data-v-msg-dialog]")));
+  expect("publisher: the dialog names who it is for", /Cine Aura/.test(cd.querySelector(".vmsg__head")?.textContent || ""), cd.querySelector(".vmsg__head")?.textContent);
+  cd.querySelector('.vmsg textarea[name="body"]').value = "A question about the last shoot.";
+  cd.querySelector("[data-v-msg-form]").dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
+  await wait(80);
+  const sent = lastCall(studioCard.calls, "msg_send")?.body;
+  expect("publisher: the message is sent to the owner", sent?.p_ref === "ID100019" && sent?.p_body === "A question about the last shoot.", JSON.stringify(sent));
+  expect("publisher: and the dialog closes", !cd.querySelector("[data-v-msg-dialog]"));
+
+  /* block: this device, and the way back */
+  cd.querySelector("[data-v-block]").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await wait(60);
+  expect("publisher: block is kept on the device", (studioCard.window.localStorage.getItem("1w.videos.blocked") || "").includes("ID100019"), studioCard.window.localStorage.getItem("1w.videos.blocked"));
+  expect("publisher: the menu offers the way back", /Unblock/.test(cd.querySelector("[data-v-block]")?.textContent || ""), cd.querySelector("[data-v-block]")?.textContent);
+  expect("publisher: and the card says it is blocked", cd.querySelector(".vhost")?.classList.contains("is-blocked"));
+  cd.querySelector("[data-v-block]").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await wait(60);
+  expect("publisher: unblock clears it", !(studioCard.window.localStorage.getItem("1w.videos.blocked") || "").includes("ID100019"), studioCard.window.localStorage.getItem("1w.videos.blocked"));
 
   /* a guest is asked to sign in, and nothing is sent */
   const guestCard = boot("videos.html", {

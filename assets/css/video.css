@@ -2015,3 +2015,58 @@
   height: 0.95rem;
   color: var(--muted);
 }
+
+/* the menu's last row, and the message it can open */
+.vmenu__item--danger {
+  color: var(--muted);
+}
+
+.vmenu__item--danger.is-on {
+  color: var(--text);
+}
+
+.vhost.is-blocked {
+  opacity: 0.55;
+}
+
+.vmsg {
+  width: min(30rem, 94vw);
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.vmsg__form {
+  display: grid;
+  gap: 0.6rem;
+  padding: 1rem;
+}
+
+.vmsg__head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.vmsg__head svg {
+  width: 1rem;
+  height: 1rem;
+  color: var(--muted);
+}
+
+.vmsg__note {
+  margin: 0;
+  font-size: 0.76rem;
+  color: var(--faint);
+}
+
+.vmsg__acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}

@@ -603,11 +603,13 @@ function watchMarkup(v, res) {
                 ? `<details class="vmenu" data-v-actions>
                      <summary class="btn btn--ghost btn--sm">${icon("dots")} Take action</summary>
                      <div class="vmenu__panel">
+                       <button class="vmenu__item" type="button" data-v-follow>${icon("user")} Follow the creator</button>
+                       <button class="vmenu__item" type="button" data-v-join>${icon("users")} Join the ${esc(hubKindWord(state.hub.kind).toLowerCase())}</button>
+                       <button class="vmenu__item" type="button" data-v-message>${icon("mail")} Message</button>
                        <button class="vmenu__item" type="button" data-v-share>${icon("share")} Share</button>
                        <button class="vmenu__item" type="button" data-v-copy>${icon("link")} Copy the link</button>
-                       <a class="vmenu__item" href="${esc(creatorUrl(state.hub.code || state.hub.id, state.hub.creator || host.id))}">${icon("external")} Open the ${esc(hubKindWord(state.hub.kind).toLowerCase())}</a>
-                       <a class="vmenu__item" href="${esc(creatorUrl(state.hub.code || state.hub.id, state.hub.creator || host.id))}">${icon("bookmark")} More from this ${esc(hubKindWord(state.hub.kind).toLowerCase())}</a>
                        <button class="vmenu__item" type="button" data-v-report>${icon("flag")} Report</button>
+                       <button class="vmenu__item vmenu__item--danger" type="button" data-v-block>${icon("close")} Block</button>
                      </div>
                    </details>`
                 : ""
@@ -645,6 +647,8 @@ function watchMarkup(v, res) {
                </div>`
             : ""
         }
+
+        <div data-v-msg-box hidden></div>
 
         ${res.locked ? "" : commentsMarkup()}
       </div>
@@ -754,6 +758,7 @@ async function openWatch(code, orientation) {
     if (toggle) toggle.hidden = true;
     descEl.classList.remove("is-clamped");
   }
+  paintBlockState();
   const saveBtn = $("[data-v-save]");
   if (saveBtn) {
     const saved = savedSet().has(v.code || v.id);
@@ -950,6 +955,98 @@ function toggleSaved(code) {
 }
 
 /* ================================================================== */
+/* blocked on this device                                             */
+/* ================================================================== */
+const BLOCKED_KEY = "1w.videos.blocked";
+
+function blockedSet() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(BLOCKED_KEY) || "[]");
+    return new Set(Array.isArray(raw) ? raw : []);
+  } catch {
+    return new Set();
+  }
+}
+
+/** The member who publishes this video — the studio's owner, or the host. */
+function blockRef() {
+  const host = (state.video && state.video.video && state.video.video.host) || state.video?.publisher || {};
+  return String((state.hub && state.hub.creator) || host.id || host.username || "");
+}
+
+/** The card says when it is blocked, and the menu offers the way back. */
+function paintBlockState() {
+  const btn = qs("[data-v-block]");
+  const who = blockRef();
+  if (!btn || !who) return;
+  const on = blockedSet().has(who);
+  btn.innerHTML = `${icon(on ? "check" : "close")} ${on ? "Unblock" : "Block"}`;
+  btn.classList.toggle("is-on", on);
+  const card = qs(".vhost");
+  if (card) card.classList.toggle("is-blocked", on);
+}
+
+/* ================================================================== */
+/* a message to the publisher                                         */
+/* ================================================================== */
+function openMessageDialog() {
+  if (!signedIn()) {
+    return toast({ title: "Sign in first", message: "A message needs a member behind it.", iconName: "login" });
+  }
+  const who = blockRef();
+  const name = (state.hub && state.hub.name) || (state.video?.video?.host || {}).name || "the publisher";
+  const box = qs("[data-v-msg-box]");
+  if (box === null) return;
+  box.hidden = false;
+  box.innerHTML = `
+    <dialog class="vmsg" data-v-msg-dialog open>
+      <form class="vmsg__form" data-v-msg-form>
+        <p class="vmsg__head">${icon("mail")} A message to ${esc(name)}</p>
+        <input class="input" type="text" name="subject" placeholder="The subject" aria-label="Subject" maxlength="120" />
+        <textarea class="textarea" rows="4" name="body" placeholder="What would you like to say?" aria-label="The message" maxlength="2000"></textarea>
+        <p class="vmsg__note" data-v-msg-note>It lands in their inbox${who ? ` (${esc(who)})` : ""}.</p>
+        <div class="vmsg__acts">
+          <button class="btn btn--ghost btn--sm" type="button" data-v-msg-cancel>Cancel</button>
+          <button class="btn btn--primary btn--sm" type="submit">${icon("send")} Send</button>
+        </div>
+      </form>
+    </dialog>`;
+  box.querySelector("textarea")?.focus();
+}
+
+async function sendMessage(form) {
+  const who = blockRef();
+  const data = new window.FormData(form);
+  const body = String(data.get("body") || "").trim();
+  if (!who) return toast({ title: "No one to write to", message: "This video named no publisher.", tone: "error", iconName: "info" });
+  if (!body) return toast({ title: "Nothing to send", message: "Write a line first.", tone: "error", iconName: "info" });
+  const button = form.querySelector('button[type="submit"]');
+  if (button) button.disabled = true;
+  let res = null;
+  try {
+    res = await rpc("msg_send", {
+      p_token: state.token,
+      p_ref: who,
+      p_subject: String(data.get("subject") || "").trim(),
+      p_body: body,
+      p_attachments: [],
+    });
+  } catch (error) {
+    toast({ title: "Not sent", message: error.message, tone: "error", iconName: "info" });
+  }
+  if (button) button.disabled = false;
+  if (res && res.ok !== false) {
+    const box = qs("[data-v-msg-box]");
+    if (box) {
+      box.hidden = true;
+      box.innerHTML = "";
+    }
+    return toast({ title: "Message sent", message: "It is in their inbox.", tone: "success", iconName: "mail" });
+  }
+  if (res) toast({ title: "Not sent", message: res.error === "session" ? "Sign in again." : "The inbox did not take it.", tone: "error", iconName: "info" });
+}
+
+/* ================================================================== */
 /* comments                                                           */
 /* ================================================================== */
 function paintComments() {
@@ -1038,7 +1135,61 @@ function bindWatch() {
   const root = watchEl();
   if (!root) return;
 
+  root.onsubmit = (event) => {
+    const form = event.target.closest("[data-v-msg-form]");
+    if (!form) return;
+    event.preventDefault();
+    sendMessage(form);
+  };
   root.onclick = async (event) => {
+    /* join the studio — the menu item and the card's button are the same door */
+    const join = event.target.closest("[data-v-join]");
+    if (join) {
+      event.preventDefault();
+      const cardBtn = $("[data-v-subscribe]");
+      if (cardBtn) return cardBtn.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+      return;
+    }
+
+    /* a message to the person behind the studio */
+    const messageBtn = event.target.closest("[data-v-message]");
+    if (messageBtn) {
+      event.preventDefault();
+      return openMessageDialog();
+    }
+    const messageCancel = event.target.closest("[data-v-msg-cancel]");
+    if (messageCancel) {
+      event.preventDefault();
+      const box = qs("[data-v-msg-box]");
+      if (box) {
+        box.hidden = true;
+        box.innerHTML = "";
+      }
+      return;
+    }
+
+    /* block: this device stops showing what they publish */
+    const blockBtn = event.target.closest("[data-v-block]");
+    if (blockBtn) {
+      event.preventDefault();
+      const who = blockRef();
+      if (!who) return;
+      const set = blockedSet();
+      if (set.has(who)) set.delete(who);
+      else set.add(who);
+      try {
+        localStorage.setItem(BLOCKED_KEY, JSON.stringify([...set]));
+      } catch {
+        /* storage blocked — the card still says what happened for this visit */
+      }
+      paintBlockState();
+      return toast({
+        title: set.has(who) ? "Blocked on this device" : "Unblocked",
+        message: set.has(who) ? "Their videos are hidden from you here. Nothing was reported." : "Their videos are back in your lists.",
+        iconName: set.has(who) ? "close" : "check",
+      });
+    }
+
     /* subscribing to the studio, from the card that published the video */
     const subscribe = event.target.closest("[data-v-subscribe]");
     if (subscribe) {
@@ -1257,7 +1408,9 @@ function bindWatch() {
     if (event.target.closest("[data-v-follow]")) {
       const btn = event.target.closest("[data-v-follow]");
       const host = (state.video && state.video.video && state.video.video.host) || {};
-      if (!signedIn()) return;
+      if (!signedIn()) {
+        return toast({ title: "Sign in first", message: "Following hangs from a member.", iconName: "login" });
+      }
       btn.disabled = true;
       try {
         const res = await rpc("profile_follow_toggle", { p_token: state.token, p_ref: host.id || host.username || "" });

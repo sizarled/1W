@@ -1651,8 +1651,11 @@ page draws it under the player without reading the description.
 **The publisher card carries its own two doors.** Under the studio's name: its counts (subscribers,
 releases), its blurb, then **Subscribe** — the hub's own subscription (`creator_subscribe`), not the
 member's follow, with the count moving when it lands, and a guest told to sign in before anything is
-sent — and **Take action**, a menu holding Share, Copy the link, Open the studio, More from this
-studio and Report. A video with no studio keeps the member's face, handle, followers and Follow.
+sent — and **Take action**, the six a viewer acts with: **Follow the creator** (`profile_follow_toggle`),
+**Join the studio** (the same door as Subscribe), **Message** (a dialog that sends through
+`msg_send` to the studio's owner and closes on success), **Share**, **Copy the link**, **Report**
+(the page's own report box) and **Block** — which keeps the member in `1w.videos.blocked` on this
+device only, says so on the card, and offers Unblock in the same row. A video with no studio keeps the member's face, handle, followers and Follow.
 
 **The details under the video.** The watch screen carries, in this order: *Back to the studio* (the
 kind's own word) beside *All videos*; the stats line, now with the minutes; a **chapter list read from
@@ -1669,7 +1672,7 @@ in the same file, or, when that call is not on the server yet, the `creator_publ
 page already makes (a channel first, then a server or a cinema, never a private hub). No studio at
 all, and the member's face is the publisher, which is the honest answer.
 
-Test: `node tools/video-smoke.mjs` — **307/307** (feed, sort, search, watch, reaction→comment, a locked
+Test: `node tools/video-smoke.mjs` — **316/316** (feed, sort, search, watch, reaction→comment, a locked
 door and its password, a missing video, the editor signed out and in, the payload of a publish, of an
 exclusive rule set and of a private list, the player and the sixteen host cases, the oEmbed stills, the
 studio picker, the contents rail, and the forwarding page).
@@ -2024,7 +2027,7 @@ the editors need**, each pinned to a name pattern and a set of extensions (`user
 | `node tools/rte-smoke.mjs` | **45/45** (every command, links, insertion, history, paste, drop, keys, toolbar state) |
 | `node tools/article-smoke.mjs` | **281/281** |
 | `node tools/blog-smoke.mjs` | **82/82** (the address, the closed door, the hero, the home, a section, the search, the plain cover) |
-| `node tools/video-smoke.mjs` | **307/307** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
+| `node tools/video-smoke.mjs` | **316/316** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
 | `node tools/media-smoke.mjs` | **89/89** (the address book, the three pages, the portrait stage, the locked item, the shelves) |
 
 ### The six OAuth apps — one checklist each
