@@ -1281,7 +1281,7 @@ published (and refused without a media link), an article refused in a studio hub
 categories three deep with the fourth refused (`deep`) and a duplicate refused, a third blog created
 then a fourth refused (`limit`, level 1), staff added by code and an unknown code refused
 (`member`), and the subscriber list reporting a real member with their country.
-`tools/creator-smoke.mjs` (359 checks) runs the studio end to end — an empty studio, its tables
+`tools/creator-smoke.mjs` (372 checks) runs the studio end to end — an empty studio, its tables
 (private + password + staff), saves, refuses, and deletes a studio; a studio page holding one of each
 hub (tables, columns, action menus, the editor saving a draft then publishing, blog articles vs
 drafts, categories, subscribers, library books); and the `?section=&tab=` deep links — including
@@ -1485,7 +1485,7 @@ blog with `role: "publisher"`, `creator_items` returned its two published rows w
 `draft`, `creator_item_get` opened it and `creator_item_delete` removed it — while another member's row
 answered `not_found`. The seat and the test session were removed afterwards. `tools/publisher-smoke.mjs`
 (52 checks) holds `publisher.html` to the program alone and follows an old `?studio=` link to
-`creator.html?studio=<code>`; `tools/creator-smoke.mjs` (359 checks) walks a publisher's seat room by
+`creator.html?studio=<code>`; `tools/creator-smoke.mjs` (372 checks) walks a publisher's seat room by
 room and re-checks that the owner's page did not change.
 
 DDL + functions: `tools/sql/creator-requests.sql` — **applied**, and exercised on the real database:
@@ -1690,6 +1690,13 @@ the temporary studio and the session were removed afterwards.
 
 `assets/js/media.js` is the only module that knows how a thing is addressed. A page asks it for a
 link; a page hands it a hash; nothing else spells a media URL by hand.
+
+A **studio** (`creator.html?studio=<code>&creator=<id>`, kind `channel`) is read shelf by shelf:
+**All · Videos · Vertical · Podcasts · Music · Playlists** — a tab per shelf with its count, the
+videos in a grid, the vertical ones in a portrait rail, the podcasts, the music and the playlists as
+lists, plus an *Also here* shelf for anything else the studio holds (a book, a document, an image).
+Every card is a link: `videos.html#/h|v/ID=…`, `audio.html#/p|m/ID=…`, `playlist.html#/videos|podcasts|songs/ID=…`.
+The other six hub kinds keep the plain grid.
 
 | What | Address |
 | --- | --- |
@@ -2452,7 +2459,7 @@ node tools/dashboard-smoke.mjs   # 269 checks: the five gates, rail, popover, co
 node tools/sidebar-smoke.mjs     # 93 checks: the edge, the pin, Escape, the mobile drawer, the dashboard menu
 node tools/panel-smoke.mjs       # 90 checks: the desk's three states, the rows, the switch, the dialog, the shelf
 node tools/court-smoke.mjs       # 115 checks: the four steps, uploads, both doors, the court room
-node tools/creator-smoke.mjs     # 363 checks: the search (owners + publishers), the tables, the editors, a publisher's seat
+node tools/creator-smoke.mjs     # 372 checks: the search (owners + publishers), the tables, the editors, a publisher's seat
 node tools/media-smoke.mjs       # 89 checks: the address book, videos.html#/h|v/, audio.html#/p|m/, playlist.html#/videos|podcasts|songs/
 node tools/publisher-smoke.mjs   # 52 checks: the program, the seat, the links, and the hand-off to the creator page
 node tools/iptv-smoke.mjs        # 43 checks: the playlists, the groups, the page, the deep links

@@ -3285,3 +3285,310 @@ a.crp-ad:hover {
   text-decoration-color: color-mix(in srgb, var(--text) 35%, transparent);
   text-underline-offset: 3px;
 }
+
+/* ------------------------------------------------------------------ */
+/* the studio page — one shelf per medium                             */
+/* ------------------------------------------------------------------ */
+/* `creator.html?studio=<code>&creator=<id>` on a channel: the videos in
+   a grid, the vertical ones in a portrait rail, the podcasts, the music
+   and the playlists in lists. Every card is a link to the page that
+   plays the thing, so the studio is the door and not the player. */
+.crs {
+  display: grid;
+  gap: clamp(1.2rem, 3vw, 2rem);
+}
+
+.crs-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.crs-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.42rem 0.85rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.84rem;
+  cursor: pointer;
+  transition: color 0.18s var(--ease-out), border-color 0.18s var(--ease-out);
+}
+
+.crs-tab:hover {
+  color: var(--text);
+  border-color: var(--line);
+}
+
+.crs-tab.is-on {
+  background: var(--surface-inv);
+  border-color: var(--surface-inv);
+  color: var(--bg);
+}
+
+.crs-tab__n {
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--faint);
+}
+
+.crs-tab.is-on .crs-tab__n {
+  color: color-mix(in srgb, var(--bg) 70%, transparent);
+}
+
+.crs-sec {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.crs-sec[hidden] {
+  display: none;
+}
+
+.crs-sec__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.crs-sec__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.crs-sec__title svg {
+  width: 1rem;
+  height: 1rem;
+  color: var(--muted);
+}
+
+.crs-sec__count {
+  font-size: 0.78rem;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* the video grid */
+.crs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+  gap: clamp(0.7rem, 2vw, 1.1rem);
+}
+
+.crs-card {
+  display: grid;
+  gap: 0.4rem;
+  text-decoration: none;
+  color: inherit;
+}
+
+.crs-card__thumb {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--bg-soft) center / cover no-repeat;
+  color: var(--faint);
+  overflow: hidden;
+}
+
+.crs-card.is-tall {
+  max-width: 200px;
+}
+
+.crs-card.is-tall .crs-card__thumb {
+  aspect-ratio: 9 / 16;
+}
+
+.crs-card__thumb.is-plain {
+  background-image: radial-gradient(circle at 35% 30%, var(--ghost), transparent 65%);
+}
+
+.crs-card__thumb svg {
+  width: 1.4rem;
+  height: 1.4rem;
+}
+
+.crs-card__play {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 50%;
+  background: var(--surface-inv);
+  color: var(--bg);
+  opacity: 0;
+  transform: scale(0.9);
+  transition: opacity 0.18s var(--ease-out), transform 0.18s var(--ease-out);
+}
+
+.crs-card__play svg {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+.crs-card:hover .crs-card__play,
+.crs-card:focus-visible .crs-card__play {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.crs-card__time {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  padding: 0.05rem 0.35rem;
+  border-radius: 3px;
+  background: var(--surface-inv);
+  color: var(--bg);
+  font-size: 0.66rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.crs-card__title {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.crs-card:hover .crs-card__title {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.crs-card__meta {
+  font-size: 0.74rem;
+  color: var(--faint);
+}
+
+/* the portrait rail */
+.crs-rail {
+  display: flex;
+  gap: clamp(0.7rem, 2vw, 1rem);
+  overflow-x: auto;
+  padding-bottom: 0.4rem;
+  scroll-snap-type: x proximity;
+}
+
+.crs-rail .crs-card {
+  flex: 0 0 auto;
+  width: 150px;
+  scroll-snap-align: start;
+}
+
+.crs-rail .crs-card__title {
+  -webkit-line-clamp: 2;
+}
+
+/* the lists — podcasts, music, playlists */
+.crs-list {
+  display: grid;
+  border-top: 1px solid var(--line);
+}
+
+.crs-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.65rem 0.35rem;
+  border-bottom: 1px solid var(--line);
+  text-decoration: none;
+  color: inherit;
+}
+
+.crs-row:hover {
+  background: var(--bg-soft);
+}
+
+.crs-row__thumb {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--bg-soft) center / cover no-repeat;
+  color: var(--faint);
+}
+
+.crs-row__thumb.is-plain {
+  background-image: radial-gradient(circle at 35% 30%, var(--ghost), transparent 65%);
+}
+
+.crs-row__thumb svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.crs-row__play {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--bg) 60%, transparent);
+  color: var(--text);
+  opacity: 0;
+  transition: opacity 0.16s var(--ease-out);
+}
+
+.crs-row:hover .crs-row__play {
+  opacity: 1;
+}
+
+.crs-row__text {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.crs-row__title {
+  font-size: 0.92rem;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crs-row:hover .crs-row__title {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.crs-row__meta {
+  font-size: 0.76rem;
+  color: var(--faint);
+}
+
+.crs-row__go svg {
+  width: 1rem;
+  height: 1rem;
+  color: var(--faint);
+}
+
+@media (max-width: 640px) {
+  .crs-grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr));
+  }
+}

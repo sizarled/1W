@@ -359,6 +359,8 @@ const state = {
   directory: { q: "", role: "", kind: "", country: "", sort: "subscribers", rows: [], countries: [], count: 0, owners: 0, publishers: 0, loading: false, error: "" },
   /* `?studio=<studio>&creator=<creator>` — the hub, and whose page of it */
   scope: { studio: "", creator: "" },
+  /* the studio page's shelf filter: all / videos / vertical / podcasts / music / playlists */
+  hubTab: "all",
 };
 
 const el = (sel, root = document) => qs(sel, root);
@@ -2023,6 +2025,172 @@ async function loadCreatorPage(ref) {
 /* ------------------------------------------------------------------ */
 /* one hub, as a visitor                                              */
 /* ------------------------------------------------------------------ */
+/* ================================================================== */
+/* the studio page — a channel, and everything under it               */
+/* ================================================================== */
+/*
+ * A studio is not a grid of everything it has: it is a shelf per medium.
+ * The videos sit in a grid, the vertical ones in a portrait rail, the
+ * podcasts and the music in lists, and the playlists in a row of cards —
+ * and every one of them carries the address media.js gives it, so the
+ * page is a door to `videos.html#/h|v/`, `audio.html#/p|m/` and
+ * `playlist.html#/videos|podcasts|songs/`, not a copy of them.
+ */
+const STUDIO_TABS = [
+  { key: "all", label: "All" },
+  { key: "videos", label: "Videos" },
+  { key: "vertical", label: "Vertical" },
+  { key: "podcasts", label: "Podcasts" },
+  { key: "music", label: "Music" },
+  { key: "playlists", label: "Playlists" },
+];
+
+/** `v` when the row is a 9:16 piece, `h` otherwise. */
+function shapeOf(row) {
+  const raw = String(
+    row.shape || (row.meta && row.meta.shape) || (row.audience && row.audience.shape) || ""
+  ).toLowerCase();
+  return ["v", "vertical", "portrait", "9:16", "reel", "short"].includes(raw) ? "v" : "h";
+}
+
+/** The shelf a playlist holds, from whatever the row carries. */
+function shelfOfRow(row) {
+  const raw = String(row.shelf || row.content_kind || (row.meta && row.meta.kind) || "").toLowerCase();
+  if (raw === "podcast" || raw === "podcasts") return "podcasts";
+  if (raw === "song" || raw === "songs" || raw === "music") return "songs";
+  return "videos";
+}
+
+/** The groups a studio page is read in. */
+function studioGroups(rows) {
+  const videos = [];
+  const vertical = [];
+  const podcasts = [];
+  const music = [];
+  const playlists = [];
+  const others = [];
+  rows.forEach((row) => {
+    const kind = String(row.kind || "").toLowerCase();
+    if (kind === "video") (shapeOf(row) === "v" ? vertical : videos).push(row);
+    else if (kind === "podcast") podcasts.push(row);
+    else if (kind === "song" || kind === "music") music.push(row);
+    else if (kind === "playlist") playlists.push(row);
+    /* a studio can hold a book, a document or an image too — they keep the
+       card the rest of the site draws for them */
+    else others.push(row);
+  });
+  return { videos, vertical, podcasts, music, playlists, others };
+}
+
+function studioVideo(row) {
+  const portrait = shapeOf(row) === "v";
+  const href = mediaUrl({ ...row, kind: "video", orientation: portrait ? "v" : "h" });
+  const thumb = row.thumbnail || row.cover || "";
+  return `
+    <a class="crs-card${portrait ? " is-tall" : ""}" href="${esc(href)}" data-crs-item="${esc(row.code || row.id || "")}" data-shape="${portrait ? "v" : "h"}">
+      <span class="crs-card__thumb${thumb ? "" : " is-plain"}"${thumb ? ` style="background-image:url('${esc(thumb)}')"` : ""}>
+        ${thumb ? "" : `<i data-icon="video"></i>`}
+        <span class="crs-card__play"><i data-icon="play"></i></span>
+        ${row.minutes ? `<span class="crs-card__time">${esc(num(Number(row.minutes) || 0))} min</span>` : ""}
+      </span>
+      <span class="crs-card__title">${esc(row.title || "Untitled")}</span>
+      <span class="crs-card__meta" data-vis="${esc(row.visibility || "public")}">${esc(num(Number(row.views) || Number(row.likes) || 0))}${row.published_at ? ` · ${esc(dateOf(row.published_at))}` : ""}${row.visibility && row.visibility !== "public" ? ` · ${esc(visLabel(row.visibility))}` : ""}</span>
+    </a>`;
+}
+
+function studioRow(row, kind) {
+  const isPlaylist = kind === "playlist";
+  const href = isPlaylist
+    ? mediaUrl({ ...row, kind: "playlist", shelf: shelfOfRow(row) })
+    : mediaUrl({ ...row, kind: kind === "song" ? "song" : "podcast" });
+  const thumb = row.thumbnail || row.cover || "";
+  const blurb =
+    kind === "playlist"
+      ? `${esc((PLAYLIST_NOUN[shelfOfRow(row)] || "Playlist"))}${row.items ? ` · ${esc(num(row.items))} item${row.items === 1 ? "" : "s"}` : ""}`
+      : `${esc(kind === "song" ? "Song" : "Podcast")}${row.minutes ? ` · ${esc(num(Number(row.minutes) || 0))} min` : ""}`;
+  return `
+    <a class="crs-row" href="${esc(href)}" data-crs-item="${esc(row.code || row.id || "")}" data-kind="${esc(kind)}">
+      <span class="crs-row__thumb${thumb ? "" : " is-plain"}"${thumb ? ` style="background-image:url('${esc(thumb)}')"` : ""}>
+        ${thumb ? "" : `<i data-icon="${isPlaylist ? "bookmark" : kind === "song" ? "music" : "mic"}"></i>`}
+        <span class="crs-row__play"><i data-icon="play"></i></span>
+      </span>
+      <span class="crs-row__text">
+        <span class="crs-row__title">${esc(row.title || "Untitled")}</span>
+        <span class="crs-row__meta" data-vis="${esc(row.visibility || "public")}">${blurb}${row.visibility && row.visibility !== "public" ? ` · ${esc(visLabel(row.visibility))}` : ""}</span>
+      </span>
+      <span class="crs-row__go"><i data-icon="chevronRight"></i></span>
+    </a>`;
+}
+
+const PLAYLIST_NOUN = { videos: "Video playlist", podcasts: "Podcast playlist", songs: "Music playlist" };
+
+function studioSection(key, title, iconName, inner, count) {
+  return `
+    <section class="crs-sec" data-crs-sec="${esc(key)}"${state.hubTab === "all" || state.hubTab === key ? "" : " hidden"}>
+      <div class="crs-sec__head">
+        <h2 class="crs-sec__title"><i data-icon="${esc(iconName)}"></i>${esc(title)}</h2>
+        <span class="crs-sec__count">${esc(num(count))}</span>
+      </div>
+      ${inner}
+    </section>`;
+}
+
+function studioBody(rows, hub) {
+  const groups = studioGroups(rows);
+  const counts = {
+    videos: groups.videos.length,
+    vertical: groups.vertical.length,
+    podcasts: groups.podcasts.length,
+    music: groups.music.length,
+    playlists: groups.playlists.length,
+  };
+  const total = Object.values(counts).reduce((sum, n) => sum + n, 0) + groups.others.length;
+
+  if (!total) {
+    return emptyBlock(
+      hubInfo(hub.kind).icon,
+      "Nothing published yet",
+      "This studio has not published a video, a podcast, a song or a playlist in the open. Subscribe and come back."
+    );
+  }
+
+  const tabs = STUDIO_TABS.filter((tab) => tab.key === "all" || counts[tab.key] > 0)
+    .map(
+      (tab) => `
+      <button class="crs-tab${state.hubTab === tab.key ? " is-on" : ""}" type="button" role="tab"
+              aria-selected="${state.hubTab === tab.key}" data-crs-tab="${esc(tab.key)}">
+        ${esc(tab.label)}${tab.key === "all" ? "" : `<span class="crs-tab__n">${esc(num(counts[tab.key]))}</span>`}
+      </button>`
+    )
+    .join("");
+
+  const sections = [
+    counts.videos
+      ? studioSection("videos", "Videos", "film", `<div class="crs-grid">${groups.videos.map(studioVideo).join("")}</div>`, counts.videos)
+      : "",
+    counts.vertical
+      ? studioSection("vertical", "Vertical", "smartphone", `<div class="crs-rail">${groups.vertical.map(studioVideo).join("")}</div>`, counts.vertical)
+      : "",
+    counts.podcasts
+      ? studioSection("podcasts", "Podcasts", "mic", `<div class="crs-list">${groups.podcasts.map((row) => studioRow(row, "podcast")).join("")}</div>`, counts.podcasts)
+      : "",
+    counts.music
+      ? studioSection("music", "Music", "music", `<div class="crs-list">${groups.music.map((row) => studioRow(row, "song")).join("")}</div>`, counts.music)
+      : "",
+    counts.playlists
+      ? studioSection("playlists", "Playlists", "bookmark", `<div class="crs-list">${groups.playlists.map((row) => studioRow(row, "playlist")).join("")}</div>`, counts.playlists)
+      : "",
+    groups.others.length
+      ? studioSection("more", "Also here", "file", `<div class="crp-items">${groups.others.map(itemCard).join("")}</div>`, groups.others.length)
+      : "",
+  ].join("");
+
+  return `<div class="crs" data-crs>
+      <div class="crs-tabs" role="tablist" aria-label="What this studio holds">${tabs}</div>
+      ${sections}
+    </div>`;
+}
+
 function renderHubPage(host) {
   const view = state.hubView;
   if (!view) {
@@ -2077,7 +2245,10 @@ function renderHubPage(host) {
             : `<p class="crp-lock__state" data-crp-lock-state role="status">No password — the VIP list only.</p>`
         }
       </div>`
-    : `
+    : hub.kind === "channel"
+      ? /* a studio is read shelf by shelf: videos, vertical, podcasts, music, playlists */
+        studioBody(scoped, hub)
+      : `
       ${
         scoped.length
           ? `<div class="crp-items">${scoped.map(itemCard).join("")}</div>`
@@ -3319,6 +3490,23 @@ document.addEventListener("click", (event) => {
     if (action === "close") return setItemStatus(id, "hidden");
     if (action === "link" || action === "share") return copyLink(row || { id });
     return editItem(id);
+  }
+
+  /* the studio page's shelves */
+  const shelfTab = target.closest("[data-crs-tab]");
+  if (shelfTab) {
+    event.preventDefault();
+    state.hubTab = shelfTab.getAttribute("data-crs-tab") || "all";
+    qsa("[data-crs-tab]").forEach((button) => {
+      const on = button === shelfTab;
+      button.classList.toggle("is-on", on);
+      button.setAttribute("aria-selected", String(on));
+    });
+    qsa("[data-crs-sec]").forEach((section) => {
+      const key = section.getAttribute("data-crs-sec");
+      section.hidden = state.hubTab !== "all" && state.hubTab !== key;
+    });
+    return;
   }
 
   if (target.closest("[data-cr-editor-back]")) {

@@ -670,7 +670,14 @@ async function main() {
       publicHub({ id: "pub-bl", kind: "blog", name: "Night Notes", description: "Essays about light" }),
       publicHub({ id: "pub-priv", kind: "gallery", name: "The Vault", visibility: "private", locked: true }),
     ],
-    hubItems: [item({ id: "pub-it", title: "The first film", minutes: 42 })],
+    /* a studio holds every medium it publishes — the page reads them shelf by shelf */
+    hubItems: [
+      item({ id: "pub-it", title: "The first film", minutes: 42 }),
+      item({ id: "pub-it-v", code: "CA4728CE", title: "The tall one", shape: "v", minutes: 1 }),
+      item({ id: "pub-it-p", code: "PST-000901", kind: "podcast", title: "A long talk", minutes: 51 }),
+      item({ id: "pub-it-m", code: "SNG-000901", kind: "song", title: "Night bus", minutes: 4 }),
+      item({ id: "pub-it-l", code: "PLS-000901", kind: "playlist", title: "Winter", meta: { kind: "song" } }),
+    ],
     ads: [
       { id: "ad-1", format: "banner", title: "Cameras for every night shoot", body: "", media_url: "https://example.com/banner.png", link_url: "https://example.com/shop", member: "Sara Bennani" },
       { id: "ad-2", format: "paragraph", title: "A word from the crew", body: "Light, cameras and a crew of four, every week in Casablanca.", media_url: "", link_url: "", member: "Sara Bennani" },
@@ -757,8 +764,22 @@ async function main() {
   expect("hub: the hub is named", /Studio One/.test(anon.text(".crp-hubhero__name")), anon.text(".crp-hubhero__name"));
   expect("hub: the owner is a link back", Boolean(anon.qs("[data-crp-owner]")));
   expect("hub: the description is shown", /Films and long talks/.test(anon.text("[data-cr-view]")));
-  expect("hub: the items are listed", /The first film/.test(anon.text(".crp-items")));
-  expect("hub: an item counts its minutes", /42 min/.test(anon.text(".crp-item__meta")), anon.text(".crp-item__meta"));
+  /* a studio is read shelf by shelf, and every shelf is a door */
+  expect("studio: the videos shelf lists the video", /The first film/.test(anon.text('[data-crs-sec="videos"]')), anon.text('[data-crs-sec="videos"]').slice(0, 120));
+  expect("studio: a video card opens videos.html#/h/ID=", anon.qs('[data-crs-sec="videos"] .crs-card')?.getAttribute("href") === "videos.html#/h/ID=CA4728CD", anon.qs('[data-crs-sec="videos"] .crs-card')?.getAttribute("href"));
+  expect("studio: the card counts its minutes", /42 min/.test(anon.text('[data-crs-sec="videos"] .crs-card__time')), anon.text('[data-crs-sec="videos"] .crs-card__time'));
+  expect("studio: a vertical video keeps its own rail", anon.qsa('[data-crs-sec="vertical"] .crs-card').length === 1 && anon.qs('[data-crs-sec="vertical"] .crs-card')?.getAttribute("href") === "videos.html#/v/ID=CA4728CE", anon.qs('[data-crs-sec="vertical"] .crs-card')?.getAttribute("href"));
+  expect("studio: the podcasts shelf opens the audio page", anon.qs('[data-crs-sec="podcasts"] .crs-row')?.getAttribute("href") === "audio.html#/p/ID=PST-000901", anon.qs('[data-crs-sec="podcasts"] .crs-row')?.getAttribute("href"));
+  expect("studio: the music shelf opens the song", anon.qs('[data-crs-sec="music"] .crs-row')?.getAttribute("href") === "audio.html#/m/ID=SNG-000901", anon.qs('[data-crs-sec="music"] .crs-row')?.getAttribute("href"));
+  expect("studio: a playlist keeps its shelf", anon.qs('[data-crs-sec="playlists"] .crs-row')?.getAttribute("href") === "playlist.html#/songs/ID=PLS-000901", anon.qs('[data-crs-sec="playlists"] .crs-row')?.getAttribute("href"));
+  expect("studio: one shelf tab per medium, after All", anon.qsa("[data-crs-tab]").length === 6 && anon.qs("[data-crs-tab]")?.getAttribute("data-crs-tab") === "all", String(anon.qsa("[data-crs-tab]").length));
+  expect("studio: a tab counts its shelf", /Podcasts[\s\S]*1/.test(anon.text('[data-crs-tab="podcasts"]')), anon.text('[data-crs-tab="podcasts"]'));
+  anon.click(anon.qs('[data-crs-tab="podcasts"]'));
+  await anon.wait(80);
+  expect("studio: picking a shelf hides the others", !anon.hidden('[data-crs-sec="podcasts"]') && anon.hidden('[data-crs-sec="videos"]') && anon.hidden('[data-crs-sec="music"]'));
+  anon.click(anon.qs('[data-crs-tab="all"]'));
+  await anon.wait(80);
+  expect("studio: All brings them back", !anon.hidden('[data-crs-sec="videos"]') && !anon.hidden('[data-crs-sec="playlists"]'));
   expect("hub: there is a subscribe button", Boolean(anon.qs("[data-crp-sub]")));
   expect("hub: the address bar holds the hub by its code", /studio=IDST100001/.test(anon.window.location.search), anon.window.location.search);
   calls.length = 0;
@@ -1046,7 +1067,7 @@ async function main() {
   c7.qs("[data-crp-unlock-form]").dispatchEvent(new c7.window.Event("submit", { bubbles: true, cancelable: true }));
   await c7.wait(340);
   expect("locked hub: the password opens the hub", /The hidden film/.test(c7.text("[data-cr-view]")), c7.text("[data-cr-view]").slice(0, 160));
-  expect("locked hub: the exclusive item is marked", /Exclusive/i.test(c7.text(".crp-item__kind")), c7.text(".crp-item__kind"));
+  expect("locked hub: the exclusive item is marked", /Exclusive/i.test(c7.text('[data-crs-sec="videos"] .crs-card__meta')), c7.text('[data-crs-sec="videos"] .crs-card__meta'));
   expect("locked hub: no errors", c7.errors.length === 0, c7.errors.join(" | "));
   c7.window.close();
 
