@@ -1040,6 +1040,47 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
   expect("studio: the code and the member are under it", /Studio/.test(doc.querySelector(".vhost__meta")?.textContent || "") && /IDST100001/.test(doc.querySelector(".vhost__meta")?.textContent || "") && /Jhon/.test(doc.querySelector(".vhost__meta")?.textContent || ""), doc.querySelector(".vhost__meta")?.textContent);
   expect("studio: the member's profile is still one click away", /creator\.html\?creator=/.test(doc.querySelector(".vhost__meta a")?.getAttribute("href") || ""), doc.querySelector(".vhost__meta a")?.getAttribute("href"));
 
+  /* a video saved before `posts.hub_id` existed: the member's studio answers */
+  const byMember = boot("videos.html", {
+    hash: "#/h/ID=PST-001032",
+    fetchImpl: (href) => {
+      const fn = fnName(href);
+      if (fn === "video_feed") return reply(FEED);
+      if (fn === "video_mine") return reply({ ok: true, rows: [] });
+      if (fn === "video_get") return reply({ ok: true, locked: false, mine: false, video: card({ code: "PST-001032" }), related: [], more: [] });
+      if (fn === "video_hub") return reply({ ok: true, hub: null });
+      if (fn === "creator_studio") return reply({ ok: true, hub: STUDIO });
+      if (fn === "post_comments") return reply({ comments: [], count: 0 });
+      return reply([]);
+    },
+  });
+  await import(`file://${join(root, "assets/js/videos.js")}?p=studio1b`);
+  await wait(120);
+  expect("studio: a video with no hub asks its member's studio", byMember.calls.some((c) => fnName(c.href) === "creator_studio"), byMember.calls.map((c) => fnName(c.href)).join(" "));
+  expect("studio: the member's studio becomes the publisher", byMember.document.querySelector(".vhost__name")?.textContent === "Cine Aura", byMember.document.querySelector(".vhost__name")?.textContent);
+  expect("studio: and it links with the studio's code", byMember.document.querySelector("[data-v-studio]")?.getAttribute("href") === "creator.html?studio=IDST100001&creator=ID100019", byMember.document.querySelector("[data-v-studio]")?.getAttribute("href"));
+
+  /* the same answer from the creator page's own call, when that one is missing */
+  const byPublic = boot("videos.html", {
+    hash: "#/h/ID=PST-001032",
+    fetchImpl: (href) => {
+      const fn = fnName(href);
+      if (fn === "video_feed") return reply(FEED);
+      if (fn === "video_mine") return reply({ ok: true, rows: [] });
+      if (fn === "video_get") return reply({ ok: true, locked: false, mine: false, video: card({ code: "PST-001032" }), related: [], more: [] });
+      if (fn === "video_hub") return reply({ ok: true, hub: null });
+      if (fn === "creator_studio") return reply({ ok: false, error: "not_found" });
+      if (fn === "creator_public") return reply({ ok: true, creator: { code: "ID100019" }, hubs: [{ id: "hub-9", kind: "blog", name: "Night Notes" }, { id: "hub-1", kind: "channel", name: "Cine Aura", logo_url: "", visibility: "public" }] });
+      if (fn === "post_comments") return reply({ comments: [], count: 0 });
+      return reply([]);
+    },
+  });
+  await import(`file://${join(root, "assets/js/videos.js")}?p=studio1c`);
+  await wait(140);
+  expect("studio: the creator page's call names the studio too", byPublic.document.querySelector(".vhost__name")?.textContent === "Cine Aura", byPublic.document.querySelector(".vhost__name")?.textContent);
+  expect("studio: a non-studio hub is not picked first", !/Night Notes/.test(byPublic.document.querySelector(".vhost")?.textContent || ""), byPublic.document.querySelector(".vhost")?.textContent);
+  expect("studio: with no code the link keeps the hub's id", /creator\.html\?studio=hub-1&creator=ID100019/.test(byPublic.document.querySelector("[data-v-studio]")?.getAttribute("href") || ""), byPublic.document.querySelector("[data-v-studio]")?.getAttribute("href"));
+
   const noStudio = studioBoot(null);
   await import(`file://${join(root, "assets/js/videos.js")}?p=studio2`);
   await wait(120);

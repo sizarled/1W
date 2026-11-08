@@ -541,7 +541,7 @@ function watchMarkup(v, res) {
                logo, its name and its code lead, and the member is the line
                under it — the profile is still one click away */
             state.hub && state.hub.name
-              ? `<a class="vhost__logo" href="${esc(creatorUrl(state.hub.code, state.hub.creator || host.id))}" data-v-studio="${esc(state.hub.code || "")}" aria-label="${esc(state.hub.name)}">
+              ? `<a class="vhost__logo" href="${esc(creatorUrl(state.hub.code || state.hub.id, state.hub.creator || host.id))}" data-v-studio="${esc(state.hub.code || "")}" aria-label="${esc(state.hub.name)}">
                    ${state.hub.logo_url ? `<img src="${esc(state.hub.logo_url)}" alt="" width="48" height="48" />` : `<span aria-hidden="true">${esc(initialsOf(state.hub.name))}</span>`}
                  </a>`
               : avatarTag({ avatar: host.avatar, name: host.name || host.username }, "vav vav--lg")
@@ -549,7 +549,7 @@ function watchMarkup(v, res) {
           <div class="vhost__id">
             ${
               state.hub && state.hub.name
-                ? `<p class="vhost__name"><a href="${esc(creatorUrl(state.hub.code, state.hub.creator || host.id))}">${esc(state.hub.name)}</a></p>
+                ? `<p class="vhost__name"><a href="${esc(creatorUrl(state.hub.code || state.hub.id, state.hub.creator || host.id))}">${esc(state.hub.name)}</a></p>
                    <p class="vhost__meta"><span class="vhost__kind">${esc(hubKindWord(state.hub.kind))}</span>${state.hub.code ? ` · ${esc(state.hub.code)}` : ""} · by <a href="${esc(creatorUrl("", host.id))}">${esc(host.name || host.username || "a member")}</a></p>`
                 : `<p class="vhost__name">${esc(host.name || host.username || "A member")}</p>
                    <p class="vhost__meta">${host.username ? esc(host.username) + " · " : ""}${esc(num(host.followers || 0))} followers</p>`
@@ -653,10 +653,12 @@ async function openWatch(code, orientation) {
   }
 
   /* the studio that published it — from the reply when it carries one, from
-     the call beside it otherwise */
+     the call beside it otherwise, and from the member's own studio when the
+     video was saved before `posts.hub_id` existed */
   const hubReply = await hubPromise;
   const inline = (res && (res.hub || (res.video && res.video.hub))) || null;
   state.hub = inline && inline.name ? inline : hubReply && hubReply.ok && hubReply.hub && hubReply.hub.name ? hubReply.hub : null;
+  if (!state.hub) state.hub = await studioOfMember(res.video || {});
   state.video = res.video || null;
   state.related = Array.isArray(res.related) ? res.related : [];
   state.more = Array.isArray(res.more) ? res.more : [];
@@ -704,6 +706,41 @@ function showBrowse() {
   }
   if (browseEl()) browseEl().hidden = false;
   document.title = "Videos — 1World Web";
+}
+
+/**
+ * The studio a member publishes into, when the video carries none.
+ *
+ * A video saved before `posts.hub_id` existed has no studio on its row, and
+ * the publisher line must still name the studio rather than a bare profile:
+ * one call asks which studio this member runs. If they run none, the page
+ * keeps the member's face and follower count, which is the honest answer.
+ */
+async function studioOfMember(video) {
+  /* the same two places watchMarkup reads the publisher from */
+  const host = (video && video.video && video.video.host) || (video && video.host) || (video && video.publisher) || {};
+  const ref = host.username || host.id || "";
+  if (!ref) return null;
+  try {
+    const res = await rpc("creator_studio", { p_ref: String(ref) });
+    if (res && res.ok && res.hub && res.hub.name) return res.hub;
+  } catch {
+    /* the call is not there yet — the second door below still answers */
+  }
+  /* the same answer from the call the creator page already makes: the
+     member's public page carries the hubs they run */
+  try {
+    const res = await rpc("creator_public", { p_token: state.token, p_ref: String(ref) });
+    const hubs = res && res.ok && Array.isArray(res.hubs) ? res.hubs : [];
+    const pick =
+      hubs.find((hub) => hub.kind === "channel" && hub.visibility !== "private") ||
+      hubs.find((hub) => (hub.kind === "server" || hub.kind === "cinema") && hub.visibility !== "private") ||
+      null;
+    if (pick) return { ...pick, creator: (res.creator && res.creator.code) || "" };
+  } catch {
+    /* no studio to name — the member stays the publisher */
+  }
+  return null;
 }
 
 /** "Studio One" → "SO" — the letters a logo-less studio stands on. */
