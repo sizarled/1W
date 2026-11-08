@@ -1098,6 +1098,22 @@ function expect(name, condition, detail = "") {
   expect("manage: the save goes out", calls.some((c) => c.includes("creator_hub_save")), calls.join(" "));
   expect("manage: the access rules follow it", calls.some((c) => c.includes("creator_hub_access")));
   expect("manage: it says saved", /Saved/i.test(p.text("[data-hub-state]")), p.text("[data-hub-state]"));
+  /* a link typed in the page pane is part of the same save — and it is what
+     the watch page draws under the publisher's blurb */
+  expect("manage: the related links have a panel", p.qsa("[data-link-row]").length >= 1, String(p.qsa("[data-link-row]").length));
+  const linkRows = p.qsa("[data-link-row]");
+  expect("manage: the links have a row each", linkRows.length >= 1, String(linkRows.length));
+  const lastRow = linkRows[linkRows.length - 1];
+  type(lastRow.querySelector("[data-link-label]"), "Website");
+  type(lastRow.querySelector("[data-link-url]"), "https://cineaura.example");
+  calls.length = 0;
+  p.click(p.qs("[data-cr-save-hub]"));
+  await p.wait(200);
+  expect(
+    "manage: the typed link rides in the save",
+    (scenario.savedHub?.p_links || []).some((link) => link.label === "Website" && link.url === "https://cineaura.example"),
+    JSON.stringify(scenario.savedHub?.p_links)
+  );
 
   p.click(p.qs('[data-ha-pane="categories"]'));
   await p.wait(180);

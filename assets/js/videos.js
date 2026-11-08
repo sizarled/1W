@@ -615,21 +615,24 @@ function watchMarkup(v, res) {
                 : ""
             }
           </div>
+
+          ${
+            /* under the publisher's own blurb: the links the studio wrote in
+               its settings, and the door to its playlists */
+            state.hub && state.hub.name
+              ? `<div class="vhost__foot">
+                   ${state.hub.description ? `<p class="vhost__bio">${esc(state.hub.description)}</p>` : ""}
+                   <div class="vlinks" data-v-links>
+                     <span class="vlinks__head">Related links</span>
+                     <div class="vlinks__row">
+                       ${links.map((link) => `<a class="chip" href="${esc(link.url)}" target="_blank" rel="noopener noreferrer">${icon(link.icon || "link")}${esc(link.label)}</a>`).join("")}
+                       <a class="chip" href="${esc(creatorUrl(state.hub.code || state.hub.id, state.hub.creator || host.id))}" data-v-studio-link>${icon("bookmark")}Playlists</a>
+                     </div>
+                   </div>
+                 </div>`
+              : ""
+          }
         </div>
-
-        ${state.hub && state.hub.description ? `<p class="vhost__bio">${esc(state.hub.description)}</p>` : ""}
-
-        ${
-          links.length
-            ? `<div class="vlinks" data-v-links>
-                 <span class="vlinks__head">Related links</span>
-                 <div class="vlinks__row">
-                   ${links.map((link) => `<a class="chip" href="${esc(link.url)}" target="_blank" rel="noopener noreferrer">${icon(link.icon || "link")}${esc(link.label)}</a>`).join("")}
-                   ${state.hub && state.hub.name ? `<a class="chip" href="${esc(creatorUrl(state.hub.code || state.hub.id, state.hub.creator || host.id))}" data-v-studio-link>${icon("bookmark")}Playlists</a>` : ""}
-                 </div>
-               </div>`
-            : ""
-        }
 
         ${
           desc

@@ -1176,6 +1176,28 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
   expect("details: the studio's blurb is under it", /camera tests and long talks/.test(rd.querySelector(".vhost__bio")?.textContent || ""), rd.querySelector(".vhost__bio")?.textContent);
   expect("details: the related links are the studio's", rd.querySelectorAll(".vlinks .chip").length === 3, String(rd.querySelectorAll(".vlinks .chip").length));
   expect("details: a link points where it says", rd.querySelector('.vlinks .chip[href="https://youtube.com/@cineaura"]') !== null);
+  /* they sit under the publisher's blurb, inside the publisher's card */
+  expect("details: the links are inside the publisher card", Boolean(rd.querySelector(".vhost .vhost__foot .vlinks")), rd.querySelector(".vhost__foot")?.className);
+  expect("details: and under the blurb", /camera tests/.test(rd.querySelector(".vhost__foot .vhost__bio")?.textContent || ""), rd.querySelector(".vhost__foot .vhost__bio")?.textContent);
+  expect("details: the playlists door is always there", Boolean(rd.querySelector("[data-v-studio-link]")) && /Playlists/.test(rd.querySelector("[data-v-studio-link]")?.textContent || ""));
+  expect("details: every link carries its own label", [...rd.querySelectorAll(".vlinks .chip")].map((a) => a.textContent.trim()).join(" | ") === "Website | YouTube | Playlists", [...rd.querySelectorAll(".vlinks .chip")].map((a) => a.textContent.trim()).join(" | "));
+
+  /* a studio that wrote no links still gets the door */
+  const bare = boot("videos.html", {
+    hash: "#/h/ID=PST-001032",
+    fetchImpl: (href) => {
+      const fn = fnName(href);
+      if (fn === "video_feed") return reply(FEED);
+      if (fn === "video_mine") return reply({ ok: true, rows: [] });
+      if (fn === "video_get") return reply({ ok: true, locked: false, mine: false, video: card({ code: "PST-001032" }), related: [], more: [] });
+      if (fn === "video_hub") return reply({ ok: true, hub: { ...STUDIO, links: [] } });
+      if (fn === "post_comments") return reply({ comments: [], count: 0 });
+      return reply([]);
+    },
+  });
+  await import(`file://${join(root, "assets/js/videos.js")}?p=studio1g`);
+  await wait(120);
+  expect("details: a studio with no links shows only the playlists door", bare.document.querySelectorAll(".vlinks .chip").length === 1 && Boolean(bare.document.querySelector("[data-v-studio-link]")), String(bare.document.querySelectorAll(".vlinks .chip").length));
   rd.querySelector("[data-v-chapter]").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
   await wait(60);
   expect("details: jumping a chapter throws nothing", richBoot.errors.length === 0, richBoot.errors.join(" | "));

@@ -1657,6 +1657,11 @@ sent — and **Take action**, the six a viewer acts with: **Follow the creator**
 (the page's own report box) and **Block** — which keeps the member in `1w.videos.blocked` on this
 device only, says so on the card, and offers Unblock in the same row. A video with no studio keeps the member's face, handle, followers and Follow.
 
+**Related links come from the studio's own settings.** The studio page's *Page management* pane carries
+the label-and-URL rows (`p_links`, ten at most); the watch page draws them **under the publisher's
+blurb, inside the publisher's card** — Website, YouTube, Instagram, X — with a **Playlists** door
+always beside them, so a studio that wrote no links still has one way into its shelves.
+
 **The details under the video.** The watch screen carries, in this order: *Back to the studio* (the
 kind's own word) beside *All videos*; the stats line, now with the minutes; a **chapter list read from
 the description** — `Comedy beats: (0:37 - 14:00) …` becomes `01 · Comedy beats · 0:37`, clickable, and
@@ -1672,7 +1677,7 @@ in the same file, or, when that call is not on the server yet, the `creator_publ
 page already makes (a channel first, then a server or a cinema, never a private hub). No studio at
 all, and the member's face is the publisher, which is the honest answer.
 
-Test: `node tools/video-smoke.mjs` — **316/316** (feed, sort, search, watch, reaction→comment, a locked
+Test: `node tools/video-smoke.mjs` — **321/321** (feed, sort, search, watch, reaction→comment, a locked
 door and its password, a missing video, the editor signed out and in, the payload of a publish, of an
 exclusive rule set and of a private list, the player and the sixteen host cases, the oEmbed stills, the
 studio picker, the contents rail, and the forwarding page).
@@ -2027,7 +2032,7 @@ the editors need**, each pinned to a name pattern and a set of extensions (`user
 | `node tools/rte-smoke.mjs` | **45/45** (every command, links, insertion, history, paste, drop, keys, toolbar state) |
 | `node tools/article-smoke.mjs` | **281/281** |
 | `node tools/blog-smoke.mjs` | **82/82** (the address, the closed door, the hero, the home, a section, the search, the plain cover) |
-| `node tools/video-smoke.mjs` | **316/316** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
+| `node tools/video-smoke.mjs` | **321/321** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
 | `node tools/media-smoke.mjs` | **89/89** (the address book, the three pages, the portrait stage, the locked item, the shelves) |
 
 ### The six OAuth apps — one checklist each
@@ -2498,7 +2503,7 @@ browser that already has the old file.
 ### Tests
 
 ```bash
-node tools/dashboard-smoke.mjs   # 269 checks: the five gates, rail, popover, codes, sections, Unlock now, Account settings, the seven creator tabs, the management pane, the Publisher program
+node tools/dashboard-smoke.mjs   # 272 checks: the five gates, rail, popover, codes, sections, Unlock now, Account settings, the seven creator tabs, the management pane, the Publisher program
 node tools/sidebar-smoke.mjs     # 93 checks: the edge, the pin, Escape, the mobile drawer, the dashboard menu
 node tools/panel-smoke.mjs       # 90 checks: the desk's three states, the rows, the switch, the dialog, the shelf
 node tools/court-smoke.mjs       # 115 checks: the four steps, uploads, both doors, the court room

@@ -2070,3 +2070,16 @@
   justify-content: flex-end;
   gap: 0.4rem;
 }
+
+/* the publisher's foot: the blurb, then the links it wrote in its settings */
+.vhost__foot {
+  display: grid;
+  gap: 0.55rem;
+  padding-top: 0.6rem;
+  margin-top: 0.1rem;
+  border-top: 1px solid var(--line);
+}
+
+.vhost__foot .vlinks {
+  padding: 0;
+}
