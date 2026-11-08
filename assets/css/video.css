@@ -1938,3 +1938,80 @@
     grid-template-columns: auto 5.2rem minmax(0, 1fr) auto;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* the publisher's two buttons, and its menu                          */
+/* ------------------------------------------------------------------ */
+/* A studio card holds Follow, and one menu behind it: share, copy,
+   open the studio, more from it, report. The menu is a `<details>`, so
+   it works with the keyboard and closes on a second press. */
+.vhost__acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: auto;
+}
+
+.vmenu {
+  position: relative;
+}
+
+.vmenu > summary {
+  cursor: pointer;
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.vmenu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.vmenu > summary svg {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+.vmenu__panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.35rem);
+  z-index: 20;
+  min-width: 13rem;
+  padding: 0.3rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  display: grid;
+  gap: 0.1rem;
+}
+
+.vmenu__item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.45rem 0.55rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.86rem;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.vmenu__item:hover {
+  background: var(--bg-soft);
+}
+
+.vmenu__item svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  color: var(--muted);
+}

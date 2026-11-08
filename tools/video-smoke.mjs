@@ -1180,6 +1180,57 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
   await wait(60);
   expect("details: jumping a chapter throws nothing", richBoot.errors.length === 0, richBoot.errors.join(" | "));
 
+  /* the studio card's two buttons: Subscribe, and the menu behind it */
+  const studioCard = boot("videos.html", {
+    hash: "#/h/ID=PST-001032",
+    storage: { "1w.member": JSON.stringify({ id: "m7", username: "@viewer", name: "Viewer", level: 2 }), "1w.session": "tok-view" },
+    fetchImpl: (href) => {
+      const fn = fnName(href);
+      if (fn === "video_feed") return reply(FEED);
+      if (fn === "video_mine") return reply({ ok: true, rows: [] });
+      if (fn === "video_get") return reply({ ok: true, locked: false, mine: false, video: card({ code: "PST-001032" }), related: [], more: [] });
+      if (fn === "video_hub") return reply({ ok: true, hub: RICH });
+      if (fn === "creator_subscribe") return reply({ ok: true, subscribed: true, subscribers: 746001 });
+      if (fn === "post_comments") return reply({ comments: [], count: 0 });
+      return reply([]);
+    },
+  });
+  await import(`file://${join(root, "assets/js/videos.js")}?p=studio1e`);
+  await wait(140);
+  const cd = studioCard.document;
+  expect("publisher: a studio offers Subscribe", /Subscribe/.test(cd.querySelector("[data-v-subscribe]")?.textContent || ""), cd.querySelector("[data-v-subscribe]")?.textContent);
+  expect("publisher: the button knows the studio", cd.querySelector("[data-v-subscribe]")?.getAttribute("data-v-subscribe") === "hub-1", cd.querySelector("[data-v-subscribe]")?.getAttribute("data-v-subscribe"));
+  expect("publisher: Take action opens a menu", cd.querySelector(".vmenu > summary")?.textContent.includes("Take action"), cd.querySelector(".vmenu > summary")?.textContent);
+  const items = [...cd.querySelectorAll(".vmenu__item")].map((node) => node.textContent.trim());
+  expect("publisher: the menu holds the five actions", items.length === 5, items.join(" | "));
+  expect("publisher: it can open the studio", cd.querySelectorAll('.vmenu__item[href="creator.html?studio=IDST100001&creator=ID100019"]').length === 2, String(cd.querySelectorAll(".vmenu__item[href]").length));
+  cd.querySelector("[data-v-subscribe]").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await wait(80);
+  expect("publisher: the subscription is sent", lastCall(studioCard.calls, "creator_subscribe")?.body.p_hub === "hub-1", JSON.stringify(lastCall(studioCard.calls, "creator_subscribe")?.body));
+  expect("publisher: the button says so", /Subscribed/.test(cd.querySelector("[data-v-subscribe]")?.textContent || ""), cd.querySelector("[data-v-subscribe]")?.textContent);
+  /* the card writes the count the way the rest of the site does: 746K */
+  expect("publisher: and the count moves", cd.querySelector(".vhost__stats b")?.textContent === "746K", cd.querySelector(".vhost__stats b")?.textContent);
+
+  /* a guest is asked to sign in, and nothing is sent */
+  const guestCard = boot("videos.html", {
+    hash: "#/h/ID=PST-001032",
+    fetchImpl: (href) => {
+      const fn = fnName(href);
+      if (fn === "video_feed") return reply(FEED);
+      if (fn === "video_mine") return reply({ ok: true, rows: [] });
+      if (fn === "video_get") return reply({ ok: true, locked: false, mine: false, video: card({ code: "PST-001032" }), related: [], more: [] });
+      if (fn === "video_hub") return reply({ ok: true, hub: RICH });
+      if (fn === "post_comments") return reply({ comments: [], count: 0 });
+      return reply([]);
+    },
+  });
+  await import(`file://${join(root, "assets/js/videos.js")}?p=studio1f`);
+  await wait(120);
+  guestCard.document.querySelector("[data-v-subscribe]").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await wait(80);
+  expect("publisher: a guest is asked to sign in", /Sign in first/i.test(guestCard.document.querySelector(".toast__title")?.textContent || ""), guestCard.document.querySelector(".toast__title")?.textContent);
+  expect("publisher: and nothing was sent", !guestCard.calls.some((c) => fnName(c.href) === "creator_subscribe"));
+
   const noStudio = studioBoot(null);
   await import(`file://${join(root, "assets/js/videos.js")}?p=studio2`);
   await wait(120);

@@ -590,11 +590,29 @@ function watchMarkup(v, res) {
                    <p class="vhost__meta">${host.username ? esc(host.username) + " · " : ""}${esc(num(host.followers || 0))} followers</p>`
             }
           </div>
-          ${
-            signedIn() && host.id !== (getMember() || {}).id
-              ? `<button class="btn btn--ghost btn--sm" type="button" data-v-follow>${icon("plus")} Follow</button>`
-              : ""
-          }
+          <div class="vhost__acts">
+            ${
+              signedIn() && host.id === (getMember() || {}).id
+                ? ""
+                : state.hub && state.hub.name
+                  ? `<button class="btn btn--primary btn--sm" type="button" data-v-subscribe="${esc(state.hub.id || "")}" aria-pressed="${state.hub.subscribed ? "true" : "false"}">${icon(state.hub.subscribed ? "check" : "plus")} ${state.hub.subscribed ? "Subscribed" : "Subscribe"}</button>`
+                  : `<button class="btn btn--ghost btn--sm" type="button" data-v-follow>${icon("plus")} Follow</button>`
+            }
+            ${
+              state.hub && state.hub.name
+                ? `<details class="vmenu" data-v-actions>
+                     <summary class="btn btn--ghost btn--sm">${icon("dots")} Take action</summary>
+                     <div class="vmenu__panel">
+                       <button class="vmenu__item" type="button" data-v-share>${icon("share")} Share</button>
+                       <button class="vmenu__item" type="button" data-v-copy>${icon("link")} Copy the link</button>
+                       <a class="vmenu__item" href="${esc(creatorUrl(state.hub.code || state.hub.id, state.hub.creator || host.id))}">${icon("external")} Open the ${esc(hubKindWord(state.hub.kind).toLowerCase())}</a>
+                       <a class="vmenu__item" href="${esc(creatorUrl(state.hub.code || state.hub.id, state.hub.creator || host.id))}">${icon("bookmark")} More from this ${esc(hubKindWord(state.hub.kind).toLowerCase())}</a>
+                       <button class="vmenu__item" type="button" data-v-report>${icon("flag")} Report</button>
+                     </div>
+                   </details>`
+                : ""
+            }
+          </div>
         </div>
 
         ${state.hub && state.hub.description ? `<p class="vhost__bio">${esc(state.hub.description)}</p>` : ""}
@@ -790,6 +808,19 @@ async function studioOfMember(video) {
     /* no studio to name — the member stays the publisher */
   }
   return null;
+}
+
+/** The watch page's own address, on the clipboard. */
+async function copyVideoLink(url) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(url);
+      return toast({ title: "Link copied", message: url, iconName: "link" });
+    }
+  } catch {
+    /* the clipboard is closed — the link is still shown below */
+  }
+  return toast({ title: "The link", message: url, iconName: "link" });
 }
 
 /** A link's own mark, from where it points. */
@@ -1008,6 +1039,73 @@ function bindWatch() {
   if (!root) return;
 
   root.onclick = async (event) => {
+    /* subscribing to the studio, from the card that published the video */
+    const subscribe = event.target.closest("[data-v-subscribe]");
+    if (subscribe) {
+      event.preventDefault();
+      if (!signedIn()) {
+        return toast({ title: "Sign in first", message: "A subscription hangs from a member.", iconName: "login" });
+      }
+      const hubId = subscribe.getAttribute("data-v-subscribe") || "";
+      if (!hubId) return toast({ title: "This studio cannot be reached", message: "Its code did not come back with the video.", tone: "error", iconName: "info" });
+      subscribe.disabled = true;
+      try {
+        const res = await rpc("creator_subscribe", { p_token: state.token, p_hub: hubId });
+        if (res && res.ok) {
+          const on = Boolean(res.subscribed);
+          if (state.hub) {
+            state.hub.subscribed = on;
+            if (res.subscribers != null) state.hub.subscribers = res.subscribers;
+          }
+          subscribe.innerHTML = `${icon(on ? "check" : "plus")} ${on ? "Subscribed" : "Subscribe"}`;
+          subscribe.setAttribute("aria-pressed", String(on));
+          /* the count on the card moves with it */
+          const count = $(".vhost__stats b");
+          if (count && res.subscribers != null) count.textContent = compact(Number(res.subscribers) || 0);
+          toast({
+            title: on ? "You follow this studio" : "You left this studio",
+            message: res.subscribers != null ? `${num(Number(res.subscribers) || 0)} subscribers` : "",
+            tone: "success",
+            iconName: "users",
+          });
+        } else {
+          const reason = (res && res.error) || "server";
+          toast({
+            title: reason === "own" ? "This is your studio" : "It did not take",
+            message: reason === "own" ? "You publish here already." : reason === "session" ? "Sign in again to subscribe." : "The server did not answer.",
+            tone: "error",
+            iconName: "info",
+          });
+        }
+      } catch (error) {
+        toast({ title: "The server refused it", message: error.message, tone: "error", iconName: "info" });
+      }
+      subscribe.disabled = false;
+      return;
+    }
+
+    /* share and copy, from the same menu */
+    const shareBtn = event.target.closest("[data-v-share]");
+    if (shareBtn) {
+      event.preventDefault();
+      const url = `${location.origin || ""}${location.pathname}${videoUrl(state.code, state.orientation).replace(/^videos\.html/, "")}`;
+      if (navigator.share) {
+        try {
+          await navigator.share({ title: (state.video && state.video.title) || "A video", url });
+          return;
+        } catch {
+          /* the sheet was closed — the copy below is the fallback */
+        }
+      }
+      return copyVideoLink(url);
+    }
+    const copyBtn = event.target.closest("[data-v-copy]");
+    if (copyBtn) {
+      event.preventDefault();
+      const url = `${location.origin || ""}${location.pathname}${videoUrl(state.code, state.orientation).replace(/^videos\.html/, "")}`;
+      return copyVideoLink(url);
+    }
+
     /* a chapter is a place in the file: jump, or say the frame is not ours */
     const chapter = event.target.closest("[data-v-chapter]");
     if (chapter) {
