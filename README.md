@@ -1613,13 +1613,22 @@ and `hub` — the studio the video is published into, which is [its own section]
 A key it is **not** given is a list it leaves alone — so a partial save can never wipe an audience, the
 nominated people, the passwords or the tags of the video it edits.
 
-**Two ways in, and the link names its platform.** *The video* card opens with one box that takes a
-file — dropped from a folder or picked with *Choose a video* (the whole box is the way in, not only
-the button) — and a link row under it: the address, the **platform** it belongs to, and *Read it*.
-Dropping a link from another tab fills both. The picker follows the link by itself (`youtube.com` →
-YouTube, `instagram.com/reel/…` → Instagram, and so on), and a platform picked **by hand** holds for
-that link — a different link takes the row back. The box says where its file will land: with a
-studio chosen, `Streamtape → Home / Users / Studio / <studio>`; without one, the site's storage.
+**One way in, chosen first.** *The video* card asks one question before anything else: **Upload a
+video**, or **A link from a platform**. The two rows never sit on the page together, so a video is
+either a file or one platform's link — never half of each; switching lets go of whatever the other
+way held.
+
+- **Upload a video** — the box takes a file dropped from a folder or picked with *Choose a video*
+  (the whole box is the way in, not only its button), up to 2 GB, and says where it will land.
+- **A link from a platform** — the platform is chosen **first** (YouTube, Vimeo, Facebook,
+  Instagram, Pinterest, TikTok, Reddit, X), and only then does the field open, with a placeholder
+  that names it: *Paste the YouTube link*. A link from any other host is refused — the note says
+  *this is not a YouTube link* and the field's value never becomes the video's source. Changing the
+  platform drops a link that belonged to the old one. Dropping a link of one of the eight on the
+  box moves the page to that platform's row and puts the link there.
+
+A stored video opens on the row it already belongs to: one with a host file (Streamtape) opens on
+**Upload a video**, one with a platform link opens on its platform.
 
 **Two levels of keywords, and a platform to name.** The editor's *Keywords* field is no longer a
 flat row of chips: a **main keyword** opens a block, and the **sub-keywords** sit under it on their

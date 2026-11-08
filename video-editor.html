@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="assets/css/base.css?v=20261116a" />
     <link rel="stylesheet" href="assets/css/layout.css?v=20261116a" />
     <link rel="stylesheet" href="assets/css/components.css?v=20261116b" />
-    <link rel="stylesheet" href="assets/css/video.css?v=20261203a" />
+    <link rel="stylesheet" href="assets/css/video.css?v=20261203b" />
     <script>
       /* apply the saved theme (or the OS preference) before first paint */
       (function () {
@@ -33,7 +33,7 @@
       })();
     </script>
     <script type="module" src="assets/js/app.js?v=20261116e"></script>
-    <script type="module" src="assets/js/video-editor.js?v=20261203a"></script>
+    <script type="module" src="assets/js/video-editor.js?v=20261203b"></script>
   </head>
   <body data-page="videoEditor" data-title="Publish a video">
     <a class="skip-link" href="#main">Skip to content</a>
@@ -82,50 +82,64 @@
                 <span class="vcount" data-ved-source-badge></span>
               </div>
 
-              <!-- 1 — the file itself, dropped or picked ------------------ -->
-              <div class="vdrop" data-ved-drop>
-                <span class="vdrop__icon"><i data-icon="upload"></i></span>
-                <b>Drop the video here</b>
-                <small>
-                  A file from this machine — up to 2 GB. Where it lands is decided by the studio
-                  you choose below.
-                </small>
-                <span class="vdrop__note" data-ved-drop-note></span>
-                <div class="vdrop__row">
-                  <button class="btn btn--ghost btn--sm" type="button" data-ved-file-btn><i data-icon="upload"></i> Choose a video</button>
-                  <span class="vdrop__or">or drop it from a folder</span>
-                  <input type="file" accept="video/mp4,video/webm,video/ogg,video/quicktime" data-ved-file hidden />
-                </div>
+              <!-- one way in, chosen before anything is typed --------------- -->
+              <div class="vchoose" role="radiogroup" aria-label="How the video arrives">
+                <label class="vchoose__opt">
+                  <input type="radio" name="vedMode" value="file" data-ved-mode="file" checked />
+                  <span><i data-icon="upload"></i> Upload a video</span>
+                </label>
+                <label class="vchoose__opt">
+                  <input type="radio" name="vedMode" value="link" data-ved-mode="link" />
+                  <span><i data-icon="link"></i> A link from a platform</span>
+                </label>
               </div>
 
-              <!-- 2 — or a link, with the platform it belongs to ------------ -->
-              <div class="vsrc">
-                <span class="vsrc__label">Or paste a link, and pick the platform it belongs to</span>
+              <!-- 1 — the file itself, dropped or picked ------------------ -->
+              <div class="vsrc" data-ved-mode-file>
+                <div class="vdrop" data-ved-drop>
+                  <span class="vdrop__icon"><i data-icon="upload"></i></span>
+                  <b>Drop the video here</b>
+                  <small>
+                    A file from this machine — up to 2 GB. Where it lands is decided by the studio
+                    you choose below.
+                  </small>
+                  <span class="vdrop__note" data-ved-drop-note></span>
+                  <div class="vdrop__row">
+                    <button class="btn btn--ghost btn--sm" type="button" data-ved-file-btn><i data-icon="upload"></i> Choose a video</button>
+                    <span class="vdrop__or">or drop it from a folder</span>
+                    <input type="file" accept="video/mp4,video/webm,video/ogg,video/quicktime" data-ved-file hidden />
+                  </div>
+                </div>
+                <p class="vhint" data-ved-file-note hidden></p>
+              </div>
+
+              <!-- 2 — or one platform, and only its own link ---------------- -->
+              <div class="vsrc" data-ved-mode-link hidden>
+                <label class="vsrc__label" for="vedPlatform">Which platform is the video on?</label>
+                <select class="select" id="vedPlatform" data-ved-platform>
+                  <option value="">Pick a platform…</option>
+                  <option value="youtube">YouTube</option>
+                  <option value="vimeo">Vimeo</option>
+                  <option value="facebook">Facebook</option>
+                  <option value="instagram">Instagram</option>
+                  <option value="pinterest">Pinterest</option>
+                  <option value="tiktok">TikTok</option>
+                  <option value="reddit">Reddit</option>
+                  <option value="x">X</option>
+                </select>
                 <div class="vsrc__row vsrc__row--link">
-                  <input class="input" type="url" data-ved-embed placeholder="https://www.youtube.com/watch?v=…  or  https://…/film.mp4" aria-label="Video link" spellcheck="false" />
-                  <select class="select" id="vedPlatform" data-ved-platform aria-label="Platform">
-                    <option value="">Read it from the link</option>
-                    <option value="youtube">YouTube</option>
-                    <option value="vimeo">Vimeo</option>
-                    <option value="facebook">Facebook</option>
-                    <option value="instagram">Instagram</option>
-                    <option value="pinterest">Pinterest</option>
-                    <option value="tiktok">TikTok</option>
-                    <option value="reddit">Reddit</option>
-                    <option value="x">X</option>
-                  </select>
-                  <button class="btn btn--ghost btn--sm" type="button" data-ved-detect><i data-icon="sparkle"></i> Read it</button>
+                  <input class="input" type="url" data-ved-embed placeholder="Pick a platform first" aria-label="Video link" spellcheck="false" disabled />
+                  <button class="btn btn--ghost btn--sm" type="button" data-ved-detect disabled><i data-icon="sparkle"></i> Add it</button>
                 </div>
                 <p class="vhint vplatform">
-                  Platform · <b class="vcount" data-ved-platform-note>read from the link</b>
-                  <span data-ved-platform-hint>— leave it on <i>Read it from the link</i> and the editor names the host itself.</span>
+                  Platform · <b class="vcount" data-ved-platform-note>not chosen</b>
+                  <span data-ved-platform-hint>— the field takes that platform's own link, and nothing else.</span>
                 </p>
                 <p class="vsrc__found" data-ved-source-note hidden></p>
-                <p class="vhint" data-ved-file-note hidden></p>
-
-                <!-- the picture, before it is published -->
-                <div class="vplay" data-ved-player hidden></div>
               </div>
+
+              <!-- the picture, before it is published -->
+              <div class="vplay" data-ved-player hidden></div>
             </section>
 
             <!-- title / description / tags ----------------------------- -->

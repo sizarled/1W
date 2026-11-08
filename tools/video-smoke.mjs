@@ -198,6 +198,20 @@ function boot(file, { hash = "", url = "", storage = {}, fetchImpl, globals } = 
 const fnName = (href) => String(href).split("/rpc/")[1] || "";
 const lastCall = (calls, fn) => [...calls].reverse().find((c) => fnName(c.href) === fn);
 
+/* one way in: the file row, or one platform's own link row */
+const chooseMode = (document, window, mode) => {
+  const radio = document.querySelector(`[data-ved-mode="${mode}"]`);
+  if (!radio) return;
+  radio.checked = true;
+  radio.dispatchEvent(new window.Event("change", { bubbles: true }));
+};
+const choosePlatform = (document, window, value) => {
+  const select = document.querySelector("[data-ved-platform]");
+  if (!select) return;
+  select.value = value;
+  select.dispatchEvent(new window.Event("change", { bubbles: true }));
+};
+
 /* ================================================================== */
 /* pass 1 — the feed                                                  */
 /* ================================================================== */
@@ -482,7 +496,19 @@ async function editor(tag) {
   expect("editor: the language list is filled", document.querySelectorAll("[data-ved-lang] option").length >= 8, document.querySelectorAll("[data-ved-lang] option").length);
   expect("editor: the country list is filled", document.querySelectorAll("[data-ved-country-sel] option").length > 200, document.querySelectorAll("[data-ved-country-sel] option").length);
 
-  /* the source */
+  /* the source: one way in, and the platform is picked before the link */
+  expect("editor: the field waits for a platform", document.querySelector("[data-ved-embed]")?.disabled === true);
+  chooseMode(document, window, "link");
+  expect("editor: the link row is the one on the page", document.querySelector("[data-ved-mode-link]")?.hidden === false);
+  expect("editor: and the file row stands aside", document.querySelector("[data-ved-mode-file]")?.hidden === true);
+  choosePlatform(document, window, "youtube");
+  await wait();
+  expect("editor: the field opens on that platform", document.querySelector("[data-ved-embed]")?.disabled === false);
+  expect(
+    "editor: the placeholder asks for its own link",
+    document.querySelector("[data-ved-embed]")?.placeholder === "Paste the YouTube link",
+    document.querySelector("[data-ved-embed]")?.placeholder
+  );
   const embed = document.querySelector("[data-ved-embed]");
   embed.value = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
   embed.dispatchEvent(new window.Event("input", { bubbles: true }));
@@ -490,28 +516,20 @@ async function editor(tag) {
   expect("editor: a YouTube link is recognised", document.querySelector("[data-ved-source-badge]")?.textContent === "YouTube", document.querySelector("[data-ved-source-badge]")?.textContent);
   expect("editor: the thumbnail comes from the video", document.querySelector("[data-ved-thumb-box] img")?.getAttribute("src")?.includes("i.ytimg.com"), document.querySelector("[data-ved-thumb-box]")?.innerHTML.slice(0, 80));
 
-  /* the link chooses its platform — and a hand pick keeps that link's row */
-  const platformSelect = document.querySelector("[data-ved-platform]");
+  /* the field keeps only the chosen platform's own link */
   embed.value = "https://vimeo.com/76979871";
   embed.dispatchEvent(new window.Event("input", { bubbles: true }));
   await wait();
-  expect("editor: a pasted link picks its own platform", platformSelect.value === "vimeo", platformSelect.value);
+  expect("editor: a foreign link never becomes the source", document.querySelector("[data-ved-publish]")?.disabled === true);
   expect(
-    "editor: and the note says which one",
-    document.querySelector("[data-ved-platform-note]")?.textContent === "Vimeo",
-    document.querySelector("[data-ved-platform-note]")?.textContent
+    "editor: and the note says why",
+    /not a YouTube link/i.test(document.querySelector("[data-ved-source-note]")?.textContent || ""),
+    document.querySelector("[data-ved-source-note]")?.textContent
   );
-  platformSelect.value = "tiktok";
-  platformSelect.dispatchEvent(new window.Event("change", { bubbles: true }));
-  await wait();
-  embed.value = "https://vimeo.com/76979871?x=1";
-  embed.dispatchEvent(new window.Event("input", { bubbles: true }));
-  await wait();
-  expect("editor: a hand-picked platform holds for that link", platformSelect.value === "tiktok", platformSelect.value);
   embed.value = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
   embed.dispatchEvent(new window.Event("input", { bubbles: true }));
   await wait();
-  expect("editor: a new link takes the row back", platformSelect.value === "youtube", platformSelect.value);
+  expect("editor: its own link is taken again", document.querySelector("[data-ved-source-badge]")?.textContent === "YouTube", document.querySelector("[data-ved-source-badge]")?.textContent);
 
   const title = document.querySelector("[data-ved-title]");
   title.value = "A first video";
@@ -554,9 +572,10 @@ async function editor(tag) {
     Object.defineProperty(event, "dataTransfer", { value: payload });
     return event;
   };
-  embed.value = "";
-  embed.dispatchEvent(new window.Event("input", { bubbles: true }));
+  chooseMode(document, window, "file");
   await wait();
+  expect("editor: the file row is the one on the page", document.querySelector("[data-ved-mode-file]")?.hidden === false);
+  expect("editor: and the link row stands aside", document.querySelector("[data-ved-mode-link]")?.hidden === true);
   dropBox.dispatchEvent(
     dropEvent({
       files: [new window.File([new Uint8Array(32)], "drop.mp4", { type: "video/mp4" })],
@@ -574,9 +593,15 @@ async function editor(tag) {
   );
   await wait(80);
   expect("editor: a dropped link lands in the field", embed.value === "https://www.instagram.com/reel/Cxyz123/", embed.value);
-  expect("editor: and its platform is chosen for it", platformSelect.value === "instagram", platformSelect.value);
+  expect(
+    "editor: its platform is chosen, and its own row comes forward",
+    document.querySelector("[data-ved-platform]")?.value === "instagram" && document.querySelector("[data-ved-mode-link]")?.hidden === false,
+    document.querySelector("[data-ved-platform]")?.value
+  );
+  expect("editor: the file row stands aside for it", document.querySelector("[data-ved-mode-file]")?.hidden === true);
 
   /* back to the YouTube link the rest of the pass reads */
+  choosePlatform(document, window, "youtube");
   embed.value = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
   embed.dispatchEvent(new window.Event("input", { bubbles: true }));
   await wait();
@@ -603,13 +628,20 @@ async function editor(tag) {
     document.querySelector("[data-ved-tag-count]")?.textContent
   );
 
-  /* the platform is picked, not only guessed */
+  /* the platform is chosen, and only its own link survives it */
   const platform = document.querySelector("[data-ved-platform]");
   platform.value = "x";
   platform.dispatchEvent(new window.Event("change", { bubbles: true }));
   await wait();
   expect("editor: the platform list holds the eight", document.querySelectorAll("[data-ved-platform] option").length === 9, String(document.querySelectorAll("[data-ved-platform] option").length));
   expect("editor: the chosen platform is named in the counter", document.querySelector("[data-ved-platform-note]")?.textContent === "X", document.querySelector("[data-ved-platform-note]")?.textContent);
+  expect("editor: the YouTube link does not survive that choice", document.querySelector("[data-ved-embed]")?.value === "", document.querySelector("[data-ved-embed]")?.value);
+
+  /* back to the YouTube link the payload is read from */
+  choosePlatform(document, window, "youtube");
+  embed.value = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+  embed.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await wait();
 
   /* the index: a time and a name, typed in the form */
   const typeChapter = (index, time, label) => {
@@ -660,8 +692,8 @@ async function editor(tag) {
     JSON.stringify(payload.meta?.chapters)
   );
   expect("index: a name-less row is dropped, not saved half-written", (payload.meta?.chapters || []).every((row) => row.label && row.start), JSON.stringify(payload.meta?.chapters));
-  expect("editor: the chosen platform rides in the payload", payload.meta?.platform === "x", JSON.stringify(payload.meta?.platform));
-  expect("editor: a YouTube link is still read as YouTube", payload.meta?.source === "x" || payload.meta?.source === "youtube", payload.meta?.source);
+  expect("editor: the chosen platform rides in the payload", payload.meta?.platform === "youtube", JSON.stringify(payload.meta?.platform));
+  expect("editor: a YouTube link is still read as YouTube", payload.meta?.source === "youtube", payload.meta?.source);
   expect(
     "editor: the two levels of keywords ride in the payload",
     Array.isArray(payload.meta?.keywords) &&
@@ -1379,7 +1411,7 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
   expect("video.html: it forwards to the videos page", html.includes("videos.html#/v/") && html.includes('get("id")'));
   expect("video.html: it replaces, not pushes", html.includes("location.replace"));
 
-  ["vcard", "vcard__media", "vgrid", "vbar", "vwatch", "vplayer", "vgate", "vacts", "vhost", "vcomposer", "vcom", "ved", "vdrop", "vfoot", "vseg", "vtaglist", "vsk", "vempty", "vshelf", "vrow"].forEach((name) => {
+  ["vcard", "vcard__media", "vgrid", "vbar", "vwatch", "vplayer", "vgate", "vacts", "vhost", "vcomposer", "vcom", "ved", "vdrop", "vfoot", "vseg", "vtaglist", "vsk", "vempty", "vshelf", "vrow", "vchoose", "vchoose__opt", "vdrop__note", "vkw", "vplatform"].forEach((name) => {
     expect(`css: .${name} exists`, css.includes(`.${name}`), name);
   });
   expect("css: it is monochrome — no colour literals beyond the scrims", !/#[0-9a-f]{3,6}/i.test(css.replace(/#(000|000000|f2f2f4|fff|ffffff|e6e6e9|08080a)\b/gi, "").replace(/rgba?\([^)]*\)/g, "")), "colour found");

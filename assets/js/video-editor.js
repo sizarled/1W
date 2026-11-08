@@ -23,6 +23,11 @@
  * storage: it goes to Streamtape, into `Home / Users / Studio / <studio code>`,
  * and takes the video's own code as its name (see `streamtape.js`). Without a
  * studio, a small file still goes to storage and its link is filled in.
+ *
+ * The source is one thing or the other, never both: `S.mode` is `"file"` (a
+ * dropped or picked file, whose address the upload fills in) or `"link"` (one
+ * of the eight platforms, and only that platform's own link). The field under
+ * a platform refuses a link from anywhere else.
  */
 import { rpc } from "./data.js";
 import { videoUrl } from "./media.js";
@@ -44,6 +49,8 @@ const S = {
   desc: "",
   /* three main keywords at most, five sub-keywords under each */
   keywords: [],
+  /* one way in: "file" (dropped or picked) or "link" (a platform's own link) */
+  mode: "file",
   platform: "",
   /* the index: `00:38 · Overview` — written here, read by the watch page */
   chapters: [],
@@ -597,6 +604,52 @@ function jumpToSection(item) {
 function paintPlatform() {
   const select = $("[data-ved-platform]");
   if (select && select.value !== (S.platform || "")) select.value = S.platform || "";
+  const chosen = Boolean(S.platform);
+  const label = chosen ? HOSTS[S.platform] || "platform" : "";
+  if (el.embed) {
+    el.embed.disabled = !chosen;
+    el.embed.placeholder = chosen ? `Paste the ${label} link` : "Pick a platform first";
+  }
+  const detect = $("[data-ved-detect]");
+  if (detect) detect.disabled = !chosen;
+  const hint = $("[data-ved-platform-hint]");
+  if (hint) {
+    hint.textContent = chosen
+      ? `— the field takes a ${label} link, and nothing else.`
+      : "— pick one, and the field takes that platform's own link.";
+  }
+}
+
+/** Which of the two ways in is on the page. */
+function paintMode() {
+  qsa("[data-ved-mode]").forEach((radio) => {
+    const on = radio.getAttribute("data-ved-mode") === S.mode;
+    radio.checked = on;
+    radio.closest(".vchoose__opt")?.classList.toggle("is-on", on);
+  });
+  const fileRow = $("[data-ved-mode-file]");
+  const linkRow = $("[data-ved-mode-link]");
+  if (fileRow) fileRow.hidden = S.mode !== "file";
+  if (linkRow) linkRow.hidden = S.mode !== "link";
+}
+
+/**
+ * One way in, not two: switching lets go of whatever the other way held, so a
+ * video is either a file or one platform's link — never half of each.
+ */
+function setMode(mode) {
+  const next = mode === "link" ? "link" : "file";
+  if (next !== S.mode) {
+    S.mode = next;
+    S.embed = "";
+    if (el.embed) el.embed.value = "";
+    S.host = null;
+    if (next === "file") S.platform = "";
+    if (next === "link" && /^blob:/.test(S.thumb)) S.thumb = "";
+  }
+  paintMode();
+  paintAll();
+  scheduleDraft();
 }
 
 function paintAll() {
@@ -608,6 +661,7 @@ function paintAll() {
   paintThumb();
   paintChapters();
   paintTags();
+  paintMode();
   paintPlatform();
   paintDropNote();
   paintPeople();
@@ -809,6 +863,7 @@ function resetForm() {
   S.thumbAuto = false;
   S.keywords = [];
   S.platform = "";
+  S.mode = "file";
   S.host = null;
   S.people = [];
   S.passes = [];
@@ -917,40 +972,24 @@ function addSub(index, raw) {
   paintStatus();
 }
 
-/* the eight the picker names — a link to one of them chooses its own row */
+/* the eight the picker names — nothing else can be chosen, and nothing else
+   is accepted into the field */
 const PLATFORM_VALUES = ["youtube", "vimeo", "facebook", "instagram", "pinterest", "tiktok", "reddit", "x"];
-/* a platform picked by hand, and the link it was picked against: it stands
-   while that link stands, and the link takes the row back when it moves on */
-let manualPick = "";
-let manualFor = "";
 
 /**
- * The link says which platform it is, so the picker says it too — that is what
- * "choose the link's platform" means here: paste the address and the row is
- * filled in, and the member may still overrule it for that link.
+ * A dropped or pasted address: if it belongs to one of the eight, the page
+ * moves to that platform's row and puts the link there — there is no second
+ * option, and the link never lands in a field that is not its own.
  */
-function syncPlatformFromLink() {
-  const kind = sourceKind(S.embed.trim());
-  if (manualPick && kind === manualFor) return;
-  if (manualPick) {
-    manualPick = "";
-    manualFor = "";
-  }
-  const next = PLATFORM_VALUES.includes(kind) ? kind : "";
-  if (S.platform === next) return;
-  S.platform = next;
-  const select = $("[data-ved-platform]");
-  if (select && select.value !== next) select.value = next;
-  paintCounters();
-}
-
-/** A dropped or pasted address lands in the field, and its platform follows. */
 function applyLink(raw) {
   const value = String(raw || "").trim();
   if (!value || !/^https?:\/\//i.test(value)) return false;
+  const kind = sourceKind(value);
+  if (!PLATFORM_VALUES.includes(kind)) return false;
+  setMode("link");
+  S.platform = kind;
+  paintPlatform();
   el.embed.value = value;
-  manualPick = "";
-  manualFor = "";
   el.embed.dispatchEvent(new Event("input"));
   const auto = autoThumb(value);
   if (auto) {
@@ -1024,8 +1063,13 @@ async function loadExisting(code) {
   S.hasPassword = Boolean(res.asks_password);
   /* the mains come back as rows of their own, the subs under them by parent */
   const mains = Array.isArray(v.keywords) ? v.keywords.filter((k) => k.role === "main") : [];
-  S.platform = String((v.video && v.video.meta && v.video.meta.platform) || v.meta?.platform || "") || "";
   const hostFile = (v.video && v.video.meta && v.video.meta.host_file) || v.meta?.host_file || null;
+  /* one way in, decided by what the video already is: a file on a host, or a
+     platform's own link */
+  const savedKind = sourceKind(String(v.video?.embed || v.embed || ""));
+  const savedPlatform = String((v.video && v.video.meta && v.video.meta.platform) || v.meta?.platform || "");
+  S.mode = hostFile?.id || !PLATFORM_VALUES.includes(savedKind) ? "file" : "link";
+  S.platform = S.mode === "link" ? (PLATFORM_VALUES.includes(savedPlatform) ? savedPlatform : savedKind) : "";
   /* a stored video's file already carries its code, so it is named */
   S.host = hostFile && hostFile.id ? { ...hostFile, ext: hostFile.ext || extensionOf({ name: hostFile.name || ".mp4" }), named: true } : null;
   S.keywords = mains.slice(0, MAIN_MAX).map((main) => ({
@@ -1152,22 +1196,29 @@ async function stillFromHost(url) {
 function paintSourceNote() {
   const note = $("[data-ved-source-note]");
   if (!note) return;
-  const value = S.embed.trim();
+  /* what is in the field, even when it was refused: the note has to say why */
+  const typed = String(el.embed?.value || "").trim();
+  const value = S.embed.trim() || typed;
   if (!value) {
     note.hidden = true;
     return;
   }
   note.hidden = false;
+  const label = HOSTS[S.platform] || "platform";
+  if (!S.platform) {
+    note.innerHTML = `${icon("info")} <span>Pick the platform first — then paste its own link.</span>`;
+    return;
+  }
   if (!/^https?:\/\//i.test(value)) {
     note.innerHTML = `${icon("info")} <span>A link starts with http:// or https://</span>`;
     return;
   }
   const linkKind = sourceKind(value);
-  const kind = S.platform || linkKind;
-  if (S.platform && linkKind && linkKind !== "embed" && S.platform !== linkKind) {
-    note.innerHTML = `${icon("info")} <span>This link reads as ${esc(HOSTS[linkKind] || "another host")}, and you picked ${esc(HOSTS[S.platform] || S.platform)}. The platform is what gets saved.</span>`;
+  if (linkKind !== S.platform) {
+    note.innerHTML = `${icon("info")} <span>This is not a ${esc(label)} link — this field takes only the link of the platform you chose.</span>`;
     return;
   }
+  const kind = S.platform;
   if (kind === "file") {
     note.innerHTML = `${icon("check")} <span>A file we can play here${S.download ? " — and download" : ""}</span>`;
     return;
@@ -1180,7 +1231,6 @@ function paintSourceNote() {
     note.innerHTML = `${icon("info")} <span>A Reddit short link — the full thread address frames better</span>`;
     return;
   }
-  const label = HOSTS[kind] || "Embed";
   note.innerHTML = `${icon("check")} <span>${esc(label)} — it plays inside the frame${kind === "youtube" ? ", and the thumbnail comes with it" : ""}</span>`;
 }
 
@@ -1431,6 +1481,8 @@ function draftFields() {
     vertical: S.vertical,
     hub: S.hub,
     host: S.host,
+    mode: S.mode,
+    platform: S.platform,
   };
 }
 
@@ -1497,6 +1549,8 @@ function restoreDraft(draft) {
   S.vertical = Boolean(draft.vertical);
   S.hub = draft.hub || S.hub;
   S.host = draft.host && draft.host.id ? draft.host : null;
+  S.mode = draft.mode === "link" ? "link" : "file";
+  if (typeof draft.platform === "string") S.platform = draft.platform;
 }
 
 function paintDraftNote() {
@@ -1523,11 +1577,12 @@ function bind() {
   /* the source */
   let stillTimer = null;
   el.embed.addEventListener("input", () => {
-    S.embed = el.embed.value;
-    /* the field was pointed somewhere else: the host file is no longer this
-       video's, so it is not named after it either */
+    const typed = el.embed.value.trim();
+    /* on the link row only the chosen platform's link is kept; a file that was
+       uploaded fills the same field with its own address and is taken as it is */
+    const foreign = S.mode === "link" && typed && sourceKind(typed) !== S.platform;
+    S.embed = foreign ? "" : el.embed.value;
     if (S.host && !S.embed.includes(S.host.id)) S.host = null;
-    syncPlatformFromLink();
     syncAutoThumb();
     paintSourceNote();
     paintPlayer();
@@ -1554,24 +1609,32 @@ function bind() {
 
   $("[data-ved-detect]")?.addEventListener("click", () => {
     const value = el.embed.value.trim();
+    if (!S.platform) {
+      toast({ title: "Pick the platform first", message: "Then the field takes that platform's own link.", tone: "error" });
+      $("[data-ved-platform]")?.focus();
+      return;
+    }
     if (!value) {
       el.embed.focus();
       return;
     }
-    if (!/^https?:\/\//i.test(value)) {
-      toast({ title: "That is not a link", message: "Start it with http:// or https://", tone: "error" });
+    if (sourceKind(value) !== S.platform) {
+      toast({
+        title: `That is not a ${HOSTS[S.platform] || "platform"} link`,
+        message: "This field takes only the link of the platform you chose.",
+        tone: "error",
+        iconName: "info",
+        duration: 4200,
+      });
       return;
     }
     S.embed = value;
-    manualPick = "";
-    manualFor = "";
-    syncPlatformFromLink();
     const auto = autoThumb(value);
     if (auto) {
       S.thumb = auto;
       toast({ title: "Link read", message: "The thumbnail came from the video itself.", tone: "success", iconName: "image" });
     } else {
-      toast({ title: "Link read", message: isFile(value) ? "A file we can play here." : "An embed we can frame.", tone: "success", iconName: "link" });
+      toast({ title: "Link read", message: `A ${HOSTS[S.platform] || "platform"} link — it plays inside the frame.`, tone: "success", iconName: "link" });
     }
     paintAll();
   });
@@ -1598,11 +1661,11 @@ function bind() {
       }
       const uri = event.dataTransfer.getData("text/uri-list") || event.dataTransfer.getData("text/plain");
       if (applyLink(uri)) {
-        toast({ title: "Link dropped", message: "Its platform is chosen, and the thumbnail comes with it.", tone: "success", iconName: "check" });
+        toast({ title: "Link dropped", message: "Its platform is chosen, and the link sits in its own field.", tone: "success", iconName: "check" });
       } else {
         toast({
-          title: "A link, not a file",
-          message: "Videos live on a host — paste the link to the file or the platform.",
+          title: "Not one of the eight platforms",
+          message: "Choose Upload a video for a file, or A link from a platform for YouTube, Vimeo, Facebook, Instagram, Pinterest, TikTok, Reddit or X.",
           tone: "error",
           iconName: "info",
           duration: 5200,
@@ -1623,17 +1686,31 @@ function bind() {
     paintCounters();
   });
 
+  qsa("[data-ved-mode]").forEach((radio) =>
+    radio.addEventListener("change", () => {
+      if (!radio.checked) return;
+      setMode(radio.getAttribute("data-ved-mode"));
+    })
+  );
+
   const platformEl = $("[data-ved-platform]");
   if (platformEl) {
     platformEl.value = S.platform || "";
     platformEl.addEventListener("change", () => {
       S.platform = platformEl.value;
-      manualPick = platformEl.value;
-      manualFor = sourceKind(S.embed.trim());
+      /* a link typed for another platform does not stay in the field */
+      if (S.embed && sourceKind(S.embed.trim()) !== S.platform) {
+        S.embed = "";
+        if (el.embed) el.embed.value = "";
+      }
+      paintPlatform();
       paintCounters();
       paintSourceNote();
       paintPreview();
+      paintPlayer();
+      paintThumb();
       paintStatus();
+      scheduleDraft();
     });
   }
 
