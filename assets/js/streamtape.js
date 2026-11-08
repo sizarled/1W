@@ -9,7 +9,7 @@
  *     └ Users
  *         └ Studio
  *             └ <studio code>          e.g. IDST100001
- *                 └ <video code>.mp4   e.g. PST-001100.mp4
+ *                 └ <video code>.mp4   e.g. Video-001100.mp4
  *
  * The folder is made on the way in — `Users` and `Studio` once, the studio's
  * own folder the first time that studio uploads — and their ids are remembered
@@ -27,7 +27,7 @@
  * renaming never breaks the link already in the field.
  *
  *   const out = await uploadToStudio(file, {
- *     studio: "IDST100001", name: "PST-001100.mp4",
+ *     studio: "IDST100001", name: "Video-001100.mp4",
  *     onStage: (text) => note(text),
  *   });
  *   out.embed   → https://streamtape.com/e/<id>
@@ -364,7 +364,7 @@ export async function uploadToStudio(file, { studio, name, onStage, onProgress }
   };
 }
 
-/** Give a file the video's own name — `PST-001100.mp4`. */
+/** Give a file the video's own name — `Video-001100.mp4`. */
 export async function renameFile(id, name, studio) {
   if (!id || !name) return false;
   await call("file/rename", { file: id, name, studio });

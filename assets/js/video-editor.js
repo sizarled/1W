@@ -16,7 +16,7 @@
  *     meta{ age, download, vertical, source, platform, keywords, host_file }
  *   })
  *
- * The same call edits: `?id=PST-001005` pre-fills the form from
+ * The same call edits: `?id=Video-001005` pre-fills the form from
  * video_get, and the payload carries the code back.
  *
  * A file uploaded while a **studio** is chosen does not go to the site's
@@ -753,7 +753,14 @@ function payload(status) {
          is not stored: it is the video's own code, so the record cannot go
          stale between the upload and the rename. */
       host_file: S.host
-        ? { id: S.host.id, studio: S.host.studio, folder: S.host.folder || S.host.studio, ext: S.host.ext || "mp4" }
+        ? {
+            id: S.host.id,
+            studio: S.host.studio,
+            folder: S.host.folder || S.host.studio,
+            ext: S.host.ext || "mp4",
+            /* the name the file actually has — compared with the code on load */
+            name: S.host.name || null,
+          }
         : null,
       /* the two levels of keywords, beside the flat `tags` the site reads */
       keywords: S.keywords.slice(0, MAIN_MAX).map((row) => ({
@@ -1070,8 +1077,15 @@ async function loadExisting(code) {
   const savedPlatform = String((v.video && v.video.meta && v.video.meta.platform) || v.meta?.platform || "");
   S.mode = hostFile?.id || !PLATFORM_VALUES.includes(savedKind) ? "file" : "link";
   S.platform = S.mode === "link" ? (PLATFORM_VALUES.includes(savedPlatform) ? savedPlatform : savedKind) : "";
-  /* a stored video's file already carries its code, so it is named */
-  S.host = hostFile && hostFile.id ? { ...hostFile, ext: hostFile.ext || extensionOf({ name: hostFile.name || ".mp4" }), named: true } : null;
+  /* the name the file actually has, against the code it should carry: a file
+     uploaded before the code changed (`PST-001032.mp4`) is renamed on the next
+     save, so the host and the video agree again */
+  const hostExt = hostFile?.ext || extensionOf({ name: hostFile?.name || ".mp4" });
+  const wanted = S.code ? `${S.code}.${hostExt}` : "";
+  S.host =
+    hostFile && hostFile.id
+      ? { ...hostFile, ext: hostExt, name: hostFile.name || "", named: Boolean(hostFile.name) && hostFile.name === wanted }
+      : null;
   S.keywords = mains.slice(0, MAIN_MAX).map((main) => ({
     word: String(main.keyword || ""),
     subs: Array.isArray(v.keywords)

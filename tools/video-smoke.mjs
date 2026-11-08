@@ -722,7 +722,7 @@ async function editor(tag) {
       if (fn === "creator_hubs_list") {
         return reply({ ok: true, hubs: [{ code: "IDST100001", name: "CineAura", kind: "channel" }] });
       }
-      if (fn === "video_save") return reply({ ok: true, code: "PST-001100", status: "published" });
+      if (fn === "video_save") return reply({ ok: true, code: "Video-001100", status: "published" });
       if (href.includes("/functions/v1/studio-upload")) {
         const url = new URL(href);
         const action = url.searchParams.get("action");
@@ -824,7 +824,7 @@ async function editor(tag) {
   await wait(200);
   expect(
     "studio upload: the file is renamed to the video's own code",
-    tape.renames.length === 1 && tape.renames[0].name === "PST-001100.mp4" && tape.renames[0].file === "fid1",
+    tape.renames.length === 1 && tape.renames[0].name === "Video-001100.mp4" && tape.renames[0].file === "fid1",
     JSON.stringify(tape.renames)
   );
   const studioPayload = lastCall(calls, "video_save")?.body?.p_payload;
@@ -856,6 +856,64 @@ async function editor(tag) {
     hostFunction.includes("STREAMTAPE_LOGIN") && hostFunction.includes("STREAMTAPE_KEY") && hostFunction.includes("Deno.env.get")
   );
   expect("studio upload: no key is written into the function", !/120GYLeBYluelxJ|010abc21eb8af8b77b42/.test(hostFunction));
+}
+
+{
+  /* a file uploaded before the code changed is renamed to the code it has now */
+  const renames = [];
+  const ctx = boot("video-editor.html", {
+    hash: "#?id=Video-000001",
+    url: "video-editor.html?id=Video-000001",
+    storage: STORAGE,
+    fetchImpl: (href) => {
+      const fn = fnName(href);
+      if (fn === "creator_hubs_list") {
+        return reply({ ok: true, hubs: [{ code: "IDST100001", name: "CineAura", kind: "channel" }] });
+      }
+      if (fn === "video_get") {
+        return reply({
+          ok: true,
+          locked: false,
+          mine: true,
+          video: {
+            id: "v1",
+            code: "Video-000001",
+            title: "Older file",
+            status: "draft",
+            visibility: "general",
+            embed: "https://streamtape.com/e/fid9",
+            video: {
+              embed: "https://streamtape.com/e/fid9",
+              meta: {
+                host_file: { id: "fid9", studio: "IDST100001", folder: "IDST100001", ext: "mp4", name: "PST-001032.mp4" },
+              },
+            },
+          },
+        });
+      }
+      if (fn === "video_save") return reply({ ok: true, code: "Video-000001", status: "draft" });
+      if (href.includes("/functions/v1/studio-upload")) {
+        const url = new URL(href);
+        if (url.searchParams.get("action") === "file/rename") {
+          renames.push({ file: url.searchParams.get("file"), name: url.searchParams.get("name") });
+          return reply({ status: 200, result: true });
+        }
+        return reply({ status: 200, result: {} });
+      }
+      return reply([]);
+    },
+  });
+  await import(`file://${join(root, "assets/js/video-editor.js")}?precode`);
+  await wait(90);
+  const doc = ctx.document;
+  expect("codes: the video opens on its own code", doc.querySelector("[data-ved-title]")?.value === "Older file", doc.querySelector("[data-ved-title]")?.value);
+  doc.querySelector("[data-ved-save]").dispatchEvent(new ctx.window.MouseEvent("click", { bubbles: true }));
+  await wait(150);
+  expect(
+    "codes: a file still called by the old code is renamed to the new one",
+    renames.length === 1 && renames[0].file === "fid9" && renames[0].name === "Video-000001.mp4",
+    JSON.stringify(renames)
+  );
 }
 
 {
@@ -1510,6 +1568,10 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
 {
   const html = readFileSync(join(root, "video.html"), "utf8");
   expect("video.html: it forwards to the videos page", html.includes("videos.html#/v/") && html.includes('get("id")'));
+  const codes = readFileSync(join(root, "tools/sql/video-codes.sql"), "utf8");
+  expect("codes: a video is minted with its own prefix", codes.includes("'Video-'") && codes.includes("content_type = 'video'"));
+  expect("codes: and the videos already out there are renamed", codes.includes("set post_code = 'Video-' || substring"));
+  expect("codes: the old default is dropped first", codes.includes("alter column post_code drop default"));
   expect("video.html: it replaces, not pushes", html.includes("location.replace"));
 
   ["vcard", "vcard__media", "vgrid", "vbar", "vwatch", "vplayer", "vgate", "vacts", "vhost", "vcomposer", "vcom", "ved", "vdrop", "vfoot", "vseg", "vtaglist", "vsk", "vempty", "vshelf", "vrow", "vchoose", "vchoose__opt", "vdrop__note", "vkw", "vplatform", "vprog", "vprog__bar", "vprog__fill", "vprog__meta"].forEach((name) => {

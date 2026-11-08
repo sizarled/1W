@@ -1657,7 +1657,7 @@ Home
 └ Users
   └ Studio
     └ <studio code>          IDST100001
-      └ <video code>.mp4     PST-001100.mp4
+      └ <video code>.mp4     Video-001100.mp4
 ```
 
 `assets/js/streamtape.js` makes the folders on the way in (`Users` and `Studio` once, the studio's
@@ -1674,6 +1674,24 @@ never renamed again. The record kept beside the video is `meta.host_file { id, s
 the **name is not stored**, because the name is the video's own code, so the record cannot go stale
 between the upload and the rename. A file without a studio, or one under 50 MB without a studio
 chosen, still goes to the site's storage; a studio's file may be up to 2 GB.
+
+**A video's code says "video".** Every post is minted from one default — `'PST-' || nextval` — so a
+video and an article looked alike (`PST-001032`). A video now carries its own prefix:
+
+```
+Video-001032    a video
+PST-001032      anything else — an article, a question, a recommendation
+```
+
+A column default cannot look at another column of the row it fills, so the default is gone and a
+`before insert` trigger (`tools/sql/video-codes.sql`) mints the code from `content_type`, from the
+same `post_seq` — the numbers stay dense and in order, and an explicit code is still honoured. The
+same migration renames the videos that already exist (`PST-001032` → `Video-001032`), which means an
+address that carries an old code (`videos.html#/v/PST-001032`) no longer finds its video.
+
+The file on Streamtape is named after the code, so a file uploaded before this change is still called
+`PST-001032.mp4`. `meta.host_file` now keeps the name the file actually has; opening such a video in
+the editor and saving it renames the file to the code it now carries.
 
 **Two ways to the host, and the page tries them in order.** The preferred way is the edge function
 `supabase/functions/studio-upload/index.ts`: Streamtape's **API Login** and **API Key** (the key is the
@@ -1751,7 +1769,7 @@ the hub's own library) *and* the `posts` this page publishes into that hub — s
 [the studio a video goes into](#the-studio-a-video-goes-into).
 
 DDL + functions: `tools/sql/videos-page.sql` — **applied**, and exercised on the real database: a
-published video came back with its code (`PST-001005`), a guest saw it in the feed and its
+published video came back with its code (`Video-001005`), a guest saw it in the feed and its
 `impressions` ticked; a private one stayed `locked` for a guest, `asks_password` was true, a wrong
 password stayed locked and the right one opened it; an exclusive one dated to Morocco stayed shut for a
 guest and for an Andorran member, and opened for the Moroccan one; a draft was absent from the feed but
@@ -1869,7 +1887,7 @@ sets the studio afterwards, so nothing about the video path forked.
 
 `video_card` now carries `video.hub { id, code, kind, name, visibility }`, so the editor reopens with
 the studio it was published into, and `creator_items` unions the two stores: a row from `posts` arrives
-with `source: 'video-editor'`, its post code (`PST-…`), its counters, and its visibility in the
+with `source: 'video-editor'`, its post code (`Video-…`), its counters, and its visibility in the
 studio's own words (`general → public`, `limited`/`followers → exclusive`). That row's action menu is
 the editor's, not the table's — **Open in the editor** (to `video-editor.html?id=<code>`), copy link,
 **Delete** (through `post_delete`, with the confirmation saying *a video*). `creator_hub_json` counts
@@ -2070,7 +2088,7 @@ Ctrl+Enter, a draft payload, an audience payload, a private payload with its mem
 going to review, and the shared word-count / reading-time rules).
 
 Eleven pieces from @ledsizar, @jhon007 and @ledsizar7 remain on the index — nine public, one
-exclusive (`PST-001020`, open to LV5–LV10) and one private (`PST-001021`, the password is
+exclusive (`Video-001020`, open to LV5–LV10) and one private (`Video-001021`, the password is
 `1world2026`), so both gates can be seen without publishing anything.
 
 ### A blog's reading page — `blog.html?studio=<code>`
