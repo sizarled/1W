@@ -67,7 +67,15 @@ over it, and **a round mark of 58–84px** that sits half on the banner, the stu
 `clamp(1.25rem, 2.4vw, 1.75rem)` weight 800 under it, its field and niches on one line, and the numbers
 as pills — visibility, subscribers, items, minutes, likes, reports, the figure bold and the word quiet.
 The tabs are the reference's toolbar: outlined chips in a bar that scrolls sideways on a phone, the
-one you are in filled (`--text` on `--bg`). The public hub's cards are the reference's video card —
+one you are in filled (`--text` on `--bg`).
+
+**A studio's own page** (`creator.html?studio=IDST100001&creator=ID100019`) is the reference channel
+itself: the cover is the head — `clamp(210px, 30vw, 330px)` of the hub's `cover_url` (a plain gradient
+when it has none), greyscale under a scrim, with the mark, the name at `clamp(1.5rem, 3.2vw, 2.1rem)`
+and the buttons standing on its lower edge; the pills and the description sit under it on the card.
+Its shelf cards are the reference's video card: a 16:9 still with the minutes in a dark chip on the
+leading edge, the play disc on hover, a two-line title, the studio's name, then views and the date —
+the whole card lifting 2px and taking a border when the pointer is on it. The public hub's cards are the reference's video card —
 16:9 still, kind line, two-line title, two-line summary, facts row — lifting 3px on hover. A creator's
 own page (`creator.html?creator=`) gets the same banner and mark, then its name, handle, where, tags,
 bio, actions and totals. Nothing is invented: no `cover_url`, no banner image; no field, "No field yet".

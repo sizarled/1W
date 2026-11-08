@@ -2101,6 +2101,12 @@ function studioGroups(rows) {
   return { videos, vertical, podcasts, music, playlists, others };
 }
 
+/* the studio a shelf belongs to: the card names who published it */
+function studioNameOf() {
+  const hub = (state.hubView && state.hubView.hub) || {};
+  return String(hub.name || "").trim();
+}
+
 function studioVideo(row) {
   const portrait = shapeOf(row) === "v";
   const href = mediaUrl({ ...row, kind: "video", orientation: portrait ? "v" : "h" });
@@ -2113,6 +2119,7 @@ function studioVideo(row) {
         ${row.minutes ? `<span class="crs-card__time">${esc(num(Number(row.minutes) || 0))} min</span>` : ""}
       </span>
       <span class="crs-card__title">${esc(row.title || "Untitled")}</span>
+      <span class="crs-card__pres">${esc(studioNameOf())}</span>
       <span class="crs-card__meta" data-vis="${esc(row.visibility || "public")}">${esc(num(Number(row.views) || Number(row.likes) || 0))}${row.published_at ? ` · ${esc(dateOf(row.published_at))}` : ""}${row.visibility && row.visibility !== "public" ? ` · ${esc(visLabel(row.visibility))}` : ""}</span>
     </a>`;
 }
