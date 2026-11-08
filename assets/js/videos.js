@@ -351,19 +351,89 @@ async function loadMine() {
 /* ================================================================== */
 /* one video                                                          */
 /* ================================================================== */
+/**
+ * The player, with the way out to the whole screen.
+ *
+ * The button sits on top of the player rather than inside it, because an
+ * embedded player is a window of its own: a click inside it never reaches this
+ * page. Pressing it makes the **box** full screen — the iframe then fills the
+ * screen, and the platform's own controls still work inside it. A real file
+ * plays in a `<video>`, which has its own button too.
+ */
+function fullscreenButton() {
+  return `<button class="vplayer__fs" type="button" data-v-fs aria-pressed="false" aria-label="Full screen" title="Full screen (F)">${icon("expand")}</button>`;
+}
+
+function playerShell(inner) {
+  return `<div class="vplayer" data-v-player>${inner}${fullscreenButton()}</div>`;
+}
+
 function playerMarkup(v, meta) {
   const src = (v.video && v.video.embed) || v.embed || "";
   if (!src) {
-    return `<div class="vplayer"><div class="vplayer__idle"><p class="vplayer__note">This video has no source yet.</p></div></div>`;
+    return playerShell(`<div class="vplayer__idle"><p class="vplayer__note">This video has no source yet.</p></div>`);
   }
   if (isFile(src)) {
-    return `<div class="vplayer"><video controls playsinline preload="metadata" poster="${esc(v.thumbnail || "")}" src="${esc(src)}"></video></div>`;
+    return playerShell(`<video controls playsinline preload="metadata" poster="${esc(v.thumbnail || "")}" src="${esc(src)}"></video>`);
   }
   const src2 = embedUrl(src);
   if (!src2) {
-    return `<div class="vplayer"><div class="vplayer__idle"><p class="vplayer__note">This source cannot be shown here.</p></div></div>`;
+    return playerShell(`<div class="vplayer__idle"><p class="vplayer__note">This source cannot be shown here.</p></div>`);
   }
-  return `<div class="vplayer"><iframe src="${esc(src2)}" title="${esc(v.title || "Video")}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>`;
+  return playerShell(
+    `<iframe src="${esc(src2)}" title="${esc(v.title || "Video")}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* the whole screen                                                   */
+/* ------------------------------------------------------------------ */
+/* `requestFullscreen` is the standard, `webkitRequestFullscreen` the older
+   Safari, and an iPhone will only put a `<video>` full screen through its own
+   `webkitEnterFullscreen` — all three are tried in that order. Escape is the
+   browser's own key, so nothing here has to listen for it. */
+
+function fullscreenNode() {
+  return document.fullscreenElement || document.webkitFullscreenElement || null;
+}
+
+async function toggleFullscreen() {
+  const player = $("[data-v-player]");
+  if (!player) return;
+
+  try {
+    if (fullscreenNode()) {
+      await (document.exitFullscreen?.() || document.webkitExitFullscreen?.());
+      return;
+    }
+
+    const video = player.querySelector("video");
+    if (!player.requestFullscreen && !player.webkitRequestFullscreen) {
+      /* an iPhone: only the element itself can take the screen */
+      if (video && video.webkitEnterFullscreen) {
+        video.webkitEnterFullscreen();
+        return;
+      }
+      toast({ title: "Not on this device", message: "This browser does not offer full screen here.", iconName: "info" });
+      return;
+    }
+
+    const asked = player.requestFullscreen?.({ navigationUI: "hide" }) || player.webkitRequestFullscreen?.();
+    await asked;
+  } catch {
+    toast({ title: "Full screen was refused", message: "The browser said no — the video keeps playing here.", iconName: "info" });
+  }
+}
+
+/** The button says which way it will go. */
+function paintFullscreenButton() {
+  const button = $("[data-v-fs]");
+  if (!button) return;
+  const on = Boolean(fullscreenNode());
+  button.setAttribute("aria-pressed", String(on));
+  button.setAttribute("aria-label", on ? "Leave full screen" : "Full screen");
+  button.setAttribute("title", on ? "Leave full screen (F)" : "Full screen (F)");
+  button.innerHTML = icon(on ? "collapse" : "expand");
 }
 
 function lockedMarkup(v) {
@@ -1197,6 +1267,23 @@ function toggleSaved(code) {
   return set.has(code);
 }
 
+/* ------------------------------------------------------------------ */
+/* F — the whole screen, the way a player does it                     */
+/* ------------------------------------------------------------------ */
+/* Nothing fires while the member is typing: a comment box that eats the "f"
+   is worse than a shortcut nobody has. */
+
+document.addEventListener("keydown", (event) => {
+  if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+  const target = event.target;
+  const tag = String(target?.tagName || "").toLowerCase();
+  if (tag === "input" || tag === "textarea" || tag === "select" || target?.isContentEditable) return;
+  if (String(event.key || "").toLowerCase() !== "f" || state.view !== "watch") return;
+  if (!qs("[data-v-player]")) return;
+  event.preventDefault();
+  toggleFullscreen().then(paintFullscreenButton);
+});
+
 /* ================================================================== */
 /* blocked on this device                                             */
 /* ================================================================== */
@@ -1384,7 +1471,18 @@ function bindWatch() {
     event.preventDefault();
     sendMessage(form);
   };
+  /* the way out to the whole screen — and back */
+  document.addEventListener("fullscreenchange", paintFullscreenButton);
+  document.addEventListener("webkitfullscreenchange", paintFullscreenButton);
+
   root.onclick = async (event) => {
+    if (event.target.closest("[data-v-fs]")) {
+      event.preventDefault();
+      await toggleFullscreen();
+      paintFullscreenButton();
+      return;
+    }
+
     /* join the studio — the menu item and the card's button are the same door */
     const join = event.target.closest("[data-v-join]");
     if (join) {

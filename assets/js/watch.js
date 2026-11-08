@@ -743,7 +743,59 @@ function preparePlayer(detail) {
   if (remembered) state.codeVerified = true;
 }
 
+/**
+ * The way out to the whole screen — and back.
+ *
+ * The stage takes the screen, not the iframe: an embedded player is a window
+ * of its own, and a click inside it never reaches this page. Nothing fires
+ * while the member is typing a code, and Escape stays the browser's own key.
+ */
+function wireFullscreen() {
+  const stage = qs("[data-w-stage]");
+  const button = qs("[data-w-fs]");
+  if (!stage || !button) return;
+
+  const paint = () => {
+    const on = Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+    button.setAttribute("aria-pressed", String(on));
+    button.setAttribute("aria-label", on ? "Leave full screen" : "Full screen");
+    button.setAttribute("title", on ? "Leave full screen (F)" : "Full screen (F)");
+    button.innerHTML = icon(on ? "collapse" : "expand");
+  };
+
+  button.addEventListener("click", async () => {
+    try {
+      if (document.fullscreenElement || document.webkitFullscreenElement) {
+        await (document.exitFullscreen?.() || document.webkitExitFullscreen?.());
+      } else if (stage.requestFullscreen || stage.webkitRequestFullscreen) {
+        await (stage.requestFullscreen?.({ navigationUI: "hide" }) || stage.webkitRequestFullscreen?.());
+      } else {
+        toast({ tone: "default", iconName: "info", title: "Not on this device", message: "This browser does not offer full screen here." });
+      }
+    } catch {
+      toast({ tone: "default", iconName: "info", title: "Full screen was refused", message: "The browser said no — the film keeps playing here." });
+    }
+    paint();
+  });
+
+  document.addEventListener("fullscreenchange", paint);
+  document.addEventListener("webkitfullscreenchange", paint);
+
+  document.addEventListener("keydown", (event) => {
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    const tag = String(event.target?.tagName || "").toLowerCase();
+    if (tag === "input" || tag === "textarea" || tag === "select" || event.target?.isContentEditable) return;
+    if (String(event.key || "").toLowerCase() !== "f") return;
+    if (!qs("[data-w-frame]:not([hidden])")) return;
+    event.preventDefault();
+    button.click();
+  });
+
+  paint();
+}
+
 function wirePlayer() {
+  wireFullscreen();
   qs("[data-w-play]")?.addEventListener("click", beginPlayback);
   const adLink = qs("[data-w-ad-link]");
   if (adLink) {

@@ -33,6 +33,16 @@ globalThis.sessionStorage = window.sessionStorage;
 if (typeof globalThis.crypto?.randomUUID !== "function") {
   Object.defineProperty(globalThis, "crypto", { value: window.crypto, configurable: true });
 }
+globalThis.Audio = window.Audio = class {
+  constructor() {
+    this.volume = 1;
+  }
+  play() {
+    return Promise.resolve();
+  }
+  pause() {}
+  addEventListener() {}
+};
 globalThis.getComputedStyle = window.getComputedStyle.bind(window);
 globalThis.requestAnimationFrame = window.requestAnimationFrame.bind(window);
 globalThis.cancelAnimationFrame = window.cancelAnimationFrame.bind(window);
@@ -290,6 +300,44 @@ report.visitId = window.sessionStorage.getItem("1w.visit") ? JSON.parse(window.s
 document.querySelector("[data-w-lock]").hidden = false;
 report.lockVisible = document.querySelector("[data-w-lock]").hidden === false;
 
+// ---- the whole screen: the stage takes it, and gives it back -------
+{
+  const stage = document.querySelector("[data-w-stage]");
+  const button = document.querySelector("[data-w-fs]");
+  report.fsOffered = Boolean(button) && /full screen/i.test(button.getAttribute("aria-label") || "");
+  report.fsQuietAtFirst = button?.getAttribute("aria-pressed") === "false";
+
+  let asked = 0;
+  stage.requestFullscreen = () => {
+    asked += 1;
+    Object.defineProperty(document, "fullscreenElement", { value: stage, configurable: true });
+    document.dispatchEvent(new window.Event("fullscreenchange"));
+    return Promise.resolve();
+  };
+  Object.defineProperty(document, "fullscreenElement", { value: null, configurable: true });
+  document.exitFullscreen = () => {
+    Object.defineProperty(document, "fullscreenElement", { value: null, configurable: true });
+    document.dispatchEvent(new window.Event("fullscreenchange"));
+    return Promise.resolve();
+  };
+
+  button.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  report.fsAsked = asked === 1 && document.fullscreenElement === stage;
+  report.fsPressed = button.getAttribute("aria-pressed") === "true" && /leave full screen/i.test(button.getAttribute("aria-label") || "");
+  report.fsMark = Boolean(button.querySelector("svg"));
+
+  button.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  report.fsClosed = document.fullscreenElement === null && button.getAttribute("aria-pressed") === "false";
+
+  document.body.dispatchEvent(new window.KeyboardEvent("keydown", { key: "f", bubbles: true }));
+  report.fsKey = asked === 2;
+  document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "f", bubbles: true }));
+
+  const watchCss = readFileSync(join(root, "assets/css/watch.css"), "utf8");
+  report.fsCss = watchCss.includes(".w-player__fs") && watchCss.includes(".w-player__stage:fullscreen") &&
+    watchCss.includes(".w-player__stage:fullscreen::backdrop");
+}
+
 const checks = {
   adGateBeforePlayback: report.adGateOpen && report.playerClosedOnGate && report.noCountOnGate,
   adCountdownRuns: report.adTicketWritten && report.adTicketCountsDown,
@@ -311,6 +359,11 @@ const checks = {
   watchtimeLogged: report.watchtimeLogged,
   visitLogged: report.visitLogged,
   postersKeepColourHooks: report.relatedImgClassHook,
+  fullscreenOffered: report.fsOffered && report.fsQuietAtFirst,
+  fullscreenTakesTheStage: report.fsAsked && report.fsPressed && report.fsMark,
+  fullscreenGivesTheScreenBack: report.fsClosed,
+  fullscreenFKey: report.fsKey,
+  fullscreenStyles: report.fsCss,
 };
 const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name);
 

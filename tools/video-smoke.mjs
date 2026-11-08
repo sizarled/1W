@@ -393,6 +393,64 @@ const choosePlatform = (document, window, value) => {
   expect("comments: and it quotes the comment it is about", /Comment #7/.test(reportCall?.body.p_note || "") && /Watched it twice/.test(reportCall?.body.p_note || ""), reportCall?.body.p_note);
   expect("comments: the box closes once it is sent", reportBox?.hidden === true);
   expect("watch: the box empties", box.value === "");
+
+  /* ---- the whole screen ------------------------------------------- */
+  const fsButton = document.querySelector("[data-v-fs]");
+  expect("fullscreen: the player offers it", Boolean(fsButton), "no button");
+  expect("fullscreen: it carries a name", /full screen/i.test(fsButton?.getAttribute("aria-label") || ""), fsButton?.getAttribute("aria-label"));
+  expect("fullscreen: it starts unpressed", fsButton?.getAttribute("aria-pressed") === "false");
+  expect("fullscreen: it is drawn with the expand mark", Boolean(fsButton?.querySelector("svg")), fsButton?.innerHTML?.slice(0, 60));
+
+  /* jsdom has no full screen of its own: stand one up and watch the page ask */
+  let asked = 0;
+  const player = document.querySelector("[data-v-player]");
+  player.requestFullscreen = () => {
+    asked += 1;
+    Object.defineProperty(document, "fullscreenElement", { value: player, configurable: true });
+    document.dispatchEvent(new window.Event("fullscreenchange"));
+    return Promise.resolve();
+  };
+  Object.defineProperty(document, "fullscreenElement", { value: null, configurable: true });
+  document.exitFullscreen = () => {
+    Object.defineProperty(document, "fullscreenElement", { value: null, configurable: true });
+    document.dispatchEvent(new window.Event("fullscreenchange"));
+    return Promise.resolve();
+  };
+
+  fsButton.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await wait(30);
+  expect("fullscreen: the player box is the one that takes the screen", asked === 1, String(asked));
+  expect("fullscreen: the button says it is on now", fsButton.getAttribute("aria-pressed") === "true", fsButton.getAttribute("aria-pressed"));
+  expect("fullscreen: and it offers the way back", /leave full screen/i.test(fsButton.getAttribute("aria-label") || ""), fsButton.getAttribute("aria-label"));
+  expect("fullscreen: the mark turns to the corners pointing in", Boolean(fsButton.querySelector("svg")) && document.fullscreenElement === player);
+
+  fsButton.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await wait(30);
+  expect("fullscreen: a second press leaves it", asked === 1 && document.fullscreenElement === null);
+  expect("fullscreen: and the button is quiet again", fsButton.getAttribute("aria-pressed") === "false", fsButton.getAttribute("aria-pressed"));
+
+  /* F does it too — but never while the member is typing */
+  document.body.dispatchEvent(new window.KeyboardEvent("keydown", { key: "f", bubbles: true }));
+  await wait(30);
+  expect("fullscreen: F takes the screen", asked === 2, String(asked));
+  document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "F", bubbles: true }));
+  await wait(30);
+  expect("fullscreen: and F again gives it back", document.fullscreenElement === null);
+  const typing = document.querySelector("[data-v-comment-input]");
+  if (typing) {
+    typing.focus();
+    typing.dispatchEvent(new window.KeyboardEvent("keydown", { key: "f", bubbles: true }));
+    await wait(20);
+    expect("fullscreen: a comment box keeps its own f", asked === 2, String(asked));
+  }
+
+  const videoCss = readFileSync(join(root, "assets/css/video.css"), "utf8");
+  expect("fullscreen: the stylesheet lets the player own the screen", videoCss.includes(".vplayer:fullscreen"), "no fullscreen rule");
+  expect("fullscreen: it fills the viewport", /:fullscreen[\s\S]{0,220}height: 100vh/.test(videoCss), "not sized");
+  expect("fullscreen: and the backdrop is black", videoCss.includes(".vplayer:fullscreen::backdrop"), "no backdrop");
+  expect("fullscreen: the button is drawn in the page", videoCss.includes(".vplayer__fs"), "no button style");
+  expect("fullscreen: the iframe is allowed to go full screen", /allowfullscreen/.test(readFileSync(join(root, "assets/js/videos.js"), "utf8")), "no allowfullscreen");
+
   expect("watch: nothing threw", errors.length === 0, errors.join(" | "));
 }
 

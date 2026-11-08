@@ -35,6 +35,9 @@ export const ICONS = {
   arrowLeft: S("M20 12H5") + S("M10.5 6.5 4 12l6.5 5.5"),
   arrowUpRight: S("M7 17 17 7") + S("M8.5 7H17v8.5"),
   external: S("M14 4h6v6") + S("M20 4l-8.5 8.5") + S("M18 14.5V18a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3.5"),
+  /* the four corners: out to the whole screen, and back again */
+  expand: S("M9 4H4v5") + S("M15 4h5v5") + S("M20 15v5h-5") + S("M4 15v5h5"),
+  collapse: S("M4 9h5V4") + S("M20 9h-5V4") + S("M15 20v-5h5") + S("M9 20v-5H4"),
   plus: S("M12 5v14M5 12h14"),
   minus: S("M5 12h14"),
   check: S("M4.5 12.5 9.5 17.5 19.5 6.5"),

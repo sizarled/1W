@@ -1843,10 +1843,22 @@ in the same file, or, when that call is not on the server yet, the `creator_publ
 page already makes (a channel first, then a server or a cinema, never a private hub). No studio at
 all, and the member's face is the publisher, which is the honest answer.
 
-Test: `node tools/video-smoke.mjs` — **419/419** (feed, sort, search, watch, reaction→comment, a locked
+Test: `node tools/video-smoke.mjs` — **436/436** (feed, sort, search, watch, reaction→comment, a locked
 door and its password, a missing video, the editor signed out and in, the payload of a publish, of an
 exclusive rule set and of a private list, the player and the sixteen host cases, the oEmbed stills, the
 studio picker, the contents rail, and the forwarding page).
+
+**The whole screen.** The player carries its way out in the corner — a disc that stays quiet until the
+pointer is near and is always there once the screen is the player — and pressing it, or **F**, makes
+the *player box* full screen: a 16:9 frame becomes the whole viewport, black, no border, no radius,
+`object-fit: contain`. It works because an embedded player is a window of its own — a click inside an
+iframe never reaches the page — so the button lives on top of it, the iframe carries
+`allowfullscreen` (and `fullscreen` in `allow`), and the platform's own controls keep working inside.
+Escape is the browser's key, the second press gives the screen back, and the button's mark and label
+turn with it (`expand` → `collapse`). A real file in a `<video>` gets the same button, and an iPhone —
+which only enlarges the video element itself — falls back to `webkitEnterFullscreen()`. Nothing fires
+while the member is typing, so a comment box keeps its own `f`. The cinema page's stage
+(`watch.html`, `[data-w-stage]`) carries the same door in the same corner, with the same key.
 
 **The live preview is a door.** Once the video has been saved, the preview card in the editor opens
 the video's own page in a new tab — `videos.html#/h/ID=<code>`, or `#/v/` when **vertical** was
@@ -2198,7 +2210,7 @@ the editors need**, each pinned to a name pattern and a set of extensions (`user
 | `node tools/rte-smoke.mjs` | **45/45** (every command, links, insertion, history, paste, drop, keys, toolbar state) |
 | `node tools/article-smoke.mjs` | **281/281** |
 | `node tools/blog-smoke.mjs` | **82/82** (the address, the closed door, the hero, the home, a section, the search, the plain cover) |
-| `node tools/video-smoke.mjs` | **419/419** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
+| `node tools/video-smoke.mjs` | **436/436** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
 | `node tools/media-smoke.mjs` | **89/89** (the address book, the three pages, the portrait stage, the locked item, the shelves) |
 
 ### The six OAuth apps — one checklist each
