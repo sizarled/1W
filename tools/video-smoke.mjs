@@ -46,6 +46,16 @@ const reply = (data, ok = true) =>
 /* ------------------------------------------------------------------ */
 /* the fixtures                                                       */
 /* ------------------------------------------------------------------ */
+/* the same card, with a YouTube source: the chapters are tested on a frame
+   whose player reads `&t=` — a file would be seeked by the browser instead */
+const YT_SOURCE = "https://www.youtube.com/watch?v=8smBjnWptPk&t=1883s";
+function youtubeCard(over = {}) {
+  const base = card(over);
+  base.embed = YT_SOURCE;
+  base.video = { ...base.video, embed: YT_SOURCE, file: YT_SOURCE };
+  return base;
+}
+
 function card(over = {}) {
   return {
     id: "11111111-1111-4111-8111-111111111111",
@@ -1766,7 +1776,7 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
           ok: true,
           locked: false,
           mine: false,
-          video: card({
+          video: youtubeCard({
             code: "PST-001032",
             minutes: 51,
             description: "Comedy beats: (0:37 - 14:00) the wedding hunt.\nMoney and work: (14:00 - 30:00) the neighbours.\nNo time in this line at all.",
@@ -1792,9 +1802,32 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
   expect("details: a line with no time makes no chapter", rd.querySelectorAll("[data-v-chapter]").length === 2);
 
   /* a chapter is a second in the address, the way the reference writes it */
+  const frameBefore = rd.querySelector(".vplayer iframe");
+  expect("details: the frame starts without a second", !/[?&](t|start)=\d/.test(frameBefore?.getAttribute("src") || ""), frameBefore?.getAttribute("src"));
   const secondChapter = rd.querySelectorAll("[data-v-chapter]")[1];
   secondChapter.dispatchEvent(new richBoot.window.MouseEvent("click", { bubbles: true }));
   await wait(60);
+  const frameAfter = rd.querySelector(".vplayer iframe");
+  expect(
+    "details: the second goes into the frame's own address, as &t=840s",
+    /[?&]t=840s(&|$)/.test(frameAfter?.getAttribute("src") || ""),
+    frameAfter?.getAttribute("src")
+  );
+  expect(
+    "details: and the word the embed reads rides beside it",
+    /[?&]start=840(&|$)/.test(frameAfter?.getAttribute("src") || ""),
+    frameAfter?.getAttribute("src")
+  );
+  expect(
+    "details: the frame is moved in place — the page is not rebuilt",
+    Boolean(frameAfter) && frameAfter === frameBefore,
+    `${Boolean(frameAfter)} / ${frameAfter === frameBefore}`
+  );
+  expect(
+    "details: the old second is replaced in the frame too",
+    (String(frameAfter?.getAttribute("src") || "").match(/[?&]t=/g) || []).length === 1,
+    frameAfter?.getAttribute("src")
+  );
   expect(
     "details: picking a chapter writes its second into the address",
     /[?&]t=840s$/.test(richBoot.window.location.hash),
@@ -1921,6 +1954,38 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
 }
 
 /* ------------------------------------------------------------------ */
+/* ================================================================== */
+/* last — an address that already carries `&t=1860​s` opens the frame  */
+/* ================================================================== */
+{
+  /* an address that already carries `&t=1860s` opens the frame there */
+  const atSecond = boot("videos.html", {
+    hash: "#/h/ID=PST-001032&t=1860s",
+    fetchImpl: (href) => {
+      const fn = fnName(href);
+      if (fn === "video_feed") return reply(FEED);
+      if (fn === "video_mine") return reply({ ok: true, rows: [] });
+      if (fn === "video_get") return reply({ ok: true, locked: false, mine: false, video: youtubeCard({ code: "PST-001032" }), related: [], more: [] });
+      if (fn === "video_hub") return reply({ ok: true, hub: RICH });
+      if (fn === "post_comments") return reply({ comments: [], count: 0 });
+      return reply([]);
+    },
+  });
+  await import(`file://${join(root, "assets/js/videos.js")}?p=atsecond`);
+  await wait(180);
+  const atFrame = atSecond.document.querySelector(".vplayer iframe");
+  expect(
+    "details: a link with &t=1860s opens inside the frame at that second",
+    /[?&]t=1860s(&|$)/.test(atFrame?.getAttribute("src") || "") && /[?&]start=1860(&|$)/.test(atFrame?.getAttribute("src") || ""),
+    atFrame?.getAttribute("src")
+  );
+  expect(
+    "details: and the chapter it belongs to is the one marked",
+    atSecond.document.querySelectorAll(".vchaps__row.is-active").length <= 1,
+    String(atSecond.document.querySelectorAll(".vchaps__row.is-active").length)
+  );
+}
+
 const failed = checks.filter((c) => !c.ok);
 checks.forEach((c) => {
   if (!c.ok) console.log(`FAIL  ${c.name}${c.detail ? ` — ${c.detail}` : ""}`);

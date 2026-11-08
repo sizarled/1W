@@ -1830,12 +1830,19 @@ own neighbours), *More from <publisher>*, and — under both — **Suggested for
 it, same shape only, eight at most. It is a call of its own and never holds the page up; a video the
 viewer already has on the page is never suggested back to them.
 
-**A chapter is a second in the address.** Picking one seeks the frame *and* writes `…&t=840s` at the
-end of the address, the way the reference does, replacing any earlier second rather than stacking one.
-Opening a link that carries `&t=90s` (`?t=90` is read the same) starts the file there — a `<video>`
-seeks, a YouTube frame reloads at `start=90`, a Vimeo frame at `#t=90s` — and the chapter that second
-belongs to is the one marked. The router strips the second before reading the id, so
-`ID=CA4728CD&t=90s` is still `CA4728CD` and an old link opens.
+**A chapter is a second in the address — and in the frame.** Picking one seeks the frame *and* writes
+`…&t=840s` at the end of the address, the way the reference does, replacing any earlier second rather
+than stacking one. On a YouTube embed the same second goes **into the frame's own address**, in the
+shape YouTube writes it, `…&t=840s`, with `&start=840` beside it because that is the word the embed
+itself reads; the iframe is re-pointed where it stands, so the page is never rebuilt under the member
+— the same element, a different second, inside the frame. A `<video>` is seeked by the browser, a
+Vimeo frame takes `#t=840s`, and a host with no such word keeps its address and says so.
+
+Opening a link that carries `&t=1860s` (`?t=1860` is read the same) builds the frame **at** that
+second — `playerMarkup` passes it through `frameWithSecond`, so `#/h/ID=…&t=1860s` opens at 00:31:00
+inside the iframe without a second load — and the chapter that second belongs to is the one marked.
+The router strips the second before reading the id, so `ID=CA4728CD&t=90s` is still `CA4728CD` and an
+old link opens.
 
 **A video saved before that column existed has no studio on its row**, and it still must not fall
 back to a bare profile: the page then asks which studio the member publishes into — `creator_studio(ref)`
@@ -1843,7 +1850,7 @@ in the same file, or, when that call is not on the server yet, the `creator_publ
 page already makes (a channel first, then a server or a cinema, never a private hub). No studio at
 all, and the member's face is the publisher, which is the honest answer.
 
-Test: `node tools/video-smoke.mjs` — **446/446** (feed, sort, search, watch, reaction→comment, a locked
+Test: `node tools/video-smoke.mjs` — **453/453** (feed, sort, search, watch, reaction→comment, a locked
 door and its password, a missing video, the editor signed out and in, the payload of a publish, of an
 exclusive rule set and of a private list, the player and the sixteen host cases, the oEmbed stills, the
 studio picker, the contents rail, and the forwarding page).
@@ -2220,7 +2227,7 @@ the editors need**, each pinned to a name pattern and a set of extensions (`user
 | `node tools/rte-smoke.mjs` | **45/45** (every command, links, insertion, history, paste, drop, keys, toolbar state) |
 | `node tools/article-smoke.mjs` | **281/281** |
 | `node tools/blog-smoke.mjs` | **82/82** (the address, the closed door, the hero, the home, a section, the search, the plain cover) |
-| `node tools/video-smoke.mjs` | **446/446** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
+| `node tools/video-smoke.mjs` | **453/453** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
 | `node tools/media-smoke.mjs` | **89/89** (the address book, the three pages, the portrait stage, the locked item, the shelves) |
 
 ### The six OAuth apps — one checklist each

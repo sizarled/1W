@@ -352,6 +352,24 @@ async function loadMine() {
 /* one video                                                          */
 /* ================================================================== */
 /**
+ * The frame's own address, carrying the second the address bar asked for.
+ *
+ * A chapter writes `&t=1860s` into the address, the way a YouTube link does —
+ * and the embed is given the same second in the same shape, with `start=1860`
+ * beside it because that is the word the embed itself reads. So a link like
+ * `#/h/ID=…&t=1860s` opens *inside* the frame at 00:31:00, without a second
+ * load, and a Vimeo frame takes its own `#t=1860s`. A file is seeked by the
+ * browser, and a host that offers no such word keeps its address untouched.
+ */
+function frameWithSecond(src, seconds) {
+  if (!src || !seconds) return src;
+  const add = (param) => `${src}${src.includes("?") ? "&" : "?"}${param}`;
+  if (/youtube(-nocookie)?\.com\/embed\//i.test(src)) return add(`t=${seconds}s&start=${seconds}`);
+  if (/player\.vimeo\.com/i.test(src)) return `${src.split("#")[0]}#t=${seconds}s`;
+  return src;
+}
+
+/**
  * The player, with the way out to the whole screen.
  *
  * The button sits on top of the player rather than inside it, because an
@@ -377,8 +395,9 @@ function playerMarkup(v, meta) {
     return playerShell(`<video controls playsinline preload="metadata" poster="${esc(v.thumbnail || "")}" src="${esc(src)}"></video>`);
   }
   /* the frame's address carries the platform's own full-screen flag, so its
-     button is in its chrome too, beside this page's corner button */
-  const src2 = fullscreenSrc(src);
+     button is in its chrome too, beside this page's corner button — and the
+     second the address bar holds, so the frame opens where the link says */
+  const src2 = frameWithSecond(fullscreenSrc(src), startAt());
   if (!src2) {
     return playerShell(`<div class="vplayer__idle"><p class="vplayer__note">This source cannot be shown here.</p></div>`);
   }
@@ -1133,8 +1152,11 @@ function seekPlayer(seconds, { play = false } = {}) {
   const src = (frame && frame.getAttribute("src")) || "";
   if (!src) return false;
   if (/youtube(-nocookie)?\.com\/embed\//.test(src)) {
+    /* the same second YouTube writes on its own watch links, `&t=1860s`, with
+       `&start=1860` beside it because the embed reads that one; the frame is
+       reloaded in place, so the page never moves under the member */
     const clean = src.replace(/([?&])(start|t)=\d+s?/gi, "$1").replace(/[?&]$/, "");
-    frame.setAttribute("src", `${clean}${clean.includes("?") ? "&" : "?"}start=${seconds}`);
+    frame.setAttribute("src", `${clean}${clean.includes("?") ? "&" : "?"}t=${seconds}s&start=${seconds}`);
     return true;
   }
   if (/player\.vimeo\.com/.test(src)) {
