@@ -38,6 +38,8 @@ export const ICONS = {
   plus: S("M12 5v14M5 12h14"),
   minus: S("M5 12h14"),
   check: S("M4.5 12.5 9.5 17.5 19.5 6.5"),
+  /* a publisher the site vouches for: the seal beside a studio's name */
+  verified: S("M12 3.2 14.4 5l2.9.1.9 2.8 1.7 2.3-1.7 2.3-.9 2.8-2.9.1L12 17.2 9.6 15.4l-2.9-.1-.9-2.8L4.1 10.2l1.7-2.3.9-2.8 2.9-.1L12 3.2Z") + S("M9 10.2l2.1 2.1 4-4"),
   clock: CIRC(12, 12, 8.2) + S("M12 7.4V12l3.2 2"),
   calendar: `<rect x="3.5" y="5" width="17" height="15.5" rx="2.4" fill="none" stroke="currentColor" stroke-width="1.6"/>${S("M3.5 10h17M8 3.2v3.6M16 3.2v3.6")}`,
   eye: S("M2.2 12S5.6 5.8 12 5.8 21.8 12 21.8 12 18.4 18.2 12 18.2 2.2 12 2.2 12Z") + CIRC(12, 12, 2.9),

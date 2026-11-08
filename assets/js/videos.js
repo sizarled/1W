@@ -469,7 +469,7 @@ function commentsMarkup() {
          </div>`;
 
   return `
-    <section class="vsect" id="comments">
+    <section class="vcomments" id="comments">
       <div class="vcom__head">
         <h2 class="vcom__title">Comments <span class="vcount" data-v-comment-count>${esc(num(data.count || rows.length))}</span></h2>
         <span class="vcom__hint">${canComment ? "You can comment on this one." : "Reactions unlock commenting."}</span>
@@ -520,49 +520,67 @@ function watchMarkup(v, res) {
       icon: iconForLink(link.url),
     }))
     .filter((link) => link.url && link.label);
+  const studioHref = creatorUrl(
+    (state.hub && (state.hub.code || state.hub.id)) || "",
+    (state.hub && (state.hub.creator || host.id)) || ""
+  );
 
   return `
     <div class="vwatch" data-orientation="${state.orientation}">
       <div class="vwatch__main">
         <div class="vback-row">
-          <a class="vback" href="${esc(state.hub && state.hub.name ? creatorUrl(state.hub.code || state.hub.id, state.hub.creator || host.id) : "#")}" data-v-studio-back ${state.hub && state.hub.name ? "" : "hidden"}>${icon("arrowLeft")} Back to the ${esc(hubKindWord(state.hub && state.hub.kind).toLowerCase())}</a>
+          <a class="vback" href="${esc(state.hub && state.hub.name ? studioHref : "#")}" data-v-studio-back ${state.hub && state.hub.name ? "" : "hidden"}>${icon("arrowLeft")} Back to the ${esc(hubKindWord(state.hub && state.hub.kind).toLowerCase())}</a>
           <a class="vback" href="#" data-v-back>${icon("film")} All videos</a>
         </div>
 
         ${res.locked ? lockedMarkup(res.video) : playerMarkup(v, meta)}
 
-        <div>
-          <h1 class="vtitle">${esc(v.title || "Untitled")}</h1>
-          <p class="vmeta" style="margin-top:.5rem">
-            <span>${esc(compact(counters.impressions || 0))} views</span>
-            <i></i>
-            <span>${esc(timeAgo(v.published_at) || "unpublished")}</span>
-            ${lang ? `<i></i><span>${esc(lang)}</span>` : ""}
-            ${age ? `<i></i><span>${esc(age)}</span>` : ""}
-            ${v.minutes ? `<i></i><span>${esc(num(Number(v.minutes) || 0))} minutes</span>` : ""}
-            <i></i>
-            <span>${esc(VIS_LABEL[v.visibility] || "Public")}</span>
-            ${v.status && v.status !== "published" ? `<i></i><span>${esc(v.status === "scheduled" ? `scheduled for ${new Date(v.scheduled_at).toLocaleString()}` : v.status)}</span>` : ""}
-          </p>
-        </div>
-
         ${res.locked ? "" : actionsMarkup(v)}
 
         ${
           chapters.length
-            ? `<ol class="vchaps" data-v-chapters>
-                 ${chapters
-                   .map(
-                     (row) => `<li class="vchaps__row">
-                       <button class="vchaps__btn" type="button" data-v-chapter="${row.start}" title="Jump to ${esc(stamp(row.start))}">
-                         <span class="vchaps__n">${esc(String(row.n).padStart(2, "0"))}</span>
-                         <span class="vchaps__label">${esc(row.label)}</span>
-                         <span class="vchaps__time">${esc(stamp(row.start))}</span>
-                       </button>
-                     </li>`
-                   )
-                   .join("")}
-               </ol>`
+            ? `<section class="vpanel vchaps" data-v-chapters>
+                 <div class="vchaps__head">
+                   <h2 class="vchaps__title">Chapters <span class="vchaps__count">${esc(String(chapters.length))}</span></h2>
+                   <button class="vchaps__toggle" type="button" data-v-chapters-toggle aria-expanded="true" aria-label="Collapse the chapters">${icon("chevronDown")}</button>
+                 </div>
+                 <ol class="vchaps__list">
+                   ${chapters
+                     .map(
+                       (row, index) => `<li class="vchaps__row${index === 0 ? " is-active" : ""}">
+                         <button class="vchaps__btn" type="button" data-v-chapter="${row.start}" title="Jump to ${esc(stamp(row.start))}">
+                           <span class="vchaps__n">${esc(String(row.n).padStart(2, "0"))}</span>
+                           <span class="vchaps__time">${esc(stamp(row.start))}</span>
+                           <span class="vchaps__label">${esc(row.label)}</span>
+                         </button>
+                       </li>`
+                     )
+                     .join("")}
+                 </ol>
+               </section>`
+            : ""
+        }
+
+        <p class="vmeta">
+          ${v.minutes ? `<span><b>${esc(num(Number(v.minutes) || 0))}</b> minutes</span>` : ""}
+          <span><b>${esc(compact(counters.impressions || 0))}</b> views</span>
+          <i></i>
+          <span>${esc(timeAgo(v.published_at) || "unpublished")}</span>
+          ${lang ? `<i></i><span>${esc(lang)}</span>` : ""}
+          ${age ? `<i></i><span>${esc(age)}</span>` : ""}
+          <i></i>
+          <span>${esc(VIS_LABEL[v.visibility] || "Public")}</span>
+          ${v.status && v.status !== "published" ? `<i></i><span>${esc(v.status === "scheduled" ? `scheduled for ${new Date(v.scheduled_at).toLocaleString()}` : v.status)}</span>` : ""}
+        </p>
+
+        <h1 class="vtitle">${esc(v.title || "Untitled")}</h1>
+
+        ${
+          desc
+            ? `<div class="vdesc">
+                 <p class="vdesc__body is-clamped" data-v-desc>${esc(desc)}</p>
+                 <button class="vdesc__more" type="button" data-v-desc-toggle>Show more ${icon("chevronDown")}</button>
+               </div>`
             : ""
         }
 
@@ -572,15 +590,15 @@ function watchMarkup(v, res) {
                logo, its name and its code lead, and the member is the line
                under it — the profile is still one click away */
             state.hub && state.hub.name
-              ? `<a class="vhost__logo" href="${esc(creatorUrl(state.hub.code || state.hub.id, state.hub.creator || host.id))}" data-v-studio="${esc(state.hub.code || "")}" aria-label="${esc(state.hub.name)}">
-                   ${state.hub.logo_url ? `<img src="${esc(state.hub.logo_url)}" alt="" width="48" height="48" />` : `<span aria-hidden="true">${esc(initialsOf(state.hub.name))}</span>`}
+              ? `<a class="vhost__logo" href="${esc(studioHref)}" data-v-studio="${esc(state.hub.code || "")}" aria-label="${esc(state.hub.name)}">
+                   ${state.hub.logo_url ? `<img src="${esc(state.hub.logo_url)}" alt="" width="58" height="58" />` : `<span aria-hidden="true">${esc(initialsOf(state.hub.name))}</span>`}
                  </a>`
-              : avatarTag({ avatar: host.avatar, name: host.name || host.username }, "vav vav--lg")
+              : avatarTag({ avatar: host.avatar, name: host.name || host.username }, "vav")
           }
           <div class="vhost__id">
             ${
               state.hub && state.hub.name
-                ? `<p class="vhost__name"><a href="${esc(creatorUrl(state.hub.code || state.hub.id, state.hub.creator || host.id))}">${esc(state.hub.name)}</a></p>
+                ? `<p class="vhost__name"><a href="${esc(studioHref)}">${esc(state.hub.name)}</a><span class="vhost__seal" aria-hidden="true">${icon("verified")}</span></p>
                    <p class="vhost__meta"><span class="vhost__kind">${esc(hubKindWord(state.hub.kind))}</span>${state.hub.code ? ` · ${esc(state.hub.code)}` : ""} · by <a href="${esc(creatorUrl("", host.id))}">${esc(host.name || host.username || "a member")}</a></p>
                    <p class="vhost__stats">
                      ${state.hub.subscribers != null ? `<span><b>${esc(compact(Number(state.hub.subscribers) || 0))}</b> subscribers</span>` : ""}
@@ -596,7 +614,7 @@ function watchMarkup(v, res) {
                 ? ""
                 : state.hub && state.hub.name
                   ? `<button class="btn btn--primary btn--sm" type="button" data-v-subscribe="${esc(state.hub.id || "")}" aria-pressed="${state.hub.subscribed ? "true" : "false"}">${icon(state.hub.subscribed ? "check" : "plus")} ${state.hub.subscribed ? "Subscribed" : "Subscribe"}</button>`
-                  : `<button class="btn btn--ghost btn--sm" type="button" data-v-follow>${icon("plus")} Follow</button>`
+                  : `<button class="btn btn--primary btn--sm" type="button" data-v-follow>${icon("plus")} Follow</button>`
             }
             ${
               state.hub && state.hub.name
@@ -623,25 +641,16 @@ function watchMarkup(v, res) {
               ? `<div class="vhost__foot">
                    ${state.hub.description ? `<p class="vhost__bio">${esc(state.hub.description)}</p>` : ""}
                    <div class="vlinks" data-v-links>
-                     <span class="vlinks__head">Related links</span>
+                     <span class="vlinks__head">${icon("link")}Related links</span>
                      <div class="vlinks__row">
                        ${links.map((link) => `<a class="chip" href="${esc(link.url)}" target="_blank" rel="noopener noreferrer">${icon(link.icon || "link")}${esc(link.label)}</a>`).join("")}
-                       <a class="chip" href="${esc(creatorUrl(state.hub.code || state.hub.id, state.hub.creator || host.id))}" data-v-studio-link>${icon("bookmark")}Playlists</a>
+                       <a class="chip" href="${esc(studioHref)}" data-v-studio-link>${icon("bookmark")}Playlists</a>
                      </div>
                    </div>
                  </div>`
               : ""
           }
         </div>
-
-        ${
-          desc
-            ? `<div class="vdesc">
-                 <p class="vdesc__body is-clamped" data-v-desc>${esc(desc)}</p>
-                 <button class="vdesc__more" type="button" data-v-desc-toggle>Show more</button>
-               </div>`
-            : ""
-        }
 
         ${
           tags.length
@@ -1260,11 +1269,28 @@ function bindWatch() {
       return copyVideoLink(url);
     }
 
+    /* the chapters fold away, and the row that was picked is the one marked */
+    const chToggle = event.target.closest("[data-v-chapters-toggle]");
+    if (chToggle) {
+      event.preventDefault();
+      const panel = $("[data-v-chapters]");
+      if (!panel) return;
+      const folded = panel.classList.toggle("is-collapsed");
+      chToggle.setAttribute("aria-expanded", String(!folded));
+      chToggle.setAttribute("aria-label", folded ? "Open the chapters" : "Collapse the chapters");
+      return;
+    }
+
     /* a chapter is a place in the file: jump, or say the frame is not ours */
     const chapter = event.target.closest("[data-v-chapter]");
     if (chapter) {
       event.preventDefault();
       const seconds = Number(chapter.getAttribute("data-v-chapter")) || 0;
+      const row = chapter.closest(".vchaps__row");
+      if (row) {
+        root.querySelectorAll(".vchaps__row.is-active").forEach((el) => el.classList.remove("is-active"));
+        row.classList.add("is-active");
+      }
       const media = root.querySelector("video");
       if (media) {
         try {
@@ -1372,7 +1398,7 @@ function bindWatch() {
       const btn = event.target.closest("[data-v-desc-toggle]");
       if (!body) return;
       const clamped = body.classList.toggle("is-clamped");
-      btn.textContent = clamped ? "Show more" : "Show less";
+      btn.innerHTML = clamped ? `Show more ${icon("chevronDown")}` : `Show less ${icon("chevronUp")}`;
       return;
     }
 

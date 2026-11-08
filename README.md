@@ -1610,13 +1610,19 @@ The feed searches titles and descriptions, filters by one field, and sorts four 
 `rank_points`, `new`, `liked`, `discussed`). A card carries the thumbnail, the age badge, the door it
 belongs to, the publisher, the time and the counters.
 
-The watch screen is the mock's, in the site's clothes: the player (`<video>` for a real file, a frame
-for YouTube/Vimeo and anything else), the title, views, language, the action row — like, dislike,
-comments, reshare, save (on the device), download when the publisher allowed it, report — the
-publisher card with **Follow** (`profile_follow_toggle`), a clamped description, the tags as field
-chips, the related shelf and the member's other videos. Commenting follows the site rule: **like or
-dislike first**, then the composer appears. A video the viewer may not see arrives `locked` — with its
-title and its thumbnail, never its source.
+The watch screen is the reference watch layout, in the site's clothes: a reading column of cards and
+a sticky column of suggestions beside it, and every block — the actions, the chapters, the publisher,
+its links, the comments — on the same card (one border, one radius, one blur, `--surface` at 78%).
+Under the player come the action row — like, dislike, comments, reshare, save (on the device),
+download when the publisher allowed it, report — then the chapter panel with its fold button, then
+the facts line (**minutes · views · date · language · age · visibility**), the title, the clamped
+description with *Show more* (three lines, chevron turning), the publisher card (58px mark, name with
+its seal, kind and code and member, `subscribers · releases`, **Follow**/Subscribe,
+`profile_follow_toggle` or `creator_subscribe`), the studio's own links, the tags as field chips, and
+the comments. The side column carries *Related* and *More from …* as thumbnail rows. Commenting
+follows the site rule: **like or dislike first**, then the composer appears. A video the viewer may not
+see arrives `locked` — with its title and its thumbnail, never its source. The header is the site's
+own, untouched: only the content under it was rebuilt.
 
 `video.html?id=…` still answers its old address: it forwards to `videos.html#/v/<code>`, so the links
 `watch.js` and `cast.js` already write keep working.
@@ -1671,12 +1677,13 @@ the label-and-URL rows (`p_links`, ten at most); the watch page draws them **und
 blurb, inside the publisher's card** — Website, YouTube, Instagram, X — with a **Playlists** door
 always beside them, so a studio that wrote no links still has one way into its shelves.
 
-**The details under the video.** The watch screen carries, in this order: *Back to the studio* (the
-kind's own word) beside *All videos*; the stats line, now with the minutes; a **chapter list read from
-the description** — `Comedy beats: (0:37 - 14:00) …` becomes `01 · Comedy beats · 0:37`, clickable, and
-a line with no time in it is prose, never a chapter; the studio card with its subscribers, its
-releases and its blurb; its own links (website, YouTube, Instagram, X, a playlist) beside a
-*Playlists* door; and the description itself. Nothing is invented: no time in the description, no
+**The details under the video.** The watch screen carries, in the reference's order: *Back to the
+studio* (the kind's own word) beside *All videos*; the player; the action row; the **chapter panel** —
+read from the description or written in the editor, `Comedy beats: (0:37 - 14:00) …` becomes
+`01 · 0:37 · Comedy beats`, clickable, with a fold button and the picked row marked; the facts line
+with the minutes; the title; the description; the studio card with its subscribers, its releases and
+its blurb, its own links (website, YouTube, Instagram, X) beside a *Playlists* door; the tags; and the
+comments. Nothing is invented: no time in the description, no
 chapter list; no links on the studio, no row. A source that plays in its own frame cannot be seeked
 from here, so a chapter there says the time instead of pretending.
 
