@@ -490,6 +490,29 @@ async function editor(tag) {
   expect("editor: a YouTube link is recognised", document.querySelector("[data-ved-source-badge]")?.textContent === "YouTube", document.querySelector("[data-ved-source-badge]")?.textContent);
   expect("editor: the thumbnail comes from the video", document.querySelector("[data-ved-thumb-box] img")?.getAttribute("src")?.includes("i.ytimg.com"), document.querySelector("[data-ved-thumb-box]")?.innerHTML.slice(0, 80));
 
+  /* the link chooses its platform — and a hand pick keeps that link's row */
+  const platformSelect = document.querySelector("[data-ved-platform]");
+  embed.value = "https://vimeo.com/76979871";
+  embed.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await wait();
+  expect("editor: a pasted link picks its own platform", platformSelect.value === "vimeo", platformSelect.value);
+  expect(
+    "editor: and the note says which one",
+    document.querySelector("[data-ved-platform-note]")?.textContent === "Vimeo",
+    document.querySelector("[data-ved-platform-note]")?.textContent
+  );
+  platformSelect.value = "tiktok";
+  platformSelect.dispatchEvent(new window.Event("change", { bubbles: true }));
+  await wait();
+  embed.value = "https://vimeo.com/76979871?x=1";
+  embed.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await wait();
+  expect("editor: a hand-picked platform holds for that link", platformSelect.value === "tiktok", platformSelect.value);
+  embed.value = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+  embed.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await wait();
+  expect("editor: a new link takes the row back", platformSelect.value === "youtube", platformSelect.value);
+
   const title = document.querySelector("[data-ved-title]");
   title.value = "A first video";
   title.dispatchEvent(new window.Event("input", { bubbles: true }));
@@ -519,6 +542,44 @@ async function editor(tag) {
     document.querySelector("[data-ved-tag-count]")?.textContent === "2 / 3 main · 0 / 15 sub",
     document.querySelector("[data-ved-tag-count]")?.textContent
   );
+
+  /* the box takes a dropped file, and a dropped link brings its platform */
+  const dropBox = document.querySelector("[data-ved-drop]");
+  expect("editor: the box says what it takes", /drop the video here/i.test(dropBox?.textContent || ""), dropBox?.textContent?.slice(0, 60));
+  expect("editor: and carries the picker", Boolean(dropBox?.querySelector("[data-ved-file-btn]")));
+  expect("editor: a link row sits under it", Boolean(document.querySelector(".vsrc__row--link [data-ved-embed]")), document.querySelector(".vsrc__row")?.innerHTML?.slice(0, 60));
+
+  const dropEvent = (payload) => {
+    const event = new window.Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "dataTransfer", { value: payload });
+    return event;
+  };
+  embed.value = "";
+  embed.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await wait();
+  dropBox.dispatchEvent(
+    dropEvent({
+      files: [new window.File([new Uint8Array(32)], "drop.mp4", { type: "video/mp4" })],
+      getData: () => "",
+    })
+  );
+  await wait(80);
+  expect("editor: a dropped file is uploaded", document.querySelector("[data-ved-file-note]")?.hidden === false, document.querySelector("[data-ved-file-note]")?.textContent);
+
+  dropBox.dispatchEvent(
+    dropEvent({
+      files: [],
+      getData: (kind) => (kind === "text/uri-list" ? "https://www.instagram.com/reel/Cxyz123/" : ""),
+    })
+  );
+  await wait(80);
+  expect("editor: a dropped link lands in the field", embed.value === "https://www.instagram.com/reel/Cxyz123/", embed.value);
+  expect("editor: and its platform is chosen for it", platformSelect.value === "instagram", platformSelect.value);
+
+  /* back to the YouTube link the rest of the pass reads */
+  embed.value = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+  embed.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await wait();
 
   /* three main keywords, and subs under them */
   tagInput.value = "documentary";
@@ -673,6 +734,11 @@ async function editor(tag) {
   hubSelect.dispatchEvent(new window.Event("change", { bubbles: true }));
   await wait();
 
+  expect(
+    "studio upload: the box says where the file will land",
+    /Home \/ Users \/ Studio \/ IDST100001/.test(document.querySelector("[data-ved-drop-note]")?.textContent || ""),
+    document.querySelector("[data-ved-drop-note]")?.textContent
+  );
   const file = new window.File([new Uint8Array(2048)], "clip.mp4", { type: "video/mp4" });
   const picker = document.querySelector("[data-ved-file]");
   Object.defineProperty(picker, "files", { value: [file], configurable: true });

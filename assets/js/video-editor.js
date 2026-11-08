@@ -180,7 +180,8 @@ function paintCounters() {
   }
   const platformNote = $("[data-ved-platform-note]");
   if (platformNote) {
-    platformNote.textContent = S.platform ? HOSTS[S.platform] || S.platform : "read from the link";
+    const kind = S.platform || sourceKind(S.embed.trim());
+    platformNote.textContent = kind ? HOSTS[kind] || "read from the link" : "read from the link";
   }
 }
 
@@ -608,6 +609,7 @@ function paintAll() {
   paintChapters();
   paintTags();
   paintPlatform();
+  paintDropNote();
   paintPeople();
   paintPasses();
   paintCountries();
@@ -913,6 +915,60 @@ function addSub(index, raw) {
   paintTags();
   paintCounters();
   paintStatus();
+}
+
+/* the eight the picker names — a link to one of them chooses its own row */
+const PLATFORM_VALUES = ["youtube", "vimeo", "facebook", "instagram", "pinterest", "tiktok", "reddit", "x"];
+/* a platform picked by hand, and the link it was picked against: it stands
+   while that link stands, and the link takes the row back when it moves on */
+let manualPick = "";
+let manualFor = "";
+
+/**
+ * The link says which platform it is, so the picker says it too — that is what
+ * "choose the link's platform" means here: paste the address and the row is
+ * filled in, and the member may still overrule it for that link.
+ */
+function syncPlatformFromLink() {
+  const kind = sourceKind(S.embed.trim());
+  if (manualPick && kind === manualFor) return;
+  if (manualPick) {
+    manualPick = "";
+    manualFor = "";
+  }
+  const next = PLATFORM_VALUES.includes(kind) ? kind : "";
+  if (S.platform === next) return;
+  S.platform = next;
+  const select = $("[data-ved-platform]");
+  if (select && select.value !== next) select.value = next;
+  paintCounters();
+}
+
+/** A dropped or pasted address lands in the field, and its platform follows. */
+function applyLink(raw) {
+  const value = String(raw || "").trim();
+  if (!value || !/^https?:\/\//i.test(value)) return false;
+  el.embed.value = value;
+  manualPick = "";
+  manualFor = "";
+  el.embed.dispatchEvent(new Event("input"));
+  const auto = autoThumb(value);
+  if (auto) {
+    S.thumb = auto;
+    paintThumb();
+    paintPreview();
+  }
+  return true;
+}
+
+/** The box says where the file it takes will land — the studio decides. */
+function paintDropNote() {
+  const note = $("[data-ved-drop-note]");
+  if (!note) return;
+  const studio = studioHub();
+  note.textContent = studio
+    ? `This studio's videos go to Streamtape — Home / Users / Studio / ${studio.code} — and take the video's own code as their name.`
+    : "Without a studio, a small file stays in the site's storage. Choose a studio below and it goes to the studio's host instead.";
 }
 
 /** The studio this video belongs to, when it belongs to one. */
@@ -1248,7 +1304,9 @@ async function uploadToStudioHost(file, studio) {
   const named = Boolean(S.code);
   const name = named ? `${S.code}.${ext}` : `${studio.code}-${Date.now().toString(36)}.${ext}`;
   const button = $("[data-ved-file-btn]");
+  const box = $("[data-ved-drop]");
   if (button) button.disabled = true;
+  box?.classList.add("is-busy");
   fileNote("Talking to the studio's host…");
   try {
     const out = await uploadToStudio(file, {
@@ -1274,6 +1332,7 @@ async function uploadToStudioHost(file, studio) {
     toast({ title: "Upload failed", message: error?.message || "Paste a link instead.", tone: "error" });
   } finally {
     if (button) button.disabled = false;
+    box?.classList.remove("is-busy");
     scheduleDraft();
     paintStatus();
   }
@@ -1321,7 +1380,9 @@ async function uploadVideoFile(file) {
     return;
   }
   const button = $("[data-ved-file-btn]");
+  const box = $("[data-ved-drop]");
   if (button) button.disabled = true;
+  box?.classList.add("is-busy");
   fileNote("Uploading… 0%");
   try {
     const url = await uploadFile(file, "videos", (text) => fileNote(text));
@@ -1334,6 +1395,7 @@ async function uploadVideoFile(file) {
     toast({ title: "Upload failed", message: error?.message || "Paste a link instead.", tone: "error" });
   } finally {
     if (button) button.disabled = false;
+    box?.classList.remove("is-busy");
     scheduleDraft();
   }
 }
@@ -1465,6 +1527,7 @@ function bind() {
     /* the field was pointed somewhere else: the host file is no longer this
        video's, so it is not named after it either */
     if (S.host && !S.embed.includes(S.host.id)) S.host = null;
+    syncPlatformFromLink();
     syncAutoThumb();
     paintSourceNote();
     paintPlayer();
@@ -1500,6 +1563,9 @@ function bind() {
       return;
     }
     S.embed = value;
+    manualPick = "";
+    manualFor = "";
+    syncPlatformFromLink();
     const auto = autoThumb(value);
     if (auto) {
       S.thumb = auto;
@@ -1510,12 +1576,13 @@ function bind() {
     paintAll();
   });
 
-  /* dropping a link on the page */
+  /* the box takes a file from the machine or a link from another tab */
   const drop = $("[data-ved-drop]");
   if (drop) {
     ["dragenter", "dragover"].forEach((name) =>
       drop.addEventListener(name, (event) => {
         event.preventDefault();
+        if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
         drop.classList.add("is-over");
       })
     );
@@ -1530,16 +1597,8 @@ function bind() {
         return;
       }
       const uri = event.dataTransfer.getData("text/uri-list") || event.dataTransfer.getData("text/plain");
-      if (uri && /^https?:\/\//i.test(uri.trim())) {
-        el.embed.value = uri.trim();
-        el.embed.dispatchEvent(new Event("input"));
-        const auto = autoThumb(uri);
-        if (auto) {
-          S.thumb = auto;
-          paintThumb();
-          paintPreview();
-        }
-        toast({ title: "Link dropped", message: "Check the title and the thumbnail below.", tone: "success", iconName: "check" });
+      if (applyLink(uri)) {
+        toast({ title: "Link dropped", message: "Its platform is chosen, and the thumbnail comes with it.", tone: "success", iconName: "check" });
       } else {
         toast({
           title: "A link, not a file",
@@ -1569,6 +1628,8 @@ function bind() {
     platformEl.value = S.platform || "";
     platformEl.addEventListener("change", () => {
       S.platform = platformEl.value;
+      manualPick = platformEl.value;
+      manualFor = sourceKind(S.embed.trim());
       paintCounters();
       paintSourceNote();
       paintPreview();
@@ -1690,6 +1751,12 @@ function bind() {
   const fileButton = $("[data-ved-file-btn]");
   const videoFile = $("[data-ved-file]");
   fileButton?.addEventListener("click", () => videoFile?.click());
+  /* the box itself opens the picker — the button is the label, not the only door */
+  const dropBox = $("[data-ved-drop]");
+  dropBox?.addEventListener("click", (event) => {
+    if (event.target.closest("[data-ved-file-btn]")) return;
+    videoFile?.click();
+  });
   videoFile?.addEventListener("change", () => {
     const file = videoFile.files && videoFile.files[0];
     if (file) uploadVideoFile(file);
@@ -1918,6 +1985,7 @@ function bind() {
     const hub = S.hubs.find((h) => h.code === S.hub);
     S.hubName = hub ? hub.name : "";
     paintHub();
+    paintDropNote();
     paintPreview();
     paintStatus();
     scheduleDraft();

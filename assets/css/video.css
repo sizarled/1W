@@ -646,6 +646,86 @@
   background: var(--surface-2);
 }
 
+/* the whole box is the way in — clicking it opens the picker */
+.vdrop {
+  cursor: pointer;
+}
+
+.vdrop.is-over,
+.vdrop:hover {
+  border-color: var(--text-2);
+}
+
+.vdrop small b {
+  color: var(--text-2);
+  font-weight: 570;
+}
+
+.vdrop__row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 0.15rem;
+}
+
+.vdrop__note {
+  font-size: 0.72rem;
+  line-height: 1.55;
+  color: var(--text-2);
+  max-width: 52ch;
+  padding: 0.28rem 0.6rem;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--surface-3);
+}
+
+.vdrop__or {
+  font-size: 0.72rem;
+  color: var(--faint);
+}
+
+.vdrop.is-busy {
+  cursor: progress;
+  opacity: 0.75;
+}
+
+/* the link row: the address, the platform it belongs to, and the door */
+.vsrc__label {
+  font-size: 0.78rem;
+  font-weight: 570;
+  color: var(--text-2);
+  margin-top: 0.35rem;
+}
+
+.vsrc__row--link .select {
+  flex: 0 1 190px;
+  height: 44px;
+}
+
+.vsrc__row--link .input {
+  flex: 1 1 260px;
+}
+
+.vplatform {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.vplatform .vcount {
+  color: var(--text);
+}
+
+@media (max-width: 640px) {
+  .vsrc__row--link .select,
+  .vsrc__row--link .btn {
+    flex: 1 1 100%;
+  }
+}
+
 .vdrop__icon {
   display: grid;
   place-items: center;
