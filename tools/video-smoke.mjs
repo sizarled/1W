@@ -32,6 +32,14 @@ const strip = (file) => readFileSync(join(root, file), "utf8").replace(/<script[
 const css = readFileSync(join(root, "assets/css/video.css"), "utf8");
 const wait = (ms = 40) => new Promise((r) => setTimeout(r, ms));
 
+const safeParse = (text) => {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+};
+
 const reply = (data, ok = true) =>
   Promise.resolve({ ok, status: ok ? 200 : 400, json: async () => data, text: async () => JSON.stringify(data) });
 
@@ -147,6 +155,7 @@ function boot(file, { hash = "", url = "", storage = {}, fetchImpl, globals } = 
   globalThis.MouseEvent = window.MouseEvent;
   globalThis.KeyboardEvent = window.KeyboardEvent;
   globalThis.AbortController = window.AbortController || AbortController;
+  globalThis.FormData = window.FormData;
   globalThis.localStorage = window.localStorage;
   globalThis.sessionStorage = window.sessionStorage;
   globalThis.getComputedStyle = window.getComputedStyle.bind(window);
@@ -167,7 +176,8 @@ function boot(file, { hash = "", url = "", storage = {}, fetchImpl, globals } = 
   const calls = [];
   globalThis.fetch = (input, opts = {}) => {
     const href = String(input);
-    calls.push({ href, body: opts.body ? JSON.parse(opts.body) : null });
+    const body = typeof opts.body === "string" ? safeParse(opts.body) : opts.body || null;
+    calls.push({ href, body });
     if (fetchImpl) return fetchImpl(href, opts, calls);
     return reply([]);
   };
@@ -607,6 +617,118 @@ async function editor(tag) {
   expect("editor: in a new tab, so the editor is not lost", door?.getAttribute("target") === "_blank" && /noopener/.test(door?.getAttribute("rel") || ""), door?.getAttribute("rel"));
   expect("editor: the hint steps aside", document.querySelector("[data-ved-preview-hint]")?.hidden === true);
   expect("editor: no audience on a public one", Array.isArray(payload.audience) && payload.audience.length === 0);
+}
+
+{
+  /* a studio's video does not stay on the site — it goes to the studio's host */
+  const tape = { listed: 0, created: [], uploads: [], renames: [] };
+  const { document, calls, window } = boot("video-editor.html", {
+    storage: STORAGE,
+    fetchImpl: (href, opts) => {
+      const fn = fnName(href);
+      if (fn === "creator_hubs_list") {
+        return reply({ ok: true, hubs: [{ code: "IDST100001", name: "CineAura", kind: "channel" }] });
+      }
+      if (fn === "video_save") return reply({ ok: true, code: "PST-001100", status: "published" });
+      if (href.startsWith("https://api.streamtape.com/")) {
+        const url = new URL(href);
+        const action = url.pathname.replace(/^\//, "");
+        const folder = url.searchParams.get("folder") || "";
+        if (action === "file/listfolder") {
+          tape.listed += 1;
+          if (!folder) return reply({ status: 200, result: { folders: [{ id: "fld-users", name: "Users" }], files: [] } });
+          if (folder === "fld-users") return reply({ status: 200, result: { folders: [{ id: "fld-studio", name: "Studio" }], files: [] } });
+          return reply({ status: 200, result: { folders: [], files: [] } });
+        }
+        if (action === "file/createfolder") {
+          tape.created.push({ name: url.searchParams.get("name"), pid: url.searchParams.get("pid") });
+          return reply({ status: 200, result: { folderid: "fld-cineaura" } });
+        }
+        if (action === "file/ul") {
+          tape.spot = folder;
+          return reply({ status: 200, result: { url: "https://tapecontent.net/xfsupload/tok" } });
+        }
+        if (action === "file/rename") {
+          tape.renames.push({ file: url.searchParams.get("file"), name: url.searchParams.get("name") });
+          return reply({ status: 200, result: true });
+        }
+        return reply({ status: 400, msg: "unexpected call" });
+      }
+      if (href.startsWith("https://tapecontent.net/")) {
+        const sent = opts.body && typeof opts.body.get === "function" ? opts.body.get("file1") : null;
+        tape.uploads.push({ href, name: sent && sent.name, size: sent && sent.size });
+        return reply({ status: 200, result: { id: "fid1", name: sent && sent.name } });
+      }
+      return reply([]);
+    },
+  });
+  await import(`file://${join(root, "assets/js/video-editor.js")}?pstudio`);
+  await wait(80);
+
+  const hubSelect = document.querySelector("[data-ved-hub]");
+  expect("studio upload: the hub list holds the studio", (hubSelect?.querySelectorAll("option") || []).length >= 2, hubSelect?.innerHTML?.slice(0, 120));
+  hubSelect.value = "IDST100001";
+  hubSelect.dispatchEvent(new window.Event("change", { bubbles: true }));
+  await wait();
+
+  const file = new window.File([new Uint8Array(2048)], "clip.mp4", { type: "video/mp4" });
+  const picker = document.querySelector("[data-ved-file]");
+  Object.defineProperty(picker, "files", { value: [file], configurable: true });
+  picker.dispatchEvent(new window.Event("change", { bubbles: true }));
+  await wait(160);
+
+  expect(
+    "studio upload: the tree is read from Home down",
+    tape.listed === 3,
+    `${tape.listed} listings`
+  );
+  expect(
+    "studio upload: a folder is made for the studio, on the Users/Studio shelf",
+    tape.created.length === 1 && tape.created[0].name === "IDST100001" && tape.created[0].pid === "fld-studio",
+    JSON.stringify(tape.created)
+  );
+  expect("studio upload: the file is posted into that folder", tape.spot === "fld-cineaura", tape.spot);
+  expect("studio upload: one file goes up", tape.uploads.length === 1, JSON.stringify(tape.uploads.map((row) => row.name)));
+  expect(
+    "studio upload: it carries a provisional name until the video has a code",
+    /^IDST100001-[a-z0-9]+\.mp4$/.test(String(tape.uploads[0]?.name)),
+    tape.uploads[0]?.name
+  );
+  expect(
+    "studio upload: the field holds the host's embed address",
+    document.querySelector("[data-ved-embed]")?.value === "https://streamtape.com/e/fid1",
+    document.querySelector("[data-ved-embed]")?.value
+  );
+  expect(
+    "studio upload: the source is named Streamtape",
+    document.querySelector("[data-ved-source-badge]")?.textContent === "Streamtape",
+    document.querySelector("[data-ved-source-badge]")?.textContent
+  );
+  const studioNote = document.querySelector("[data-ved-file-note]")?.textContent || "";
+  expect("studio upload: the note says where the file went", studioNote.includes("Home / Users / Studio / IDST100001"), studioNote);
+
+  /* publish: the video gets its code, and the file takes that name */
+  const studioTitle = document.querySelector("[data-ved-title]");
+  studioTitle.value = "A studio video";
+  studioTitle.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await wait();
+  document.querySelector("[data-ved-publish]").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await wait(200);
+  expect(
+    "studio upload: the file is renamed to the video's own code",
+    tape.renames.length === 1 && tape.renames[0].name === "PST-001100.mp4" && tape.renames[0].file === "fid1",
+    JSON.stringify(tape.renames)
+  );
+  const studioPayload = lastCall(calls, "video_save")?.body?.p_payload;
+  expect(
+    "studio upload: the host file rides in the payload",
+    studioPayload?.meta?.host_file?.id === "fid1" &&
+      studioPayload?.meta?.host_file?.studio === "IDST100001" &&
+      studioPayload?.meta?.host_file?.folder === "IDST100001" &&
+      studioPayload?.meta?.host_file?.ext === "mp4",
+    JSON.stringify(studioPayload?.meta?.host_file)
+  );
+  expect("studio upload: the source rides as the host", studioPayload?.meta?.source === "streamtape", studioPayload?.meta?.source);
 }
 
 {

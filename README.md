@@ -1626,6 +1626,38 @@ and when the picked platform and the link disagree the hint says so instead of s
 of them. `embed.js` grew the two missing readers for that: `instagram.com|instagr.am` (framed through
 `/p/<code>/embed/captioned/`) and `twitter.com|x.com`.
 
+**A studio's video file lives on the studio's host.** When the editor's *Studio* picker names a
+studio (a hub of kind `channel`), *Upload a file* no longer puts the file in the site's storage: it
+goes to **Streamtape**, and the tree it lands in is the account's own:
+
+```
+Home
+└ Users
+  └ Studio
+    └ <studio code>          IDST100001
+      └ <video code>.mp4     PST-001100.mp4
+```
+
+`assets/js/streamtape.js` makes the folders on the way in (`Users` and `Studio` once, the studio's
+own folder the first time it uploads), remembers their ids in `localStorage["1w.streamtape.folders"]`
+so a second upload is three calls shorter, asks for an upload address (`file/ul`), posts the file as
+`multipart/form-data` under `file1`, and reads the file's id back — from the answer, or from the
+folder's own listing when the answer is bare. The field is filled with the id-only embed address
+(`https://streamtape.com/e/<id>`), so the link survives the rename.
+
+A brand-new video has no code until it is saved, so its file travels up under a working name
+(`IDST100001-<stamp>.mp4`) and is renamed to `<video code>.<ext>` by `file/rename` the moment the
+server hands the code back — and a file that is already on the host when the video is opened is
+never renamed again. The record kept beside the video is `meta.host_file { id, studio, folder, ext }`:
+the **name is not stored**, because the name is the video's own code, so the record cannot go stale
+between the upload and the rename. A file without a studio, or one under 50 MB without a studio
+chosen, still goes to the site's storage; a studio's file may be up to 2 GB.
+
+The credentials — Streamtape's **API Login** and **API Key** (the key is the "API password") — sit in
+`STREAMTAPE` in `assets/js/config.js`, beside the Supabase and TMDB keys, and `STREAMTAPE.proxy` is
+the escape hatch: point it at an Edge Function that forwards the same actions and the browser stops
+holding them at all.
+
 The three doors keep their meaning, on the feed as well as on the door:
 
 | What the editor says | `posts.visibility` | Who gets in |

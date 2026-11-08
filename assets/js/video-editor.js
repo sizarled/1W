@@ -13,11 +13,16 @@
  *     audience[],       { kind: country|language|level|entity, value, mode: include }
  *     profiles[],       the nominated list a private video opens to
  *     passwords[],      hashed by the server; never readable again
- *     meta{ age, download, vertical, source }
+ *     meta{ age, download, vertical, source, platform, keywords, host_file }
  *   })
  *
  * The same call edits: `?id=PST-001005` pre-fills the form from
  * video_get, and the payload carries the code back.
+ *
+ * A file uploaded while a **studio** is chosen does not go to the site's
+ * storage: it goes to Streamtape, into `Home / Users / Studio / <studio code>`,
+ * and takes the video's own code as its name (see `streamtape.js`). Without a
+ * studio, a small file still goes to storage and its link is filled in.
  */
 import { rpc } from "./data.js";
 import { videoUrl } from "./media.js";
@@ -29,6 +34,7 @@ import { COUNTRIES } from "./countries.js";
 import { SUPABASE, storageUrl } from "./config.js";
 import { embedUrl, autoThumb, isFile, sourceKind, sourceLabel, HOSTS, pinterestId, redditPath } from "./embed.js";
 import { createContents } from "./contents.js";
+import { studioReady, uploadToStudio, renameFile, NOT_CONNECTED } from "./streamtape.js";
 
 const S = {
   token: "",
@@ -63,6 +69,8 @@ const S = {
   hub: "",
   hubName: "",
   hubs: [],
+  /* the file on the studio's host: { id, name, ext, studio, folder, named } */
+  host: null,
   busy: false,
   ready: false,
 };
@@ -685,6 +693,12 @@ function payload(status) {
       source: S.platform || sourceKind(S.embed) || "embed",
       /* the platform the member picked, when they picked one */
       platform: S.platform || sourceKind(S.embed) || null,
+      /* the file on the studio's host, when the video lives there. The name
+         is not stored: it is the video's own code, so the record cannot go
+         stale between the upload and the rename. */
+      host_file: S.host
+        ? { id: S.host.id, studio: S.host.studio, folder: S.host.folder || S.host.studio, ext: S.host.ext || "mp4" }
+        : null,
       /* the two levels of keywords, beside the flat `tags` the site reads */
       keywords: S.keywords.slice(0, MAIN_MAX).map((row) => ({
         keyword: row.word,
@@ -742,6 +756,7 @@ async function save(status) {
 
   S.code = res.code || S.code;
   S.status = res.status || status;
+  await nameHostFile();
   paintAll();
 
   if (status === "draft") {
@@ -792,6 +807,7 @@ function resetForm() {
   S.thumbAuto = false;
   S.keywords = [];
   S.platform = "";
+  S.host = null;
   S.people = [];
   S.passes = [];
   S.hasPassword = false;
@@ -899,6 +915,12 @@ function addSub(index, raw) {
   paintStatus();
 }
 
+/** The studio this video belongs to, when it belongs to one. */
+function studioHub() {
+  const hub = S.hubs.find((row) => row.code === S.hub);
+  return hub && hub.kind === "channel" ? hub : null;
+}
+
 /** The hubs this member may publish into — a studio, a server, a cinema. */
 async function loadHubs() {
   let res = null;
@@ -947,6 +969,9 @@ async function loadExisting(code) {
   /* the mains come back as rows of their own, the subs under them by parent */
   const mains = Array.isArray(v.keywords) ? v.keywords.filter((k) => k.role === "main") : [];
   S.platform = String((v.video && v.video.meta && v.video.meta.platform) || v.meta?.platform || "") || "";
+  const hostFile = (v.video && v.video.meta && v.video.meta.host_file) || v.meta?.host_file || null;
+  /* a stored video's file already carries its code, so it is named */
+  S.host = hostFile && hostFile.id ? { ...hostFile, ext: hostFile.ext || extensionOf({ name: hostFile.name || ".mp4" }), named: true } : null;
   S.keywords = mains.slice(0, MAIN_MAX).map((main) => ({
     word: String(main.keyword || ""),
     subs: Array.isArray(v.keywords)
@@ -1203,14 +1228,96 @@ async function uploadThumbnail(file) {
   }
 }
 
+/** The extension without the dot — `.mp4`, `.mov`. */
+function extensionOf(file) {
+  const name = String(file?.name || "");
+  const ext = (name.split(".").pop() || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (ext && ext !== name.toLowerCase()) return ext;
+  const type = String(file?.type || "");
+  return (type.split("/").pop() || "mp4").replace(/[^a-z0-9]/g, "") || "mp4";
+}
+
+/**
+ * A video for a studio does not stay on the site — it goes to Streamtape,
+ * into `Home / Users / Studio / <studio code>`, and is named after the video's
+ * own code. A brand-new video has no code until it is saved, so it travels up
+ * under a provisional name and is renamed the moment the server gives it one.
+ */
+async function uploadToStudioHost(file, studio) {
+  const ext = extensionOf(file);
+  const named = Boolean(S.code);
+  const name = named ? `${S.code}.${ext}` : `${studio.code}-${Date.now().toString(36)}.${ext}`;
+  const button = $("[data-ved-file-btn]");
+  if (button) button.disabled = true;
+  fileNote("Talking to the studio's host…");
+  try {
+    const out = await uploadToStudio(file, {
+      studio: studio.code,
+      name,
+      onStage: (text) => fileNote(text),
+    });
+    S.host = { id: out.id, name: out.name || name, ext, studio: studio.code, folder: out.folder, named };
+    el.embed.value = out.embed;
+    el.embed.dispatchEvent(new Event("input"));
+    fileNote(
+      `${out.name || name} · ${(file.size / (1024 * 1024)).toFixed(1)} MB — Streamtape, Home / Users / Studio / ${studio.code}` +
+        (named ? "" : " · it takes the video's own name when you save it")
+    );
+    toast({
+      title: "Uploaded to the studio's host",
+      message: `Home / Users / Studio / ${studio.code}`,
+      tone: "success",
+      iconName: "check",
+    });
+  } catch (error) {
+    fileNote(error?.message || "The upload failed. Paste a link instead.", "error");
+    toast({ title: "Upload failed", message: error?.message || "Paste a link instead.", tone: "error" });
+  } finally {
+    if (button) button.disabled = false;
+    scheduleDraft();
+    paintStatus();
+  }
+}
+
+/** A file the host took under a provisional name gets the video's name now. */
+async function nameHostFile() {
+  if (!S.host || S.host.named || !S.code) return;
+  const wanted = `${S.code}.${S.host.ext || "mp4"}`;
+  try {
+    await renameFile(S.host.id, wanted);
+    S.host.name = wanted;
+    S.host.named = true;
+    fileNote(`${wanted} — Streamtape, Home / Users / Studio / ${S.host.studio}`);
+    scheduleDraft();
+  } catch (error) {
+    /* the video is saved and plays either way — the file keeps its working name */
+    console.warn("[1World] studio file name:", error.message);
+  }
+}
+
 async function uploadVideoFile(file) {
   if (!file) return;
   if (!VIDEO_TYPES.test(file.type)) {
     fileNote("MP4, WEBM, OGG or MOV — those are the files a browser can play.", "error");
     return;
   }
+  /* a studio's videos live on the host, in the studio's own folder */
+  const studio = studioHub();
+  if (studio) {
+    if (!studioReady()) {
+      fileNote(`${NOT_CONNECTED} You can still paste a link above.`, "error");
+      toast({ title: "The studio host is not connected", message: NOT_CONNECTED, tone: "error" });
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024 * 1024) {
+      fileNote("2 GB at most, even on the host.", "error");
+      return;
+    }
+    await uploadToStudioHost(file, studio);
+    return;
+  }
   if (file.size > 50 * 1024 * 1024) {
-    fileNote("50 MB at most here. A longer film belongs on a host — paste its link.", "error");
+    fileNote("50 MB at most here. A longer film belongs on a host — choose a studio, or paste its link.", "error");
     return;
   }
   const button = $("[data-ved-file-btn]");
@@ -1261,6 +1368,7 @@ function draftFields() {
     download: S.download,
     vertical: S.vertical,
     hub: S.hub,
+    host: S.host,
   };
 }
 
@@ -1326,6 +1434,7 @@ function restoreDraft(draft) {
   S.download = Boolean(draft.download);
   S.vertical = Boolean(draft.vertical);
   S.hub = draft.hub || S.hub;
+  S.host = draft.host && draft.host.id ? draft.host : null;
 }
 
 function paintDraftNote() {
@@ -1353,6 +1462,9 @@ function bind() {
   let stillTimer = null;
   el.embed.addEventListener("input", () => {
     S.embed = el.embed.value;
+    /* the field was pointed somewhere else: the host file is no longer this
+       video's, so it is not named after it either */
+    if (S.host && !S.embed.includes(S.host.id)) S.host = null;
     syncAutoThumb();
     paintSourceNote();
     paintPlayer();

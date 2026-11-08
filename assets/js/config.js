@@ -33,6 +33,33 @@ export function storageUrl(path) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Streamtape — where a studio's video files live                      */
+/* ------------------------------------------------------------------ */
+/**
+ * A video uploaded in the editor while a **studio** is chosen does not stay in
+ * the site's storage: it goes to Streamtape, under
+ * `Home / Users / Studio / <studio code> / <video code>.<ext>`.
+ *
+ * Every call needs the **API Login** *and* the **API Key** from Streamtape →
+ * Account Settings (the key is the "API password"). They are read here so the
+ * whole integration can be pointed somewhere else — or moved behind a proxy —
+ * by editing this one block and nothing else.
+ *
+ * `proxy` is the escape hatch: point it at an Edge Function that forwards the
+ * same calls and the browser stops holding the credentials at all.
+ */
+export const STREAMTAPE = {
+  api: "https://api.streamtape.com",
+  login: "",
+  key: "120GYLeBYluelxJ",
+  /** Home / Users / Studio — the shelf every studio's folder sits on. */
+  users: "Users",
+  shelf: "Studio",
+  /** e.g. "https://<project>.supabase.co/functions/v1/studio-upload" */
+  proxy: "",
+};
+
+/* ------------------------------------------------------------------ */
 /* TMDB                                                               */
 /* ------------------------------------------------------------------ */
 export const TMDB = {

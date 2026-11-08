@@ -33,7 +33,7 @@
       })();
     </script>
     <script type="module" src="assets/js/app.js?v=20261116e"></script>
-    <script type="module" src="assets/js/video-editor.js?v=20261202b"></script>
+    <script type="module" src="assets/js/video-editor.js?v=20261202c"></script>
   </head>
   <body data-page="videoEditor" data-title="Publish a video">
     <a class="skip-link" href="#main">Skip to content</a>
@@ -95,7 +95,11 @@
                 </div>
                 <div class="vsrc__row">
                   <button class="btn btn--ghost btn--sm" type="button" data-ved-file-btn><i data-icon="upload"></i> Upload a file</button>
-                  <span class="vhint" style="flex:1 1 220px">A file up to 50 MB goes to the site's storage and the link is filled in for you.</span>
+                  <span class="vhint" style="flex:1 1 220px">
+                    A video for a studio goes to the studio's host and lands in
+                    <b>Home / Users / Studio / &lt;studio&gt;</b>, named after the video. Without a studio,
+                    a file up to 50 MB stays in the site's storage. Either way the link is filled in for you.
+                  </span>
                   <input type="file" accept="video/mp4,video/webm,video/ogg,video/quicktime" data-ved-file hidden />
                 </div>
                 <div class="field vplatform">

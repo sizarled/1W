@@ -6,7 +6,8 @@
  * or a <video> will accept, and names the host so the page can say what it is.
  *
  *   YouTube · Vimeo · Dailymotion · TikTok · Facebook · Google Drive ·
- *   Pinterest · Reddit · a direct file (.mp4 .webm .ogv .ogg .mov .m4v)
+ *   Pinterest · Reddit · Instagram · X · Streamtape · a direct file
+ *   (.mp4 .webm .ogv .ogg .mov .m4v)
  *
  * Anything else is left as it is and framed as-is — an honest last resort:
  * some sites refuse to be framed, and the player says so rather than showing a
@@ -24,6 +25,7 @@ export const HOSTS = {
   drive: "Google Drive",
   pinterest: "Pinterest",
   reddit: "Reddit",
+  streamtape: "Streamtape",
   file: "File",
   embed: "Embed",
 };
@@ -56,6 +58,12 @@ export function youtubeId(raw = "") {
   return match ? match[1] : "";
 }
 
+/** The file id in a Streamtape address — `/v/<id>/<name>` or `/e/<id>`. */
+export function streamtapeId(raw = "") {
+  const match = String(raw).match(/streamtape\.com\/(?:v|e)\/([\w-]+)/i);
+  return match ? match[1] : "";
+}
+
 /** The pin id in a Pinterest pin address. */
 export function pinterestId(raw = "") {
   const match = String(raw).match(/pinterest\.[a-z.]+\/pin\/(\d+)/i);
@@ -78,6 +86,10 @@ export function redditPath(raw = "") {
 export function embedUrl(raw = "") {
   const url = String(raw).trim();
   if (!url) return "";
+  /* a Streamtape link can end in .mp4 — and then it is still a page, not a
+     file a <video> can play, so it is read before the file test */
+  const tape = streamtapeId(url);
+  if (tape) return `https://streamtape.com/e/${tape}`;
   if (isFile(url)) return url;
   try {
     const u = new URL(url, "https://example.com");
@@ -142,6 +154,7 @@ export function embedUrl(raw = "") {
 export function sourceKind(raw = "") {
   const url = String(raw).trim();
   if (!url) return "";
+  if (/streamtape\.com\//i.test(url)) return "streamtape";
   if (isFile(url)) return "file";
   if (youtubeId(url)) return "youtube";
   if (/vimeo\.com\//i.test(url)) return "vimeo";
