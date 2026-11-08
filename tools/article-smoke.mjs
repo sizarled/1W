@@ -258,7 +258,8 @@ function boot(file, { url = "", storage = {}, fetchImpl } = {}) {
 }
 
 const fnName = (href) => String(href).split("/rpc/")[1] || "";
-const lastCall = (calls, fn) => [...calls].reverse().find((c) => fnName(c.href) === fn);
+const lastCall = (calls, fn) =>
+  [...calls].reverse().find((c) => fnName(c.href) === fn || fnName(c.href) === `${fn}_from`);
 const MEMBER = {
   "1w.member": JSON.stringify({ id: "m1", username: "@ledsizar", name: "El Mehdi", level: 1, points: 0 }),
   "1w.session": "tok-article",
@@ -348,8 +349,8 @@ const MEMBER = {
       const fn = fnName(href);
       if (fn === "article_get") return reply(OPEN);
       if (fn === "post_comments") return reply(COMMENTS);
-      if (fn === "post_react") return reply({ ok: true, likes: 4, dislikes: 0, reaction: 1 });
-      if (fn === "post_comment") return reply({ ok: true });
+      if (fn === "post_react" || fn === "post_react_from") return reply({ ok: true, likes: 4, dislikes: 0, reaction: 1 });
+      if (fn === "post_comment" || fn === "post_comment_from") return reply({ ok: true, sentiment: 1 });
       if (fn === "post_comment_vote") return reply({ ok: true, agree: 3, disagree: 0, mine: "agree" });
       return reply([]);
     },
@@ -410,7 +411,7 @@ const MEMBER = {
   /* a reaction opens the composer */
   document.querySelector("[data-r-react='1']").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
   await wait(80);
-  expect("reader: the reaction is sent", fnName(lastCall(calls, "post_react")?.href) === "post_react");
+  expect("reader: the reaction is sent", fnName(lastCall(calls, "post_react")?.href) === "post_react_from");
   expect("reader: the reaction value is +1", lastCall(calls, "post_react")?.body.p_value === 1, lastCall(calls, "post_react")?.body.p_value);
   expect("reader: the counter moves at once", document.querySelector("[data-r-like]")?.textContent === "4", document.querySelector("[data-r-like]")?.textContent);
   expect("reader: the composer opens", Boolean(document.querySelector("[data-r-comment-input]")));
@@ -420,7 +421,7 @@ const MEMBER = {
   input.value = "The kitchen scene is the whole argument.";
   document.querySelector("[data-r-comment-form]").dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
   await wait(80);
-  expect("reader: the comment goes out", fnName(lastCall(calls, "post_comment")?.href) === "post_comment");
+  expect("reader: the comment goes out", fnName(lastCall(calls, "post_comment")?.href) === "post_comment_from");
   expect("reader: with its body", lastCall(calls, "post_comment")?.body.p_body === "The kitchen scene is the whole argument.");
   expect("reader: as a top-level comment", lastCall(calls, "post_comment")?.body.p_parent_id === null);
 

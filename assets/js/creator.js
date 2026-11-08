@@ -859,11 +859,7 @@ function reachRow(row) {
       </td>
       <td class="cr-reach__num">${num(shown)}</td>
       <td class="cr-reach__num">${left === null ? "—" : num(left)}</td>
-      <td>
-        <input class="dsh-input cr-reach__input" type="number" min="0" step="100"
-               value="${Number(row.rank) || 0}" data-cr-reach-rank="${esc(row.ref)}"
-               aria-label="Ranking points for ${esc(row.title || "this item")}" />
-      </td>
+      <td class="cr-reach__num" data-cr-reach-rank="${esc(row.ref)}">${num(Number(row.rank) || 0)}</td>
     </tr>`;
 }
 
@@ -884,7 +880,10 @@ function renderReach(host, hub, tab) {
 
   const points = Number(data.points) || 0;
   const spent = Number(data.spent) || 0;
-  const remaining = Math.max(0, points - spent);
+  const base = Number(data.base) || 0;
+  const earned = Number(data.earned) || 0;
+  const limitless = Boolean(data.limitless);
+  const remaining = limitless ? Infinity : Math.max(0, points - spent);
   const allocated = (data.rows || []).reduce((sum, row) => sum + (Number(row.points) || 0), 0);
   const percent = points ? Math.min(100, Math.round((spent / points) * 100)) : 0;
   const rows = data.rows || [];
@@ -894,7 +893,7 @@ function renderReach(host, hub, tab) {
       <div class="cr-bar__left">
         <span class="cr-bar__title">${esc(tab.label)}</span>
         <span class="cr-bar__count">
-          ${num(points)} points · ${num(spent)} spent · ${num(remaining)} left today
+          ${limitless ? "no limit" : `${num(points)} points`} · ${num(spent)} spent · ${limitless ? "and never spent out" : `${num(remaining)} left today`}
         </span>
       </div>
       <div class="cr-bar__right">
@@ -909,19 +908,24 @@ function renderReach(host, hub, tab) {
 
     <div class="cr-reach">
       <div class="cr-reach__day">
-        <label class="cr-reach__field">
+        <div class="cr-reach__field" data-cr-reach-total>
           <span>Reach points for this studio</span>
-          <input class="dsh-input" type="number" min="0" step="100" data-cr-reach-total
-                 value="${points}" aria-label="The studio's reach points" />
-        </label>
+          <strong class="cr-reach__total">${limitless ? "no limit" : num(points)}</strong>
+          <span class="cr-reach__split">
+            ${limitless
+              ? "LVMax — first in the order, and the showing never runs out"
+              : `${num(base)} from the level + ${num(earned)} from the interactions`}
+          </span>
+        </div>
         <div class="cr-reach__meter" role="img" aria-label="${percent}% of today's reach spent">
           <span class="cr-reach__meter-fill" style="width: ${percent}%"></span>
         </div>
         <p class="cr-reach__note">
-          A day's budget. Every person who has not seen the work yet spends one point; at midnight
-          the whole number comes back. Reach decides how far the work travels on the home pages and
-          in the suggestions — ranking points decide where it stands in a search, and they are
-          permanent.
+          Every like is worth 30, a dislike takes 30, a repost adds 60 and a report takes 60; a
+          share link adds 10 and each visit from it adds 10 more. A day's budget: every person who
+          has not seen the work yet spends one point, and at midnight the whole number comes back.
+          Reach decides how far the work travels — ranking points decide where it stands in a
+          search, and they come from the interactions a search brings.
         </p>
       </div>
 
@@ -953,16 +957,21 @@ function renderReach(host, hub, tab) {
   hydrateIcons(host);
 }
 
-/** The plan as it stands on the page, before it is sent. */
+/**
+ * The plan as it stands on the page, before it is sent.
+ *
+ * The total is not on the page to be typed: it is the level's floor plus what
+ * the interactions have earned, and it is read from the server. The studio only
+ * decides how that number is split between its items.
+ */
 function reachPlan() {
-  const total = Number(el("[data-cr-reach-total]")?.value) || 0;
+  const total = Number(state.reach?.points) || 0;
   const rows = qsa("[data-reach-row]").map((rowEl) => {
     const ref = rowEl.getAttribute("data-reach-row");
     return {
       ref,
       kind: rowEl.getAttribute("data-reach-kind") || "post",
       points: Number(qs(`[data-cr-reach-points="${ref}"]`)?.value) || 0,
-      rank: Number(qs(`[data-cr-reach-rank="${ref}"]`)?.value) || 0,
     };
   });
   return { total, rows };
@@ -3980,7 +3989,7 @@ document.addEventListener("change", (event) => {
 
 document.addEventListener("input", (event) => {
   const target = event.target;
-  if (target.matches("[data-cr-reach-total], [data-cr-reach-points], [data-cr-reach-rank]")) {
+  if (target.matches("[data-cr-reach-points]")) {
     reachTotals();
     return;
   }

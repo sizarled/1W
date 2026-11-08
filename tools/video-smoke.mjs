@@ -196,7 +196,10 @@ function boot(file, { hash = "", url = "", storage = {}, fetchImpl, globals } = 
 }
 
 const fnName = (href) => String(href).split("/rpc/")[1] || "";
-const lastCall = (calls, fn) => [...calls].reverse().find((c) => fnName(c.href) === fn);
+/* the pages call the `_from` shells when the interaction happens on a page
+   that can say where the reader came from, so both names answer */
+const lastCall = (calls, fn) =>
+  [...calls].reverse().find((c) => fnName(c.href) === fn || fnName(c.href) === `${fn}_from`);
 
 /* one way in: the file row, or one platform's own link row */
 const chooseMode = (document, window, mode) => {
@@ -273,10 +276,13 @@ const choosePlatform = (document, window, value) => {
       if (fn === "video_mine") return reply({ ok: true, rows: [] });
       if (fn === "video_get") return reply({ ok: true, locked: false, mine: false, video: card(), related: [card({ code: "PST-001011", title: "Elephants Dream" })], more: [] });
       if (fn === "post_comments") return reply(COMMENTS);
-      if (fn === "post_react") return reply({ ok: true, likes: 5, dislikes: 1, reaction: 1 });
-      if (fn === "post_comment") return reply({ ok: true, comments: [], comments_pos: 1, comments_neg: 0 });
+      if (fn === "post_react" || fn === "post_react_from") return reply({ ok: true, likes: 5, dislikes: 1, reaction: sent.p_value ?? 1 });
+      if (fn === "post_comment" || fn === "post_comment_from") return reply({ ok: true, comments: [], comments_pos: 1, comments_neg: 0, sentiment: 1 });
       if (fn === "post_comment_vote") return reply({ ok: true, agree: sent.p_agree ? 2 : 1, disagree: sent.p_agree ? 0 : 1, mine: sent.p_agree ? "agree" : "disagree" });
-      if (fn === "post_report") return reply({ ok: true, reported: true });
+      if (fn === "post_report" || fn === "post_report_from") return reply({ ok: true, reported: true });
+      if (fn === "post_reshare" || fn === "post_reshare_from") return reply({ ok: true, reshared: true, reshares: 1 });
+      if (fn === "reach_share_link") return reply({ ok: true, credited: 10 });
+      if (fn === "reach_share_visit") return reply({ ok: true, credited: 20 });
       return reply([]);
     },
   });
@@ -326,7 +332,9 @@ const choosePlatform = (document, window, value) => {
   /* like → the composer appears */
   document.querySelector("[data-v-react='1']").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
   await wait(60);
-  expect("watch: the like is sent", fnName(lastCall(calls, "post_react")?.href) === "post_react", JSON.stringify(lastCall(calls, "post_react")?.body));
+  expect("watch: the like is sent", fnName(lastCall(calls, "post_react")?.href) === "post_react_from", JSON.stringify(lastCall(calls, "post_react")?.body));
+  expect("watch: and it says where the reader came from", lastCall(calls, "post_react")?.body.p_source === "feed", JSON.stringify(lastCall(calls, "post_react")?.body));
+  expect("watch: and which way it was before", lastCall(calls, "post_react")?.body.p_was === 0, JSON.stringify(lastCall(calls, "post_react")?.body));
   expect("watch: the like value is +1", lastCall(calls, "post_react")?.body.p_value === 1);
   expect("watch: the counter moves at once", document.querySelector("[data-v-like]")?.textContent === "5", document.querySelector("[data-v-like]")?.textContent);
   expect("watch: pressed now", document.querySelector("[data-v-react='1']")?.getAttribute("aria-pressed") === "true");

@@ -231,6 +231,7 @@ function stubFetch(url, opts = {}) {
     });
   }
   if (href.includes("/rpc/post_react")) {
+    /* post_react_from is the same call, plus where the reader came from */
     scenario.reaction = body.p_value || null;
     return reply({
       ok: true,
@@ -523,7 +524,7 @@ function expect(name, condition, detail = "") {
   input.value = "Well written";
   p.click(p.qs('[data-pc-act="send-comment"]'));
   await p.wait(200);
-  const commentCall = calls.find((c) => c.href.endsWith("/rpc/post_comment"));
+  const commentCall = calls.find((c) => /\/rpc\/post_comment(_from)?$/.test(c.href.split("?")[0]));
   expect("comments: rpc called", Boolean(commentCall));
   expect("comments: body sent", commentCall?.body?.p_body === "Well written", JSON.stringify(commentCall?.body));
 

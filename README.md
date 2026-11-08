@@ -1843,7 +1843,7 @@ in the same file, or, when that call is not on the server yet, the `creator_publ
 page already makes (a channel first, then a server or a cinema, never a private hub). No studio at
 all, and the member's face is the publisher, which is the honest answer.
 
-Test: `node tools/video-smoke.mjs` — **321/321** (feed, sort, search, watch, reaction→comment, a locked
+Test: `node tools/video-smoke.mjs` — **419/419** (feed, sort, search, watch, reaction→comment, a locked
 door and its password, a missing video, the editor signed out and in, the payload of a publish, of an
 exclusive rule set and of a private list, the player and the sixteen host cases, the oEmbed stills, the
 studio picker, the contents rail, and the forwarding page).
@@ -2198,7 +2198,7 @@ the editors need**, each pinned to a name pattern and a set of extensions (`user
 | `node tools/rte-smoke.mjs` | **45/45** (every command, links, insertion, history, paste, drop, keys, toolbar state) |
 | `node tools/article-smoke.mjs` | **281/281** |
 | `node tools/blog-smoke.mjs` | **82/82** (the address, the closed door, the hero, the home, a section, the search, the plain cover) |
-| `node tools/video-smoke.mjs` | **321/321** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
+| `node tools/video-smoke.mjs` | **419/419** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
 | `node tools/media-smoke.mjs` | **89/89** (the address book, the three pages, the portrait stage, the locked item, the shelves) |
 
 ### The six OAuth apps — one checklist each
@@ -2674,7 +2674,7 @@ node tools/dashboard-smoke.mjs   # 272 checks: the five gates, rail, popover, co
 node tools/sidebar-smoke.mjs     # 93 checks: the edge, the pin, Escape, the mobile drawer, the dashboard menu
 node tools/panel-smoke.mjs       # 90 checks: the desk's three states, the rows, the switch, the dialog, the shelf
 node tools/court-smoke.mjs       # 115 checks: the four steps, uploads, both doors, the court room
-node tools/creator-smoke.mjs     # 408 checks: the search (owners + publishers), the tables, the editors, a publisher's seat, the Reach tab
+node tools/creator-smoke.mjs     # 416 checks: the search (owners + publishers), the tables, the editors, a publisher's seat, the Reach tab
 node tools/media-smoke.mjs       # 89 checks: the address book, videos.html#/h|v/, audio.html#/p|m/, playlist.html#/videos|podcasts|songs/
 node tools/publisher-smoke.mjs   # 52 checks: the program, the seat, the links, and the hand-off to the creator page
 node tools/iptv-smoke.mjs        # 43 checks: the playlists, the groups, the page, the deep links
@@ -2747,6 +2747,63 @@ gate is `reach_claim(hub, kind, ref, profile)`; `reach_visible(post, profile)` a
 list, and `reach_screen(token, codes)` answers a whole page of codes at once. A hub that has never been
 configured is **not gated**, so the file hides nothing that already exists; the studio's own members
 are always allowed and never counted.
+
+### How the points are earned
+
+[`tools/sql/reach-earnings.sql`](tools/sql/reach-earnings.sql) is the table the studio's number is
+made of. **Reach points** move with what happens anywhere the work is shown — the suggestions and
+updates beside it, the notifications, and the search results:
+
+| interaction | reach points | ranking points |
+| --- | --- | --- |
+| a repost | **+60** | +60 when it came from a search result |
+| a like | **+30** | +30 from a search result |
+| a dislike | **−30** | −30 from a search result |
+| a positive comment | **+30** | +30 from a search result |
+| a negative comment | **−30** | −30 from a search result |
+| a share link | **+10** | +10 from a search result |
+| a visit that arrives from that link | **+10 more** | +10 from a search result |
+| a report | **−60** | −60 from a search result |
+
+**Ranking points are moved by the interactions a search brings, and by nothing else.** The same like
+on the watch page is worth 30 reach points and 0 rank points; the same like on a search result is
+worth both. That is the sentence `if v_src = 'search' then` in `reach_move`.
+
+A comment never comes alone: `post_comment` already refuses until the member has liked or disliked
+the post, and the comment takes that reaction's sign — so *positive* and *negative* comment are
+decided by the like or dislike that opened the door, not by the words. The pages call the `_from`
+shells (`post_react_from`, `post_comment_from`, `post_reshare_from`, `post_report_from`) and say
+only where the reader came from — `search` on a search result, `feed` on the watch page, `profile` on
+a profile — and a reaction that changes from a like to a dislike moves the number as one −60 step
+rather than counting both twice (`p_was`). The share button is `reach_share_link` (+10) and the
+address it copies carries `&s=<member>`, so the visit it brings is `reach_share_visit` (+10 more,
+once per reader per day).
+
+### Where the number starts
+
+The level sets the floor before a single interaction:
+
+| level | reach points |
+| --- | --- |
+| LV0 | **0** — and a LV0 cannot open a studio or publish |
+| LV1 | 100 |
+| LV2 | 200 |
+| LV3 | 300 |
+| LV4 | 400 |
+| LV5 | 500 |
+| LV6 | 600 |
+| LV7 | 700 |
+| LV8 | 800 |
+| LV9 | 900 |
+| LV10 | 1 000 |
+| LVMax | no number at all — **first in the order, and the showing never runs out** |
+
+`reach_sync(hub)` reads the owner's level, keeps `base = 100 × level`, and sets `points = base +
+earned`; `limitless` is on for LVMax (stored as level 11 or above), and in that case `reach_claim`
+hands the item back without spending anything. Because the total is derived, the Reach tab no longer
+lets a studio type its own size: the field is read-only and says where the number came from (`100
+from the level + 400 from the interactions`), and the ranking column is read-only too — it is earned,
+never typed.
 
 **The studio decides the split.** *Studio → Reach* is a tab in `creator.html` — the day's total in one
 field, one row per published item with the points it may take and the ranking points it keeps. The
@@ -2838,7 +2895,7 @@ platforms in *Related links* use the official brand paths of
 re-render, so switching tabs never leaves an empty `<i>` behind.
 
 ```
-node tools/profile-smoke.mjs      # 45 checks, owner + visitor + blocked
+node tools/profile-smoke.mjs      # 111 checks, owner + visitor + blocked
 ```
 
 ## The tables behind the profile page

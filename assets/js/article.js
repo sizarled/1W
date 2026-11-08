@@ -639,7 +639,13 @@ async function react(value) {
   const next = Number(state.reaction) === value ? 0 : value;
   let res = null;
   try {
-    res = await rpc("post_react", { p_token: state.token, p_ref: ref, p_value: next });
+    res = await rpc("post_react_from", {
+      p_token: state.token,
+      p_ref: ref,
+      p_value: next,
+      p_source: "feed",
+      p_was: Number(state.reaction) || 0,
+    });
   } catch (error) {
     toast({ title: "That did not go through", message: error.message, tone: "error" });
     return;
@@ -693,7 +699,7 @@ async function share() {
   const row = article();
   const url = `${location.origin}${location.pathname}?id=${encodeURIComponent(row.code || row.id)}`;
   if (signedIn()) {
-    rpc("post_reshare", { p_token: state.token, p_ref: row.code || row.id })
+    rpc("post_reshare_from", { p_token: state.token, p_ref: row.code || row.id, p_source: "feed" })
       .then((res) => {
         if (res && res.ok) toast({ title: res.reshared ? "Reshared to your feed" : "Reshare taken back", tone: "success", iconName: "share" });
       })
@@ -776,11 +782,12 @@ function bind() {
       const btn = form.querySelector("button[type=submit]");
       if (btn) btn.disabled = true;
       try {
-        const res = await rpc("post_comment", {
+        const res = await rpc("post_comment_from", {
           p_token: state.token,
           p_ref: row.code || row.id,
           p_body: body,
           p_parent_id: state.parent || null,
+          p_source: "feed",
         });
         if (res && res.ok) {
           if (input) input.value = "";
@@ -853,11 +860,12 @@ function bind() {
       const reason = (qs("[data-r-report-reason]") || {}).value || "other";
       const note = (qs("[data-r-report-note]") || {}).value || "";
       try {
-        const res = await rpc("post_report", {
+        const res = await rpc("post_report_from", {
           p_token: state.token,
           p_ref: row.code || row.id,
           p_reason: reason,
           p_note: note,
+          p_source: "feed",
         });
         if (res && res.ok) {
           toast({ title: "Report sent", message: "A moderator will look at it.", tone: "success", iconName: "flag" });

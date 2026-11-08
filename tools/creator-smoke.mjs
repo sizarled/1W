@@ -1906,6 +1906,9 @@ async function reachPass() {
     reach: {
       hub: { id: "hub-ch", code: "IDST100001", name: "Studio One", kind: "channel" },
       configured: true,
+      base: 100,
+      earned: 400,
+      limitless: false,
       points: 500,
       spent: 120,
       remaining: 380,
@@ -1927,12 +1930,13 @@ async function reachPass() {
   const day = view.text(".cr-bar__count");
   expect("reach: the day is said in points, spent and left", /500 points · 120 spent · 380 left today/.test(day), day);
 
-  const total = view.qs("[data-cr-reach-total]");
-  expect("reach: the studio's own number is in its field", total && total.value === "500", total ? total.value : "missing");
+  const total = view.text("[data-cr-reach-total]");
+  expect("reach: the studio's number is shown, not typed", /500/.test(total) && !view.qs("[data-cr-reach-total] input"), total);
+  expect("reach: and it says what it is made of", /100 from the level \+ 400 from the interactions/.test(total), total);
   expect("reach: one row per item", view.qsa("[data-reach-row]").length === 2, String(view.qsa("[data-reach-row]").length));
   expect("reach: a row names the item and its code", /The first film[\s\S]*Video-001032/.test(view.text('[data-reach-row="post-a"]')), view.text('[data-reach-row="post-a"]').slice(0, 90));
   expect("reach: the item's reach is in its own field", view.qs('[data-cr-reach-points="post-a"]')?.value === "200", view.qs('[data-cr-reach-points="post-a"]')?.value);
-  expect("reach: and its ranking points beside it", view.qs('[data-cr-reach-rank="post-a"]')?.value === "5000", view.qs('[data-cr-reach-rank="post-a"]')?.value);
+  expect("reach: its ranking points are read, not typed", view.text('[data-cr-reach-rank="post-a"]') === "5,000" && !view.qs("input[data-cr-reach-rank]"), view.text('[data-cr-reach-rank="post-a"]'));
   expect("reach: what has been shown is counted", /120/.test(view.text('[data-reach-row="post-a"]')), view.text('[data-reach-row="post-a"]'));
   expect("reach: an unplaced item draws on the studio's rest", /—/.test(view.text('[data-reach-row="content-b"]')), view.text('[data-reach-row="content-b"]'));
   expect("reach: the meter shows the day spent", view.qs(".cr-reach__meter-fill")?.getAttribute("style")?.includes("24%"), view.qs(".cr-reach__meter-fill")?.getAttribute("style"));
@@ -1959,11 +1963,12 @@ async function reachPass() {
   expect("reach: the plan was sent with the studio's number", Number(saved.points) === 500, JSON.stringify(saved.points));
   expect("reach: and one row per item", (saved.rows || []).length === 2, JSON.stringify(saved.rows));
   expect(
-    "reach: every row keeps its own kind, points and rank",
-    (saved.rows || []).some((row) => row.ref === "post-a" && row.kind === "post" && row.points === 200 && row.rank === 5000) &&
-      (saved.rows || []).some((row) => row.ref === "content-b" && row.kind === "content" && row.points === 150 && row.rank === 1500),
+    "reach: every row keeps its own kind and points",
+    (saved.rows || []).some((row) => row.ref === "post-a" && row.kind === "post" && row.points === 200) &&
+      (saved.rows || []).some((row) => row.ref === "content-b" && row.kind === "content" && row.points === 150),
     JSON.stringify(saved.rows)
   );
+  expect("reach: and never a ranking number it did not earn", (saved.rows || []).every((row) => row.rank === undefined), JSON.stringify(saved.rows));
   expect("reach: the tab was read again after the save", calls.filter((c) => c.includes("hub_reach_get")).length >= 2, String(calls.filter((c) => c.includes("hub_reach_get")).length));
   expect("reach: no errors", view.errors.length === 0, view.errors.join(" | "));
   view.window.close();
@@ -1985,6 +1990,13 @@ async function reachPass() {
 
   /* the schema behind the tab */
   const reachSql = readFileSync(join(root, "tools/sql/studio-reach.sql"), "utf8");
+  const earnSql = readFileSync(join(root, "tools/sql/reach-earnings.sql"), "utf8");
+  expect("reach sql: the level sets the floor", /100 \* greatest\(v_level, 0\)/.test(reachSql), "no level floor");
+  expect("reach sql: LVMax is limitless", /v_level >= 11/.test(reachSql) && /limitless/.test(reachSql), "no LVMax");
+  expect("reach sql: an interaction is worth what the table says", /'repost',  *60/.test(earnSql) && /'report',  *-60/.test(earnSql), "worth table missing");
+  expect("reach sql: a comment follows the reaction", /comment_pos/.test(earnSql) && /sentiment/.test(earnSql), "comment sign missing");
+  expect("reach sql: a share is 10, and its visit 10 more", /'share',  *10/.test(earnSql) && /'share_visit',  *10/.test(earnSql), "share missing");
+  expect("reach sql: rank moves on a search result only", /if v_src = 'search' then/.test(earnSql), "rank is not search-only");
   expect("reach sql: a day per studio", /create table if not exists public\.hub_reach/.test(reachSql), "hub_reach missing");
   expect("reach sql: one allocation per item", /create table if not exists public\.reach_items/.test(reachSql), "reach_items missing");
   expect("reach sql: a refresh costs nothing", /create table if not exists public\.reach_seen/.test(reachSql), "reach_seen missing");
@@ -1992,7 +2004,7 @@ async function reachPass() {
   expect("reach sql: the gate is one function", /function public\.reach_claim/.test(reachSql) && /function public\.reach_screen/.test(reachSql), "no gate");
   expect("reach sql: the studio can never spend past its day", /over_budget/.test(reachSql) && /if v_total > v_points then/.test(reachSql), "no ceiling");
   expect("reach sql: the studio's own members are never counted", /v_owner = p_profile/.test(reachSql), "owner not excused");
-  expect("reach sql: an unconfigured hub is not gated", /never configured/.test(reachSql), "no passthrough");
+  expect("reach sql: a studio is always its level plus its earnings", /b\.base \+ b\.earned/.test(reachSql), "the total is not derived");
 
   const videosSql = readFileSync(join(root, "tools/sql/videos-page.sql"), "utf8");
   expect("reach: the feed is gated by it", /and public\.reach_visible\(p\.id, v_me\.id\)/.test(videosSql), "the feed is not gated");

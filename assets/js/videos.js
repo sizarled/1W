@@ -869,6 +869,13 @@ async function openWatch(code, orientation) {
     return;
   }
 
+  /* a visit that arrived from somebody's share link: the studio is credited
+     10 for the link and this reader is new to it — once a day, so a refresh is
+     not a second visit */
+  if (new URLSearchParams(location.search || "").get("s")) {
+    rpc("reach_share_visit", { p_token: state.token, p_code: code }).catch(() => {});
+  }
+
   const v = res.video || {};
   state.reaction = (v.mine && Number(v.mine.reaction)) || 0;
   state.canComment = state.reaction !== 0;
@@ -966,17 +973,39 @@ async function studioOfMember(video) {
   return null;
 }
 
+/**
+ * Where this reader came from.
+ *
+ * `search` when the page is holding a search — a reaction on a search result
+ * moves the item's **ranking** points as well as the studio's reach; `feed`
+ * everywhere else, where only the reach moves.
+ */
+function reachSource() {
+  return String(state.search || "").trim() ? "search" : "feed";
+}
+
 /** The watch page's own address, on the clipboard. */
 async function copyVideoLink(url) {
+  /* the share link is worth 10 to the studio, and a visit it brings is worth
+     10 more — the address carries the member who shared it, so the visit can
+     be counted on the other side */
+  let href = url;
+  const me = getMember();
+  if (me && me.member_id) {
+    href += `${href.includes("?") ? "&" : "?"}s=${encodeURIComponent(me.member_id)}`;
+  }
+  if (signedIn()) {
+    rpc("reach_share_link", { p_token: state.token, p_code: state.code, p_source: "share" }).catch(() => {});
+  }
   try {
     if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(url);
-      return toast({ title: "Link copied", message: url, iconName: "link" });
+      await navigator.clipboard.writeText(href);
+      return toast({ title: "Link copied", message: href, iconName: "link" });
     }
   } catch {
     /* the clipboard is closed — the link is still shown below */
   }
-  return toast({ title: "The link", message: url, iconName: "link" });
+  return toast({ title: "The link", message: href, iconName: "link" });
 }
 
 /** A link's own mark, from where it points. */
@@ -1527,7 +1556,13 @@ function bindWatch() {
       reactBtn.disabled = true;
       let res = null;
       try {
-        res = await rpc("post_react", { p_token: state.token, p_ref: state.code, p_value: value });
+        res = await rpc("post_react_from", {
+          p_token: state.token,
+          p_ref: state.code,
+          p_value: value,
+          p_source: reachSource(),
+          p_was: now,
+        });
       } catch (error) {
         toast({ title: "That did not go through", message: error.message, tone: "error" });
       }
@@ -1557,7 +1592,7 @@ function bindWatch() {
     if (event.target.closest("[data-v-share]")) {
       const url = `${location.origin}${location.pathname}${videoUrl(state.code, state.orientation).replace(/^videos\.html/, "")}`;
       if (signedIn()) {
-        rpc("post_reshare", { p_token: state.token, p_ref: state.code }).then((res) => {
+        rpc("post_reshare_from", { p_token: state.token, p_ref: state.code, p_source: reachSource() }).then((res) => {
           if (res && res.ok) toast({ title: res.reshared ? "Reshared to your feed" : "Reshare taken back", tone: "success", iconName: "share" });
         }).catch(() => {});
       }
@@ -1614,7 +1649,13 @@ function bindWatch() {
       const reason = ($("[data-v-report-reason]") || {}).value || "other";
       const note = ($("[data-v-report-note]") || {}).value || "";
       try {
-        const res = await rpc("post_report", { p_token: state.token, p_ref: state.code, p_reason: reason, p_note: note });
+        const res = await rpc("post_report_from", {
+          p_token: state.token,
+          p_ref: state.code,
+          p_reason: reason,
+          p_note: note,
+          p_source: reachSource(),
+        });
         if (res && res.ok) {
           toast({ title: "Report sent", message: "A moderator will look at it.", tone: "success", iconName: "flag" });
           const box = $("[data-v-report-box]");
@@ -1733,21 +1774,23 @@ function bindWatch() {
       const parent = Number(id);
       creplySend.disabled = true;
       try {
-        let res = await rpc("post_comment", {
+        let res = await rpc("post_comment_from", {
           p_token: state.token,
           p_ref: state.code,
           p_body: body,
           p_parent_id: parent,
+          p_source: reachSource(),
         }).catch(() => null);
         /* a server that does not keep threads yet still gets the reply, and
            the line names the member it answers */
         if (res && res.ok !== true) {
           const to = creplySend.getAttribute("data-v-reply-to") || "";
-          res = await rpc("post_comment", {
+          res = await rpc("post_comment_from", {
             p_token: state.token,
             p_ref: state.code,
             p_body: `${to} ${body}`.trim(),
             p_parent_id: null,
+            p_source: reachSource(),
           }).catch(() => null);
         }
         if (res && res.ok) {
@@ -1809,11 +1852,12 @@ function bindWatch() {
       try {
         /* the report door the site already has: the video it is filed under,
            and a note that names the comment and quotes it */
-        const res = await rpc("post_report", {
+        const res = await rpc("post_report_from", {
           p_token: state.token,
           p_ref: state.code,
           p_reason: reason,
           p_note: `Comment #${id} by ${who}: “${said.slice(0, 160)}”${note ? ` — ${note}` : ""}`,
+          p_source: reachSource(),
         });
         if (res && res.ok) {
           if (box) box.hidden = true;
@@ -1838,7 +1882,13 @@ function bindWatch() {
       const btn = event.target.closest("[data-v-comment-send]");
       btn.disabled = true;
       try {
-        const res = await rpc("post_comment", { p_token: state.token, p_ref: state.code, p_body: body, p_parent_id: null });
+        const res = await rpc("post_comment_from", {
+          p_token: state.token,
+          p_ref: state.code,
+          p_body: body,
+          p_parent_id: null,
+          p_source: reachSource(),
+        });
         if (res && res.ok) {
           if (input) input.value = "";
           toast({ title: "Comment posted", tone: "success", iconName: "comment", duration: 2600 });

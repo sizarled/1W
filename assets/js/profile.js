@@ -643,7 +643,13 @@ async function reactToPost(id, value) {
   const current = post.mine?.reaction ?? null;
   const next = current === value ? 0 : value;
   try {
-    const res = await rpc("post_react", { p_token: state.token, p_ref: id, p_value: next });
+    const res = await rpc("post_react_from", {
+      p_token: state.token,
+      p_ref: id,
+      p_value: next,
+      p_source: "profile",
+      p_was: Number(current) || 0,
+    });
     if (!res || res.ok === false) {
       return toast({ title: "Not saved", message: hintFor(res?.error), tone: "error" });
     }
@@ -657,7 +663,7 @@ async function reactToPost(id, value) {
 
 async function toggleRepost(id) {
   try {
-    const res = await rpc("post_reshare", { p_token: state.token, p_ref: id });
+    const res = await rpc("post_reshare_from", { p_token: state.token, p_ref: id, p_source: "profile" });
     if (!res || res.ok === false) {
       return toast({ title: "Not saved", message: hintFor(res?.error), tone: "error" });
     }
@@ -759,7 +765,13 @@ async function sendComment(id) {
   const value = (input?.value || "").trim();
   if (!value) return;
   try {
-    const res = await rpc("post_comment", { p_token: state.token, p_ref: id, p_body: value, p_parent_id: null });
+    const res = await rpc("post_comment_from", {
+      p_token: state.token,
+      p_ref: id,
+      p_body: value,
+      p_parent_id: null,
+      p_source: "profile",
+    });
     if (!res || res.ok === false) {
       const messages = {
         reaction: "Like or dislike the post before commenting.",
@@ -815,7 +827,7 @@ async function reportPost(id) {
   qs("[data-report-send]")?.addEventListener("click", async () => {
     const note = qs("[data-report-note]")?.value?.trim() || "";
     try {
-      const res = await rpc("post_report", { p_token: state.token, p_ref: id, p_reason: reason, p_note: note });
+      const res = await rpc("post_report_from", { p_token: state.token, p_ref: id, p_reason: reason, p_note: note, p_source: "profile" });
       if (!res || res.ok === false) {
         return toast({ title: "Report failed", message: "Please try again.", tone: "error" });
       }

@@ -49,6 +49,11 @@ begin;
 -- ------------------------------------------------------------------
 create table if not exists public.hub_reach (
   hub_id    uuid primary key references public.creator_hubs (id) on delete cascade,
+  /* what the level gives, and what the interactions have added — `points` is
+     the two together, kept here so the gate reads one number */
+  base      integer not null default 0 check (base >= 0),
+  earned    integer not null default 0,
+  limitless boolean not null default false,
   points    integer not null default 0 check (points >= 0),
   day       date not null default current_date,
   spent     integer not null default 0 check (spent >= 0),
@@ -59,6 +64,69 @@ comment on table public.hub_reach is
   'A studio''s reach points: a day''s budget of impressions, spent on people who have not seen the item yet.';
 
 alter table public.hub_reach enable row level security;
+
+/**
+ * Whose reach this is, and how much of it there is.
+ *
+ * The level sets the floor — LV1 starts at 100, LV2 at 200 … LV10 at 1 000 —
+ * and the interactions add to or take from it (see reach-earnings.sql). LV0
+ * has nothing to start with, and **LVMax** is without a number at all: it is
+ * first in the order and its showing never runs out.
+ *
+ * Called by every door, so a studio's number is always its level plus what it
+ * has earned, and never a number somebody typed.
+ */
+create or replace function public.reach_sync(p_hub uuid)
+returns public.hub_reach
+language plpgsql
+security definer
+set search_path to 'public', 'pg_temp'
+as $function$
+declare
+  v_level integer;
+  v_row   public.hub_reach%rowtype;
+begin
+  select coalesce(m.level, 0) into v_level
+    from public.creator_hubs h
+    join public.members m on m.id = h.owner
+   where h.id = p_hub;
+
+  v_level := coalesce(v_level, 0);
+
+  insert into public.hub_reach as b (hub_id, base, earned, limitless, points, day, spent)
+  values (p_hub,
+          case when v_level >= 11 then 0 else 100 * greatest(v_level, 0) end,
+          0,
+          v_level >= 11,
+          0,
+          current_date,
+          0)
+  on conflict (hub_id) do nothing;
+
+  update public.hub_reach b
+     set base      = case when coalesce((select m.level from public.creator_hubs h
+                                           join public.members m on m.id = h.owner
+                                          where h.id = p_hub), 0) >= 11 then 0
+                          else 100 * greatest(coalesce((select m.level from public.creator_hubs h
+                                                          join public.members m on m.id = h.owner
+                                                         where h.id = p_hub), 0), 0) end,
+         limitless = coalesce((select m.level from public.creator_hubs h
+                                 join public.members m on m.id = h.owner
+                                where h.id = p_hub), 0) >= 11,
+         /* the day is over: everything that was spent comes back */
+         spent     = case when b.day <> current_date then 0 else b.spent end,
+         day       = current_date,
+         updated_at = now()
+   where b.hub_id = p_hub;
+
+  update public.hub_reach b
+     set points = greatest(0, b.base + b.earned)
+   where b.hub_id = p_hub;
+
+  select * into v_row from public.hub_reach where hub_id = p_hub;
+  return v_row;
+end;
+$function$;
 
 -- ------------------------------------------------------------------
 -- 2. one allocation per item — and the number search is ordered by
@@ -147,8 +215,7 @@ declare
   v_seen   boolean;
   v_cap    integer;
 begin
-  select * into v_budget from public.hub_reach where hub_id = p_hub;
-  /* never configured: nothing to gate */
+  v_budget := public.reach_sync(p_hub);
   if v_budget.hub_id is null then
     return true;
   end if;
@@ -158,8 +225,10 @@ begin
     return true;
   end if;
 
-  perform public.reach_tick(p_hub);
-  select * into v_budget from public.hub_reach where hub_id = p_hub;
+  /* LVMax: always first, and the showing never runs out */
+  if v_budget.limitless then
+    return true;
+  end if;
 
   /* the day is finished: nothing more goes out until tomorrow */
   if v_budget.spent >= v_budget.points then
@@ -374,11 +443,7 @@ begin
     return jsonb_build_object('ok', false, 'error', 'hub_role');
   end if;
 
-  select * into v_budget from public.hub_reach where hub_id = v_hub.id;
-  if v_budget.hub_id is not null then
-    perform public.reach_tick(v_hub.id);
-    select * into v_budget from public.hub_reach where hub_id = v_hub.id;
-  end if;
+  v_budget := public.reach_sync(v_hub.id);
 
   select coalesce(jsonb_agg(row order by row ->> 'sort', row ->> 'title'), '[]'::jsonb)
     into v_rows
@@ -421,9 +486,15 @@ begin
     'ok', true,
     'hub', jsonb_build_object('code', v_hub.code, 'name', v_hub.name, 'kind', v_hub.kind),
     'configured', v_budget.hub_id is not null,
+    /* the day's number: what the level gives, what the interactions added,
+       and whether this studio is LVMax (limitless, and first in the order) */
+    'base', coalesce(v_budget.base, 0),
+    'earned', coalesce(v_budget.earned, 0),
+    'limitless', coalesce(v_budget.limitless, false),
     'points', coalesce(v_budget.points, 0),
     'spent', coalesce(v_budget.spent, 0),
-    'remaining', greatest(0, coalesce(v_budget.points, 0) - coalesce(v_budget.spent, 0)),
+    'remaining', case when coalesce(v_budget.limitless, false) then -1
+                      else greatest(0, coalesce(v_budget.points, 0) - coalesce(v_budget.spent, 0)) end,
     'day', current_date,
     'resets', current_date + 1,
     'rows', v_rows
@@ -441,8 +512,10 @@ $function$;
  *   • a negative number anywhere.
  *
  * The allocations are a standing plan: they survive the night, while `shown`
- * starts again at zero. Ranking points are permanent and are written to the
- * item itself.
+ * starts again at zero. The studio's total is **not** its to set — it is the
+ * level's floor plus what the interactions have earned (reach-earnings.sql) —
+ * and ranking points are earned from search interactions only, so `rank` in a
+ * row is read and never written here.
  */
 create or replace function public.hub_reach_save(p_token text, p_hub text, p_payload jsonb)
 returns jsonb
@@ -478,7 +551,9 @@ begin
     return jsonb_build_object('ok', false, 'error', 'hub_role');
   end if;
 
-  v_points := greatest(0, coalesce((v_data ->> 'points')::integer, 0));
+  /* the studio does not set its own size: the level gives the floor and the
+     interactions add to it. What the tab sends for `points` is ignored. */
+  v_points := public.reach_sync(v_hub.id).points;
   v_rows := case when jsonb_typeof(v_data -> 'rows') = 'array' then v_data -> 'rows' else '[]'::jsonb end;
 
   for v_row in select value from jsonb_array_elements(v_rows)
@@ -494,11 +569,7 @@ begin
     return jsonb_build_object('ok', false, 'error', 'over_budget', 'points', v_points, 'asked', v_total);
   end if;
 
-  insert into public.hub_reach (hub_id, points, day, spent)
-  values (v_hub.id, v_points, current_date, 0)
-  on conflict (hub_id) do update
-    set points = excluded.points,
-        updated_at = now();
+  perform public.reach_sync(v_hub.id);
 
   for v_row in select value from jsonb_array_elements(v_rows)
   loop
@@ -506,7 +577,6 @@ begin
       v_kind  text := case when (v_row ->> 'kind') = 'content' then 'content' else 'post' end;
       v_ref   uuid := nullif(v_row ->> 'ref', '')::uuid;
       v_alloc integer := greatest(0, coalesce((v_row ->> 'points')::integer, 0));
-      v_rank  integer := greatest(0, coalesce((v_row ->> 'rank')::integer, 0));
       v_code  text := btrim(coalesce(v_row ->> 'code', ''));
       v_owns  uuid;
     begin
@@ -532,11 +602,9 @@ begin
             hub_id = excluded.hub_id,
             code = excluded.code;
 
-      if v_kind = 'post' then
-        update public.posts set rank_points = v_rank where id = v_ref;
-      else
-        update public.member_content set rank_points = v_rank where id = v_ref;
-      end if;
+      /* ranking points are never typed in: they come from the interactions a
+         search brings (reach_award), so the `rank` a row carries is read and
+         not written */
 
       v_saved := v_saved + 1;
     end;
