@@ -60,6 +60,12 @@ create table if not exists public.hub_reach (
   updated_at timestamptz not null default now()
 );
 
+/* a database that already had the first version of this table gets the three
+   new columns without losing a row */
+alter table public.hub_reach add column if not exists base      integer not null default 0;
+alter table public.hub_reach add column if not exists earned    integer not null default 0;
+alter table public.hub_reach add column if not exists limitless boolean not null default false;
+
 comment on table public.hub_reach is
   'A studio''s reach points: a day''s budget of impressions, spent on people who have not seen the item yet.';
 
@@ -553,7 +559,7 @@ begin
 
   /* the studio does not set its own size: the level gives the floor and the
      interactions add to it. What the tab sends for `points` is ignored. */
-  v_points := public.reach_sync(v_hub.id).points;
+  v_points := (public.reach_sync(v_hub.id)).points;
   v_rows := case when jsonb_typeof(v_data -> 'rows') = 'array' then v_data -> 'rows' else '[]'::jsonb end;
 
   for v_row in select value from jsonb_array_elements(v_rows)
