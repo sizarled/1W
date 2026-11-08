@@ -400,7 +400,8 @@ begin
 
       union all
 
-      /* a podcast, a song, a playlist */
+      /* a podcast, or a song on the music shelf — one row each, each with its
+         own ranking points */
       select jsonb_build_object(
                'kind', 'content',
                'ref', c.id,
