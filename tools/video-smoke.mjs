@@ -412,6 +412,34 @@ async function editor(tag) {
   expect("editor: tags become chips", document.querySelectorAll("[data-ved-tags] .tag").length === 2, document.querySelectorAll("[data-ved-tags] .tag").length);
   expect("editor: the tag counter counts", document.querySelector("[data-ved-tag-count]")?.textContent === "2 / 12");
 
+  /* the index: a time and a name, typed in the form */
+  const typeChapter = (index, time, label) => {
+    const timeInput = document.querySelector(`[data-ved-chapter-time="${index}"]`);
+    const labelInput = document.querySelector(`[data-ved-chapter-label="${index}"]`);
+    timeInput.value = time;
+    timeInput.dispatchEvent(new window.Event("input", { bubbles: true }));
+    labelInput.value = label;
+    labelInput.dispatchEvent(new window.Event("input", { bubbles: true }));
+  };
+  document.querySelector("[data-ved-chapter-add]").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await wait(60);
+  expect("index: the editor offers a row", document.querySelectorAll("[data-ved-chapter]").length === 1, String(document.querySelectorAll("[data-ved-chapter]").length));
+  expect("index: the row is numbered", document.querySelector(".vchp__n")?.textContent === "01", document.querySelector(".vchp__n")?.textContent);
+  typeChapter(0, "0:00", "Introduction");
+  document.querySelector("[data-ved-chapter-add]").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await wait(60);
+  typeChapter(1, "00:38", "Overview");
+  document.querySelector("[data-ved-chapter-add]").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await wait(60);
+  typeChapter(2, "1:02:03", "The long take");
+  await wait(60);
+  expect("index: three rows stand", document.querySelectorAll("[data-ved-chapter]").length === 3, String(document.querySelectorAll("[data-ved-chapter]").length));
+  expect("index: the count is spoken", document.querySelector("[data-ved-chapter-count]")?.textContent === "3 chapters", document.querySelector("[data-ved-chapter-count]")?.textContent);
+  expect("index: a row can be taken away", (() => {
+    document.querySelector('[data-ved-chapter-del="2"]').dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    return document.querySelectorAll("[data-ved-chapter]").length === 2;
+  })(), String(document.querySelectorAll("[data-ved-chapter]").length));
+
   /* publish */
   document.querySelector("[data-ved-publish]").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
   await wait(80);
@@ -421,6 +449,18 @@ async function editor(tag) {
   expect("editor: the payload is published", payload.status === "published", payload.status);
   expect("editor: the payload is public", payload.visibility === "general", payload.visibility);
   expect("editor: the tags are the main keywords", Array.isArray(payload.tags) && payload.tags.join(",") === "animation,editing", JSON.stringify(payload.tags));
+  expect(
+    "index: the chapters ride in the payload",
+    Array.isArray(payload.meta?.chapters) && payload.meta.chapters.length === 2,
+    JSON.stringify(payload.meta?.chapters)
+  );
+  expect(
+    "index: each chapter is a time and a name",
+    payload.meta?.chapters?.[0]?.start === "0:00" && payload.meta?.chapters?.[0]?.label === "Introduction" &&
+      payload.meta?.chapters?.[1]?.start === "0:38" && payload.meta?.chapters?.[1]?.label === "Overview",
+    JSON.stringify(payload.meta?.chapters)
+  );
+  expect("index: a name-less row is dropped, not saved half-written", (payload.meta?.chapters || []).every((row) => row.label && row.start), JSON.stringify(payload.meta?.chapters));
   expect("editor: a YouTube source is named", payload.meta?.source === "youtube", JSON.stringify(payload.meta));
   expect("editor: a public one sends no password key at all", payload.passwords === undefined, JSON.stringify(payload.passwords));
   /* published: the card now opens the video in the watch page */
@@ -957,11 +997,14 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
   const rows = [...document.querySelectorAll("[data-ved-toc] [data-toc]")];
 
   expect("contents: the form carries a rail", Boolean(document.querySelector("[data-ved-toc]")), "");
-  expect("contents: one row per section", rows.length === 9, rows.length);
-  expect("contents: the count is spoken", document.querySelector("[data-ved-toc-count]")?.textContent === "9 sections", document.querySelector("[data-ved-toc-count]")?.textContent);
+  expect("contents: one row per section", rows.length === 10, rows.length);
+  expect("contents: the count is spoken", document.querySelector("[data-ved-toc-count]")?.textContent === "10 sections", document.querySelector("[data-ved-toc-count]")?.textContent);
   expect(
     "contents: in the order the form is read",
-    rows[0]?.textContent.includes("The video") && rows[2]?.textContent.includes("Extra choices") && rows[8]?.textContent.includes("Details"),
+    rows[0]?.textContent.includes("The video") &&
+      rows[2]?.textContent.includes("Extra choices") &&
+      rows[6]?.textContent.includes("Chapters") &&
+      rows[9]?.textContent.includes("Details"),
     rows.map((row) => row.textContent.trim()).join(" | ")
   );
   expect("contents: numbered", rows[8]?.textContent.trim().startsWith("09"), rows[8]?.textContent);

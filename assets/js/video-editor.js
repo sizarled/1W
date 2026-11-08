@@ -36,6 +36,8 @@ const S = {
   title: "",
   desc: "",
   tags: [],
+  /* the index: `00:38 · Overview` — written here, read by the watch page */
+  chapters: [],
   thumb: "",
   thumbChosen: false,
   thumbAuto: false,
@@ -275,6 +277,53 @@ function paintTags() {
     .join("");
 }
 
+/* ------------------------------------------------------------------ */
+/* the index                                                          */
+/* ------------------------------------------------------------------ */
+/* A chapter is a time and a name. The time is written the way a member
+   says it (`0:38`, `00:38`, `1:02:03`) and stored the way a player reads
+   it (`m:ss`); a row without both halves is dropped on save, never saved
+   half-written. */
+function chapterTime(value) {
+  const text = String(value || "").trim().replace(/[^0-9:]/g, "");
+  if (!text) return "";
+  const parts = text.split(":").filter((part) => part !== "");
+  if (!parts.length) return "";
+  const nums = parts.map((part) => Number(part));
+  if (nums.some((num) => Number.isNaN(num))) return "";
+  if (nums.length === 1) return `0:${String(nums[0]).padStart(2, "0")}`;
+  if (nums.length === 2) return `${nums[0]}:${String(nums[1]).padStart(2, "0")}`;
+  return `${nums[0]}:${String(nums[1]).padStart(2, "0")}:${String(nums[2]).padStart(2, "0")}`;
+}
+
+function chapterSeconds(value) {
+  const parts = String(chapterTime(value) || "0:00").split(":").map((part) => Number(part));
+  return parts.reduce((total, part) => total * 60 + part, 0);
+}
+
+function paintChapters() {
+  const host = $("[data-ved-chapters]");
+  if (!host) return;
+  const rows = S.chapters;
+  host.innerHTML = rows.length
+    ? rows
+        .map(
+          (row, index) => `
+        <li class="vchp" data-ved-chapter="${index}">
+          <span class="vchp__n">${esc(String(index + 1).padStart(2, "0"))}</span>
+          <input class="input vchp__time" type="text" inputmode="numeric" value="${esc(row.time)}" placeholder="00:00"
+                 aria-label="Chapter ${index + 1} time" data-ved-chapter-time="${index}" spellcheck="false" />
+          <input class="input vchp__label" type="text" value="${esc(row.label)}" placeholder="What happens here"
+                 aria-label="Chapter ${index + 1} name" data-ved-chapter-label="${index}" />
+          <button class="vchp__del" type="button" data-ved-chapter-del="${index}" aria-label="Remove chapter ${index + 1}">${icon("trash")}</button>
+        </li>`
+        )
+        .join("")
+    : `<li class="vchp__none">No chapter yet. The first one is usually <b>00:00</b> and says what the video is.</li>`;
+  const count = $("[data-ved-chapter-count]");
+  if (count) count.textContent = `${rows.length} ${rows.length === 1 ? "chapter" : "chapters"}`;
+}
+
 function paintPeople() {
   const host = $("[data-ved-people]");
   if (!host) return;
@@ -503,6 +552,7 @@ function paintAll() {
   paintCounters();
   paintPreview();
   paintThumb();
+  paintChapters();
   paintTags();
   paintPeople();
   paintPasses();
@@ -585,6 +635,11 @@ function payload(status) {
       download: Boolean(S.download),
       vertical: Boolean(S.vertical),
       source: sourceKind(S.embed) || "embed",
+      /* the index travels with the video: `start` is m:ss, `label` the words */
+      chapters: S.chapters
+        .map((row) => ({ start: chapterTime(row.time), label: String(row.label || "").trim() }))
+        .filter((row) => row.start && row.label)
+        .sort((a, b) => chapterSeconds(a.start) - chapterSeconds(b.start)),
     },
   };
   /* the passwords we were never shown are the passwords we must not wipe:
@@ -818,6 +873,10 @@ async function loadExisting(code) {
   }
   S.download = Boolean(meta.download);
   S.vertical = Boolean(meta.vertical);
+  S.chapters = Array.isArray(meta.chapters)
+    ? meta.chapters.map((row) => ({ time: chapterTime(row.start || row.time || ""), label: String(row.label || row.title || "") }))
+    : [];
+  paintChapters();
   if (v.scheduled_at) {
     const d = new Date(v.scheduled_at);
     if (!Number.isNaN(d.getTime()) && d.getTime() > Date.now()) {
@@ -1362,6 +1421,23 @@ function bind() {
 
   /* anything typed is a draft within a second */
   [el.title, el.desc, el.thumb, el.embed].forEach((input) => input?.addEventListener("input", scheduleDraft));
+
+  /* the index is typed in place: the row is not redrawn under the caret */
+  el.shell.addEventListener("input", (event) => {
+    const time = event.target.closest("[data-ved-chapter-time]");
+    if (time) {
+      const index = Number(time.getAttribute("data-ved-chapter-time"));
+      if (S.chapters[index]) S.chapters[index].time = time.value;
+      scheduleDraft();
+      return;
+    }
+    const label = event.target.closest("[data-ved-chapter-label]");
+    if (label) {
+      const index = Number(label.getAttribute("data-ved-chapter-label"));
+      if (S.chapters[index]) S.chapters[index].label = label.value;
+      scheduleDraft();
+    }
+  });
   el.shell.addEventListener("change", scheduleDraft);
   el.shell.addEventListener("click", (event) => {
     if (event.target.closest("[data-vis], [data-when], [data-age]")) scheduleDraft();
@@ -1430,6 +1506,24 @@ function bind() {
       S.tags.splice(Number(tagRemove.getAttribute("data-ved-tag-remove")), 1);
       paintTags();
       paintCounters();
+      paintStatus();
+      return;
+    }
+    const chapterAdd = event.target.closest("[data-ved-chapter-add]");
+    if (chapterAdd) {
+      /* a new row starts a minute after the last one, so a member typing one
+         after another never restarts at 00:00 */
+      const last = S.chapters[S.chapters.length - 1];
+      const next = last && chapterTime(last.time) ? chapterSeconds(last.time) + 60 : 0;
+      S.chapters.push({ time: `${Math.floor(next / 60)}:${String(next % 60).padStart(2, "0")}`, label: "" });
+      paintChapters();
+      document.querySelector(`[data-ved-chapter-label="${S.chapters.length - 1}"]`)?.focus();
+      return;
+    }
+    const chapterDel = event.target.closest("[data-ved-chapter-del]");
+    if (chapterDel) {
+      S.chapters.splice(Number(chapterDel.getAttribute("data-ved-chapter-del")), 1);
+      paintChapters();
       paintStatus();
       return;
     }

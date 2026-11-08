@@ -1861,3 +1861,80 @@
 .vlinks .chip {
   text-decoration: none;
 }
+
+/* ------------------------------------------------------------------ */
+/* the index, as the editor writes it                                 */
+/* ------------------------------------------------------------------ */
+.vchps {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.6rem 0 0.5rem;
+  padding: 0;
+  list-style: none;
+}
+
+.vchp {
+  display: grid;
+  grid-template-columns: auto 6.5rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.vchp__n {
+  font-size: 0.74rem;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  min-width: 1.4rem;
+}
+
+.vchp__time {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.vchp__del {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.vchp__del:hover {
+  color: var(--text);
+  border-color: var(--muted);
+}
+
+.vchp__del svg {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+.vchp__none {
+  padding: 0.7rem 0.8rem;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.vchp__none b {
+  color: var(--text);
+}
+
+.vchp__acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+@media (max-width: 560px) {
+  .vchp {
+    grid-template-columns: auto 5.2rem minmax(0, 1fr) auto;
+  }
+}

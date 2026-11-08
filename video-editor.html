@@ -33,7 +33,7 @@
       })();
     </script>
     <script type="module" src="assets/js/app.js?v=20261116e"></script>
-    <script type="module" src="assets/js/video-editor.js?v=20261118b"></script>
+    <script type="module" src="assets/js/video-editor.js?v=20261120a"></script>
   </head>
   <body data-page="videoEditor" data-title="Publish a video">
     <a class="skip-link" href="#main">Skip to content</a>
@@ -218,6 +218,24 @@
                 <button class="btn btn--quiet btn--sm" type="button" data-ved-thumb-clear><i data-icon="trash"></i> Remove</button>
               </div>
               <input class="input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" data-ved-thumb-file hidden />
+            </section>
+
+            <!-- the index ---------------------------------------------- -->
+            <section class="vcard-box" data-ved-chapters-box>
+              <div class="vcard-box__head">
+                <h2 class="vcard-box__title">Chapters</h2>
+                <span class="vcount" data-ved-chapter-count>0 chapters</span>
+              </div>
+              <p class="vhint">
+                The index of the video: a time and what happens there, in order. The watch page draws it
+                under the player — <b>00:38 · Overview</b>, <b>01:35 · Analysis</b> — and a click on one jumps
+                to that moment. Leave it empty and no list is drawn.
+              </p>
+              <ol class="vchps" data-ved-chapters></ol>
+              <div class="vchp__acts">
+                <button class="btn btn--ghost btn--sm" type="button" data-ved-chapter-add><i data-icon="plus"></i> Add a chapter</button>
+                <span class="vhint">Times are written as <b>0:38</b> or <b>1:02:03</b>.</span>
+              </div>
             </section>
 
             <!-- visibility --------------------------------------------- -->
