@@ -183,9 +183,20 @@ function segmentsOf(hash) {
 }
 
 function idOf(segment) {
-  const raw = String(segment || "");
+  /* `…/ID=CA4728CD&t=90s` is the same address, with a second to start at */
+  const raw = String(segment || "").replace(/[?&]t=\d+s?$/i, "");
   if (/^id=/i.test(raw)) return decodeURIComponent(raw.slice(3));
   return decodeURIComponent(raw);
+}
+
+/**
+ * The second an address asks to start at: `&t=90s`, `?t=90` or `#t=90s`.
+ * A number with no `s` is read the same way; anything else is zero.
+ */
+export function timeOf(value) {
+  const m = String(value || "").match(/[?&#]t=(\d+)s?/i);
+  const n = m ? Number(m[1]) : 0;
+  return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
 /**

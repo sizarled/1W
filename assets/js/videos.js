@@ -27,7 +27,7 @@ import { qs, qsa, esc, num, compact, timeAgo, debounce } from "./utils.js";
 import { icon } from "./icons.js";
 import { toast } from "./ui.js";
 import { sessionToken, getMember } from "./session.js";
-import { parseRoute, videoUrl, orientationOf, creatorUrl, ORIENTATIONS } from "./media.js";
+import { parseRoute, videoUrl, orientationOf, creatorUrl, timeOf, ORIENTATIONS } from "./media.js";
 
 const PAGE = 24;
 
@@ -828,6 +828,17 @@ async function openWatch(code, orientation) {
     descEl.classList.remove("is-clamped");
   }
   paintBlockState();
+  /* an address like `#/h/ID=…&t=90s` opens at that second, and the chapter
+     it belongs to is the one marked */
+  const at = startAt();
+  if (at) {
+    if (!seekPlayer(at)) setStartTime(at);
+    document.querySelectorAll("[data-v-chapter]").forEach((button) => {
+      const found = Number(button.getAttribute("data-v-chapter")) === at;
+      if (found) button.closest(".vchaps__row")?.classList.add("is-active");
+      else button.closest(".vchaps__row")?.classList.remove("is-active");
+    });
+  }
   const saveBtn = $("[data-v-save]");
   if (saveBtn) {
     const saved = savedSet().has(v.code || v.id);
@@ -898,6 +909,69 @@ async function copyVideoLink(url) {
 }
 
 /** A link's own mark, from where it points. */
+/* ------------------------------------------------------------------ */
+/* a second inside the address                                        */
+/* ------------------------------------------------------------------ */
+/* The address of a video can say where to start: `…&t=90s`, the way the
+   reference does it. It is written when a chapter is picked, so the line in
+   the address bar is a shareable place in the file, and it is read back when
+   the page opens on such an address. */
+
+function startAt() {
+  const fromHash = timeOf(location.hash);
+  if (fromHash) return fromHash;
+  const raw = String(new URLSearchParams(location.search).get("t") || "");
+  const n = Number(raw.replace(/s$/i, ""));
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+}
+
+/** Write `&t=90s` at the end of the address, replacing any earlier second. */
+function setStartTime(seconds) {
+  const clean = location.hash.replace(/([?&])t=\d+s?/gi, "$1").replace(/[?&#]$/, "");
+  const hash = clean ? `${clean}&t=${seconds}s` : `#t=${seconds}s`;
+  try {
+    history.replaceState(null, "", `${location.pathname}${location.search}${hash}`);
+  } catch {
+    /* a browser that refuses history still seeks; only the address is still */
+  }
+}
+
+/** Put the frame at that second: a file seeks, a YouTube frame reloads there. */
+function seekPlayer(seconds, { play = false } = {}) {
+  const root = watchEl();
+  if (!root || !seconds) return false;
+  const media = root.querySelector("video");
+  if (media) {
+    const apply = () => {
+      try {
+        media.currentTime = seconds;
+        if (play) {
+          const started = media.play();
+          if (started && started.catch) started.catch(() => {});
+        }
+      } catch {
+        /* the browser refused the seek; the time is still in the address */
+      }
+    };
+    if (media.readyState >= 1) apply();
+    else media.addEventListener("loadedmetadata", apply, { once: true });
+    return true;
+  }
+  const frame = root.querySelector(".vplayer iframe");
+  const src = (frame && frame.getAttribute("src")) || "";
+  if (!src) return false;
+  if (/youtube(-nocookie)?\.com\/embed\//.test(src)) {
+    const clean = src.replace(/([?&])(start|t)=\d+s?/gi, "$1").replace(/[?&]$/, "");
+    frame.setAttribute("src", `${clean}${clean.includes("?") ? "&" : "?"}start=${seconds}`);
+    return true;
+  }
+  if (/player\.vimeo\.com/.test(src)) {
+    frame.setAttribute("src", `${src.split("#")[0]}#t=${seconds}s`);
+    return true;
+  }
+  return false;
+}
+
 function iconForLink(url) {
   const href = String(url || "").toLowerCase();
   if (href.includes("youtube") || href.includes("youtu.be")) return "play";
@@ -1348,20 +1422,12 @@ function bindWatch() {
         root.querySelectorAll(".vchaps__row.is-active").forEach((el) => el.classList.remove("is-active"));
         row.classList.add("is-active");
       }
-      const media = root.querySelector("video");
-      if (media) {
-        try {
-          media.currentTime = seconds;
-          const played = media.play();
-          if (played && played.catch) played.catch(() => {});
-        } catch {
-          /* the browser refused the seek; the label below still says where */
-        }
-        return;
-      }
+      /* the address says where this chapter begins, like the reference does */
+      if (seconds) setStartTime(seconds);
+      if (seekPlayer(seconds, { play: true })) return;
       return toast({
         title: stamp(seconds),
-        message: "This source plays in its own frame, so the track changes inside it.",
+        message: "This source plays in its own frame, so the track changes inside it. The address holds the second.",
         iconName: "clock",
       });
     }

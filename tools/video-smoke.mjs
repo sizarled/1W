@@ -175,6 +175,16 @@ function boot(file, { hash = "", url = "", storage = {}, fetchImpl, globals } = 
   return { dom, window, document: window.document, calls, errors };
 }
 
+/* `…/ID=CA4728CD&t=90s` is the same address, with a second to start at */
+{
+  const media = await import(`file://${join(root, "assets/js/media.js")}?t=1`);
+  const route = media.parseRoute("#/h/ID=CA4728CD&t=90s");
+  expect("address: a second does not break the id", route.id === "CA4728CD", route.id);
+  expect("address: the second is read back", media.timeOf("#/h/ID=CA4728CD&t=90s") === 90, String(media.timeOf("#/h/ID=CA4728CD&t=90s")));
+  expect("address: a bare number is the same second", media.timeOf("?t=42") === 42, String(media.timeOf("?t=42")));
+  expect("address: no second, no start", media.timeOf("#/h/ID=CA4728CD") === 0);
+}
+
 const fnName = (href) => String(href).split("/rpc/")[1] || "";
 const lastCall = (calls, fn) => [...calls].reverse().find((c) => fnName(c.href) === fn);
 
@@ -1239,6 +1249,21 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
   expect("details: a chapter is named by the words before its time", rd.querySelector(".vchaps__label")?.textContent === "Comedy beats", rd.querySelector(".vchaps__label")?.textContent);
   expect("details: a chapter carries its time", rd.querySelector(".vchaps__time")?.textContent === "0:37", rd.querySelector(".vchaps__time")?.textContent);
   expect("details: a line with no time makes no chapter", rd.querySelectorAll("[data-v-chapter]").length === 2);
+
+  /* a chapter is a second in the address, the way the reference writes it */
+  const secondChapter = rd.querySelectorAll("[data-v-chapter]")[1];
+  secondChapter.dispatchEvent(new richBoot.window.MouseEvent("click", { bubbles: true }));
+  await wait(60);
+  expect(
+    "details: picking a chapter writes its second into the address",
+    /[?&]t=840s$/.test(richBoot.window.location.hash),
+    `${richBoot.window.location.href} | ${richBoot.window.location.hash}`
+  );
+  expect(
+    "details: the old second is replaced, not stacked",
+    (richBoot.window.location.hash.match(/t=/g) || []).length === 1,
+    richBoot.window.location.hash
+  );
   expect("details: the minutes are in the stats line", /51 minutes/.test(rd.querySelector(".vmeta")?.textContent || ""), rd.querySelector(".vmeta")?.textContent);
   expect("details: the studio counts its subscribers and releases", /746,000|746K/.test(rd.querySelector(".vhost__stats")?.textContent || "") && /12/.test(rd.querySelector(".vhost__stats")?.textContent || ""), rd.querySelector(".vhost__stats")?.textContent);
   expect("details: the studio's blurb is under it", /camera tests and long talks/.test(rd.querySelector(".vhost__bio")?.textContent || ""), rd.querySelector(".vhost__bio")?.textContent);
