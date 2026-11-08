@@ -97,7 +97,8 @@ function item(over = {}) {
     summary: "a short film",
     status: "published",
     visibility: "public",
-    thumbnail: "",
+    thumbnail: over.thumbnail ?? "https://example.com/still.jpg",
+    views: over.views ?? 1284,
     media_url: "https://example.com/film.mp4",
     category: null,
     category_name: null,
@@ -105,7 +106,6 @@ function item(over = {}) {
     parent_title: null,
     micro: "",
     nano: "",
-    views: 0,
     minutes: 42,
     likes: 12,
     dislikes: 3,
@@ -768,6 +768,17 @@ async function main() {
   expect("studio: the videos shelf lists the video", /The first film/.test(anon.text('[data-crs-sec="videos"]')), anon.text('[data-crs-sec="videos"]').slice(0, 120));
   expect("studio: a video card opens videos.html#/h/ID=", anon.qs('[data-crs-sec="videos"] .crs-card')?.getAttribute("href") === "videos.html#/h/ID=CA4728CD", anon.qs('[data-crs-sec="videos"] .crs-card')?.getAttribute("href"));
   expect("studio: the card counts its minutes", /42 min/.test(anon.text('[data-crs-sec="videos"] .crs-card__time')), anon.text('[data-crs-sec="videos"] .crs-card__time'));
+  expect(
+    "studio: the card draws its still as an image",
+    anon.qs('[data-crs-sec="videos"] .crs-card__thumb img')?.getAttribute("src") === "https://example.com/still.jpg",
+    anon.qs('[data-crs-sec="videos"] .crs-card__thumb')?.innerHTML.slice(0, 80)
+  );
+  expect(
+    "studio: the card says how many watched it",
+    /1,284 views/.test(anon.text('[data-crs-sec="videos"] .crs-card__meta') || ""),
+    anon.text('[data-crs-sec="videos"] .crs-card__meta')
+  );
+  expect("studio: and it names the studio that published it", /Studio One/.test(anon.text('[data-crs-sec="videos"] .crs-card__pres') || ""), anon.text('[data-crs-sec="videos"] .crs-card__pres'));
   expect("studio: a vertical video keeps its own rail", anon.qsa('[data-crs-sec="vertical"] .crs-card').length === 1 && anon.qs('[data-crs-sec="vertical"] .crs-card')?.getAttribute("href") === "videos.html#/v/ID=CA4728CE", anon.qs('[data-crs-sec="vertical"] .crs-card')?.getAttribute("href"));
   expect("studio: the podcasts shelf opens the audio page", anon.qs('[data-crs-sec="podcasts"] .crs-row')?.getAttribute("href") === "audio.html#/p/ID=PST-000901", anon.qs('[data-crs-sec="podcasts"] .crs-row')?.getAttribute("href"));
   expect("studio: the music shelf opens the song", anon.qs('[data-crs-sec="music"] .crs-row')?.getAttribute("href") === "audio.html#/m/ID=SNG-000901", anon.qs('[data-crs-sec="music"] .crs-row')?.getAttribute("href"));

@@ -2101,6 +2101,20 @@ function studioGroups(rows) {
   return { videos, vertical, podcasts, music, playlists, others };
 }
 
+/* a row may carry its still under more than one name — the feed's `video_card`
+   puts it where the post card does, a shelf puts it in `thumbnail` */
+function stillOf(row) {
+  const v = row.video || {};
+  return String(row.thumbnail || row.thumb || row.poster || row.cover || v.thumbnail || v.thumb || v.poster || (v.meta && v.meta.thumbnail) || "").trim();
+}
+
+/* the number a card is allowed to say: views, and nothing dressed as views */
+function viewsOf(row) {
+  const c = row.counters || {};
+  const n = row.views ?? row.impressions ?? c.impressions ?? c.views ?? null;
+  return n == null || !Number.isFinite(Number(n)) ? null : Number(n);
+}
+
 /* the studio a shelf belongs to: the card names who published it */
 function studioNameOf() {
   const hub = (state.hubView && state.hubView.hub) || {};
@@ -2110,17 +2124,25 @@ function studioNameOf() {
 function studioVideo(row) {
   const portrait = shapeOf(row) === "v";
   const href = mediaUrl({ ...row, kind: "video", orientation: portrait ? "v" : "h" });
-  const thumb = row.thumbnail || row.cover || "";
+  const thumb = stillOf(row);
+  const views = viewsOf(row);
+  const said = [
+    views != null ? `${esc(num(views))} views` : "",
+    row.published_at ? esc(dateOf(row.published_at)) : "",
+    row.visibility && row.visibility !== "public" ? esc(visLabel(row.visibility)) : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
   return `
     <a class="crs-card${portrait ? " is-tall" : ""}" href="${esc(href)}" data-crs-item="${esc(row.code || row.id || "")}" data-shape="${portrait ? "v" : "h"}">
-      <span class="crs-card__thumb${thumb ? "" : " is-plain"}"${thumb ? ` style="background-image:url('${esc(thumb)}')"` : ""}>
-        ${thumb ? "" : `<i data-icon="video"></i>`}
+      <span class="crs-card__thumb${thumb ? "" : " is-plain"}">
+        ${thumb ? `<img class="crs-card__img" src="${esc(thumb)}" alt="" loading="lazy" decoding="async" />` : `<i data-icon="video"></i>`}
         <span class="crs-card__play"><i data-icon="play"></i></span>
         ${row.minutes ? `<span class="crs-card__time">${esc(num(Number(row.minutes) || 0))} min</span>` : ""}
       </span>
       <span class="crs-card__title">${esc(row.title || "Untitled")}</span>
-      <span class="crs-card__pres">${esc(studioNameOf())}</span>
-      <span class="crs-card__meta" data-vis="${esc(row.visibility || "public")}">${esc(num(Number(row.views) || Number(row.likes) || 0))}${row.published_at ? ` · ${esc(dateOf(row.published_at))}` : ""}${row.visibility && row.visibility !== "public" ? ` · ${esc(visLabel(row.visibility))}` : ""}</span>
+      ${studioNameOf() ? `<span class="crs-card__pres">${esc(studioNameOf())}</span>` : ""}
+      <span class="crs-card__meta" data-vis="${esc(row.visibility || "public")}">${said}</span>
     </a>`;
 }
 
@@ -2129,15 +2151,15 @@ function studioRow(row, kind) {
   const href = isPlaylist
     ? mediaUrl({ ...row, kind: "playlist", shelf: shelfOfRow(row) })
     : mediaUrl({ ...row, kind: kind === "song" ? "song" : "podcast" });
-  const thumb = row.thumbnail || row.cover || "";
+  const thumb = stillOf(row);
   const blurb =
     kind === "playlist"
       ? `${esc((PLAYLIST_NOUN[shelfOfRow(row)] || "Playlist"))}${row.items ? ` · ${esc(num(row.items))} item${row.items === 1 ? "" : "s"}` : ""}`
       : `${esc(kind === "song" ? "Song" : "Podcast")}${row.minutes ? ` · ${esc(num(Number(row.minutes) || 0))} min` : ""}`;
   return `
     <a class="crs-row" href="${esc(href)}" data-crs-item="${esc(row.code || row.id || "")}" data-kind="${esc(kind)}">
-      <span class="crs-row__thumb${thumb ? "" : " is-plain"}"${thumb ? ` style="background-image:url('${esc(thumb)}')"` : ""}>
-        ${thumb ? "" : `<i data-icon="${isPlaylist ? "bookmark" : kind === "song" ? "music" : "mic"}"></i>`}
+      <span class="crs-row__thumb${thumb ? "" : " is-plain"}">
+        ${thumb ? `<img class="crs-row__img" src="${esc(thumb)}" alt="" loading="lazy" decoding="async" />` : `<i data-icon="${isPlaylist ? "bookmark" : kind === "song" ? "music" : "mic"}"></i>`}
         <span class="crs-row__play"><i data-icon="play"></i></span>
       </span>
       <span class="crs-row__text">
@@ -2424,11 +2446,14 @@ async function feedItemsFor(hub) {
       ...row,
       kind: "video",
       code: row.code || row.id,
-      thumbnail: row.thumbnail || row.cover || "",
+      /* every name a still can travel under, so a card is never a blank box */
+      thumbnail: stillOf(row),
       summary: row.description || row.summary || "",
-      views: row.views != null ? row.views : row.counters?.impressions,
+      views: viewsOf(row),
       likes: row.likes != null ? row.likes : row.counters?.likes,
       minutes: row.minutes != null ? row.minutes : row.video?.meta?.minutes,
+      published_at: row.published_at || row.created_at || null,
+      orientation: row.orientation || row.video?.meta?.orientation || null,
     }));
 }
 
