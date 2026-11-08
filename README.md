@@ -2674,7 +2674,7 @@ node tools/dashboard-smoke.mjs   # 272 checks: the five gates, rail, popover, co
 node tools/sidebar-smoke.mjs     # 93 checks: the edge, the pin, Escape, the mobile drawer, the dashboard menu
 node tools/panel-smoke.mjs       # 90 checks: the desk's three states, the rows, the switch, the dialog, the shelf
 node tools/court-smoke.mjs       # 115 checks: the four steps, uploads, both doors, the court room
-node tools/creator-smoke.mjs     # 372 checks: the search (owners + publishers), the tables, the editors, a publisher's seat
+node tools/creator-smoke.mjs     # 408 checks: the search (owners + publishers), the tables, the editors, a publisher's seat, the Reach tab
 node tools/media-smoke.mjs       # 89 checks: the address book, videos.html#/h|v/, audio.html#/p|m/, playlist.html#/videos|podcasts|songs/
 node tools/publisher-smoke.mjs   # 52 checks: the program, the seat, the links, and the hand-off to the creator page
 node tools/iptv-smoke.mjs        # 43 checks: the playlists, the groups, the page, the deep links
@@ -2714,6 +2714,55 @@ search, the premium lock, `?M3U=` and `?list=`); `activated-smoke.mjs` proves th
 shows the wizard alone, that the second visit shows the two doors with the success card still hidden,
 that an image link becomes the preview, and that the ad clock stops when the page is hidden or the ad
 tab closes — and returns to the activation page with the code when it finishes.
+
+## Reach points and ranking points
+
+A studio carries **two different numbers**, and the whole feature hangs on keeping them apart.
+
+**Reach points** are the studio's authority — the same idea as a domain's authority. They are a
+**day's budget**, shared by the whole studio, and they are spent one point per **impression**: one
+person, who has not seen this item yet, shown it. At midnight the budget comes back whole. Reach is
+what decides **how far** a studio's work travels — to people who do not follow it, in the suggestions
+beside a video, on the videos / podcasts / music / playlists home pages, and in search.
+
+**Ranking points** are **permanent and per item** — one video, one podcast, one song, one playlist
+each has its own number — and they are the only thing a search or the *popular* sort is ordered by.
+Rank decides **how high** an item stands, reach decides **whether** it goes out at all.
+
+The brief's example, exactly: five thousand people are interested in internet earnings. Studio 1 has
+500 reach and posts first — it is shown to 500 of them, its day is spent, and it stays quiet for
+twenty-four hours; tomorrow the next 500. Studio 2 has 1 500 and posts second — 1 500 people. Studio
+3 has 10 000 and posts last — it covers all five thousand **and keeps five thousand for its other
+videos that same day**. Suggestions go out in **upload order** (earliest first), never in rank order:
+reach and rank decide whether and how high, not when. In a search, video A (rank 5 000), B (1 500) and
+C (500) come back A, B, C — but once A has spent its five hundred viewers it drops out, B becomes
+first, C second, and so on.
+
+**Where the numbers live.** [`tools/sql/studio-reach.sql`](tools/sql/studio-reach.sql) adds
+`hub_reach` (the studio's day: `points`, `spent`, `day`), `reach_items` (one allocation per item, plus
+its `rank_points`), `reach_seen` (who has already been shown what today, so a refresh costs nothing)
+and a `rank_points` column on `member_content` so a podcast ranks the way a video already did. The
+gate is `reach_claim(hub, kind, ref, profile)`; `reach_visible(post, profile)` and
+`reach_visible_content(content, profile)` are the one-row versions the feeds call while they build a
+list, and `reach_screen(token, codes)` answers a whole page of codes at once. A hub that has never been
+configured is **not gated**, so the file hides nothing that already exists; the studio's own members
+are always allowed and never counted.
+
+**The studio decides the split.** *Studio → Reach* is a tab in `creator.html` — the day's total in one
+field, one row per published item with the points it may take and the ranking points it keeps. The
+plan is summed as it is typed and a plan that spends more than the studio owns is refused **on the
+page** and again on the server (`over_budget`), so the distribution can never exceed the account.
+
+```sql
+-- hand a studio its authority
+insert into public.hub_reach (hub_id, points)
+select id, 1500 from public.creator_hubs where code = 'IDST100001'
+on conflict (hub_id) do update set points = excluded.points;
+```
+
+`videos-page.sql` was already ordering `video_feed` and the rail beside the player by `rank_points`
+with no writer behind it; `reach_visible` now gates that feed and `video_get`'s suggestion rail was
+put back in upload order, which is what the brief asks for.
 
 ## Profile, posts and reach — the schema plan
 

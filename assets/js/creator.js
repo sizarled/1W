@@ -73,6 +73,8 @@ const SECTIONS = [
       { key: "videos", label: "Videos", type: "list", kind: "video", cols: ["item", "vis", "minutes", "likes", "dislikes", "comments", "shares", "reports", "act"], actions: ["edit", "link", "delete"], cta: { label: "Publish a video", href: "video-editor.html", icon: "upload" } },
       { key: "podcasts", label: "Podcasts", type: "list", kind: "podcast", cols: ["item", "vis", "minutes", "likes", "dislikes", "comments", "shares", "reports", "act"], actions: ["edit", "link", "delete"] },
       { key: "playlists", label: "Playlists", type: "list", kind: "playlist", cols: ["item", "vis", "minutes", "likes", "dislikes", "comments", "shares", "reports", "act"], actions: ["edit", "link", "delete"] },
+      /* how far the studio's work travels, and how high it ranks */
+      { key: "reach", label: "Reach", type: "reach" },
     ],
     /* A video is not typed into this table any more. `video-editor.html` is
        the video form — the player, the thumbnail, the audience, the schedule —
@@ -341,6 +343,9 @@ const state = {
   counts: {},
   categories: [],
   subscribers: [],
+  /* the studio's reach: its day, and a row per item */
+  reach: null,
+  reachError: "",
   search: "",
   busy: false,
   editor: null,
@@ -801,6 +806,8 @@ function renderView() {
     return;
   }
 
+  if (tab.type === "reach") return renderReach(host, hub, tab);
+
   return renderList(host, hub, tab);
 }
 
@@ -812,6 +819,199 @@ function emptyBlock(iconName, title, text, action = "") {
       <p class="cr-empty__text">${esc(text)}</p>
       ${action}
     </div>`;
+}
+
+/* ------------------------------------------------------------------ */
+/* reach: how far the studio's work travels, and how high it ranks    */
+/* ------------------------------------------------------------------ */
+/*
+ * Two numbers live on this tab, and they are not the same thing:
+ *
+ *   reach points    the studio's own authority — a **day's** budget. Every
+ *                   impression of the studio's work to someone who has not
+ *                   seen it yet spends one, and at midnight it comes back
+ *                   whole. It is shared by the whole studio, and the studio
+ *                   decides how much of it each item may take.
+ *
+ *   ranking points  one number per item, **permanent**, and the only thing a
+ *                   search orders by.
+ *
+ * The studio may hand out at most what it has: the total in the first field is
+ * the ceiling for the day, and a plan that spends more is refused here and
+ * again on the server.
+ */
+function reachRow(row) {
+  const points = Number(row.points) || 0;
+  const shown = Number(row.shown) || 0;
+  const left = points > 0 ? Math.max(0, points - shown) : null;
+  const kind = row.kind === "content" ? "podcast" : "video";
+  return `
+    <tr class="cr-row" data-reach-row="${esc(row.ref)}" data-reach-kind="${esc(row.kind)}">
+      <td>
+        <span class="cr-reach__title">${esc(row.title || "Untitled")}</span>
+        <span class="cr-reach__code">${esc(row.code || "")}</span>
+      </td>
+      <td><span class="cr-pill">${esc(kind)}</span></td>
+      <td>
+        <input class="dsh-input cr-reach__input" type="number" min="0" step="50"
+               value="${points}" data-cr-reach-points="${esc(row.ref)}"
+               aria-label="Reach points for ${esc(row.title || "this item")}" />
+      </td>
+      <td class="cr-reach__num">${num(shown)}</td>
+      <td class="cr-reach__num">${left === null ? "—" : num(left)}</td>
+      <td>
+        <input class="dsh-input cr-reach__input" type="number" min="0" step="100"
+               value="${Number(row.rank) || 0}" data-cr-reach-rank="${esc(row.ref)}"
+               aria-label="Ranking points for ${esc(row.title || "this item")}" />
+      </td>
+    </tr>`;
+}
+
+function renderReach(host, hub, tab) {
+  const data = state.reach;
+  if (!data) {
+    host.innerHTML = emptyBlock(
+      "gauge",
+      "Reach could not be read",
+      state.reachError === "hub_role"
+        ? "This studio is not one you run."
+        : "The server did not answer with the studio's reach. Try again in a moment.",
+      `<button class="dsh-btn dsh-btn--sm" type="button" data-cr-reach-reload><i data-icon="refresh"></i> Try again</button>`
+    );
+    hydrateIcons(host);
+    return;
+  }
+
+  const points = Number(data.points) || 0;
+  const spent = Number(data.spent) || 0;
+  const remaining = Math.max(0, points - spent);
+  const allocated = (data.rows || []).reduce((sum, row) => sum + (Number(row.points) || 0), 0);
+  const percent = points ? Math.min(100, Math.round((spent / points) * 100)) : 0;
+  const rows = data.rows || [];
+
+  host.innerHTML = `
+    <div class="cr-bar">
+      <div class="cr-bar__left">
+        <span class="cr-bar__title">${esc(tab.label)}</span>
+        <span class="cr-bar__count">
+          ${num(points)} points · ${num(spent)} spent · ${num(remaining)} left today
+        </span>
+      </div>
+      <div class="cr-bar__right">
+        <span class="cr-reach__plan" data-cr-reach-plan>
+          ${num(allocated)} / ${num(points)} allocated
+        </span>
+        <button class="dsh-btn dsh-btn--primary dsh-btn--sm" type="button" data-cr-reach-save>
+          <i data-icon="check"></i> Save the plan
+        </button>
+      </div>
+    </div>
+
+    <div class="cr-reach">
+      <div class="cr-reach__day">
+        <label class="cr-reach__field">
+          <span>Reach points for this studio</span>
+          <input class="dsh-input" type="number" min="0" step="100" data-cr-reach-total
+                 value="${points}" aria-label="The studio's reach points" />
+        </label>
+        <div class="cr-reach__meter" role="img" aria-label="${percent}% of today's reach spent">
+          <span class="cr-reach__meter-fill" style="width: ${percent}%"></span>
+        </div>
+        <p class="cr-reach__note">
+          A day's budget. Every person who has not seen the work yet spends one point; at midnight
+          the whole number comes back. Reach decides how far the work travels on the home pages and
+          in the suggestions — ranking points decide where it stands in a search, and they are
+          permanent.
+        </p>
+      </div>
+
+      ${
+        rows.length
+          ? `<div class="dsh-table-wrap cr-table">
+              <table class="dsh-table">
+                <thead>
+                  <tr>
+                    <th>Item</th>
+                    <th>Kind</th>
+                    <th>Reach today</th>
+                    <th>Shown</th>
+                    <th>Left</th>
+                    <th>Ranking points</th>
+                  </tr>
+                </thead>
+                <tbody>${rows.map(reachRow).join("")}</tbody>
+              </table>
+            </div>`
+          : emptyBlock(
+              "upload",
+              "Nothing to place yet",
+              "Publish a video, a podcast or a song in this studio and it appears here, ready to be given its share of the day."
+            )
+      }
+    </div>`;
+
+  hydrateIcons(host);
+}
+
+/** The plan as it stands on the page, before it is sent. */
+function reachPlan() {
+  const total = Number(el("[data-cr-reach-total]")?.value) || 0;
+  const rows = qsa("[data-reach-row]").map((rowEl) => {
+    const ref = rowEl.getAttribute("data-reach-row");
+    return {
+      ref,
+      kind: rowEl.getAttribute("data-reach-kind") || "post",
+      points: Number(qs(`[data-cr-reach-points="${ref}"]`)?.value) || 0,
+      rank: Number(qs(`[data-cr-reach-rank="${ref}"]`)?.value) || 0,
+    };
+  });
+  return { total, rows };
+}
+
+function reachTotals() {
+  const plan = reachPlan();
+  const allocated = plan.rows.reduce((sum, row) => sum + row.points, 0);
+  const planEl = el("[data-cr-reach-plan]");
+  if (planEl) {
+    planEl.textContent = `${num(allocated)} / ${num(plan.total)} allocated`;
+    planEl.classList.toggle("is-over", allocated > plan.total);
+  }
+  return { ...plan, allocated };
+}
+
+async function saveReach() {
+  const hub = currentHub();
+  if (!hub) return;
+  const plan = reachTotals();
+  if (plan.allocated > plan.total) {
+    toast({
+      title: "More than the day allows",
+      message: `The plan spends ${num(plan.allocated)} of ${num(plan.total)} points. Take something away first.`,
+      tone: "error",
+      iconName: "info",
+    });
+    return;
+  }
+  const res = await rpc("hub_reach_save", {
+    p_token: state.token,
+    p_hub: hub.code || hub.id,
+    p_payload: { points: plan.total, rows: plan.rows },
+  });
+  if (!res || res.ok !== true) {
+    toast({
+      title: "Not saved",
+      message:
+        res?.error === "over_budget"
+          ? "The server refused it: the plan spends more than the studio has for the day."
+          : "The reach plan was not saved. Try again in a moment.",
+      tone: "error",
+      iconName: "info",
+    });
+    return;
+  }
+  toast({ title: "Reach saved", message: `${num(plan.allocated)} points placed for the day.`, tone: "success", iconName: "check" });
+  await loadTab();
+  await refresh();
 }
 
 /* ------------------------------------------------------------------ */
@@ -1481,6 +1681,11 @@ async function loadTab() {
   if (tab.type === "subscribers") {
     const res = await rpc("creator_subscribers", { p_token: state.token, p_hub: hub.id });
     state.subscribers = res && res.ok ? res.rows || [] : [];
+  }
+  if (tab.type === "reach") {
+    const res = await rpc("hub_reach_get", { p_token: state.token, p_hub: hub.code || hub.id });
+    state.reach = res && res.ok ? res : null;
+    state.reachError = res && !res.ok ? res.error || "reach" : "";
   }
 }
 
@@ -3403,7 +3608,7 @@ document.addEventListener("keydown", (event) => {
   openRow(focused.dataset.crRow);
 });
 
-document.addEventListener("click", (event) => {
+document.addEventListener("click", async (event) => {
   const target = event.target;
 
   /* a row is a door — but not when the click was meant for a button, a link or
@@ -3520,6 +3725,20 @@ document.addEventListener("click", (event) => {
     return;
   }
 
+  if (target.closest("[data-cr-reach-save]")) {
+    event.preventDefault();
+    if (state.busy) return;
+    state.busy = true;
+    await saveReach();
+    state.busy = false;
+    return;
+  }
+  if (target.closest("[data-cr-reach-reload]")) {
+    event.preventDefault();
+    await loadTab();
+    await refresh();
+    return;
+  }
   const tab = target.closest("[data-cr-tab]");
   if (tab) {
     event.preventDefault();
@@ -3761,6 +3980,10 @@ document.addEventListener("change", (event) => {
 
 document.addEventListener("input", (event) => {
   const target = event.target;
+  if (target.matches("[data-cr-reach-total], [data-cr-reach-points], [data-cr-reach-rank]")) {
+    reachTotals();
+    return;
+  }
   if (target.matches("[data-crp-q]")) {
     state.directory.q = target.value || "";
     queueDirectorySearch();

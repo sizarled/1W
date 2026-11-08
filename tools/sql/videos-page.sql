@@ -148,6 +148,9 @@ begin
               select 1 from public.post_keywords pk
                 join public.keywords k on k.id = pk.keyword_id
                where pk.post_id = p.id and lower(k.keyword) = lower(v_field)))
+       /* reach gates the page, rank orders it: a video whose studio has spent
+          its day falls out here, and the next one moves up by itself */
+       and public.reach_visible(p.id, v_me.id)
      order by (case when v_sort = 'new' then extract(epoch from p.published_at) else p.rank_points end) desc nulls last,
               (case when v_sort = 'liked' then p.likes
                     when v_sort = 'discussed' then p.comments_pos + p.comments_neg
@@ -267,9 +270,11 @@ begin
 
   v_card := public.video_card(v_id, v_me.id);
 
-  select coalesce(jsonb_agg(public.video_card(r.id, v_me.id) order by r.rank_points desc), '[]'::jsonb)
+  /* the rail beside the player suggests by upload time — the earliest first,
+     as the brief asks — and reach decides which of them still travels today */
+  select coalesce(jsonb_agg(public.video_card(r.id, v_me.id) order by r.published_at asc), '[]'::jsonb)
     into v_rel
-    from (select p.id, p.rank_points
+    from (select p.id, p.published_at
             from public.posts p
            where p.content_type = 'video'
              and p.status = 'published'
@@ -279,7 +284,8 @@ begin
                select 1 from public.post_keywords a
                  join public.post_keywords b on b.keyword_id = a.keyword_id
                 where a.post_id = v_id and b.post_id = p.id)
-           order by p.rank_points desc
+             and public.reach_visible(p.id, v_me.id)
+           order by p.published_at asc
            limit 10) r;
 
   select coalesce(jsonb_agg(public.video_card(m.id, v_me.id) order by m.published_at desc), '[]'::jsonb)

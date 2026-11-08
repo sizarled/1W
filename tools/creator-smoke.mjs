@@ -261,6 +261,36 @@ function stubFetch(url, opts = {}) {
     return reply({ ok: true, body: "<p>Two nights on the quay.</p>", article: scenario.article || null });
   }
 
+  if (href.includes("/rpc/hub_reach_get")) {
+    const reach = scenario.reach || {
+      hub: { id: "hub-ch", code: "IDST100001", name: "Studio One", kind: "channel" },
+      configured: true,
+      points: 0,
+      spent: 0,
+      remaining: 0,
+      day: "2026-12-05",
+      rows: [],
+    };
+    return reply({ ok: true, ...reach });
+  }
+
+  if (href.includes("/rpc/hub_reach_save")) {
+    const payload = body.p_payload || {};
+    scenario.savedReach = payload;
+    if (scenario.reachSaveError) return reply({ ok: false, error: scenario.reachSaveError });
+    const allocated = (payload.rows || []).reduce((sum, row) => sum + (Number(row.points) || 0), 0);
+    if (allocated > (Number(payload.points) || 0)) return reply({ ok: false, error: "over_budget" });
+    scenario.reach = {
+      ...(scenario.reach || {}),
+      points: Number(payload.points) || 0,
+      rows: (scenario.reach?.rows || []).map((row) => {
+        const next = (payload.rows || []).find((entry) => entry.ref === row.ref);
+        return next ? { ...row, points: Number(next.points) || 0, rank: Number(next.rank) || 0 } : row;
+      }),
+    };
+    return reply({ ok: true });
+  }
+
   if (href.includes("/rpc/creator_items")) {
     const rows = (scenario.items || []).filter(
       (row) =>
@@ -1867,10 +1897,114 @@ async function seatPass() {
 }
 
 /* ------------------------------------------------------------------ */
+/* pass 13 — the Reach tab: a day's budget, and the rank each item keeps */
+/* ------------------------------------------------------------------ */
+async function reachPass() {
+  scenario = {
+    hubs: [hub({ id: "hub-ch", kind: "channel", name: "Studio One" })],
+    items: [],
+    reach: {
+      hub: { id: "hub-ch", code: "IDST100001", name: "Studio One", kind: "channel" },
+      configured: true,
+      points: 500,
+      spent: 120,
+      remaining: 380,
+      day: "2026-12-05",
+      rows: [
+        { kind: "post", ref: "post-a", code: "Video-001032", title: "The first film", points: 200, shown: 120, rank: 5000 },
+        { kind: "content", ref: "content-b", code: "PST-000901", title: "A long talk", points: 0, shown: 0, rank: 1500 },
+      ],
+    },
+  };
+  calls.length = 0;
+  const view = await boot(70, { search: "?section=studio&hub=hub-ch&tab=reach" });
+  await view.wait(320);
+
+  const tabs = view.qsa("[data-cr-tab]").map((btn) => btn.getAttribute("data-cr-tab"));
+  expect("reach: the tab is offered in the studio", tabs.includes("reach"), tabs.join(","));
+  expect("reach: it asked the server for the studio's day", calls.some((c) => c.includes("hub_reach_get")), calls.join(" "));
+
+  const day = view.text(".cr-bar__count");
+  expect("reach: the day is said in points, spent and left", /500 points · 120 spent · 380 left today/.test(day), day);
+
+  const total = view.qs("[data-cr-reach-total]");
+  expect("reach: the studio's own number is in its field", total && total.value === "500", total ? total.value : "missing");
+  expect("reach: one row per item", view.qsa("[data-reach-row]").length === 2, String(view.qsa("[data-reach-row]").length));
+  expect("reach: a row names the item and its code", /The first film[\s\S]*Video-001032/.test(view.text('[data-reach-row="post-a"]')), view.text('[data-reach-row="post-a"]').slice(0, 90));
+  expect("reach: the item's reach is in its own field", view.qs('[data-cr-reach-points="post-a"]')?.value === "200", view.qs('[data-cr-reach-points="post-a"]')?.value);
+  expect("reach: and its ranking points beside it", view.qs('[data-cr-reach-rank="post-a"]')?.value === "5000", view.qs('[data-cr-reach-rank="post-a"]')?.value);
+  expect("reach: what has been shown is counted", /120/.test(view.text('[data-reach-row="post-a"]')), view.text('[data-reach-row="post-a"]'));
+  expect("reach: an unplaced item draws on the studio's rest", /—/.test(view.text('[data-reach-row="content-b"]')), view.text('[data-reach-row="content-b"]'));
+  expect("reach: the meter shows the day spent", view.qs(".cr-reach__meter-fill")?.getAttribute("style")?.includes("24%"), view.qs(".cr-reach__meter-fill")?.getAttribute("style"));
+  expect("reach: the plan is summed as it is typed", /200 \/ 500 allocated/.test(view.text("[data-cr-reach-plan]")), view.text("[data-cr-reach-plan]"));
+
+  /* more than the day allows: the page refuses before it asks the server */
+  view.type(view.qs('[data-cr-reach-points="content-b"]'), "600");
+  await view.wait(40);
+  expect("reach: an over-plan is marked on the page", view.qs("[data-cr-reach-plan]")?.classList.contains("is-over"), view.text("[data-cr-reach-plan]"));
+  const before = calls.filter((c) => c.includes("hub_reach_save")).length;
+  view.click(view.qs("[data-cr-reach-save]"));
+  await view.wait(120);
+  expect("reach: and it never reaches the server", calls.filter((c) => c.includes("hub_reach_save")).length === before, calls.join(" "));
+  expect("reach: the refusal says why", /More than the day allows/.test(view.text("[data-toast], .toast, [role=status]") || view.document.body.textContent), view.text("[data-toast], .toast, [role=status]"));
+
+  /* back inside the budget: it saves, and the plan is read back */
+  view.type(view.qs('[data-cr-reach-points="content-b"]'), "150");
+  await view.wait(40);
+  expect("reach: within the day it is no longer over", !view.qs("[data-cr-reach-plan]")?.classList.contains("is-over"), view.text("[data-cr-reach-plan]"));
+  view.click(view.qs("[data-cr-reach-save]"));
+  await view.wait(220);
+
+  const saved = scenario.savedReach || {};
+  expect("reach: the plan was sent with the studio's number", Number(saved.points) === 500, JSON.stringify(saved.points));
+  expect("reach: and one row per item", (saved.rows || []).length === 2, JSON.stringify(saved.rows));
+  expect(
+    "reach: every row keeps its own kind, points and rank",
+    (saved.rows || []).some((row) => row.ref === "post-a" && row.kind === "post" && row.points === 200 && row.rank === 5000) &&
+      (saved.rows || []).some((row) => row.ref === "content-b" && row.kind === "content" && row.points === 150 && row.rank === 1500),
+    JSON.stringify(saved.rows)
+  );
+  expect("reach: the tab was read again after the save", calls.filter((c) => c.includes("hub_reach_get")).length >= 2, String(calls.filter((c) => c.includes("hub_reach_get")).length));
+  expect("reach: no errors", view.errors.length === 0, view.errors.join(" | "));
+  view.window.close();
+
+  /* a server that refuses anyway: over budget is said, not swallowed */
+  scenario.reach = {
+    ...scenario.reach,
+    rows: [{ kind: "post", ref: "post-a", code: "Video-001032", title: "The first film", points: 200, shown: 0, rank: 5000 }],
+  };
+  const refused = await boot(71, { search: "?section=studio&hub=hub-ch&tab=reach" });
+  await refused.wait(320);
+  refused.type(refused.qs("[data-cr-reach-points]"), "200");
+  await refused.wait(40);
+  refused.click(refused.qs("[data-cr-reach-save]"));
+  await refused.wait(160);
+  expect("reach: the field is drawn for the one item", refused.qsa("[data-cr-reach-points]").length === 1, String(refused.qsa("[data-cr-reach-points]").length));
+  expect("reach: a refused save is reported", /Reach saved|Not saved/.test(refused.document.body.textContent), "no word after the save");
+  refused.window.close();
+
+  /* the schema behind the tab */
+  const reachSql = readFileSync(join(root, "tools/sql/studio-reach.sql"), "utf8");
+  expect("reach sql: a day per studio", /create table if not exists public\.hub_reach/.test(reachSql), "hub_reach missing");
+  expect("reach sql: one allocation per item", /create table if not exists public\.reach_items/.test(reachSql), "reach_items missing");
+  expect("reach sql: a refresh costs nothing", /create table if not exists public\.reach_seen/.test(reachSql), "reach_seen missing");
+  expect("reach sql: a podcast ranks like a video", /member_content[\s\S]*rank_points/.test(reachSql), "no rank column for member content");
+  expect("reach sql: the gate is one function", /function public\.reach_claim/.test(reachSql) && /function public\.reach_screen/.test(reachSql), "no gate");
+  expect("reach sql: the studio can never spend past its day", /over_budget/.test(reachSql) && /if v_total > v_points then/.test(reachSql), "no ceiling");
+  expect("reach sql: the studio's own members are never counted", /v_owner = p_profile/.test(reachSql), "owner not excused");
+  expect("reach sql: an unconfigured hub is not gated", /never configured/.test(reachSql), "no passthrough");
+
+  const videosSql = readFileSync(join(root, "tools/sql/videos-page.sql"), "utf8");
+  expect("reach: the feed is gated by it", /and public\.reach_visible\(p\.id, v_me\.id\)/.test(videosSql), "the feed is not gated");
+  expect("reach: the rail beside a video goes by upload time", /coalesce\(jsonb_agg\(public\.video_card\(r\.id, v_me\.id\) order by r\.published_at asc\)/.test(videosSql), "the rail is not in upload order");
+}
+
+/* ------------------------------------------------------------------ */
 /* results                                                             */
 /* ------------------------------------------------------------------ */
 await main();
 await seatPass();
+await reachPass();
 const failed = checks.filter((c) => !c.ok);
 checks.forEach((c) => {
   console.log(`${c.ok ? "ok  " : "FAIL"}  ${c.name}${c.ok || !c.detail ? "" : ` — ${c.detail}`}`);

@@ -3855,3 +3855,124 @@ a.crp-ad:hover {
   background: rgba(0, 0, 0, 0.92);
   transform: scale(1.06);
 }
+
+/* ------------------------------------------------------------------ */
+/* reach: a day's budget, and the rank each item keeps                 */
+/* ------------------------------------------------------------------ */
+/*
+ * The studio's authority is drawn as one meter for the day and one number per
+ * item, because they answer different questions. Nothing here is a colour: the
+ * meter is the same ink as the rest of the page, and "more than the day allows"
+ * is said with a struck line and a heavier weight instead of red.
+ */
+.cr-reach {
+  display: grid;
+  gap: 1rem;
+  padding-top: 0.35rem;
+}
+
+.cr-reach__day {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.95rem 1rem;
+  border: 1px solid var(--line-2);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bg) 60%, transparent);
+}
+
+.cr-reach__field {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+  color: var(--text-2);
+}
+
+.cr-reach__field .dsh-input {
+  width: 9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.cr-reach__meter {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+.cr-reach__meter-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: var(--text);
+  transition: width 0.25s var(--ease);
+}
+
+.cr-reach__note {
+  margin: 0;
+  max-width: 68ch;
+  font-size: 0.74rem;
+  line-height: 1.65;
+  color: var(--muted);
+}
+
+.cr-reach__plan {
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* over the day's number — said with weight, not with colour */
+.cr-reach__plan.is-over {
+  color: var(--text);
+  font-weight: 650;
+  text-decoration: underline dotted;
+  text-underline-offset: 4px;
+}
+
+.cr-reach .cr-table {
+  margin-top: 0.15rem;
+}
+
+.cr-reach__title {
+  display: block;
+  font-weight: 550;
+  color: var(--text);
+}
+
+.cr-reach__code {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.cr-reach__input {
+  width: 7rem;
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+
+.cr-reach__num {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+/* a phone: the plan sits under the bar and the numbers stay one line each */
+@media (max-width: 640px) {
+  .cr-reach__field .dsh-input,
+  .cr-reach__input {
+    width: 6rem;
+  }
+
+  .cr-reach__plan {
+    order: 3;
+    width: 100%;
+  }
+}
