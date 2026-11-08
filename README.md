@@ -1670,9 +1670,14 @@ the **name is not stored**, because the name is the video's own code, so the rec
 between the upload and the rename. A file without a studio, or one under 50 MB without a studio
 chosen, still goes to the site's storage; a studio's file may be up to 2 GB.
 
-**The credentials never reach the browser.** Streamtape's **API Login** and **API Key** (the key is
-the "API password") are secrets of an edge function — `supabase/functions/studio-upload/index.ts` —
-and the page only ever holds the member's own session token. The function speaks the same six
+**Two ways to the host, and the page tries them in order.** The preferred way is the edge function
+`supabase/functions/studio-upload/index.ts`: Streamtape's **API Login** and **API Key** (the key is the
+"API password") are its secrets, and the page only ever holds the member's own session token. If the
+function is not deployed yet, or the browser cannot reach it, `streamtape.js` falls back to
+Streamtape's address directly with the two keys kept in `STREAMTAPE` in `assets/js/config.js` — so a
+studio can upload before the function exists at all. The way that answered last is remembered in
+`localStorage["1w.streamtape.path"]`, and when neither answers the message names both and the deploy
+command instead of pretending the network blinked. The function speaks the same six
 actions (`file/listfolder`, `file/createfolder`, `file/ul`, `file/rename`, `file/info`, `file/find`)
 and answers in Streamtape's own `{ status, msg, result }` shape, so the client reads it exactly as
 it would read the API. The file itself is **not** sent through the function: the browser asks for an

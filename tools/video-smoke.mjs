@@ -832,22 +832,100 @@ async function editor(tag) {
   );
   expect("studio upload: the source rides as the host", studioPayload?.meta?.source === "streamtape", studioPayload?.meta?.source);
 
-  /* the credentials live in the function's secrets, never in the page */
+  /* the function first, and a direct way behind it for the day it is missing */
   const cfg = await import(`file://${join(root, "assets/js/config.js")}?cfgstudio`);
   expect(
-    "studio upload: the browser holds no host credential",
-    !cfg.STREAMTAPE.login && !cfg.STREAMTAPE.key && /\/functions\/v1\/studio-upload$/.test(cfg.STREAMTAPE.proxy),
-    JSON.stringify(cfg.STREAMTAPE)
+    "studio upload: the function is the way in",
+    /\/functions\/v1\/studio-upload$/.test(cfg.STREAMTAPE.proxy),
+    cfg.STREAMTAPE.proxy
+  );
+  expect(
+    "studio upload: and a direct way stands behind it",
+    Boolean(cfg.STREAMTAPE.login && cfg.STREAMTAPE.key),
+    `${cfg.STREAMTAPE.login ? "login set" : "no login"}`
   );
   const hostFunction = readFileSync(join(root, "supabase/functions/studio-upload/index.ts"), "utf8");
   expect(
     "studio upload: the function reads its keys from the environment",
     hostFunction.includes("STREAMTAPE_LOGIN") && hostFunction.includes("STREAMTAPE_KEY") && hostFunction.includes("Deno.env.get")
   );
+  expect("studio upload: no key is written into the function", !/120GYLeBYluelxJ|010abc21eb8af8b77b42/.test(hostFunction));
+}
+
+{
+  /* the day the function is not deployed: the direct way takes over */
+  const direct = { calls: [], uploads: 0 };
+  const ctx = boot("video-editor.html", {
+    storage: STORAGE,
+    fetchImpl: (href, opts) => {
+      const fn = fnName(href);
+      if (fn === "creator_hubs_list") {
+        return reply({ ok: true, hubs: [{ code: "IDST100001", name: "CineAura", kind: "channel" }] });
+      }
+      if (fn === "video_save") return reply({ ok: true, code: "PST-002200", status: "published" });
+      if (href.includes("/functions/v1/studio-upload")) return Promise.reject(new TypeError("Failed to fetch"));
+      if (href.startsWith("https://api.streamtape.com/")) {
+        const url = new URL(href);
+        const action = url.pathname.replace(/^\//, "");
+        const folder = url.searchParams.get("folder") || "";
+        direct.calls.push({ action, login: url.searchParams.get("login"), key: url.searchParams.get("key") });
+        if (action === "file/listfolder") {
+          if (!folder) return reply({ status: 200, result: { folders: [{ id: "fld-users", name: "Users" }], files: [] } });
+          if (folder === "fld-users") return reply({ status: 200, result: { folders: [{ id: "fld-studio", name: "Studio" }], files: [] } });
+          if (folder === "fld-studio") return reply({ status: 200, result: { folders: [], files: [] } });
+          return reply({ status: 200, result: { folders: [], files: [] } });
+        }
+        if (action === "file/createfolder") return reply({ status: 200, result: { folderid: "fld-cineaura" } });
+        if (action === "file/ul") return reply({ status: 200, result: { url: "https://tapecontent.net/xfsupload/direct" } });
+        if (action === "file/rename") return reply({ status: 200, result: true });
+        return reply({ status: 400, msg: "unexpected" });
+      }
+      if (href.startsWith("https://tapecontent.net/")) {
+        direct.uploads += 1;
+        return reply({ status: 200, result: { id: "fid2" } });
+      }
+      return reply([]);
+    },
+  });
+  await import(`file://${join(root, "assets/js/video-editor.js")}?pdirect`);
+  await wait(80);
+  const doc = ctx.document;
+  const hubs = doc.querySelector("[data-ved-hub]");
+  hubs.value = "IDST100001";
+  hubs.dispatchEvent(new ctx.window.Event("change", { bubbles: true }));
+  await wait();
+  /* the folder ids are remembered across boots in this harness — forget them
+     so the direct way has to read the tree again */
+  const host = await import(`file://${join(root, "assets/js/streamtape.js")}`);
+  host.forgetFolders();
+  const pick = doc.querySelector("[data-ved-file]");
+  Object.defineProperty(pick, "files", {
+    value: [new ctx.window.File([new Uint8Array(64)], "clip.mp4", { type: "video/mp4" })],
+    configurable: true,
+  });
+  pick.dispatchEvent(new ctx.window.Event("change", { bubbles: true }));
+  await wait(160);
+
   expect(
-    "studio upload: no key is written into the repository",
-    !/120GYLeBYluelxJ|010abc21eb8af8b77b42/.test(hostFunction) &&
-      !/120GYLeBYluelxJ|010abc21eb8af8b77b42/.test(readFileSync(join(root, "assets/js/config.js"), "utf8"))
+    "direct way: the API is asked in Streamtape's own shape",
+    direct.calls.length >= 3,
+    `${direct.calls.length} · ${doc.querySelector("[data-ved-file-note]")?.textContent} · ${JSON.stringify(direct.calls)}`
+  );
+  expect(
+    "direct way: every call carries the account's two keys",
+    direct.calls.every((row) => row.login && row.key),
+    JSON.stringify(direct.calls[0])
+  );
+  expect("direct way: the file still goes up", direct.uploads === 1, String(direct.uploads));
+  expect(
+    "direct way: and the field holds the host's address",
+    doc.querySelector("[data-ved-embed]")?.value === "https://streamtape.com/e/fid2",
+    doc.querySelector("[data-ved-embed]")?.value
+  );
+  expect(
+    "direct way: the path is remembered",
+    ctx.window.localStorage.getItem("1w.streamtape.path") === "direct",
+    ctx.window.localStorage.getItem("1w.streamtape.path")
   );
 }
 

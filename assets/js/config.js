@@ -40,11 +40,14 @@ export function storageUrl(path) {
  * the site's storage: it goes to Streamtape, under
  * `Home / Users / Studio / <studio code> / <video code>.<ext>`.
  *
- * The API Login and API Key (the key is the "API password") are **not here** —
- * they are secrets of the `studio-upload` Edge Function, set with
- * `supabase secrets set STREAMTAPE_LOGIN=… STREAMTAPE_KEY=…`. The browser only
- * ever holds a session token, and the function decides which studio that token
- * may upload into.
+ * The preferred way is the `studio-upload` Edge Function, where the API Login
+ * and API Key are secrets (`supabase secrets set STREAMTAPE_LOGIN=…
+ * STREAMTAPE_KEY=…`): the browser then holds only a session token, and the
+ * function decides which studio that token may upload into.
+ *
+ * `login` and `key` below are the **fallback**: if the function is not deployed
+ * yet or cannot be reached, `streamtape.js` speaks to the API directly with
+ * them. Empty both once the function is live.
  */
 export const STREAMTAPE = {
   api: "https://api.streamtape.com",
@@ -53,9 +56,13 @@ export const STREAMTAPE = {
   /** Home / Users / Studio — the shelf every studio's folder sits on. */
   users: "Users",
   shelf: "Studio",
-  /** Empty here on purpose: a key in a public file is a key everyone has. */
-  login: "",
-  key: "",
+  /**
+   * The direct way — used only when the function cannot be reached (not
+   * deployed yet, or blocked). Deploy `studio-upload` and empty these two and
+   * the browser stops holding the account's keys at all.
+   */
+  login: "010abc21eb8af8b77b42",
+  key: "120GYLeBYluelxJ",
 };
 
 /* ------------------------------------------------------------------ */

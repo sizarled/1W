@@ -51,14 +51,54 @@ export function embedOf(id) {
   return id ? `https://streamtape.com/e/${id}` : "";
 }
 
-function urlOf(action, params = {}) {
-  const base = STREAMTAPE.proxy
-    ? `${STREAMTAPE.proxy.replace(/\/$/, "")}?action=${encodeURIComponent(action)}`
-    : `${STREAMTAPE.api.replace(/\/$/, "")}/${action}`;
+/**
+ * Two ways to the same API, and the page tries them in order:
+ *
+ *   proxy   the `studio-upload` function — the browser holds no credential,
+ *           and the function decides which studio the token may upload into.
+ *   direct  Streamtape's own address, with the keys from `config.js`. It is the
+ *           fallback for the day the function is not deployed yet, or the day
+ *           the browser cannot reach it at all.
+ *
+ * The one that answered last is remembered, so the failing one is not asked
+ * again on every keystroke.
+ */
+const PATH_KEY = "1w.streamtape.path";
+
+function paths() {
+  const proxy = Boolean(STREAMTAPE.proxy);
+  const direct = Boolean(STREAMTAPE.login && STREAMTAPE.key);
+  const order = [];
+  const last = (() => {
+    try {
+      return localStorage.getItem(PATH_KEY) || "";
+    } catch {
+      return "";
+    }
+  })();
+  if (last === "direct" && direct) order.push("direct");
+  if (proxy) order.push("proxy");
+  if (direct && !order.includes("direct")) order.push("direct");
+  return order;
+}
+
+function rememberPath(path) {
+  try {
+    localStorage.setItem(PATH_KEY, path);
+  } catch {
+    /* nothing to remember */
+  }
+}
+
+function urlOf(path, action, params = {}) {
+  const base =
+    path === "proxy"
+      ? `${STREAMTAPE.proxy.replace(/\/$/, "")}?action=${encodeURIComponent(action)}`
+      : `${STREAMTAPE.api.replace(/\/$/, "")}/${action}`;
   const url = new URL(base);
-  if (!STREAMTAPE.proxy) {
-    if (STREAMTAPE.login) url.searchParams.set("login", STREAMTAPE.login);
-    if (STREAMTAPE.key) url.searchParams.set("key", STREAMTAPE.key);
+  if (path !== "proxy") {
+    url.searchParams.set("login", STREAMTAPE.login);
+    url.searchParams.set("key", STREAMTAPE.key);
   }
   Object.entries(params).forEach(([key, value]) => {
     if (value === undefined || value === null || value === "") return;
@@ -67,31 +107,71 @@ function urlOf(action, params = {}) {
   return url.toString();
 }
 
-/** One API call; `result` on success, a readable Error on refusal. */
-async function call(action, params = {}) {
+/** A failure that means "this way never arrived" — the other way gets a turn. */
+const unreachable = (message) => {
+  const error = new Error(message);
+  error.unreachable = true;
+  return error;
+};
+
+/** One call along one way. */
+async function along(path, action, params) {
   const token = sessionToken();
   let response;
   try {
-    response = await fetch(urlOf(action, params), {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    response = await fetch(urlOf(path, action, params), {
+      headers: path === "proxy" && token ? { Authorization: `Bearer ${token}` } : {},
     });
   } catch {
-    throw new Error("The host could not be reached — check the connection and try again.");
+    throw unreachable(
+      path === "proxy"
+        ? "The studio host's function did not answer — it is probably not deployed yet (studio-upload)."
+        : "Streamtape could not be reached from this browser."
+    );
   }
   const text = await response.text();
   if (response.status === 404) {
-    throw new Error("The studio host's function is not deployed yet (studio-upload).");
+    throw unreachable("The studio host's function is not deployed yet (studio-upload).");
   }
   let body = null;
   try {
     body = JSON.parse(text);
   } catch {
-    throw new Error(`The host answered something unexpected (${response.status}).`);
+    throw unreachable(`The host answered something unexpected (${response.status}).`);
+  }
+  if (Number(body?.status) === 401 || Number(body?.status) === 403) {
+    /* the function says this token may not publish here — no other way helps */
+    throw new Error(String(body?.msg || "This studio is not one you publish into.").slice(0, 160));
+  }
+  if (Number(body?.status) === 503) {
+    throw unreachable(String(body?.msg || "The studio host is not connected.").slice(0, 160));
   }
   if (!body || Number(body.status) !== 200) {
     throw new Error(String(body?.msg || `The host refused (${body?.status || response.status}).`).slice(0, 160));
   }
   return body.result;
+}
+
+/** One API call; `result` on success, a readable Error on refusal. */
+async function call(action, params = {}) {
+  const order = paths();
+  if (!order.length) throw new Error(NOT_CONNECTED);
+  let last = null;
+  for (const path of order) {
+    try {
+      const result = await along(path, action, params);
+      rememberPath(path);
+      return result;
+    } catch (error) {
+      last = error;
+      if (!error.unreachable) throw error;
+    }
+  }
+  const message =
+    order.length > 1
+      ? `Neither way reached Streamtape (${order.join(" and ")}). Deploy the studio-upload function — supabase functions deploy studio-upload — then try again.`
+      : last?.message || "The host could not be reached.";
+  throw new Error(message);
 }
 
 /* ------------------------------------------------------------------ */
