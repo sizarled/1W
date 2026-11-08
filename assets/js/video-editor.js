@@ -8,7 +8,8 @@
  *     visibility,       general · limited · private · followers
  *     status,           draft · published · scheduled
  *     scheduled_at,     only when scheduled
- *     tags[],           main keywords, twelve at most
+ *     platform,         youtube | vimeo | facebook | instagram | pinterest | tiktok | reddit | x
+ *     keywords[],       { word, subs[] } — three mains at most, five subs under each, fifteen in all
  *     audience[],       { kind: country|language|level|entity, value, mode: include }
  *     profiles[],       the nominated list a private video opens to
  *     passwords[],      hashed by the server; never readable again
@@ -35,7 +36,9 @@ const S = {
   embed: "",
   title: "",
   desc: "",
-  tags: [],
+  /* three main keywords at most, five sub-keywords under each */
+  keywords: [],
+  platform: "",
   /* the index: `00:38 · Overview` — written here, read by the watch page */
   chapters: [],
   thumb: "",
@@ -164,8 +167,12 @@ function paintCounters() {
   if (descCount) descCount.textContent = `${S.desc.length} / 5000`;
   const tagCount = $("[data-ved-tag-count]");
   if (tagCount) {
-    tagCount.textContent = `${S.tags.length} / 12`;
-    tagCount.classList.toggle("is-over", S.tags.length > 12);
+    tagCount.textContent = `${S.keywords.length} / ${MAIN_MAX} main · ${subCount()} / ${SUB_MAX_TOTAL} sub`;
+    tagCount.classList.toggle("is-over", S.keywords.length > MAIN_MAX || subCount() > SUB_MAX_TOTAL);
+  }
+  const platformNote = $("[data-ved-platform-note]");
+  if (platformNote) {
+    platformNote.textContent = S.platform ? HOSTS[S.platform] || S.platform : "read from the link";
   }
 }
 
@@ -267,12 +274,43 @@ function paintThumb() {
   }
 }
 
+const MAIN_MAX = 3;
+const SUB_MAX = 5;
+const SUB_MAX_TOTAL = 15;
+
+const subCount = () => S.keywords.reduce((sum, row) => sum + row.subs.length, 0);
+
+/* one main keyword, and its sub-keywords hanging under it */
 function paintTags() {
   const host = $("[data-ved-tags]");
   if (!host) return;
-  host.innerHTML = S.tags
+  host.innerHTML = S.keywords
     .map(
-      (tag, index) => `<span class="tag">${esc(tag)}<button type="button" data-ved-tag-remove="${index}" aria-label="Remove ${esc(tag)}">${icon("close")}</button></span>`
+      (row, index) => `
+      <div class="vkw" data-ved-kw="${index}">
+        <div class="vkw__head">
+          <span class="tag">${esc(row.word)}${index === 0 ? ' <b class="vkw__field">field</b>' : ""}
+            <button type="button" data-ved-tag-remove="${index}" aria-label="Remove ${esc(row.word)}">${icon("close")}</button>
+          </span>
+          <span class="vkw__count">${row.subs.length} / ${SUB_MAX} sub</span>
+        </div>
+        ${
+          row.subs.length
+            ? `<div class="vkw__subs">${row.subs
+                .map(
+                  (sub, at) =>
+                    `<span class="tag tag--sub">${esc(sub)}<button type="button" data-ved-sub-remove="${index}:${at}" aria-label="Remove ${esc(sub)}">${icon("close")}</button></span>`
+                )
+                .join("")}</div>`
+            : ""
+        }
+        <div class="vkw__add">
+          <input class="input" type="text" maxlength="40" data-ved-sub-input="${index}"
+                 placeholder="${row.subs.length >= SUB_MAX ? "Five is the ceiling" : `A sub-keyword under “${esc(row.word)}”`}"
+                 autocomplete="off" ${row.subs.length >= SUB_MAX ? "disabled" : ""} />
+          <button class="btn btn--ghost btn--sm" type="button" data-ved-sub-add="${index}" ${row.subs.length >= SUB_MAX ? "disabled" : ""}>${icon("plus")} Sub</button>
+        </div>
+      </div>`
     )
     .join("");
 }
@@ -545,6 +583,13 @@ function jumpToSection(item) {
   first?.focus?.({ preventScroll: true });
 }
 
+/* the platform select follows the state, so an edit of a saved video, a
+   reset, and a picked host all show the same thing */
+function paintPlatform() {
+  const select = $("[data-ved-platform]");
+  if (select && select.value !== (S.platform || "")) select.value = S.platform || "";
+}
+
 function paintAll() {
   paintContents();
   paintSourceNote();
@@ -554,6 +599,7 @@ function paintAll() {
   paintThumb();
   paintChapters();
   paintTags();
+  paintPlatform();
   paintPeople();
   paintPasses();
   paintCountries();
@@ -586,7 +632,9 @@ function readiness() {
   if (!S.embed.trim()) return { ok: false, message: "Add the video link to begin" };
   if (!S.title.trim()) return { ok: false, message: "The title is still empty" };
   if (S.title.trim().length > 200) return { ok: false, message: "The title is too long" };
-  if (S.tags.length > 12) return { ok: false, message: "Twelve tags at most" };
+  if (S.keywords.length > MAIN_MAX) return { ok: false, message: `${MAIN_MAX} main keywords at most` };
+  if (S.keywords.some((row) => row.subs.length > SUB_MAX)) return { ok: false, message: `${SUB_MAX} sub-keywords under one keyword` };
+  if (subCount() > SUB_MAX_TOTAL) return { ok: false, message: `${SUB_MAX_TOTAL} sub-keywords in all` };
   if (S.vis === "limited" && !S.followers) {
     const rules = audienceRules();
     const named = S.people.length > 0;
@@ -627,14 +675,21 @@ function payload(status) {
     visibility: S.vis,
     status,
     scheduled_at: status === "scheduled" && date ? date.toISOString() : null,
-    tags: S.tags.slice(0, 12),
+    tags: S.keywords.slice(0, MAIN_MAX).map((row) => row.word),
     audience: rules,
     profiles: people,
     meta: {
       age: S.age,
       download: Boolean(S.download),
       vertical: Boolean(S.vertical),
-      source: sourceKind(S.embed) || "embed",
+      source: S.platform || sourceKind(S.embed) || "embed",
+      /* the platform the member picked, when they picked one */
+      platform: S.platform || sourceKind(S.embed) || null,
+      /* the two levels of keywords, beside the flat `tags` the site reads */
+      keywords: S.keywords.slice(0, MAIN_MAX).map((row) => ({
+        keyword: row.word,
+        subs: row.subs.slice(0, SUB_MAX),
+      })),
       /* the index travels with the video: `start` is m:ss, `label` the words */
       chapters: S.chapters
         .map((row) => ({ start: chapterTime(row.time), label: String(row.label || "").trim() }))
@@ -735,7 +790,8 @@ function resetForm() {
   S.thumb = "";
   S.thumbChosen = false;
   S.thumbAuto = false;
-  S.tags = [];
+  S.keywords = [];
+  S.platform = "";
   S.people = [];
   S.passes = [];
   S.hasPassword = false;
@@ -806,12 +862,38 @@ function setVisibility(vis) {
 function addTag(raw) {
   const tag = String(raw || "").replace(/\s+/g, " ").trim().slice(0, 40);
   if (!tag) return;
-  if (S.tags.length >= 12) {
-    toast({ title: "Twelve tags is the ceiling", message: "Remove one to add another.", tone: "error", iconName: "info", duration: 3200 });
+  if (S.keywords.length >= MAIN_MAX) {
+    toast({
+      title: `${MAIN_MAX} main keywords is the ceiling`,
+      message: "Remove one to add another — or put this one under a keyword you already have.",
+      tone: "error",
+      iconName: "info",
+      duration: 3200,
+    });
     return;
   }
-  if (S.tags.some((t) => t.toLowerCase() === tag.toLowerCase())) return;
-  S.tags.push(tag);
+  if (S.keywords.some((row) => row.word.toLowerCase() === tag.toLowerCase())) return;
+  S.keywords.push({ word: tag, subs: [] });
+  paintTags();
+  paintCounters();
+  paintStatus();
+}
+
+function addSub(index, raw) {
+  const row = S.keywords[Number(index)];
+  if (!row) return;
+  const sub = String(raw || "").replace(/\s+/g, " ").trim().slice(0, 40);
+  if (!sub) return;
+  if (row.subs.length >= SUB_MAX) {
+    toast({ title: `${SUB_MAX} sub-keywords under one keyword`, message: "Remove one to add another.", tone: "error", iconName: "info", duration: 3000 });
+    return;
+  }
+  if (subCount() >= SUB_MAX_TOTAL) {
+    toast({ title: `${SUB_MAX_TOTAL} sub-keywords in all`, message: "Remove one to add another.", tone: "error", iconName: "info", duration: 3000 });
+    return;
+  }
+  if (row.subs.some((one) => one.toLowerCase() === sub.toLowerCase())) return;
+  row.subs.push(sub);
   paintTags();
   paintCounters();
   paintStatus();
@@ -862,7 +944,19 @@ async function loadExisting(code) {
   S.vis = ["general", "limited", "private", "followers"].includes(v.visibility) ? v.visibility : "general";
   S.status = v.status || "draft";
   S.hasPassword = Boolean(res.asks_password);
-  S.tags = Array.isArray(v.keywords) ? v.keywords.filter((k) => k.role === "main").map((k) => k.keyword) : [];
+  /* the mains come back as rows of their own, the subs under them by parent */
+  const mains = Array.isArray(v.keywords) ? v.keywords.filter((k) => k.role === "main") : [];
+  S.platform = String((v.video && v.video.meta && v.video.meta.platform) || v.meta?.platform || "") || "";
+  S.keywords = mains.slice(0, MAIN_MAX).map((main) => ({
+    word: String(main.keyword || ""),
+    subs: Array.isArray(v.keywords)
+      ? v.keywords
+          .filter((k) => k.role !== "main" && (k.parent_id === main.id || k.parent === main.id || k.parent === main.keyword))
+          .map((k) => String(k.keyword || ""))
+          .filter(Boolean)
+          .slice(0, SUB_MAX)
+      : [],
+  })).filter((row) => row.word);
   S.age = meta.age || "none";
   if (v.video && v.video.hub) {
     S.hub = v.video.hub.code || S.hub;
@@ -987,7 +1081,12 @@ function paintSourceNote() {
     note.innerHTML = `${icon("info")} <span>A link starts with http:// or https://</span>`;
     return;
   }
-  const kind = sourceKind(value);
+  const linkKind = sourceKind(value);
+  const kind = S.platform || linkKind;
+  if (S.platform && linkKind && linkKind !== "embed" && S.platform !== linkKind) {
+    note.innerHTML = `${icon("info")} <span>This link reads as ${esc(HOSTS[linkKind] || "another host")}, and you picked ${esc(HOSTS[S.platform] || S.platform)}. The platform is what gets saved.</span>`;
+    return;
+  }
   if (kind === "file") {
     note.innerHTML = `${icon("check")} <span>A file we can play here${S.download ? " — and download" : ""}</span>`;
     return;
@@ -1145,7 +1244,8 @@ function draftFields() {
     embed: S.embed,
     title: S.title,
     desc: S.desc,
-    tags: S.tags,
+    tags: S.keywords.map((row) => row.word),
+    keywords: S.keywords,
     thumb: S.thumb,
     vis: S.vis,
     when: S.when,
@@ -1206,7 +1306,11 @@ function restoreDraft(draft) {
   S.embed = draft.embed || "";
   S.title = draft.title || "";
   S.desc = draft.desc || "";
-  S.tags = Array.isArray(draft.tags) ? draft.tags.slice(0, 12) : [];
+  S.keywords = Array.isArray(draft.keywords)
+    ? draft.keywords.slice(0, MAIN_MAX).map((row) => ({ word: String(row.word || ""), subs: Array.isArray(row.subs) ? row.subs.slice(0, SUB_MAX) : [] }))
+    : Array.isArray(draft.tags)
+      ? draft.tags.slice(0, MAIN_MAX).map((word) => ({ word: String(word), subs: [] }))
+      : [];
   S.thumb = draft.thumb || "";
   S.vis = draft.vis || "general";
   S.when = draft.when || "now";
@@ -1346,6 +1450,67 @@ function bind() {
   el.desc.addEventListener("input", () => {
     S.desc = el.desc.value;
     paintCounters();
+  });
+
+  const platformEl = $("[data-ved-platform]");
+  if (platformEl) {
+    platformEl.value = S.platform || "";
+    platformEl.addEventListener("change", () => {
+      S.platform = platformEl.value;
+      paintCounters();
+      paintSourceNote();
+      paintPreview();
+      paintStatus();
+    });
+  }
+
+  document.addEventListener("click", (event) => {
+    const target = event.target && typeof event.target.closest === "function" ? event.target : null;
+    if (!target) return;
+    const addMain = target.closest("[data-ved-tag-add]");
+    if (addMain) {
+      event.preventDefault();
+      if (el.tagInput) {
+        addTag(el.tagInput.value);
+        el.tagInput.value = "";
+        el.tagInput.focus();
+      }
+      return;
+    }
+    const subAdd = target.closest("[data-ved-sub-add]");
+    if (subAdd) {
+      event.preventDefault();
+      const index = subAdd.getAttribute("data-ved-sub-add");
+      const input = $(`[data-ved-sub-input="${index}"]`);
+      if (input) {
+        addSub(index, input.value);
+        input.value = "";
+        $(`[data-ved-sub-input="${index}"]`)?.focus();
+      }
+      return;
+    }
+    const subRemove = target.closest("[data-ved-sub-remove]");
+    if (subRemove) {
+      event.preventDefault();
+      const [index, at] = String(subRemove.getAttribute("data-ved-sub-remove")).split(":").map(Number);
+      const row = S.keywords[index];
+      if (!row) return;
+      row.subs.splice(at, 1);
+      paintTags();
+      paintCounters();
+      paintStatus();
+    }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    const subInput =
+      event.target && typeof event.target.closest === "function" ? event.target.closest("[data-ved-sub-input]") : null;
+    if (!subInput) return;
+    if (event.key !== "Enter" && event.key !== ",") return;
+    event.preventDefault();
+    const index = subInput.getAttribute("data-ved-sub-input");
+    addSub(index, subInput.value);
+    subInput.value = "";
   });
 
   el.tagInput.addEventListener("keydown", (event) => {
@@ -1503,7 +1668,7 @@ function bind() {
     }
     const tagRemove = event.target.closest("[data-ved-tag-remove]");
     if (tagRemove) {
-      S.tags.splice(Number(tagRemove.getAttribute("data-ved-tag-remove")), 1);
+      S.keywords.splice(Number(tagRemove.getAttribute("data-ved-tag-remove")), 1);
       paintTags();
       paintCounters();
       paintStatus();

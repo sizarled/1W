@@ -16,6 +16,8 @@
 export const HOSTS = {
   youtube: "YouTube",
   vimeo: "Vimeo",
+  instagram: "Instagram",
+  x: "X",
   dailymotion: "Dailymotion",
   tiktok: "TikTok",
   facebook: "Facebook",
@@ -123,6 +125,13 @@ export function embedUrl(raw = "") {
       if (path) return `https://embed.reddit.com/${path}/?embed=true&theme=dark`;
       return `https://embed.reddit.com/?embed=true&theme=dark`;
     }
+
+    if (host.endsWith("instagram.com") || host === "instagr.am") {
+      /* /p/<code>, /reel/<code> and /tv/<code> all have an embed address —
+         the code is the segment before any query, not the whole path */
+      const code = (u.pathname.match(/\/(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/) || [])[1];
+      if (code) return `https://www.instagram.com/p/${code}/embed/captioned/`;
+    }
   } catch {
     /* a plain text source, used as it is */
   }
@@ -142,6 +151,8 @@ export function sourceKind(raw = "") {
   if (/facebook\.com\/|fb\.watch\/|fb\.me\//i.test(url)) return "facebook";
   if (/pinterest\.[a-z.]+\/|pin\.it\//i.test(url)) return "pinterest";
   if (/reddit\.com\/|redd\.it\//i.test(url)) return "reddit";
+  if (/instagram\.com\/|instagr\.am\//i.test(url)) return "instagram";
+  if (/twitter\.com\/|x\.com\//i.test(url)) return "x";
   return "embed";
 }
 

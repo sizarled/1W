@@ -1607,11 +1607,24 @@ row likes, comments, reports and reach already live on — plus one column of it
 | `video_card(post, viewer)` | `post_card` plus `video { meta, embed, file, host }` |
 
 `video_save` takes `title`, `description`, `thumbnail`, `embed`, `language`, `visibility`, `status`
-(`draft`/`published`/`scheduled`), `scheduled_at`, `tags` (main keywords, twelve at most),
-`audience[{kind, value}]`, `profiles[]`, `passwords[]`, `meta { age, download, vertical, source }`
+(`draft`/`published`/`scheduled`), `scheduled_at`, `tags` (the main keywords, in order),
+`audience[{kind, value}]`, `profiles[]`, `passwords[]`, `meta { age, download, vertical, source, platform, keywords[] }`
 and `hub` — the studio the video is published into, which is [its own section](#the-studio-a-video-goes-into).
 A key it is **not** given is a list it leaves alone — so a partial save can never wipe an audience, the
 nominated people, the passwords or the tags of the video it edits.
+
+**Two levels of keywords, and a platform to name.** The editor's *Keywords* field is no longer a
+flat row of chips: a **main keyword** opens a block, and the **sub-keywords** sit under it on their
+own line. **Three mains at most**, **five subs under each**, **fifteen subs in all** — the counter
+reads `<n> / 3 main · <m> / 15 sub`, and the first main is marked *field* because it is the shelf the
+video is filed under. On the wire the mains travel as `tags[]` (the flat list the feed already reads)
+and the two levels travel beside them in `meta.keywords[{ keyword, subs[] }]`, so nothing that reads
+`tags` has to learn a new shape. Beside them, a **Platform** select names the host the video comes
+from — **YouTube, Vimeo, Facebook, Instagram, Pinterest, TikTok, Reddit, X** — and it rides in
+`meta.platform`; left on *Read it from the link*, the editor names the host itself from the address,
+and when the picked platform and the link disagree the hint says so instead of silently ignoring one
+of them. `embed.js` grew the two missing readers for that: `instagram.com|instagr.am` (framed through
+`/p/<code>/embed/captioned/`) and `twitter.com|x.com`.
 
 The three doors keep their meaning, on the feed as well as on the door:
 

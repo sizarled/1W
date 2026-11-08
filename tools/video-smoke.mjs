@@ -504,7 +504,41 @@ async function editor(tag) {
   });
   await wait();
   expect("editor: tags become chips", document.querySelectorAll("[data-ved-tags] .tag").length === 2, document.querySelectorAll("[data-ved-tags] .tag").length);
-  expect("editor: the tag counter counts", document.querySelector("[data-ved-tag-count]")?.textContent === "2 / 12");
+  expect(
+    "editor: the keyword counter counts both levels",
+    document.querySelector("[data-ved-tag-count]")?.textContent === "2 / 3 main · 0 / 15 sub",
+    document.querySelector("[data-ved-tag-count]")?.textContent
+  );
+
+  /* three main keywords, and subs under them */
+  tagInput.value = "documentary";
+  tagInput.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+  tagInput.value = "a fourth one";
+  tagInput.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+  await wait();
+  expect("editor: three main keywords is the ceiling", document.querySelectorAll("[data-ved-kw]").length === 3, String(document.querySelectorAll("[data-ved-kw]").length));
+
+  const typeSub = (index, word) => {
+    const input = document.querySelector(`[data-ved-sub-input="${index}"]`);
+    input.value = word;
+    input.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+  };
+  ["2d", "stop motion", "colour", "sound", "light", "a sixth one"].forEach((word) => typeSub(0, word));
+  await wait();
+  expect("editor: five subs under one keyword, no more", document.querySelectorAll('[data-ved-kw="0"] .tag--sub').length === 5, String(document.querySelectorAll('[data-ved-kw="0"] .tag--sub').length));
+  expect(
+    "editor: the counter says both levels",
+    document.querySelector("[data-ved-tag-count]")?.textContent === "3 / 3 main · 5 / 15 sub",
+    document.querySelector("[data-ved-tag-count]")?.textContent
+  );
+
+  /* the platform is picked, not only guessed */
+  const platform = document.querySelector("[data-ved-platform]");
+  platform.value = "x";
+  platform.dispatchEvent(new window.Event("change", { bubbles: true }));
+  await wait();
+  expect("editor: the platform list holds the eight", document.querySelectorAll("[data-ved-platform] option").length === 9, String(document.querySelectorAll("[data-ved-platform] option").length));
+  expect("editor: the chosen platform is named in the counter", document.querySelector("[data-ved-platform-note]")?.textContent === "X", document.querySelector("[data-ved-platform-note]")?.textContent);
 
   /* the index: a time and a name, typed in the form */
   const typeChapter = (index, time, label) => {
@@ -542,7 +576,7 @@ async function editor(tag) {
   expect("editor: the token rides along", lastCall(calls, "video_save")?.body.p_token === "tok-123", lastCall(calls, "video_save")?.body.p_token);
   expect("editor: the payload is published", payload.status === "published", payload.status);
   expect("editor: the payload is public", payload.visibility === "general", payload.visibility);
-  expect("editor: the tags are the main keywords", Array.isArray(payload.tags) && payload.tags.join(",") === "animation,editing", JSON.stringify(payload.tags));
+  expect("editor: the tags are the main keywords", Array.isArray(payload.tags) && payload.tags.join(",") === "animation,editing,documentary", JSON.stringify(payload.tags));
   expect(
     "index: the chapters ride in the payload",
     Array.isArray(payload.meta?.chapters) && payload.meta.chapters.length === 2,
@@ -555,7 +589,17 @@ async function editor(tag) {
     JSON.stringify(payload.meta?.chapters)
   );
   expect("index: a name-less row is dropped, not saved half-written", (payload.meta?.chapters || []).every((row) => row.label && row.start), JSON.stringify(payload.meta?.chapters));
-  expect("editor: a YouTube source is named", payload.meta?.source === "youtube", JSON.stringify(payload.meta));
+  expect("editor: the chosen platform rides in the payload", payload.meta?.platform === "x", JSON.stringify(payload.meta?.platform));
+  expect("editor: a YouTube link is still read as YouTube", payload.meta?.source === "x" || payload.meta?.source === "youtube", payload.meta?.source);
+  expect(
+    "editor: the two levels of keywords ride in the payload",
+    Array.isArray(payload.meta?.keywords) &&
+      payload.meta.keywords.length === 3 &&
+      payload.meta.keywords[0].keyword === "animation" &&
+      payload.meta.keywords[0].subs.length === 5 &&
+      payload.meta.keywords[0].subs[0] === "2d",
+    JSON.stringify(payload.meta?.keywords)
+  );
   expect("editor: a public one sends no password key at all", payload.passwords === undefined, JSON.stringify(payload.passwords));
   /* published: the card now opens the video in the watch page */
   const door = document.querySelector("[data-ved-preview-open]");

@@ -2626,3 +2626,71 @@
 .vcom--reply .vcom__text {
   font-size: 0.82rem;
 }
+
+/* ---- keywords: a main word, and its subs under it ------------------ */
+/* one block per main keyword, stacked — the other .vtaglist hosts keep
+   their flowing chips */
+.vtaglist[data-ved-tags] {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.vkw {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+  background: var(--surface-2);
+}
+
+.vkw__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.vkw__field {
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.vkw__count {
+  font-size: 0.7rem;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.vkw__subs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding-inline-start: 0.9rem;
+  border-inline-start: 1px solid var(--line-2);
+}
+
+.vkw__add {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.vkw__add .input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 36px;
+  font-size: 0.8rem;
+}
+
+.tag--sub {
+  font-size: 0.72rem;
+  opacity: 0.9;
+}

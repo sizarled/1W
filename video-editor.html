@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="assets/css/base.css?v=20261116a" />
     <link rel="stylesheet" href="assets/css/layout.css?v=20261116a" />
     <link rel="stylesheet" href="assets/css/components.css?v=20261116b" />
-    <link rel="stylesheet" href="assets/css/video.css?v=20261118b" />
+    <link rel="stylesheet" href="assets/css/video.css?v=20261202b" />
     <script>
       /* apply the saved theme (or the OS preference) before first paint */
       (function () {
@@ -33,7 +33,7 @@
       })();
     </script>
     <script type="module" src="assets/js/app.js?v=20261116e"></script>
-    <script type="module" src="assets/js/video-editor.js?v=20261120a"></script>
+    <script type="module" src="assets/js/video-editor.js?v=20261202b"></script>
   </head>
   <body data-page="videoEditor" data-title="Publish a video">
     <a class="skip-link" href="#main">Skip to content</a>
@@ -98,6 +98,24 @@
                   <span class="vhint" style="flex:1 1 220px">A file up to 50 MB goes to the site's storage and the link is filled in for you.</span>
                   <input type="file" accept="video/mp4,video/webm,video/ogg,video/quicktime" data-ved-file hidden />
                 </div>
+                <div class="field vplatform">
+                  <label for="vedPlatform" style="display: flex; justify-content: space-between; gap: 1rem">
+                    <span>Platform</span>
+                    <span class="vcount" data-ved-platform-note>read from the link</span>
+                  </label>
+                  <select class="select" id="vedPlatform" data-ved-platform>
+                    <option value="">Read it from the link</option>
+                    <option value="youtube">YouTube</option>
+                    <option value="vimeo">Vimeo</option>
+                    <option value="facebook">Facebook</option>
+                    <option value="instagram">Instagram</option>
+                    <option value="pinterest">Pinterest</option>
+                    <option value="tiktok">TikTok</option>
+                    <option value="reddit">Reddit</option>
+                    <option value="x">X</option>
+                  </select>
+                  <p class="vhint" data-ved-platform-hint>The platform the link plays from. Leave it to the link and the editor names it itself.</p>
+                </div>
                 <p class="vsrc__found" data-ved-source-note hidden></p>
                 <p class="vhint" data-ved-file-note hidden></p>
 
@@ -127,12 +145,18 @@
               </label>
               <div class="field">
                 <label for="vedTagInput" style="display: flex; justify-content: space-between; gap: 1rem">
-                  <span>Tags</span>
-                  <span class="vcount" data-ved-tag-count>0 / 12</span>
+                  <span>Keywords</span>
+                  <span class="vcount" data-ved-tag-count>0 / 3 main · 0 / 15 sub</span>
                 </label>
-                <input class="input" id="vedTagInput" type="text" data-ved-tag-input maxlength="40" placeholder="Type a tag and press Enter" autocomplete="off" />
+                <div class="vsrc__row">
+                  <input class="input" id="vedTagInput" type="text" data-ved-tag-input maxlength="40" placeholder="A main keyword — then press Enter" autocomplete="off" />
+                  <button class="btn btn--ghost btn--sm" type="button" data-ved-tag-add><i data-icon="plus"></i> Add</button>
+                </div>
                 <div class="vtaglist" data-ved-tags></div>
-                <p class="vhint">The first tag is the field the video is filed under; the rest help people find it.</p>
+                <p class="vhint">
+                  Three main keywords at most, and under each one up to five sub-keywords — fifteen in all.
+                  The first one is the field the video is filed under; the rest help people find it.
+                </p>
               </div>
             </section>
 
