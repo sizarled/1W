@@ -1336,6 +1336,12 @@ async function editor(tag) {
     expect(`hosts: ${kind} is named`, embed.sourceKind(input) === kind, embed.sourceKind(input));
     expect(`hosts: ${kind} wears its label`, embed.sourceLabel(input) === label, embed.sourceLabel(input));
   });
+  expect("hosts: the frame address asks YouTube for its own full screen", embed.fullscreenSrc("https://youtu.be/dQw4w9WgXcQ") === "https://www.youtube.com/embed/dQw4w9WgXcQ?fs=1&playsinline=1", embed.fullscreenSrc("https://youtu.be/dQw4w9WgXcQ"));
+  expect("hosts: Dailymotion is asked the same way", embed.fullscreenSrc("https://www.dailymotion.com/video/x8abc12").includes("allowFullscreen=true"), embed.fullscreenSrc("https://www.dailymotion.com/video/x8abc12"));
+  expect("hosts: and Facebook", embed.fullscreenSrc("https://www.facebook.com/watch/?v=123456789").includes("allowfullscreen=true"), embed.fullscreenSrc("https://www.facebook.com/watch/?v=123456789"));
+  expect("hosts: a platform without such a flag is left alone", embed.fullscreenSrc("https://www.tiktok.com/@who/video/7312345678901234567") === "https://www.tiktok.com/embed/v2/7312345678901234567", embed.fullscreenSrc("https://www.tiktok.com/@who/video/7312345678901234567"));
+  expect("hosts: the allow list names full screen", /fullscreen/.test(embed.FRAME_ALLOW), embed.FRAME_ALLOW);
+  expect("hosts: and the canonical address never changed", embed.embedUrl("https://youtu.be/dQw4w9WgXcQ") === "https://www.youtube.com/embed/dQw4w9WgXcQ", embed.embedUrl("https://youtu.be/dQw4w9WgXcQ"));
   expect("hosts: a YouTube still comes free", embed.autoThumb("https://youtu.be/dQw4w9WgXcQ") === "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg", embed.autoThumb("https://youtu.be/dQw4w9WgXcQ"));
   expect("hosts: nothing else pretends to have one", embed.autoThumb("https://www.tiktok.com/@a/video/7312345678901234567") === "");
 
@@ -1359,7 +1365,11 @@ async function editor(tag) {
 
   type("https://youtu.be/dQw4w9WgXcQ");
   await wait(30);
-  expect("player: a YouTube link is framed", frame() === "https://www.youtube.com/embed/dQw4w9WgXcQ", frame());
+  expect("player: a YouTube link is framed", frame() === "https://www.youtube.com/embed/dQw4w9WgXcQ?fs=1&playsinline=1", frame());
+  expect("player: YouTube's own full-screen button is asked for", /(^|[?&])fs=1(&|$)/.test(frame()), frame());
+  expect("player: the frame names full screen in its allow list", /allow="[^"]*fullscreen/.test(player()?.querySelector("iframe")?.outerHTML || ""), player()?.querySelector("iframe")?.outerHTML?.slice(0, 120));
+  expect("player: and carries the attribute itself", player()?.querySelector("iframe")?.hasAttribute("allowfullscreen") === true);
+  expect("player: the editor's preview has the corner door too", Boolean(document.querySelector("[data-ved-fs]")), "no button");
   expect("player: the still is shown straight away", document.querySelector("[data-ved-thumb-box] img")?.getAttribute("src")?.includes("i.ytimg.com"));
   await wait(400);
   expect("player: and the still is now the form's", document.querySelector("[data-ved-thumb]")?.value.includes("i.ytimg.com"), document.querySelector("[data-ved-thumb]")?.value);

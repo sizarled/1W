@@ -150,6 +150,33 @@ export function embedUrl(raw = "") {
   return url;
 }
 
+/**
+ * The same address a player is given, with each platform's own "this may go
+ * full screen" flag on it.
+ *
+ * `embedUrl` answers the canonical address — the one the editor stores and
+ * the tests know — and this one is for the `<iframe>` alone, so the platform's
+ * **own** button appears in its chrome as well as the page's own corner
+ * button. YouTube reads `fs=1` (and `playsinline=1`, so an iPhone keeps it in
+ * the page until it is asked), Dailymotion reads `allowFullscreen`, and the
+ * Facebook plugin takes the same word. A platform that offers no such flag
+ * (Instagram, TikTok, Pinterest, Reddit, X) is left exactly as it is: the
+ * page's own button still takes the screen for it.
+ */
+export function fullscreenSrc(raw = "") {
+  const url = embedUrl(raw);
+  if (!url) return "";
+  const withParam = (param) => `${url}${url.includes("?") ? "&" : "?"}${param}`;
+  if (/youtube(-nocookie)?\.com\/embed\//i.test(url)) return withParam("fs=1&playsinline=1");
+  if (/dailymotion\.com\/embed\//i.test(url)) return withParam("allowFullscreen=true");
+  if (/facebook\.com\/plugins\/video\.php/i.test(url)) return withParam("allowfullscreen=true");
+  return url;
+}
+
+/** The `allow` list an embedded player needs — full screen named on it. */
+export const FRAME_ALLOW =
+  "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen";
+
 /** Which host a link belongs to; `embed` when we cannot tell. */
 export function sourceKind(raw = "") {
   const url = String(raw).trim();

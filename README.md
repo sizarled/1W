@@ -1843,7 +1843,7 @@ in the same file, or, when that call is not on the server yet, the `creator_publ
 page already makes (a channel first, then a server or a cinema, never a private hub). No studio at
 all, and the member's face is the publisher, which is the honest answer.
 
-Test: `node tools/video-smoke.mjs` — **436/436** (feed, sort, search, watch, reaction→comment, a locked
+Test: `node tools/video-smoke.mjs` — **446/446** (feed, sort, search, watch, reaction→comment, a locked
 door and its password, a missing video, the editor signed out and in, the payload of a publish, of an
 exclusive rule set and of a private list, the player and the sixteen host cases, the oEmbed stills, the
 studio picker, the contents rail, and the forwarding page).
@@ -1859,6 +1859,16 @@ turn with it (`expand` → `collapse`). A real file in a `<video>` gets the same
 which only enlarges the video element itself — falls back to `webkitEnterFullscreen()`. Nothing fires
 while the member is typing, so a comment box keeps its own `f`. The cinema page's stage
 (`watch.html`, `[data-w-stage]`) carries the same door in the same corner, with the same key.
+
+**The platforms bring their own button too.** The page's corner disc is not the only way out: the
+frame's address asks each platform for its **own** full-screen control as well — YouTube gets
+`?fs=1&playsinline=1`, Dailymotion `?allowFullscreen=true`, the Facebook plugin
+`&allowfullscreen=true` — while the canonical address `embedUrl` returns stays exactly as it was
+(the editor stores that one, and the tests know it), and the `<iframe>` carries
+`allow="… fullscreen"` plus `allowfullscreen` in every case. Instagram, TikTok, Pinterest, Reddit
+and X offer no such flag in their embeds, so their frames are untouched and the page's own disc
+still takes the screen for them. The editor's live preview has the same disc (`[data-ved-fs]`) on
+the same rules, so a link can be tried full-screen before it is published.
 
 **The live preview is a door.** Once the video has been saved, the preview card in the editor opens
 the video's own page in a new tab — `videos.html#/h/ID=<code>`, or `#/v/` when **vertical** was
@@ -2210,7 +2220,7 @@ the editors need**, each pinned to a name pattern and a set of extensions (`user
 | `node tools/rte-smoke.mjs` | **45/45** (every command, links, insertion, history, paste, drop, keys, toolbar state) |
 | `node tools/article-smoke.mjs` | **281/281** |
 | `node tools/blog-smoke.mjs` | **82/82** (the address, the closed door, the hero, the home, a section, the search, the plain cover) |
-| `node tools/video-smoke.mjs` | **436/436** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
+| `node tools/video-smoke.mjs` | **446/446** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
 | `node tools/media-smoke.mjs` | **89/89** (the address book, the three pages, the portrait stage, the locked item, the shelves) |
 
 ### The six OAuth apps — one checklist each

@@ -108,7 +108,7 @@ function signedIn() {
 }
 
 /** The host list lives in one place now: see assets/js/embed.js. */
-import { embedUrl, autoThumb, isFile } from "./embed.js";
+import { embedUrl, fullscreenSrc, FRAME_ALLOW, autoThumb, isFile } from "./embed.js";
 
 export { embedUrl, autoThumb, isFile, sourceKind } from "./embed.js";
 
@@ -376,12 +376,14 @@ function playerMarkup(v, meta) {
   if (isFile(src)) {
     return playerShell(`<video controls playsinline preload="metadata" poster="${esc(v.thumbnail || "")}" src="${esc(src)}"></video>`);
   }
-  const src2 = embedUrl(src);
+  /* the frame's address carries the platform's own full-screen flag, so its
+     button is in its chrome too, beside this page's corner button */
+  const src2 = fullscreenSrc(src);
   if (!src2) {
     return playerShell(`<div class="vplayer__idle"><p class="vplayer__note">This source cannot be shown here.</p></div>`);
   }
   return playerShell(
-    `<iframe src="${esc(src2)}" title="${esc(v.title || "Video")}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`
+    `<iframe src="${esc(src2)}" title="${esc(v.title || "Video")}" loading="lazy" allow="${esc(FRAME_ALLOW)}" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`
   );
 }
 

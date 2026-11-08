@@ -37,7 +37,7 @@ import { toast } from "./ui.js";
 import { sessionToken, getMember } from "./session.js";
 import { COUNTRIES } from "./countries.js";
 import { SUPABASE, storageUrl } from "./config.js";
-import { embedUrl, autoThumb, isFile, sourceKind, sourceLabel, HOSTS, pinterestId, redditPath } from "./embed.js";
+import { embedUrl, fullscreenSrc, FRAME_ALLOW, autoThumb, isFile, sourceKind, sourceLabel, HOSTS, pinterestId, redditPath } from "./embed.js";
 import { createContents } from "./contents.js";
 import { studioReady, uploadToStudio, renameFile, NOT_CONNECTED } from "./streamtape.js";
 
@@ -1265,13 +1265,46 @@ function paintPlayer() {
   }
   host.hidden = false;
   const poster = S.thumb || autoThumb(value);
+  /* the preview can go to the whole screen too — the same corner disc, the
+     same platform flag for the embed's own button */
+  const disc = `<button class="vplayer__fs" type="button" data-ved-fs aria-pressed="false" aria-label="Full screen" title="Full screen">${icon("expand")}</button>`;
   if (isFile(value)) {
-    host.innerHTML = `<video controls playsinline preload="metadata"${poster ? ` poster="${esc(poster)}"` : ""} src="${esc(value)}"></video>`;
+    host.innerHTML = `<video controls playsinline preload="metadata"${poster ? ` poster="${esc(poster)}"` : ""} src="${esc(value)}"></video>${disc}`;
     return;
   }
-  const src = embedUrl(value);
-  host.innerHTML = `<iframe src="${esc(src)}" title="The video, before it is published" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+  const src = fullscreenSrc(value);
+  host.innerHTML = `<iframe src="${esc(src)}" title="The video, before it is published" loading="lazy" allow="${esc(FRAME_ALLOW)}" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>${disc}`;
 }
+
+/* the same door the watch page has, for the preview */
+function paintPreviewFullscreen() {
+  const button = $("[data-ved-fs]");
+  if (!button) return;
+  const on = Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+  button.setAttribute("aria-pressed", String(on));
+  button.setAttribute("aria-label", on ? "Leave full screen" : "Full screen");
+  button.innerHTML = icon(on ? "collapse" : "expand");
+}
+
+async function togglePreviewFullscreen() {
+  const host = $("[data-ved-player]");
+  if (!host) return;
+  try {
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+      await (document.exitFullscreen?.() || document.webkitExitFullscreen?.());
+    } else if (host.requestFullscreen || host.webkitRequestFullscreen) {
+      await (host.requestFullscreen?.({ navigationUI: "hide" }) || host.webkitRequestFullscreen?.());
+    } else {
+      toast({ title: "Not on this device", message: "This browser does not offer full screen here.", iconName: "info" });
+    }
+  } catch {
+    toast({ title: "Full screen was refused", message: "The browser said no — the preview keeps playing here.", iconName: "info" });
+  }
+  paintPreviewFullscreen();
+}
+
+document.addEventListener("fullscreenchange", paintPreviewFullscreen);
+document.addEventListener("webkitfullscreenchange", paintPreviewFullscreen);
 
 /* ================================================================== */
 /* files: a picture or a video, from the machine                      */
@@ -1855,6 +1888,11 @@ function bind() {
   document.addEventListener("click", (event) => {
     const target = event.target && typeof event.target.closest === "function" ? event.target : null;
     if (!target) return;
+    if (target.closest("[data-ved-fs]")) {
+      event.preventDefault();
+      togglePreviewFullscreen();
+      return;
+    }
     const addMain = target.closest("[data-ved-tag-add]");
     if (addMain) {
       event.preventDefault();
