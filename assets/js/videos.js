@@ -468,6 +468,79 @@ function commentsMarkup() {
            </div>
          </div>`;
 
+  /* a reply carries the id of the comment it answers; the server keeps the
+     thread, and a row with no parent is a comment of its own */
+  const repliesOf = (id) => rows.filter((c) => Number(c.parent_id) === Number(id));
+  const tops = rows.filter((c) => !c.parent_id || !rows.some((p) => Number(p.id) === Number(c.parent_id)));
+
+  const voteRow = (c) => {
+    const id = esc(String(c.id ?? ""));
+    const mine = String(c.mine_reaction || c.mine || "");
+    return `<div class="vcom__acts">
+      <button class="vcom__act" type="button" data-v-cvote="1" data-v-cvote-id="${id}" aria-pressed="${mine === "agree"}" aria-label="Like this comment">${icon("thumbUp")}<span data-v-cagree>${esc(num(Number(c.likes ?? c.agree_count ?? 0)))}</span></button>
+      <button class="vcom__act" type="button" data-v-cvote="0" data-v-cvote-id="${id}" aria-pressed="${mine === "disagree"}" aria-label="Dislike this comment">${icon("thumbDown")}<span data-v-cdisagree>${esc(num(Number(c.dislikes ?? c.disagree_count ?? 0)))}</span></button>
+      <button class="vcom__act" type="button" data-v-creply="${id}">${icon("comment")} Reply</button>
+      <button class="vcom__act" type="button" data-v-creport="${id}">${icon("flag")} Report</button>
+    </div>`;
+  };
+
+  const replyBox = (c) => {
+    const id = esc(String(c.id ?? ""));
+    const who = esc((c.author && (c.author.name || c.author.username)) || "this member");
+    return `<div class="vcom__box" data-v-reply-box="${id}" hidden>
+      <textarea class="textarea" rows="2" maxlength="4000" data-v-reply-input placeholder="Reply to ${who}"></textarea>
+      <div class="vcom__boxact">
+        <button class="btn btn--ghost btn--sm" type="button" data-v-reply-cancel="${id}">Cancel</button>
+        <button class="btn btn--primary btn--sm" type="button" data-v-reply-send="${id}" data-v-reply-to="@${who}">${icon("send")} Reply</button>
+      </div>
+    </div>`;
+  };
+
+  const reportBox = (c) => {
+    const id = esc(String(c.id ?? ""));
+    return `<div class="vcom__box" data-v-creport-box="${id}" hidden>
+      <label class="field">
+        <span>Why</span>
+        <select class="select" data-v-creport-reason>
+          <option value="abuse">It is abusive or hateful</option>
+          <option value="spam">It is spam</option>
+          <option value="misleading">It misleads</option>
+          <option value="other">Something else</option>
+        </select>
+      </label>
+      <textarea class="textarea" rows="2" maxlength="400" data-v-creport-note placeholder="What should we know? (optional)"></textarea>
+      <div class="vcom__boxact">
+        <button class="btn btn--ghost btn--sm" type="button" data-v-creport-cancel="${id}">Cancel</button>
+        <button class="btn btn--primary btn--sm" type="button" data-v-creport-send="${id}">${icon("flag")} Report</button>
+      </div>
+    </div>`;
+  };
+
+  const one = (c, { nested = false } = {}) => `
+    <article class="vcom${nested ? " vcom--reply" : ""}" data-v-comment="${esc(String(c.id ?? ""))}">
+      ${
+        c.author && c.author.avatar
+          ? `<img class="vcom__av" src="${esc(c.author.avatar)}" alt="" width="36" height="36" loading="lazy" />`
+          : `<span class="vcom__av vav" aria-hidden="true">${initial((c.author && (c.author.name || c.author.username)) || "?")}</span>`
+      }
+      <div class="vcom__body">
+        <div class="vcom__top">
+          <span class="vcom__name">${esc((c.author && (c.author.name || c.author.username)) || "A member")}</span>
+          <span class="vcom__time">${esc(timeAgo(c.created_at))}${c.edited ? " · edited" : ""}</span>
+        </div>
+        <p class="vcom__text">${esc(c.body || "")}</p>
+        ${voteRow(c)}
+        ${replyBox(c)}
+        ${reportBox(c)}
+      </div>
+    </article>`;
+
+  const thread = (c) => {
+    const kids = repliesOf(c.id).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    if (!kids.length) return one(c);
+    return `${one(c)}<div class="vcom__replies">${kids.map((kid) => one(kid, { nested: true })).join("")}</div>`;
+  };
+
   return `
     <section class="vcomments" id="comments">
       <div class="vcom__head">
@@ -477,25 +550,9 @@ function commentsMarkup() {
       ${composer}
       <div class="vcom__list" data-v-comment-list>
         ${
-          rows.length
-            ? rows
-                .map(
-                  (c) => `
-          <article class="vcom">
-            ${
-              c.author && c.author.avatar
-                ? `<img class="vcom__av" src="${esc(c.author.avatar)}" alt="" width="34" height="34" loading="lazy" />`
-                : `<span class="vcom__av vav" aria-hidden="true">${initial((c.author && (c.author.name || c.author.username)) || "?")}</span>`
-            }
-            <div class="vcom__body">
-              <div class="vcom__top">
-                <span class="vcom__name">${esc((c.author && (c.author.name || c.author.username)) || "A member")}</span>
-                <span class="vcom__time">${esc(timeAgo(c.created_at))}${c.edited ? " · edited" : ""}</span>
-              </div>
-              <p class="vcom__text">${esc(c.body || "")}</p>
-            </div>
-          </article>`
-                )
+          tops.length
+            ? tops
+                .map(thread)
                 .join("")
             : `<p class="vcom__hint" style="padding:1rem .35rem">No comments yet${canComment ? " — say the first thing." : "."}</p>`
         }
@@ -1456,6 +1513,181 @@ function bindWatch() {
         toast({ title: "That did not go through", message: error.message, tone: "error" });
       }
       btn.disabled = false;
+      return;
+    }
+
+    /* a comment is a place of its own: it can be liked, disliked, answered
+       and reported without leaving the page */
+    const cvote = event.target.closest("[data-v-cvote]");
+    if (cvote) {
+      event.preventDefault();
+      if (!signedIn()) {
+        return toast({ title: "Sign in first", message: "Votes hang from a member account.", iconName: "login" });
+      }
+      const id = cvote.getAttribute("data-v-cvote-id");
+      const agree = cvote.getAttribute("data-v-cvote") === "1";
+      cvote.disabled = true;
+      try {
+        const res = await rpc("post_comment_vote", {
+          p_token: state.token,
+          p_comment_id: Number(id),
+          p_agree: agree,
+        });
+        const node = root.querySelector(`[data-v-comment="${id}"]`);
+        if (res && res.ok) {
+          if (node) {
+            const like = node.querySelector("[data-v-cagree]");
+            const dislike = node.querySelector("[data-v-cdisagree]");
+            if (like) like.textContent = num(Number(res.agree) || 0);
+            if (dislike) dislike.textContent = num(Number(res.disagree) || 0);
+            const mine = res.mine === "agree" ? "1" : res.mine === "disagree" ? "0" : "";
+            node.querySelectorAll("[data-v-cvote]").forEach((button) => {
+              button.setAttribute("aria-pressed", String(button.getAttribute("data-v-cvote") === mine));
+            });
+          }
+          return;
+        }
+        toast({ title: "Not counted", message: res && res.error === "session" ? "Sign in again." : "The server refused that vote.", tone: "error", iconName: "info" });
+      } catch (error) {
+        toast({ title: "Not counted", message: "This comment cannot be voted on yet.", tone: "error", iconName: "info" });
+      } finally {
+        cvote.disabled = false;
+      }
+      return;
+    }
+
+    const creply = event.target.closest("[data-v-creply]");
+    if (creply) {
+      event.preventDefault();
+      const id = creply.getAttribute("data-v-creply");
+      const box = root.querySelector(`[data-v-reply-box="${id}"]`);
+      if (!box) return;
+      box.hidden = !box.hidden;
+      if (!box.hidden) {
+        const report = root.querySelector(`[data-v-creport-box="${id}"]`);
+        if (report) report.hidden = true;
+        box.querySelector("[data-v-reply-input]")?.focus();
+      }
+      return;
+    }
+
+    const creplyCancel = event.target.closest("[data-v-reply-cancel]");
+    if (creplyCancel) {
+      event.preventDefault();
+      const box = root.querySelector(`[data-v-reply-box="${creplyCancel.getAttribute("data-v-reply-cancel")}"]`);
+      if (box) box.hidden = true;
+      return;
+    }
+
+    const creplySend = event.target.closest("[data-v-reply-send]");
+    if (creplySend) {
+      event.preventDefault();
+      if (!signedIn()) {
+        return toast({ title: "Sign in first", message: "Replies hang from a member account.", iconName: "login" });
+      }
+      const id = creplySend.getAttribute("data-v-reply-send");
+      const box = root.querySelector(`[data-v-reply-box="${id}"]`);
+      const input = box && box.querySelector("[data-v-reply-input]");
+      const body = String((input && input.value) || "").trim();
+      if (!body) {
+        if (input) input.focus();
+        return;
+      }
+      const parent = Number(id);
+      creplySend.disabled = true;
+      try {
+        let res = await rpc("post_comment", {
+          p_token: state.token,
+          p_ref: state.code,
+          p_body: body,
+          p_parent_id: parent,
+        }).catch(() => null);
+        /* a server that does not keep threads yet still gets the reply, and
+           the line names the member it answers */
+        if (res && res.ok !== true) {
+          const to = creplySend.getAttribute("data-v-reply-to") || "";
+          res = await rpc("post_comment", {
+            p_token: state.token,
+            p_ref: state.code,
+            p_body: `${to} ${body}`.trim(),
+            p_parent_id: null,
+          }).catch(() => null);
+        }
+        if (res && res.ok) {
+          if (input) input.value = "";
+          if (box) box.hidden = true;
+          toast({ title: "Reply sent", tone: "success", iconName: "comment", duration: 2600 });
+          await loadComments(state.code);
+        } else {
+          toast({
+            title: "Not sent",
+            message: res && res.error === "reaction" ? "Like or dislike the video first." : "The server refused the reply.",
+            tone: "error",
+            iconName: "info",
+          });
+        }
+      } catch (error) {
+        toast({ title: "Not sent", message: error.message, tone: "error", iconName: "info" });
+      }
+      creplySend.disabled = false;
+      return;
+    }
+
+    const creport = event.target.closest("[data-v-creport]");
+    if (creport) {
+      event.preventDefault();
+      const id = creport.getAttribute("data-v-creport");
+      const box = root.querySelector(`[data-v-creport-box="${id}"]`);
+      if (!box) return;
+      box.hidden = !box.hidden;
+      if (!box.hidden) {
+        const reply = root.querySelector(`[data-v-reply-box="${id}"]`);
+        if (reply) reply.hidden = true;
+      }
+      return;
+    }
+
+    const creportCancel = event.target.closest("[data-v-creport-cancel]");
+    if (creportCancel) {
+      event.preventDefault();
+      const box = root.querySelector(`[data-v-creport-box="${creportCancel.getAttribute("data-v-creport-cancel")}"]`);
+      if (box) box.hidden = true;
+      return;
+    }
+
+    const creportSend = event.target.closest("[data-v-creport-send]");
+    if (creportSend) {
+      event.preventDefault();
+      if (!signedIn()) {
+        return toast({ title: "Sign in first", message: "Reports need a member account.", iconName: "login" });
+      }
+      const id = creportSend.getAttribute("data-v-creport-send");
+      const box = root.querySelector(`[data-v-creport-box="${id}"]`);
+      const node = root.querySelector(`[data-v-comment="${id}"]`);
+      const reason = (box && box.querySelector("[data-v-creport-reason]")?.value) || "other";
+      const note = String((box && box.querySelector("[data-v-creport-note]")?.value) || "").trim();
+      const who = (node && node.querySelector(".vcom__name")?.textContent) || "a member";
+      const said = (node && node.querySelector(".vcom__text")?.textContent) || "";
+      creportSend.disabled = true;
+      try {
+        /* the report door the site already has: the video it is filed under,
+           and a note that names the comment and quotes it */
+        const res = await rpc("post_report", {
+          p_token: state.token,
+          p_ref: state.code,
+          p_reason: reason,
+          p_note: `Comment #${id} by ${who}: “${said.slice(0, 160)}”${note ? ` — ${note}` : ""}`,
+        });
+        if (res && res.ok) {
+          if (box) box.hidden = true;
+          toast({ title: "Report sent", message: "A moderator will look at the comment.", tone: "success", iconName: "flag" });
+        } else {
+          toast({ title: "Not sent", message: "The server refused the report.", tone: "error", iconName: "flag" });
+        }
+      } catch (error) {
+        toast({ title: "Not sent", message: "Reporting is not open on this server yet.", tone: "error", iconName: "flag" });
+      }
+      creportSend.disabled = false;
       return;
     }
 

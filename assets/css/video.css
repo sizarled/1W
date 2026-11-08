@@ -2557,3 +2557,67 @@
   width: 14px;
   height: 14px;
 }
+
+/* a comment answers, is counted, and can be reported where it stands */
+.vcom__act[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  border-color: var(--line-3);
+  color: var(--text);
+}
+
+.vcom__act .ico {
+  width: 12px;
+  height: 12px;
+}
+
+.vcom__box {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.55rem;
+  padding: 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 0.7rem;
+  background: var(--surface-2);
+}
+
+.vcom__box[hidden] {
+  display: none;
+}
+
+.vcom__box .textarea {
+  min-height: 62px;
+  background: var(--bg-soft);
+}
+
+.vcom__boxact {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.vcom__replies {
+  display: grid;
+  gap: 0;
+  margin-inline-start: 2.4rem;
+  padding-inline-start: 0.9rem;
+  border-inline-start: 1px solid var(--line);
+}
+
+.vcom__replies .vcom {
+  grid-template-columns: 30px 1fr;
+}
+
+.vcom__replies .vcom__av {
+  width: 30px;
+  height: 30px;
+  font-size: 0.72rem;
+}
+
+.vcom--reply .vcom__name {
+  font-size: 0.78rem;
+}
+
+.vcom--reply .vcom__text {
+  font-size: 0.82rem;
+}

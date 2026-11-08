@@ -102,6 +102,19 @@ const COMMENTS = {
       sentiment: 1,
       created_at: new Date(Date.now() - 600_000).toISOString(),
     },
+    {
+      id: 8,
+      body: "Agreed — the second half is the film.",
+      code: "cmt000008",
+      author: { id: "m3", name: "Omar", username: "@omar", avatar: null },
+      mine: false,
+      likes: 0,
+      dislikes: 0,
+      edited: false,
+      parent_id: 7,
+      sentiment: 1,
+      created_at: new Date(Date.now() - 300_000).toISOString(),
+    },
   ],
   count: 1,
   reaction: null,
@@ -219,14 +232,17 @@ const lastCall = (calls, fn) => [...calls].reverse().find((c) => fnName(c.href) 
   const { document, calls, errors, window } = boot("videos.html", {
     hash: "#/v/PST-001010",
     storage: { "1w.member": JSON.stringify({ id: "m9", username: "@you", name: "You", level: 2 }), "1w.session": "tok-watch" },
-    fetchImpl: (href) => {
+    fetchImpl: (href, opts) => {
       const fn = fnName(href);
+      const sent = opts && opts.body ? JSON.parse(opts.body) : {};
       if (fn === "video_feed") return reply(FEED);
       if (fn === "video_mine") return reply({ ok: true, rows: [] });
       if (fn === "video_get") return reply({ ok: true, locked: false, mine: false, video: card(), related: [card({ code: "PST-001011", title: "Elephants Dream" })], more: [] });
       if (fn === "post_comments") return reply(COMMENTS);
       if (fn === "post_react") return reply({ ok: true, likes: 5, dislikes: 1, reaction: 1 });
       if (fn === "post_comment") return reply({ ok: true, comments: [], comments_pos: 1, comments_neg: 0 });
+      if (fn === "post_comment_vote") return reply({ ok: true, agree: sent.p_agree ? 2 : 1, disagree: sent.p_agree ? 0 : 1, mine: sent.p_agree ? "agree" : "disagree" });
+      if (fn === "post_report") return reply({ ok: true, reported: true });
       return reply([]);
     },
   });
@@ -243,7 +259,13 @@ const lastCall = (calls, fn) => [...calls].reverse().find((c) => fnName(c.href) 
   expect("watch: the publisher is named", document.querySelector(".vhost__name")?.textContent === "Jhon");
   expect("watch: the counters arrive", document.querySelector("[data-v-like]")?.textContent === "4", document.querySelector("[data-v-like]")?.textContent);
   expect("watch: related is listed", document.querySelectorAll(".vwatch__side .vrow").length === 1, document.querySelectorAll(".vwatch__side .vrow").length);
-  expect("watch: the existing comment renders", document.querySelectorAll(".vcom__list .vcom").length === 1);
+  expect("watch: the existing comment renders", document.querySelectorAll(".vcom__list .vcom").length === 2, document.querySelectorAll(".vcom__list .vcom").length);
+  expect(
+    "watch: a reply sits under the comment it answers",
+    document.querySelectorAll(".vcom__list > .vcom").length === 1 &&
+      document.querySelectorAll(".vcom__list .vcom__replies .vcom").length === 1,
+    `${document.querySelectorAll(".vcom__list > .vcom").length} / ${document.querySelectorAll(".vcom__list .vcom__replies .vcom").length}`
+  );
   expect("watch: the tags come back as chips", document.querySelectorAll("[data-v-tag]").length === 1);
   expect("watch: the like reads unpressed", document.querySelector("[data-v-react='1']")?.getAttribute("aria-pressed") === "false");
 
@@ -266,6 +288,52 @@ const lastCall = (calls, fn) => [...calls].reverse().find((c) => fnName(c.href) 
   document.querySelector("[data-v-comment-send]").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
   await wait(60);
   expect("watch: the comment is sent", lastCall(calls, "post_comment")?.body.p_body === "Second watch, still great.", JSON.stringify(lastCall(calls, "post_comment")?.body));
+
+  /* a comment of its own: a like, a dislike, a reply and a report */
+  const first = document.querySelector('[data-v-comment="7"]');
+  expect("comments: every comment carries its four doors", first?.querySelectorAll(".vcom__acts .vcom__act").length === 4, first?.querySelectorAll(".vcom__acts .vcom__act").length);
+  expect("comments: a reply carries them too", document.querySelectorAll('[data-v-comment="8"] .vcom__acts .vcom__act').length === 4);
+  expect("comments: the count it came with is shown", first?.querySelector("[data-v-cagree]")?.textContent === "1", first?.querySelector("[data-v-cagree]")?.textContent);
+
+  first.querySelector('[data-v-cvote="1"]').dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await wait(60);
+  const vote = lastCall(calls, "post_comment_vote");
+  expect("comments: the like names the comment", vote?.body.p_comment_id === 7, JSON.stringify(vote?.body));
+  expect("comments: and says which way", vote?.body.p_agree === true);
+  expect("comments: the like count moves", first.querySelector("[data-v-cagree]")?.textContent === "2", first.querySelector("[data-v-cagree]")?.textContent);
+  expect("comments: the like reads pressed", first.querySelector('[data-v-cvote="1"]')?.getAttribute("aria-pressed") === "true");
+
+  first.querySelector('[data-v-cvote="0"]').dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await wait(60);
+  expect("comments: a dislike is the same door, the other way", lastCall(calls, "post_comment_vote")?.body.p_agree === false);
+  expect("comments: the dislike count moves", first.querySelector("[data-v-cdisagree]")?.textContent === "1", first.querySelector("[data-v-cdisagree]")?.textContent);
+  expect("comments: and only one of the two is pressed", first.querySelectorAll("[data-v-cvote][aria-pressed='true']").length === 1, first.querySelectorAll("[data-v-cvote][aria-pressed='true']").length);
+
+  first.querySelector("[data-v-creply='7']").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await wait(20);
+  const replyBox = first.querySelector("[data-v-reply-box='7']");
+  expect("comments: Reply opens a box under that comment", replyBox?.hidden === false);
+  replyBox.querySelector("[data-v-reply-input]").value = "Same here.";
+  first.querySelector("[data-v-reply-send='7']").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await wait(80);
+  const replyCall = lastCall(calls, "post_comment");
+  expect("comments: the reply goes out with the comment it answers", replyCall?.body.p_parent_id === 7, JSON.stringify(replyCall?.body));
+  expect("comments: and with its own words", replyCall?.body.p_body === "Same here.", replyCall?.body.p_body);
+
+  /* the reply reloaded the list, so the comment is drawn again */
+  await wait(40);
+  const again = document.querySelector('[data-v-comment="7"]') || first;
+  again.querySelector("[data-v-creport='7']").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await wait(20);
+  const reportBox = again.querySelector("[data-v-creport-box='7']");
+  expect("comments: Report opens its own box", reportBox?.hidden === false);
+  reportBox.querySelector("[data-v-creport-reason]").value = "spam";
+  again.querySelector("[data-v-creport-send='7']").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await wait(60);
+  const reportCall = lastCall(calls, "post_report");
+  expect("comments: the report is filed under the video", reportCall?.body.p_ref === "PST-001010", JSON.stringify(reportCall?.body));
+  expect("comments: and it quotes the comment it is about", /Comment #7/.test(reportCall?.body.p_note || "") && /Watched it twice/.test(reportCall?.body.p_note || ""), reportCall?.body.p_note);
+  expect("comments: the box closes once it is sent", reportBox?.hidden === true);
   expect("watch: the box empties", box.value === "");
   expect("watch: nothing threw", errors.length === 0, errors.join(" | "));
 }

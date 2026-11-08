@@ -1621,7 +1621,17 @@ its seal, kind and code and member, `subscribers · releases`, **Follow**/Subscr
 `profile_follow_toggle` or `creator_subscribe`), the studio's own links, the tags as field chips, and
 the comments. The side column carries *Related* and *More from …* as thumbnail rows. Commenting
 follows the site rule: **like or dislike first**, then the composer appears. A video the viewer may not
-see arrives `locked` — with its title and its thumbnail, never its source. The header is the site's
+see arrives `locked` — with its title and its thumbnail, never its source.
+
+**A comment is a place of its own.** Under every comment sit four doors: **like**, **dislike**
+(`post_comment_vote`, the same door the article's *agree / disagree* uses — one vote per member, a
+second press of the other takes the first back, and the counts come back from the answer so the row
+never guesses), **Reply** (an inline box under that comment; it goes out as `post_comment` with
+`p_parent_id`, and a server that does not keep threads yet still gets it as a line naming the member —
+never dropped), and **Report** (an inline box with a reason and a note; it is filed through
+`post_report` under the video, and the note names the comment and quotes it, so a moderator knows
+exactly which line it is about). A row whose `parent_id` points at another comment is drawn under it,
+in a bordered thread; a row with no parent is a comment of its own. The header is the site's
 own, untouched: only the content under it was rebuilt.
 
 `video.html?id=…` still answers its old address: it forwards to `videos.html#/v/<code>`, so the links
