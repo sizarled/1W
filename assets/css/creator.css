@@ -3821,3 +3821,37 @@ a.crp-ad:hover {
   gap: 0.3rem;
   font-variant-numeric: tabular-nums;
 }
+
+/* the play disc on a shelf card: black glass on the still, solid black under
+   the pointer — the same disc the site's video cards carry */
+.crs-card__thumb {
+  position: relative;
+}
+
+.crs-card__play {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  color: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 12px 30px -12px rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+  transition: background 0.18s var(--ease), transform 0.18s var(--ease);
+}
+
+.crs-card__play svg {
+  width: 18px;
+  height: 18px;
+}
+
+.crs-card:hover .crs-card__play,
+.crs-card:focus-visible .crs-card__play {
+  background: rgba(0, 0, 0, 0.92);
+  transform: scale(1.06);
+}

@@ -205,18 +205,15 @@
   pointer-events: none;
 }
 
+/* the play disc sits on the still from the start: black glass, and solid black
+   the moment the pointer is on the card */
 .vcard__play {
   position: absolute;
   inset: 0;
   display: grid;
   place-items: center;
-  opacity: 0;
-  transition: opacity 0.28s var(--ease);
-}
-
-.vcard:hover .vcard__play,
-.vcard:focus-visible .vcard__play {
   opacity: 1;
+  pointer-events: none;
 }
 
 .vcard__play span {
@@ -225,9 +222,17 @@
   width: 46px;
   height: 46px;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--text) 92%, transparent);
-  color: var(--bg);
+  background: rgba(0, 0, 0, 0.45);
+  color: rgba(255, 255, 255, 0.95);
   box-shadow: 0 12px 30px -12px rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(2px);
+  transition: background 0.18s var(--ease), transform 0.18s var(--ease);
+}
+
+.vcard:hover .vcard__play span,
+.vcard:focus-visible .vcard__play span {
+  background: rgba(0, 0, 0, 0.92);
+  transform: scale(1.06);
 }
 
 .vcard__play .ico {
