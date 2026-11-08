@@ -2376,6 +2376,55 @@ function itemCard(row) {
     </article>`;
 }
 
+/**
+ * A studio's videos are published into `posts`, and a hub view that reads only
+ * the studio's own shelf cannot see them. The public feed is asked for the ones
+ * that name this studio — read from whichever door the row carries — and they
+ * are added as items, never invented: a row that does not name this hub is not
+ * this hub's.
+ */
+async function feedItemsFor(hub) {
+  if (!hub || (!hub.id && !hub.code)) return [];
+  let res = null;
+  try {
+    res = await rpc("video_feed", {
+      p_token: state.token || "",
+      p_field: null,
+      p_sort: "new",
+      p_search: "",
+      p_limit: 60,
+      p_offset: 0,
+    });
+  } catch {
+    return [];
+  }
+  const rows = res && res.ok && Array.isArray(res.rows) ? res.rows : [];
+  const ids = [];
+  const codes = [];
+  rows.forEach((row) => {
+    const id = row.hub_id || row.hub?.id || row.video?.hub?.id || row.video?.hub_id || "";
+    const code = row.hub?.code || row.video?.hub?.code || "";
+    if (id) ids.push(String(id));
+    if (code) codes.push(String(code));
+  });
+  return rows
+    .filter((row) => {
+      const id = String(row.hub_id || row.hub?.id || row.video?.hub?.id || row.video?.hub_id || "");
+      const code = String(row.hub?.code || row.video?.hub?.code || "");
+      return (hub.id && id === String(hub.id)) || (hub.code && code === String(hub.code));
+    })
+    .map((row) => ({
+      ...row,
+      kind: "video",
+      code: row.code || row.id,
+      thumbnail: row.thumbnail || row.cover || "",
+      summary: row.description || row.summary || "",
+      views: row.views != null ? row.views : row.counters?.impressions,
+      likes: row.likes != null ? row.likes : row.counters?.likes,
+      minutes: row.minutes != null ? row.minutes : row.video?.meta?.minutes,
+    }));
+}
+
 async function loadHubPage(ref, password = "") {
   state.hubView = null;
   state.hubError = "";
@@ -2384,6 +2433,12 @@ async function loadHubPage(ref, password = "") {
   try {
     const res = await rpc("creator_hub_view", { p_token: state.token || "", p_hub: ref, p_password: password });
     if (res && res.ok) {
+      /* an empty shelf is not the last word: the studio's published videos may
+         live in `posts`, so the feed is asked for the ones that name it */
+      if (!(res.items || []).length) {
+        const extra = await feedItemsFor(res.hub);
+        if (extra.length) res.items = extra;
+      }
       state.hubView = res;
       state.hubViewId = res.hub?.id || ref;
       state.hubError = "";
@@ -3863,3 +3918,4 @@ if (document.readyState === "loading") {
 } else {
   boot();
 }
+
