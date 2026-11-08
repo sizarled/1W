@@ -58,6 +58,20 @@ included — work three ways:
 
 ---
 
+## The creator page, drawn as a channel
+
+`creator.html` keeps its console — the rail, the *Managing* picker, the tabs, the tables — and
+wears the reference channel's head. The hub being managed now opens on **a cover banner** (its own
+`cover_url`, greyscale behind a scrim; a plain gradient when it has none), with the kind and the code
+over it, and **a round mark of 58–84px** that sits half on the banner, the studio's name at
+`clamp(1.25rem, 2.4vw, 1.75rem)` weight 800 under it, its field and niches on one line, and the numbers
+as pills — visibility, subscribers, items, minutes, likes, reports, the figure bold and the word quiet.
+The tabs are the reference's toolbar: outlined chips in a bar that scrolls sideways on a phone, the
+one you are in filled (`--text` on `--bg`). The public hub's cards are the reference's video card —
+16:9 still, kind line, two-line title, two-line summary, facts row — lifting 3px on hover. A creator's
+own page (`creator.html?creator=`) gets the same banner and mark, then its name, handle, where, tags,
+bio, actions and totals. Nothing is invented: no `cover_url`, no banner image; no field, "No field yet".
+
 ## The watch page
 
 `watch.html` is a real page, not a placeholder. It reads the title from the URL and builds

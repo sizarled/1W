@@ -572,83 +572,70 @@
  * is graded down to grey and half hidden — the furniture around it stays the
  * one thing the eye lands on.
  */
+/* the channel head — a cover, a mark, a name and the numbers under it */
 .cr-hubhead {
   position: relative;
-  isolation: isolate;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.95rem;
-  padding: clamp(0.95rem, 2vw, 1.2rem) var(--cr-x);
+  gap: 0;
+  padding: clamp(0.9rem, 2vw, 1.2rem) var(--cr-x) 0;
   border-bottom: 1px solid var(--cr-hair);
-  overflow: hidden;
 }
 
-.cr-hubhead::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
+.cr-hubhead__banner {
+  position: relative;
+  isolation: isolate;
+  min-height: clamp(140px, 20vw, 232px);
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  overflow: hidden;
   background:
-    radial-gradient(120% 180% at 0% 0%, color-mix(in srgb, var(--text) 7%, transparent), transparent 60%),
-    linear-gradient(180deg, color-mix(in srgb, var(--surface) 60%, transparent), transparent);
-  pointer-events: none;
+    radial-gradient(120% 160% at 12% 0%, color-mix(in srgb, var(--text) 12%, transparent), transparent 62%),
+    linear-gradient(140deg, var(--surface-2), var(--bg-soft));
 }
 
 .cr-hubhead__cover {
   position: absolute;
   inset: 0;
-  z-index: -2;
+  z-index: -1;
   width: 100%;
   height: 100%;
   object-fit: cover;
   object-position: center 40%;
-  opacity: 0.16;
-  filter: grayscale(1) contrast(1.06);
+  filter: grayscale(1) contrast(1.05) brightness(0.82);
+}
+
+.cr-hubhead__scrim {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.55)),
+    radial-gradient(90% 120% at 0% 100%, rgba(0, 0, 0, 0.55), transparent 70%);
   pointer-events: none;
 }
 
-.cr-hubhead__logo {
-  display: grid;
-  place-items: center;
-  width: 54px;
-  height: 54px;
-  border-radius: 14px;
-  border: 1px solid var(--line-2);
-  background: var(--surface-2);
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--text) 6%, transparent),
-    0 8px 24px -12px rgba(0, 0, 0, 0.9);
-  overflow: hidden;
-  flex: none;
-  font-size: 0.82rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  color: var(--text-2);
-}
-
-.cr-hubhead__logo img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.cr-hubhead__id {
-  display: grid;
-  gap: 0.22rem;
-  min-width: 0;
-}
-
 .cr-hubhead__eyebrow {
+  position: absolute;
+  inset-inline-start: clamp(0.9rem, 2vw, 1.4rem);
+  top: clamp(0.8rem, 1.6vw, 1.1rem);
   display: flex;
   align-items: center;
   gap: 0.45rem;
   margin: 0;
-  font-size: 0.58rem;
-  font-weight: 650;
-  letter-spacing: 0.18em;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--faint);
+  color: rgba(255, 255, 255, 0.82);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.6);
+}
+
+.cr-hubhead__kind {
+  padding: 0.18rem 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 0.4rem;
+  background: rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(6px);
 }
 
 .cr-hubhead__dot {
@@ -660,22 +647,59 @@
 }
 
 .cr-hubhead__code {
-  font-family: var(--font-sans);
-  letter-spacing: 0.1em;
   font-variant-numeric: tabular-nums;
-  color: var(--muted);
+  letter-spacing: 0.1em;
 }
 
-.cr-hubhead__name {
-  font-size: clamp(1.05rem, 1.6vw, 1.28rem);
-  font-weight: 650;
-  letter-spacing: -0.02em;
-  line-height: 1.15;
+.cr-hubhead__bar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: end;
+  gap: clamp(0.7rem, 1.6vw, 1.1rem);
+  margin-top: clamp(-2.6rem, -3.2vw, -2rem);
+  padding: 0 clamp(0.8rem, 2vw, 1.4rem) clamp(0.9rem, 1.8vw, 1.2rem);
+}
+
+.cr-hubhead__logo {
+  display: grid;
+  place-items: center;
+  width: clamp(58px, 8vw, 84px);
+  height: clamp(58px, 8vw, 84px);
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--text) 22%, transparent);
+  background: var(--surface-2);
+  box-shadow: 0 12px 30px -14px rgba(0, 0, 0, 0.95);
+  overflow: hidden;
+  flex: none;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
   color: var(--text);
 }
 
+.cr-hubhead__logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cr-hubhead__id {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.cr-hubhead__name {
+  font-size: clamp(1.25rem, 2.4vw, 1.75rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
 .cr-hubhead__sub {
-  font-size: 0.73rem;
+  font-size: 0.79rem;
   color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -684,27 +708,38 @@
 
 .cr-hubhead__stats {
   display: flex;
-  gap: 0.35rem;
   flex-wrap: wrap;
-  justify-content: flex-end;
-  margin-left: auto;
+  gap: 0.4rem;
+  margin-top: 0.15rem;
 }
 
-@media (max-width: 860px) {
-  .cr-hubhead {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
+.cr-hubhead__stats .cr-pill {
+  height: 28px;
+  padding: 0 0.7rem;
+  font-size: 0.71rem;
+}
 
-  .cr-hubhead__stats {
-    grid-column: 1 / -1;
-    justify-content: flex-start;
-    margin-left: 0;
+.cr-hubhead__stats .cr-pill b {
+  font-weight: 800;
+  color: var(--text);
+}
+
+@media (max-width: 760px) {
+  .cr-hubhead__bar {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: start;
+    margin-top: -1.6rem;
   }
 
   .cr-hubhead__sub {
     white-space: normal;
   }
+
+  .cr-hubhead__banner {
+    min-height: 120px;
+  }
 }
+
 
 .cr-pill {
   display: inline-flex;
@@ -750,15 +785,17 @@
 
 /* tabs -------------------------------------------------------------- */
 /*
- * Underlined rather than pill-shaped: a bar of sections belongs to the page,
- * not to a button. The line under the active one is the whole signal.
+ * A row of doors, drawn as the reference draws them: quiet outlined chips in a
+ * bar, and the one you are in filled. It scrolls sideways on a phone instead
+ * of wrapping into a second line.
  */
 .cr-tabs {
   display: flex;
-  gap: 0.15rem;
+  align-items: center;
+  gap: 0.4rem;
   flex-wrap: nowrap;
   overflow-x: auto;
-  padding: 0 var(--cr-x);
+  padding: 0.7rem var(--cr-x);
   border-bottom: 1px solid var(--cr-hair);
   scrollbar-width: none;
   scroll-snap-type: x proximity;
@@ -770,46 +807,37 @@
 
 .cr-tab {
   position: relative;
-  height: 42px;
-  padding: 0 0.05rem;
-  margin-right: 1.15rem;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
+  flex: none;
+  height: 34px;
+  padding: 0 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
   color: var(--muted);
   font: inherit;
   font-size: 0.79rem;
-  font-weight: 600;
+  font-weight: 650;
   letter-spacing: -0.005em;
   cursor: pointer;
   white-space: nowrap;
   scroll-snap-align: start;
-  transition: color 0.14s ease;
+  transition: all 0.18s var(--ease);
 }
 
 .cr-tab::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 2px;
-  border-radius: 2px 2px 0 0;
-  background: transparent;
-  transition: background 0.14s ease;
+  content: none;
 }
 
 .cr-tab:hover {
-  color: var(--text-2);
+  color: var(--text);
+  border-color: var(--line-3);
+  background: color-mix(in srgb, var(--text) 7%, transparent);
 }
 
 .cr-tab.is-on {
-  background: transparent;
-  color: var(--text);
-}
-
-.cr-tab.is-on::after {
   background: var(--text);
+  border-color: transparent;
+  color: var(--bg);
 }
 
 /* the view ---------------------------------------------------------- */
@@ -2080,15 +2108,65 @@ tr:hover .cr-act > summary,
   height: 13px;
 }
 
+/* the creator's page — a cover, a mark that sits on it, then the facts */
 .crp-profile {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 1rem;
-  padding: clamp(1rem, 3vw, 1.6rem);
+  display: grid;
+  gap: 0;
+  padding: 0;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   background: var(--surface);
+  overflow: hidden;
+}
+
+.crp-profile__banner {
+  position: relative;
+  min-height: clamp(120px, 18vw, 200px);
+  background:
+    radial-gradient(120% 160% at 12% 0%, color-mix(in srgb, var(--text) 12%, transparent), transparent 62%),
+    linear-gradient(140deg, var(--surface-2), var(--bg-soft));
+}
+
+.crp-profile__banner img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 40%;
+  filter: grayscale(1) contrast(1.05) brightness(0.82);
+}
+
+.crp-profile__scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.06), rgba(0, 0, 0, 0.5));
+}
+
+.crp-profile__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 1rem;
+  padding: 0 clamp(1rem, 2.6vw, 1.5rem) clamp(1rem, 3vw, 1.4rem);
+  margin-top: clamp(-2.4rem, -3vw, -1.8rem);
+}
+
+.crp-profile__bar .crp-avatar--lg {
+  width: clamp(64px, 9vw, 96px);
+  height: clamp(64px, 9vw, 96px);
+  border: 2px solid color-mix(in srgb, var(--text) 22%, transparent);
+  box-shadow: 0 12px 30px -14px rgba(0, 0, 0, 0.95);
+}
+
+@media (max-width: 700px) {
+  .crp-profile__bar {
+    align-items: flex-start;
+  }
+
+  .crp-profile__banner {
+    min-height: 108px;
+  }
 }
 
 .crp-profile__id {
@@ -3591,4 +3669,97 @@ a.crp-ad:hover {
   .crs-grid {
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr));
   }
+}
+
+/* the cards on a public hub — the reference's video card, in the site's greys */
+.crp-items {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr));
+  gap: 1rem;
+}
+
+.crp-item {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+  transition: transform 0.22s var(--ease), border-color 0.22s var(--ease), box-shadow 0.22s var(--ease);
+}
+
+.crp-item:hover {
+  transform: translateY(-3px);
+  border-color: var(--line-3);
+  box-shadow: var(--shadow-sm);
+}
+
+.crp-item__thumb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border: 0;
+  border-radius: 0;
+  background: var(--bg-soft);
+  filter: var(--art-filter, none);
+}
+
+.crp-item__thumb.is-plain {
+  display: grid;
+  place-items: center;
+  color: var(--faint);
+  font-size: 1.4rem;
+}
+
+.crp-item__body {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.85rem 0.95rem 0.95rem;
+}
+
+.crp-item__kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.crp-item__kind .ico {
+  width: 12px;
+  height: 12px;
+}
+
+.crp-item__title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.crp-item__summary {
+  font-size: 0.78rem;
+  line-height: 1.65;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.crp-item__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.7rem;
+  margin-top: 0.15rem;
+  font-size: 0.71rem;
+  font-weight: 600;
+  color: var(--faint);
 }

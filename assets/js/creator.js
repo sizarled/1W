@@ -722,30 +722,39 @@ function renderHubHead() {
   }
   host.hidden = false;
   host.style.display = "";
+  host.dataset.kind = hub.kind || "";
   const logo = hub.logo_url
-    ? `<img src="${esc(hub.logo_url)}" alt="" width="52" height="52" />`
+    ? `<img src="${esc(hub.logo_url)}" alt="" width="84" height="84" />`
     : esc(String(hub.name || "?").trim().slice(0, 2).toUpperCase());
   const section = sectionOf(state.section);
   const seat = seatOf(hub);
   const seatNote = seat === "publisher" ? "publisher seat" : seat === "staff" ? "staff access" : "owner";
+  const cover = hub.cover_url
+    ? `<img class="cr-hubhead__cover" src="${esc(hub.cover_url)}" alt="" loading="lazy" />`
+    : "";
   host.innerHTML = `
-    ${hub.cover_url ? `<img class="cr-hubhead__cover" src="${esc(hub.cover_url)}" alt="" loading="lazy" />` : ""}
-    <span class="cr-hubhead__logo">${logo}</span>
-    <div class="cr-hubhead__id">
+    <div class="cr-hubhead__banner">
+      ${cover}
+      <span class="cr-hubhead__scrim" aria-hidden="true"></span>
       <p class="cr-hubhead__eyebrow">
-        <span>${esc(section.label)}</span>
+        <span class="cr-hubhead__kind">${esc(section.label)}</span>
         ${hub.code ? `<span class="cr-hubhead__dot" aria-hidden="true"></span><span class="cr-hubhead__code">${esc(hub.code)}</span>` : ""}
       </p>
-      <span class="cr-hubhead__name">${esc(hub.name)}</span>
-      <span class="cr-hubhead__sub">${esc(hub.field || "No field yet")}${hub.niches?.length ? ` · ${esc(hub.niches.join(", "))}` : ""} · ${esc(seatNote)}</span>
     </div>
-    <div class="cr-hubhead__stats">
-      <span class="cr-pill" data-tone="${esc(hub.visibility)}"><i data-icon="shield"></i>${esc(visLabel(hub.visibility))}</span>
-      <span class="cr-pill"><i data-icon="users"></i>${esc(num(hub.subscribers || 0))}</span>
-      <span class="cr-pill"><i data-icon="file"></i>${esc(num(hub.items || 0))}</span>
-      <span class="cr-pill"><i data-icon="clock"></i>${esc(num(hub.minutes || 0))} min</span>
-      <span class="cr-pill"><i data-icon="thumbUp"></i>${esc(num(hub.likes || 0))}</span>
-      <span class="cr-pill"><i data-icon="flag"></i>${esc(num(hub.reports || 0))}</span>
+    <div class="cr-hubhead__bar">
+      <span class="cr-hubhead__logo">${logo}</span>
+      <div class="cr-hubhead__id">
+        <span class="cr-hubhead__name">${esc(hub.name)}</span>
+        <span class="cr-hubhead__sub">${esc(hub.field || "No field yet")}${hub.niches?.length ? ` · ${esc(hub.niches.join(", "))}` : ""} · ${esc(seatNote)}</span>
+        <div class="cr-hubhead__stats">
+          <span class="cr-pill" data-tone="${esc(hub.visibility)}"><i data-icon="shield"></i>${esc(visLabel(hub.visibility))}</span>
+          <span class="cr-pill"><i data-icon="users"></i><b>${esc(num(hub.subscribers || 0))}</b> subscribers</span>
+          <span class="cr-pill"><i data-icon="file"></i><b>${esc(num(hub.items || 0))}</b> items</span>
+          <span class="cr-pill"><i data-icon="clock"></i><b>${esc(num(hub.minutes || 0))}</b> min</span>
+          <span class="cr-pill"><i data-icon="thumbUp"></i><b>${esc(num(hub.likes || 0))}</b></span>
+          <span class="cr-pill"><i data-icon="flag"></i><b>${esc(num(hub.reports || 0))}</b></span>
+        </div>
+      </div>
     </div>`;
   hydrateIcons(host);
 }
@@ -1910,6 +1919,15 @@ function renderCreatorPage(host) {
       </nav>
 
       <header class="crp-profile">
+        <div class="crp-profile__banner">
+          ${
+            creator.cover || creator.cover_url
+              ? `<img src="${esc(creator.cover || creator.cover_url)}" alt="" loading="lazy" />`
+              : ""
+          }
+          <span class="crp-profile__scrim" aria-hidden="true"></span>
+        </div>
+        <div class="crp-profile__bar">
         ${avatarBlock(creator.avatar, creator.name, "crp-avatar crp-avatar--lg")}
         <div class="crp-profile__id">
           <h1 class="crp-profile__name">${esc(creator.name || "Member")}<span class="crp-badge" data-tone="${pubhubs.length && hubs.length ? "both" : pubhubs.length ? "publisher" : "owner"}">${pubhubs.length && hubs.length ? "Owner & publisher" : pubhubs.length ? "Publisher" : "Owner"}</span></h1>
@@ -1929,6 +1947,7 @@ function renderCreatorPage(host) {
           ${pubhubs.length ? `<span class="crp-stat"><b>${esc(num(Number(totals.writes) || pubhubs.length))}</b><small>writes in</small></span>` : ""}
           <span class="crp-stat"><b>${esc(num(Number(totals.minutes) || 0))}</b><small>minutes</small></span>
           <span class="crp-stat"><b>${esc(num(Number(totals.likes) || 0))}</b><small>likes</small></span>
+        </div>
         </div>
       </header>
 
