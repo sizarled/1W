@@ -48,6 +48,7 @@ const state = {
   video: null,
   related: [],
   more: [],
+  suggested: [],
   comments: null,
   canComment: false,
   reaction: null,
@@ -741,8 +742,60 @@ function watchMarkup(v, res) {
                </div>`
             : ""
         }
+        ${
+          /* under the publisher's own shelf: what else the site suggests —
+             never the video being watched, never a row already above */
+          state.suggested.length
+            ? `<div class="vcard-box" data-v-suggested>
+                 <div class="vcard-box__head">
+                   <span class="vcard-box__title">Suggested for you</span>
+                   <span class="vcard-box__hint">${esc(String(state.suggested.length))}</span>
+                 </div>
+                 <div style="display:grid;gap:.15rem">${state.suggested.slice(0, 8).map(rowMarkup).join("")}</div>
+               </div>`
+            : ""
+        }
       </aside>
     </div>`;
+}
+
+/**
+ * What else to watch: the public feed, minus the video on screen and minus the
+ * rows already listed beside it. A studio's own shelf is `more`; this is the
+ * rest of the site, and it never repeats what is on the page.
+ */
+async function loadSuggested(code, orientation) {
+  state.suggested = [];
+  const seen = new Set(
+    [state.code]
+      .concat(state.related.map((row) => row.code || row.id))
+      .concat(state.more.map((row) => row.code || row.id))
+      .filter(Boolean)
+      .map(String)
+  );
+  let res = null;
+  try {
+    res = await rpc("video_feed", {
+      p_token: state.token,
+      p_field: null,
+      p_sort: "popular",
+      p_search: "",
+      p_limit: 24,
+      p_offset: 0,
+    });
+  } catch (error) {
+    console.warn("[1World] suggested:", error.message);
+    return;
+  }
+  const rows = res && res.ok === true && Array.isArray(res.rows) ? res.rows : [];
+  state.suggested = rows
+    .filter((row) => {
+      const id = String(row.code || row.id || "");
+      if (!id || seen.has(id)) return false;
+      const shape = String(row.orientation || (row.video && row.video.meta && row.video.meta.orientation) || "");
+      return !orientation || !shape || shape === orientation;
+    })
+    .slice(0, 8);
 }
 
 async function openWatch(code, orientation) {
@@ -827,6 +880,24 @@ async function openWatch(code, orientation) {
     if (toggle) toggle.hidden = true;
     descEl.classList.remove("is-clamped");
   }
+  /* the suggestions are one more call, and they do not hold the page up */
+  loadSuggested(v.code || v.id, state.orientation).then(() => {
+    if (state.view !== "watch" || state.code !== (v.code || v.id)) return;
+    const side = $(".vwatch__side");
+    if (!side) return;
+    const box = state.suggested.length
+      ? `<div class="vcard-box" data-v-suggested>
+           <div class="vcard-box__head">
+             <span class="vcard-box__title">Suggested for you</span>
+             <span class="vcard-box__hint">${esc(String(state.suggested.length))}</span>
+           </div>
+           <div style="display:grid;gap:.15rem">${state.suggested.map(rowMarkup).join("")}</div>
+         </div>`
+      : "";
+    side.querySelector("[data-v-suggested]")?.remove();
+    if (box) side.insertAdjacentHTML("beforeend", box);
+  }).catch(() => {});
+
   paintBlockState();
   /* an address like `#/h/ID=…&t=90s` opens at that second, and the chapter
      it belongs to is the one marked */

@@ -268,7 +268,23 @@ const lastCall = (calls, fn) => [...calls].reverse().find((c) => fnName(c.href) 
   expect("watch: the document title follows", document.title.startsWith("Big Buck Bunny"));
   expect("watch: the publisher is named", document.querySelector(".vhost__name")?.textContent === "Jhon");
   expect("watch: the counters arrive", document.querySelector("[data-v-like]")?.textContent === "4", document.querySelector("[data-v-like]")?.textContent);
-  expect("watch: related is listed", document.querySelectorAll(".vwatch__side .vrow").length === 1, document.querySelectorAll(".vwatch__side .vrow").length);
+  expect(
+    "watch: related is listed",
+    document.querySelectorAll(".vwatch__side > .vcard-box:first-child .vrow").length === 1,
+    String(document.querySelectorAll(".vwatch__side > .vcard-box:first-child .vrow").length)
+  );
+  expect(
+    "watch: suggestions sit under the shelves",
+    Boolean(document.querySelector("[data-v-suggested]")) &&
+      document.querySelectorAll(".vwatch__side > .vcard-box").length === 2 &&
+      document.querySelector(".vwatch__side > .vcard-box:last-child")?.matches("[data-v-suggested]") === true,
+    String(document.querySelectorAll(".vwatch__side > .vcard-box").length)
+  );
+  expect(
+    "watch: a suggestion is never the video on screen",
+    !/Big Buck Bunny/.test(document.querySelector("[data-v-suggested]")?.textContent || ""),
+    document.querySelector("[data-v-suggested]")?.textContent?.slice(0, 60)
+  );
   expect("watch: the existing comment renders", document.querySelectorAll(".vcom__list .vcom").length === 2, document.querySelectorAll(".vcom__list .vcom").length);
   expect(
     "watch: a reply sits under the comment it answers",

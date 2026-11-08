@@ -1719,6 +1719,12 @@ comments. Nothing is invented: no time in the description, no
 chapter list; no links on the studio, no row. A source that plays in its own frame cannot be seeked
 from here, so a chapter there says the time instead of pretending.
 
+**Under the publisher's shelf, the rest of the site.** The side column lists *Related* (the server's
+own neighbours), *More from <publisher>*, and — under both — **Suggested for you**: one read of
+`video_feed` (`popular`, 24 rows), minus the video on screen and minus every row already listed beside
+it, same shape only, eight at most. It is a call of its own and never holds the page up; a video the
+viewer already has on the page is never suggested back to them.
+
 **A chapter is a second in the address.** Picking one seeks the frame *and* writes `…&t=840s` at the
 end of the address, the way the reference does, replacing any earlier second rather than stacking one.
 Opening a link that carries `&t=90s` (`?t=90` is read the same) starts the file there — a `<video>`
