@@ -1653,10 +1653,25 @@ the **name is not stored**, because the name is the video's own code, so the rec
 between the upload and the rename. A file without a studio, or one under 50 MB without a studio
 chosen, still goes to the site's storage; a studio's file may be up to 2 GB.
 
-The credentials — Streamtape's **API Login** and **API Key** (the key is the "API password") — sit in
-`STREAMTAPE` in `assets/js/config.js`, beside the Supabase and TMDB keys, and `STREAMTAPE.proxy` is
-the escape hatch: point it at an Edge Function that forwards the same actions and the browser stops
-holding them at all.
+**The credentials never reach the browser.** Streamtape's **API Login** and **API Key** (the key is
+the "API password") are secrets of an edge function — `supabase/functions/studio-upload/index.ts` —
+and the page only ever holds the member's own session token. The function speaks the same six
+actions (`file/listfolder`, `file/createfolder`, `file/ul`, `file/rename`, `file/info`, `file/find`)
+and answers in Streamtape's own `{ status, msg, result }` shape, so the client reads it exactly as
+it would read the API. The file itself is **not** sent through the function: the browser asks for an
+upload address and posts the film straight to it, so a two-gigabyte upload costs the function one
+small JSON answer. `file/find` is the safety net for a host whose upload endpoint refuses to be read
+across origins — the function lists the folder and names the file instead.
+
+Before any call it asks `creator_hubs_list` (and `publisher_hubs`, for the desk) with the member's
+token: if the studio named in the request is not one that token may publish into, the answer is 403
+and Streamtape is never called. With its keys missing the function answers 503 with a sentence, the
+editor shows that sentence, and nothing pretends a file went anywhere.
+
+```
+supabase functions deploy studio-upload
+supabase secrets set STREAMTAPE_LOGIN=<api login> STREAMTAPE_KEY=<api key>
+```
 
 The three doors keep their meaning, on the feed as well as on the door:
 
@@ -3061,6 +3076,8 @@ tools/apps-script/recovery-delivery.gs  the Google Apps Script: email, WhatsApp,
 supabase/functions/whatsapp-webhook/    the edge function Meta calls: verify, statuses, inbound
 supabase/functions/telegram-bot/        the bot's webhook: /start <code> links a chat, /stop unlinks
 supabase/functions/oauth-link/          the OAuth callback for the six networks (state → code → token → profile)
+supabase/functions/studio-upload/       the studio's host: Streamtape folders, upload addresses, renames
+assets/js/streamtape.js                  the studio's host, spoken from the page (never the credentials)
 assets/css/dashboard.css    app shell: header rail, sidebar, gates, section views
 assets/js/dashboard.js      dashboard controller (member_dashboard + code/notify/court/account actions)
 assets/js/activated.js      activation wizard (profile → viewing code → ad gate → activate), reactivation, upgrade

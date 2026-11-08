@@ -630,10 +630,12 @@ async function editor(tag) {
         return reply({ ok: true, hubs: [{ code: "IDST100001", name: "CineAura", kind: "channel" }] });
       }
       if (fn === "video_save") return reply({ ok: true, code: "PST-001100", status: "published" });
-      if (href.startsWith("https://api.streamtape.com/")) {
+      if (href.includes("/functions/v1/studio-upload")) {
         const url = new URL(href);
-        const action = url.pathname.replace(/^\//, "");
+        const action = url.searchParams.get("action");
         const folder = url.searchParams.get("folder") || "";
+        tape.studio = url.searchParams.get("studio");
+        tape.auth = (opts.headers && (opts.headers.Authorization || opts.headers.authorization)) || "";
         if (action === "file/listfolder") {
           tape.listed += 1;
           if (!folder) return reply({ status: 200, result: { folders: [{ id: "fld-users", name: "Users" }], files: [] } });
@@ -649,7 +651,7 @@ async function editor(tag) {
           return reply({ status: 200, result: { url: "https://tapecontent.net/xfsupload/tok" } });
         }
         if (action === "file/rename") {
-          tape.renames.push({ file: url.searchParams.get("file"), name: url.searchParams.get("name") });
+          tape.renames.push({ file: url.searchParams.get("file"), name: url.searchParams.get("name"), studio: url.searchParams.get("studio") });
           return reply({ status: 200, result: true });
         }
         return reply({ status: 400, msg: "unexpected call" });
@@ -688,6 +690,8 @@ async function editor(tag) {
     JSON.stringify(tape.created)
   );
   expect("studio upload: the file is posted into that folder", tape.spot === "fld-cineaura", tape.spot);
+  expect("studio upload: the call carries the member's token", tape.auth === "Bearer tok-123", tape.auth);
+  expect("studio upload: every call names the studio", tape.studio === "IDST100001", tape.studio);
   expect("studio upload: one file goes up", tape.uploads.length === 1, JSON.stringify(tape.uploads.map((row) => row.name)));
   expect(
     "studio upload: it carries a provisional name until the video has a code",
@@ -729,6 +733,24 @@ async function editor(tag) {
     JSON.stringify(studioPayload?.meta?.host_file)
   );
   expect("studio upload: the source rides as the host", studioPayload?.meta?.source === "streamtape", studioPayload?.meta?.source);
+
+  /* the credentials live in the function's secrets, never in the page */
+  const cfg = await import(`file://${join(root, "assets/js/config.js")}?cfgstudio`);
+  expect(
+    "studio upload: the browser holds no host credential",
+    !cfg.STREAMTAPE.login && !cfg.STREAMTAPE.key && /\/functions\/v1\/studio-upload$/.test(cfg.STREAMTAPE.proxy),
+    JSON.stringify(cfg.STREAMTAPE)
+  );
+  const hostFunction = readFileSync(join(root, "supabase/functions/studio-upload/index.ts"), "utf8");
+  expect(
+    "studio upload: the function reads its keys from the environment",
+    hostFunction.includes("STREAMTAPE_LOGIN") && hostFunction.includes("STREAMTAPE_KEY") && hostFunction.includes("Deno.env.get")
+  );
+  expect(
+    "studio upload: no key is written into the repository",
+    !/120GYLeBYluelxJ|010abc21eb8af8b77b42/.test(hostFunction) &&
+      !/120GYLeBYluelxJ|010abc21eb8af8b77b42/.test(readFileSync(join(root, "assets/js/config.js"), "utf8"))
+  );
 }
 
 {

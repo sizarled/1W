@@ -15,13 +15,16 @@
  * own folder the first time that studio uploads — and their ids are remembered
  * on this device so a second upload is three calls shorter.
  *
- * The file is renamed the moment the video gets its code: a brand-new video
- * has no id until it is saved, so it travels up under a provisional name and
- * is renamed by `renameFile()` afterwards. The embed address is the id-only
- * form (`/e/<id>`), so renaming never breaks the link already in the field.
+ * **The credentials never reach this file.** Every call goes through the
+ * `studio-upload` Edge Function (`STREAMTAPE.proxy`), which holds the API Login
+ * and Key and checks that the member's token may publish into the studio being
+ * named. The file itself is posted straight to the upload address the function
+ * hands back, so a large film never travels through a function.
  *
- * Nothing here decides *whether* to use the host — the editor asks for that.
- * This module only speaks Streamtape's API and hands back an id and a link.
+ * A brand-new video has no id until it is saved, so its file travels up under a
+ * provisional name and is renamed by `renameFile()` the moment the server gives
+ * the video its code. The embed address is the id-only form (`/e/<id>`), so
+ * renaming never breaks the link already in the field.
  *
  *   const out = await uploadToStudio(file, {
  *     studio: "IDST100001", name: "PST-001100.mp4",
@@ -30,23 +33,18 @@
  *   out.embed   → https://streamtape.com/e/<id>
  */
 import { STREAMTAPE } from "./config.js";
+import { sessionToken } from "./session.js";
 
 const CACHE_KEY = "1w.streamtape.folders";
 
-/**
- * The studio shelf is reachable: a credential is set, or a proxy stands in
- * front. One half of the pair is enough to try — the host answers a 403 of its
- * own when the login is missing, and that answer is worth more than a guess
- * made here.
- */
+/** The studio shelf is reachable: a proxy stands in front, or keys are set. */
 export function studioReady() {
-  if (STREAMTAPE.proxy) return true;
-  return Boolean(STREAMTAPE.login || STREAMTAPE.key);
+  return Boolean(STREAMTAPE.proxy || (STREAMTAPE.login && STREAMTAPE.key));
 }
 
 /** A member-facing sentence for "the host is not connected". */
 export const NOT_CONNECTED =
-  "The studio host is not connected yet — an owner has to set the Streamtape API Login and Key in config.js.";
+  "The studio host is not connected yet — the site's owner has to deploy the studio-upload function and give it the Streamtape API Login and Key.";
 
 /** The embed address for a file id — name-free, so a rename cannot break it. */
 export function embedOf(id) {
@@ -54,10 +52,14 @@ export function embedOf(id) {
 }
 
 function urlOf(action, params = {}) {
-  const base = STREAMTAPE.proxy ? `${STREAMTAPE.proxy.replace(/\/$/, "")}?action=${encodeURIComponent(action)}` : `${STREAMTAPE.api.replace(/\/$/, "")}/${action}`;
+  const base = STREAMTAPE.proxy
+    ? `${STREAMTAPE.proxy.replace(/\/$/, "")}?action=${encodeURIComponent(action)}`
+    : `${STREAMTAPE.api.replace(/\/$/, "")}/${action}`;
   const url = new URL(base);
-  if (STREAMTAPE.login) url.searchParams.set("login", STREAMTAPE.login);
-  if (STREAMTAPE.key) url.searchParams.set("key", STREAMTAPE.key);
+  if (!STREAMTAPE.proxy) {
+    if (STREAMTAPE.login) url.searchParams.set("login", STREAMTAPE.login);
+    if (STREAMTAPE.key) url.searchParams.set("key", STREAMTAPE.key);
+  }
   Object.entries(params).forEach(([key, value]) => {
     if (value === undefined || value === null || value === "") return;
     url.searchParams.set(key, String(value));
@@ -67,13 +69,19 @@ function urlOf(action, params = {}) {
 
 /** One API call; `result` on success, a readable Error on refusal. */
 async function call(action, params = {}) {
+  const token = sessionToken();
   let response;
   try {
-    response = await fetch(urlOf(action, params));
+    response = await fetch(urlOf(action, params), {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
   } catch {
     throw new Error("The host could not be reached — check the connection and try again.");
   }
   const text = await response.text();
+  if (response.status === 404) {
+    throw new Error("The studio host's function is not deployed yet (studio-upload).");
+  }
   let body = null;
   try {
     body = JSON.parse(text);
@@ -109,8 +117,8 @@ function remember(path, id) {
 }
 
 /** The folders and files inside one folder — root when no id is given. */
-export async function listFolder(folder = "") {
-  const result = await call("file/listfolder", { folder });
+export async function listFolder(folder, studio) {
+  const result = await call("file/listfolder", { folder, studio });
   return {
     folders: Array.isArray(result?.folders) ? result.folders : [],
     files: Array.isArray(result?.files) ? result.files : [],
@@ -118,16 +126,16 @@ export async function listFolder(folder = "") {
 }
 
 /** The id of `name` inside `parent`, made when it is not there yet. */
-async function ensureFolder(name, parent, path) {
+async function ensureFolder(name, parent, studio, path) {
   const known = remembered[path];
   if (known) return known;
-  const listing = await listFolder(parent);
+  const listing = await listFolder(parent, studio);
   const found = listing.folders.find((row) => String(row.name || "").trim().toLowerCase() === name.toLowerCase());
   if (found) {
     remember(path, found.id);
     return found.id;
   }
-  const made = await call("file/createfolder", { name, pid: parent });
+  const made = await call("file/createfolder", { name, pid: parent, studio });
   const id = made?.folderid || made?.id;
   if (!id) throw new Error(`The host would not make the “${name}” folder.`);
   remember(path, id);
@@ -136,15 +144,15 @@ async function ensureFolder(name, parent, path) {
 
 /**
  * `Home / Users / Studio / <studio>` — the folder this studio's videos live in.
- * Made on the way in; its id is remembered for the rest of the session and the
- * next ones on this device.
+ * Made on the way in; its id is remembered for the rest of this session and the
+ * ones that follow on this device.
  */
 export async function studioFolder(studio) {
   const code = String(studio || "").trim();
   if (!code) throw new Error("Choose the studio first — the video's folder is named after it.");
-  const users = await ensureFolder(STREAMTAPE.users, "", STREAMTAPE.users);
-  const shelf = await ensureFolder(STREAMTAPE.shelf, users, `${STREAMTAPE.users}/${STREAMTAPE.shelf}`);
-  return ensureFolder(code, shelf, `${STREAMTAPE.users}/${STREAMTAPE.shelf}/${code}`);
+  const users = await ensureFolder(STREAMTAPE.users, "", code, STREAMTAPE.users);
+  const shelf = await ensureFolder(STREAMTAPE.shelf, users, code, `${STREAMTAPE.users}/${STREAMTAPE.shelf}`);
+  return ensureFolder(code, shelf, code, `${STREAMTAPE.users}/${STREAMTAPE.shelf}/${code}`);
 }
 
 /** Forget where the folders were — used when an id turns out to be stale. */
@@ -160,20 +168,20 @@ export function forgetFolders() {
 /* ------------------------------------------------------------------ */
 /* files                                                              */
 /* ------------------------------------------------------------------ */
+/** The id in a row of the host's file list — the API calls it different names. */
+function idOf(row) {
+  return row?.linkid || row?.id || row?.fileid || "";
+}
+
 /** The newest file in a folder whose name matches, else the newest file. */
-async function newestFile(folder, name) {
-  const listing = await listFolder(folder);
+async function newestFile(folder, name, studio) {
+  const listing = await listFolder(folder, studio);
   const files = listing.files;
   if (!files.length) return null;
   const wanted = String(name || "").toLowerCase();
   const named = files.find((row) => String(row.name || "").toLowerCase() === wanted);
   if (named) return named;
   return [...files].sort((a, b) => Number(b.created_at || 0) - Number(a.created_at || 0))[0];
-}
-
-/** The id in a row of the host's file list — the API calls it different names. */
-function idOf(row) {
-  return row?.linkid || row?.id || row?.fileid || "";
 }
 
 /**
@@ -189,12 +197,9 @@ export async function uploadToStudio(file, { studio, name, onStage } = {}) {
   const folder = await studioFolder(studio);
 
   stage("Getting a place to put it…");
-  let target = urlOf("file/upload", { folder, name: fileName });
-  if (!STREAMTAPE.proxy) {
-    const spot = await call("file/ul", { folder });
-    target = spot?.url;
-    if (!target) throw new Error("The host did not hand back an upload address.");
-  }
+  const spot = await call("file/ul", { folder, studio });
+  const target = spot?.url;
+  if (!target) throw new Error("The host did not hand back an upload address.");
 
   const body = new FormData();
   body.append("file1", file, fileName);
@@ -205,7 +210,9 @@ export async function uploadToStudio(file, { studio, name, onStage } = {}) {
     const response = await fetch(target, { method: "POST", body });
     answer = await response.json().catch(() => null);
   } catch {
-    throw new Error("The upload broke off — check the connection and try again.");
+    /* a host that refuses to be read across origins: the upload still went,
+       and the folder will name the file below */
+    answer = null;
   }
   if (answer && Number(answer.status) && Number(answer.status) !== 200) {
     throw new Error(String(answer.msg || "The host refused the file.").slice(0, 160));
@@ -213,9 +220,17 @@ export async function uploadToStudio(file, { studio, name, onStage } = {}) {
   const sent = answer?.result || answer || {};
   let id = idOf(sent);
 
-  /* some answers carry only a link; the folder's own list names the file */
+  /* the answer was bare or unreadable — the folder knows what arrived */
   if (!id) {
-    const row = await newestFile(folder, fileName);
+    try {
+      const found = await call("file/find", { studio, folder, name: fileName });
+      id = String(found?.id || "");
+    } catch {
+      id = "";
+    }
+  }
+  if (!id) {
+    const row = await newestFile(folder, fileName, studio).catch(() => null);
     id = idOf(row);
   }
   if (!id) throw new Error("The host took the file but did not give it an id.");
@@ -230,16 +245,16 @@ export async function uploadToStudio(file, { studio, name, onStage } = {}) {
 }
 
 /** Give a file the video's own name — `PST-001100.mp4`. */
-export async function renameFile(id, name) {
+export async function renameFile(id, name, studio) {
   if (!id || !name) return false;
-  await call("file/rename", { file: id, name });
+  await call("file/rename", { file: id, name, studio });
   return true;
 }
 
 /** The file still exists, and what it is called now. */
-export async function fileInfo(id) {
+export async function fileInfo(id, studio) {
   if (!id) return null;
-  const result = await call("file/info", { file: id });
+  const result = await call("file/info", { file: id, studio });
   const row = result && typeof result === "object" ? result[id] || Object.values(result)[0] : null;
   return row && Number(row.status) === 200 ? row : null;
 }

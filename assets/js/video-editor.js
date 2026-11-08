@@ -1284,7 +1284,7 @@ async function nameHostFile() {
   if (!S.host || S.host.named || !S.code) return;
   const wanted = `${S.code}.${S.host.ext || "mp4"}`;
   try {
-    await renameFile(S.host.id, wanted);
+    await renameFile(S.host.id, wanted, S.host.studio);
     S.host.name = wanted;
     S.host.named = true;
     fileNote(`${wanted} — Streamtape, Home / Users / Studio / ${S.host.studio}`);
