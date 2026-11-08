@@ -1619,7 +1619,12 @@ either a file or one platform's link — never half of each; switching lets go o
 way held.
 
 - **Upload a video** — the box takes a file dropped from a folder or picked with *Choose a video*
-  (the whole box is the way in, not only its button), up to 2 GB, and says where it will land.
+  (the whole box is the way in, not only its button), up to 2 GB, and says where it will land. While
+  it travels, a line under the box reports it: a bar with its percentage, **elapsed** time, **speed**
+  (`12.4 MB/s`) and the time left, then the file's name and the last numbers before the line steps
+  away. Both upload paths report the same way — the site's storage through XHR's own progress events,
+  and the studio's host through the same events in `streamtape.js` (fetch cannot report bytes, which
+  is why the file is posted with XHR there).
 - **A link from a platform** — the platform is chosen **first** (YouTube, Vimeo, Facebook,
   Instagram, Pinterest, TikTok, Reddit, X), and only then does the field open, with a placeholder
   that names it: *Paste the YouTube link*. A link from any other host is refused — the note says

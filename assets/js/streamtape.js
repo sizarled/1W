@@ -265,10 +265,53 @@ async function newestFile(folder, name, studio) {
 }
 
 /**
+ * The file itself, posted as `multipart/form-data`.
+ *
+ * XHR rather than fetch for one reason only: it reports bytes as they go, so
+ * the page can show a bar and a speed. A browser that has no XHR, or a host
+ * that refuses to be read across origins, still gets the file — the answer is
+ * just empty, and the folder names it afterwards.
+ */
+function postFile(target, file, name, onProgress) {
+  return new Promise((resolve) => {
+    let xhr = null;
+    try {
+      xhr = typeof XMLHttpRequest === "function" ? new XMLHttpRequest() : null;
+    } catch {
+      xhr = null;
+    }
+    if (!xhr) {
+      const body = new FormData();
+      body.append("file1", file, name);
+      fetch(target, { method: "POST", body })
+        .then((response) => response.text().then((text) => ({ status: response.status, text })).catch(() => ({ status: response.status, text: "" })))
+        .then(resolve, () => resolve({ status: 0, text: "" }));
+      return;
+    }
+    try {
+      xhr.open("POST", target);
+      if (xhr.upload && typeof onProgress === "function") {
+        xhr.upload.onprogress = (event) => {
+          if (event && event.lengthComputable) onProgress(event.loaded, event.total);
+        };
+      }
+      xhr.onload = () => resolve({ status: xhr.status, text: xhr.responseText || "" });
+      xhr.onerror = () => resolve({ status: 0, text: "" });
+      xhr.ontimeout = () => resolve({ status: 0, text: "" });
+      const body = new FormData();
+      body.append("file1", file, name);
+      xhr.send(body);
+    } catch {
+      resolve({ status: 0, text: "" });
+    }
+  });
+}
+
+/**
  * Upload one file into the studio's folder and name it.
  * Returns `{ id, name, folder, link, embed }`; throws a readable Error.
  */
-export async function uploadToStudio(file, { studio, name, onStage } = {}) {
+export async function uploadToStudio(file, { studio, name, onStage, onProgress } = {}) {
   if (!studioReady()) throw new Error(NOT_CONNECTED);
   const fileName = String(name || file.name || "video.mp4");
   const stage = typeof onStage === "function" ? onStage : () => {};
@@ -281,14 +324,11 @@ export async function uploadToStudio(file, { studio, name, onStage } = {}) {
   const target = spot?.url;
   if (!target) throw new Error("The host did not hand back an upload address.");
 
-  const body = new FormData();
-  body.append("file1", file, fileName);
-
   stage("Uploading…");
+  const sent = await postFile(target, file, fileName, onProgress);
   let answer = null;
   try {
-    const response = await fetch(target, { method: "POST", body });
-    answer = await response.json().catch(() => null);
+    answer = sent.text ? JSON.parse(sent.text) : null;
   } catch {
     /* a host that refuses to be read across origins: the upload still went,
        and the folder will name the file below */
@@ -297,8 +337,8 @@ export async function uploadToStudio(file, { studio, name, onStage } = {}) {
   if (answer && Number(answer.status) && Number(answer.status) !== 200) {
     throw new Error(String(answer.msg || "The host refused the file.").slice(0, 160));
   }
-  const sent = answer?.result || answer || {};
-  let id = idOf(sent);
+  const row = answer?.result || answer || {};
+  let id = idOf(row);
 
   /* the answer was bare or unreadable — the folder knows what arrived */
   if (!id) {
@@ -317,9 +357,9 @@ export async function uploadToStudio(file, { studio, name, onStage } = {}) {
 
   return {
     id,
-    name: String(sent.name || fileName),
+    name: String(row.name || fileName),
     folder: String(studio),
-    link: String(sent.url || sent.link || `https://streamtape.com/v/${id}/${fileName}`),
+    link: String(row.url || row.link || `https://streamtape.com/v/${id}/${fileName}`),
     embed: embedOf(id),
   };
 }

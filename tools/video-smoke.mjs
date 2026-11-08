@@ -806,6 +806,12 @@ async function editor(tag) {
     document.querySelector("[data-ved-source-badge]")?.textContent === "Streamtape",
     document.querySelector("[data-ved-source-badge]")?.textContent
   );
+  expect(
+    "studio upload: the bar is full under it",
+    document.querySelector("[data-ved-progress]")?.hidden === false &&
+      document.querySelector("[data-ved-progress-fill]")?.style.width === "100%",
+    document.querySelector("[data-ved-progress-fill]")?.style.width
+  );
   const studioNote = document.querySelector("[data-ved-file-note]")?.textContent || "";
   expect("studio upload: the note says where the file went", studioNote.includes("Home / Users / Studio / IDST100001"), studioNote);
 
@@ -1078,6 +1084,23 @@ async function editor(tag) {
   expect("files: the source field holds the new address", embed.value.includes("/storage/v1/object/public/source/users/videos/"), embed.value);
   expect("files: the note says what happened", document.querySelector("[data-ved-file-note]")?.textContent.includes("short.mp4"), document.querySelector("[data-ved-file-note]")?.textContent);
   expect("files: a file is named as one", document.querySelector("[data-ved-source-badge]")?.textContent === "File", document.querySelector("[data-ved-source-badge]")?.textContent);
+
+  /* the upload's own line: a bar, the time gone, the speed */
+  const progress = document.querySelector("[data-ved-progress]");
+  expect("progress: the bar is out while the file goes", progress?.hidden === false);
+  expect("progress: it is full when the file lands", document.querySelector("[data-ved-progress-fill]")?.style.width === "100%", document.querySelector("[data-ved-progress-fill]")?.style.width);
+  expect("progress: and says a hundred", document.querySelector("[data-ved-progress-pct]")?.textContent === "100%", document.querySelector("[data-ved-progress-pct]")?.textContent);
+  expect(
+    "progress: the time gone is written as a clock",
+    /^\d{2}:\d{2}$/.test(document.querySelector("[data-ved-progress-elapsed]")?.textContent || ""),
+    document.querySelector("[data-ved-progress-elapsed]")?.textContent
+  );
+  expect(
+    "progress: the speed is a rate, not a dash",
+    /\/s$/.test(document.querySelector("[data-ved-progress-speed]")?.textContent || ""),
+    document.querySelector("[data-ved-progress-speed]")?.textContent
+  );
+  expect("progress: the file is named on its line", (document.querySelector("[data-ved-progress-name]")?.textContent || "").includes("short.mp4"), document.querySelector("[data-ved-progress-name]")?.textContent);
 
   /* a picture from the machine */
   const thumbInput = document.querySelector("[data-ved-thumb-file]");
@@ -1489,7 +1512,7 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
   expect("video.html: it forwards to the videos page", html.includes("videos.html#/v/") && html.includes('get("id")'));
   expect("video.html: it replaces, not pushes", html.includes("location.replace"));
 
-  ["vcard", "vcard__media", "vgrid", "vbar", "vwatch", "vplayer", "vgate", "vacts", "vhost", "vcomposer", "vcom", "ved", "vdrop", "vfoot", "vseg", "vtaglist", "vsk", "vempty", "vshelf", "vrow", "vchoose", "vchoose__opt", "vdrop__note", "vkw", "vplatform"].forEach((name) => {
+  ["vcard", "vcard__media", "vgrid", "vbar", "vwatch", "vplayer", "vgate", "vacts", "vhost", "vcomposer", "vcom", "ved", "vdrop", "vfoot", "vseg", "vtaglist", "vsk", "vempty", "vshelf", "vrow", "vchoose", "vchoose__opt", "vdrop__note", "vkw", "vplatform", "vprog", "vprog__bar", "vprog__fill", "vprog__meta"].forEach((name) => {
     expect(`css: .${name} exists`, css.includes(`.${name}`), name);
   });
   expect("css: it is monochrome — no colour literals beyond the scrims", !/#[0-9a-f]{3,6}/i.test(css.replace(/#(000|000000|f2f2f4|fff|ffffff|e6e6e9|08080a)\b/gi, "").replace(/rgba?\([^)]*\)/g, "")), "colour found");

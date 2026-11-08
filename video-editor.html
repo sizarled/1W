@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="assets/css/base.css?v=20261116a" />
     <link rel="stylesheet" href="assets/css/layout.css?v=20261116a" />
     <link rel="stylesheet" href="assets/css/components.css?v=20261116b" />
-    <link rel="stylesheet" href="assets/css/video.css?v=20261204a" />
+    <link rel="stylesheet" href="assets/css/video.css?v=20261204b" />
     <script>
       /* apply the saved theme (or the OS preference) before first paint */
       (function () {
@@ -33,7 +33,7 @@
       })();
     </script>
     <script type="module" src="assets/js/app.js?v=20261116e"></script>
-    <script type="module" src="assets/js/video-editor.js?v=20261204a"></script>
+    <script type="module" src="assets/js/video-editor.js?v=20261204b"></script>
   </head>
   <body data-page="videoEditor" data-title="Publish a video">
     <a class="skip-link" href="#main">Skip to content</a>
@@ -108,6 +108,18 @@
                     <button class="btn btn--ghost btn--sm" type="button" data-ved-file-btn><i data-icon="upload"></i> Choose a video</button>
                     <span class="vdrop__or">or drop it from a folder</span>
                     <input type="file" accept="video/mp4,video/webm,video/ogg,video/quicktime" data-ved-file hidden />
+                  </div>
+                </div>
+                <div class="vprog" data-ved-progress hidden>
+                  <div class="vprog__head">
+                    <span class="vprog__name" data-ved-progress-name></span>
+                    <span class="vprog__pct" data-ved-progress-pct>0%</span>
+                  </div>
+                  <div class="vprog__bar"><span class="vprog__fill" data-ved-progress-fill></span></div>
+                  <div class="vprog__meta">
+                    <span>Elapsed <b data-ved-progress-elapsed>0:00</b></span>
+                    <span>Speed <b data-ved-progress-speed>—</b></span>
+                    <span>Left <b data-ved-progress-left>—</b></span>
                   </div>
                 </div>
                 <p class="vhint" data-ved-file-note hidden></p>

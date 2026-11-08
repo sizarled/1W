@@ -1273,6 +1273,119 @@ function fileNote(text, tone = "") {
   note.style.color = tone === "error" ? "var(--red, #e5484d)" : "";
 }
 
+/* ------------------------------------------------------------------ */
+/* the upload's line: how far, how long, how fast                     */
+/* ------------------------------------------------------------------ */
+const uploadRun = { startedAt: 0, loaded: 0, total: 0, lastAt: 0, lastLoaded: 0, speed: 0, timer: null, hide: null };
+
+const fmtSize = (bytes) => {
+  const value = Number(bytes) || 0;
+  if (value >= 1024 * 1024 * 1024) return `${(value / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  if (value >= 1024) return `${Math.round(value / 1024)} KB`;
+  return `${value} B`;
+};
+
+const fmtClock = (ms) => {
+  const total = Math.max(0, Math.round((Number(ms) || 0) / 1000));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  const two = (num) => String(num).padStart(2, "0");
+  return hours ? `${hours}:${two(minutes)}:${two(seconds)}` : `${two(minutes)}:${two(seconds)}`;
+};
+
+const fmtSpeed = (bytesPerSecond) =>
+  Number(bytesPerSecond) > 0 ? `${fmtSize(bytesPerSecond)}/s` : "—";
+
+function paintProgress() {
+  const box = $("[data-ved-progress]");
+  if (!box) return;
+  const elapsed = Date.now() - uploadRun.startedAt;
+  const percent = uploadRun.total ? Math.min(100, Math.round((uploadRun.loaded / uploadRun.total) * 100)) : 0;
+  const fill = $("[data-ved-progress-fill]");
+  if (fill) fill.style.width = `${percent}%`;
+  const pct = $("[data-ved-progress-pct]");
+  if (pct) pct.textContent = uploadRun.total ? `${percent}%` : "…";
+  const time = $("[data-ved-progress-elapsed]");
+  if (time) time.textContent = fmtClock(elapsed);
+  const speed = $("[data-ved-progress-speed]");
+  if (speed) speed.textContent = fmtSpeed(uploadRun.speed);
+  const left = $("[data-ved-progress-left]");
+  if (left) {
+    const remaining = uploadRun.speed > 0 && uploadRun.total > uploadRun.loaded ? ((uploadRun.total - uploadRun.loaded) / uploadRun.speed) * 1000 : 0;
+    left.textContent = remaining > 0 && remaining < 6 * 60 * 60 * 1000 ? fmtClock(remaining) : "—";
+  }
+}
+
+/** The bar comes out, and the clock starts with it. */
+function beginUpload(name, total) {
+  clearInterval(uploadRun.timer);
+  clearTimeout(uploadRun.hide);
+  uploadRun.startedAt = Date.now();
+  uploadRun.lastAt = uploadRun.startedAt;
+  uploadRun.loaded = 0;
+  uploadRun.lastLoaded = 0;
+  uploadRun.total = Number(total) || 0;
+  uploadRun.speed = 0;
+  const box = $("[data-ved-progress]");
+  if (box) {
+    box.hidden = false;
+    box.classList.remove("is-done", "is-failed");
+  }
+  const label = $("[data-ved-progress-name]");
+  if (label) label.textContent = `${name}${total ? ` · ${fmtSize(total)}` : ""}`;
+  paintProgress();
+  uploadRun.timer = setInterval(paintProgress, 500);
+}
+
+/** A byte count from the upload — the bar, the speed, the time left. */
+function stepUpload(loaded, total, stage) {
+  const now = Date.now();
+  if (stage) {
+    const label = $("[data-ved-progress-name]");
+    if (label) label.textContent = stage;
+  }
+  if (Number.isFinite(Number(total)) && Number(total) > 0) uploadRun.total = Number(total);
+  if (Number.isFinite(Number(loaded))) uploadRun.loaded = Number(loaded);
+  const gap = now - uploadRun.lastAt;
+  if (gap >= 120) {
+    const instant = ((uploadRun.loaded - uploadRun.lastLoaded) / gap) * 1000;
+    uploadRun.speed = uploadRun.speed ? uploadRun.speed * 0.6 + instant * 0.4 : instant;
+    uploadRun.lastAt = now;
+    uploadRun.lastLoaded = uploadRun.loaded;
+  } else if (!uploadRun.speed) {
+    /* one sample is not a rate yet — the average since the start will do */
+    const whole = now - uploadRun.startedAt;
+    if (whole > 0) uploadRun.speed = (uploadRun.loaded / whole) * 1000;
+  }
+  paintProgress();
+}
+
+/** The end of it: a full bar, the last numbers, and then the line steps away. */
+function endUpload(ok, note = "") {
+  clearInterval(uploadRun.timer);
+  const elapsed = Date.now() - uploadRun.startedAt;
+  if (ok) {
+    uploadRun.loaded = uploadRun.total || uploadRun.loaded;
+    uploadRun.speed = (uploadRun.loaded / Math.max(elapsed, 1)) * 1000;
+  }
+  paintProgress();
+  const box = $("[data-ved-progress]");
+  if (box) {
+    box.classList.toggle("is-done", Boolean(ok));
+    box.classList.toggle("is-failed", !ok);
+  }
+  const left = $("[data-ved-progress-left]");
+  if (left) left.textContent = ok ? "done" : "stopped";
+  const label = $("[data-ved-progress-name]");
+  if (label && note) label.textContent = note;
+  uploadRun.hide = setTimeout(() => {
+    if (box) box.hidden = true;
+    uploadRun.speed = 0;
+  }, ok ? 4200 : 9000);
+}
+
 /** A small file straight to storage, with the percentage on the page. */
 function uploadFile(file, folder, note) {
   return new Promise((resolve, reject) => {
@@ -1290,10 +1403,11 @@ function uploadFile(file, folder, note) {
     request.setRequestHeader("apikey", SUPABASE.publishableKey);
     request.setRequestHeader("Content-Type", file.type || "application/octet-stream");
     request.setRequestHeader("x-upsert", "true");
-    if (request.upload && note) {
+    if (request.upload) {
       request.upload.onprogress = (event) => {
         if (!event.lengthComputable) return;
-        note(`Uploading… ${Math.round((event.loaded / event.total) * 100)}%`);
+        stepUpload(event.loaded, event.total);
+        if (note) note(`Uploading… ${Math.round((event.loaded / event.total) * 100)}%`);
       };
     }
     request.onload = () => {
@@ -1357,12 +1471,17 @@ async function uploadToStudioHost(file, studio) {
   const box = $("[data-ved-drop]");
   if (button) button.disabled = true;
   box?.classList.add("is-busy");
+  beginUpload(file.name, file.size);
   fileNote("Talking to the studio's host…");
   try {
     const out = await uploadToStudio(file, {
       studio: studio.code,
       name,
-      onStage: (text) => fileNote(text),
+      onStage: (text) => {
+        fileNote(text);
+        stepUpload(uploadRun.loaded, uploadRun.total, text);
+      },
+      onProgress: (loaded, total) => stepUpload(loaded, total),
     });
     S.host = { id: out.id, name: out.name || name, ext, studio: studio.code, folder: out.folder, named };
     el.embed.value = out.embed;
@@ -1371,6 +1490,7 @@ async function uploadToStudioHost(file, studio) {
       `${out.name || name} · ${(file.size / (1024 * 1024)).toFixed(1)} MB — Streamtape, Home / Users / Studio / ${studio.code}` +
         (named ? "" : " · it takes the video's own name when you save it")
     );
+    endUpload(true);
     toast({
       title: "Uploaded to the studio's host",
       message: `Home / Users / Studio / ${studio.code}`,
@@ -1378,6 +1498,7 @@ async function uploadToStudioHost(file, studio) {
       iconName: "check",
     });
   } catch (error) {
+    endUpload(false, error?.message || "The upload failed.");
     fileNote(error?.message || "The upload failed. Paste a link instead.", "error");
     toast({ title: "Upload failed", message: error?.message || "Paste a link instead.", tone: "error" });
   } finally {
@@ -1433,14 +1554,17 @@ async function uploadVideoFile(file) {
   const box = $("[data-ved-drop]");
   if (button) button.disabled = true;
   box?.classList.add("is-busy");
+  beginUpload(file.name, file.size);
   fileNote("Uploading… 0%");
   try {
     const url = await uploadFile(file, "videos", (text) => fileNote(text));
     el.embed.value = url;
     el.embed.dispatchEvent(new Event("input"));
     fileNote(`${file.name} · ${(file.size / (1024 * 1024)).toFixed(1)} MB — in the site's storage`);
+    endUpload(true);
     toast({ title: "File uploaded", message: "The link is in the field above.", tone: "success", iconName: "check" });
   } catch (error) {
+    endUpload(false, error?.message || "The upload failed.");
     fileNote(error?.message || "The upload failed. Paste a link instead.", "error");
     toast({ title: "Upload failed", message: error?.message || "Paste a link instead.", tone: "error" });
   } finally {

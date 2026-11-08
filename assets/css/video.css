@@ -725,6 +725,77 @@
   margin-top: 0.15rem;
 }
 
+/* the upload's own line: how far, how long, how fast */
+.vprog {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.vprog__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8rem;
+  font-size: 0.76rem;
+}
+
+.vprog__name {
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vprog__pct {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.vprog__bar {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.vprog__fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: var(--text);
+  transition: width 0.25s var(--ease);
+}
+
+.vprog__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.1rem;
+  font-size: 0.72rem;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.vprog__meta b {
+  color: var(--text-2);
+  font-weight: 570;
+}
+
+.vprog.is-done .vprog__fill {
+  background: var(--text);
+}
+
+.vprog.is-failed .vprog__fill {
+  background: var(--faint);
+}
+
 .vdrop__note {
   font-size: 0.72rem;
   line-height: 1.55;
