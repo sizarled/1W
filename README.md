@@ -1641,13 +1641,22 @@ as *by @handle*. A video with no studio keeps the member's face and follower cou
 answers it is `video_hub(ref)` in `tools/sql/video-publisher.sql`; `video_get` is untouched, so the
 screen asks for the video and its studio side by side.
 
+**The details under the video.** The watch screen carries, in this order: *Back to the studio* (the
+kind's own word) beside *All videos*; the stats line, now with the minutes; a **chapter list read from
+the description** — `Comedy beats: (0:37 - 14:00) …` becomes `01 · Comedy beats · 0:37`, clickable, and
+a line with no time in it is prose, never a chapter; the studio card with its subscribers, its
+releases and its blurb; its own links (website, YouTube, Instagram, X, a playlist) beside a
+*Playlists* door; and the description itself. Nothing is invented: no time in the description, no
+chapter list; no links on the studio, no row. A source that plays in its own frame cannot be seeked
+from here, so a chapter there says the time instead of pretending.
+
 **A video saved before that column existed has no studio on its row**, and it still must not fall
 back to a bare profile: the page then asks which studio the member publishes into — `creator_studio(ref)`
 in the same file, or, when that call is not on the server yet, the `creator_public` call the creator
 page already makes (a channel first, then a server or a cinema, never a private hub). No studio at
 all, and the member's face is the publisher, which is the honest answer.
 
-Test: `node tools/video-smoke.mjs` — **276/276** (feed, sort, search, watch, reaction→comment, a locked
+Test: `node tools/video-smoke.mjs` — **289/289** (feed, sort, search, watch, reaction→comment, a locked
 door and its password, a missing video, the editor signed out and in, the payload of a publish, of an
 exclusive rule set and of a private list, the player and the sixteen host cases, the oEmbed stills, the
 studio picker, the contents rail, and the forwarding page).
@@ -2002,7 +2011,7 @@ the editors need**, each pinned to a name pattern and a set of extensions (`user
 | `node tools/rte-smoke.mjs` | **45/45** (every command, links, insertion, history, paste, drop, keys, toolbar state) |
 | `node tools/article-smoke.mjs` | **281/281** |
 | `node tools/blog-smoke.mjs` | **82/82** (the address, the closed door, the hero, the home, a section, the search, the plain cover) |
-| `node tools/video-smoke.mjs` | **276/276** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
+| `node tools/video-smoke.mjs` | **289/289** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
 | `node tools/media-smoke.mjs` | **89/89** (the address book, the three pages, the portrait stage, the locked item, the shelves) |
 
 ### The six OAuth apps — one checklist each

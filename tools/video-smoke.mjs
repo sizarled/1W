@@ -1081,6 +1081,62 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
   expect("studio: a non-studio hub is not picked first", !/Night Notes/.test(byPublic.document.querySelector(".vhost")?.textContent || ""), byPublic.document.querySelector(".vhost")?.textContent);
   expect("studio: with no code the link keeps the hub's id", /creator\.html\?studio=hub-1&creator=ID100019/.test(byPublic.document.querySelector("[data-v-studio]")?.getAttribute("href") || ""), byPublic.document.querySelector("[data-v-studio]")?.getAttribute("href"));
 
+  /* the details under the video: chapters, the studio's counts, its links */
+  const RICH = {
+    ...STUDIO,
+    description: "Studio Cine Aura — camera tests and long talks.",
+    field: "Cinema",
+    subscribers: 746000,
+    published: 12,
+    links: [
+      { label: "Website", url: "https://cineaura.example" },
+      { label: "YouTube", url: "https://youtube.com/@cineaura" },
+    ],
+  };
+  const richBoot = boot("videos.html", {
+    hash: "#/h/ID=PST-001032",
+    fetchImpl: (href) => {
+      const fn = fnName(href);
+      if (fn === "video_feed") return reply(FEED);
+      if (fn === "video_mine") return reply({ ok: true, rows: [] });
+      if (fn === "video_get")
+        return reply({
+          ok: true,
+          locked: false,
+          mine: false,
+          video: card({
+            code: "PST-001032",
+            minutes: 51,
+            description: "Comedy beats: (0:37 - 14:00) the wedding hunt.\nMoney and work: (14:00 - 30:00) the neighbours.\nNo time in this line at all.",
+          }),
+          related: [],
+          more: [],
+        });
+      if (fn === "video_hub") return reply({ ok: true, hub: RICH });
+      if (fn === "post_comments") return reply({ comments: [], count: 0 });
+      return reply([]);
+    },
+  });
+  await import(`file://${join(root, "assets/js/videos.js")}?p=studio1d`);
+  await wait(140);
+  const rd = richBoot.document;
+  expect("details: the way back to the studio is there", rd.querySelector("[data-v-studio-back]")?.getAttribute("href") === "creator.html?studio=IDST100001&creator=ID100019", rd.querySelector("[data-v-studio-back]")?.getAttribute("href"));
+  expect("details: it is not hidden when there is a studio", rd.querySelector("[data-v-studio-back]")?.hasAttribute("hidden") === false);
+  expect("details: the chapters are read from the description", rd.querySelectorAll("[data-v-chapter]").length === 2, String(rd.querySelectorAll("[data-v-chapter]").length));
+  expect("details: a chapter is numbered", rd.querySelector(".vchaps__n")?.textContent === "01", rd.querySelector(".vchaps__n")?.textContent);
+  /* the passage is named before its time — "Comedy beats: (0:37 - 14:00) …" */
+  expect("details: a chapter is named by the words before its time", rd.querySelector(".vchaps__label")?.textContent === "Comedy beats", rd.querySelector(".vchaps__label")?.textContent);
+  expect("details: a chapter carries its time", rd.querySelector(".vchaps__time")?.textContent === "0:37", rd.querySelector(".vchaps__time")?.textContent);
+  expect("details: a line with no time makes no chapter", rd.querySelectorAll("[data-v-chapter]").length === 2);
+  expect("details: the minutes are in the stats line", /51 minutes/.test(rd.querySelector(".vmeta")?.textContent || ""), rd.querySelector(".vmeta")?.textContent);
+  expect("details: the studio counts its subscribers and releases", /746,000|746K/.test(rd.querySelector(".vhost__stats")?.textContent || "") && /12/.test(rd.querySelector(".vhost__stats")?.textContent || ""), rd.querySelector(".vhost__stats")?.textContent);
+  expect("details: the studio's blurb is under it", /camera tests and long talks/.test(rd.querySelector(".vhost__bio")?.textContent || ""), rd.querySelector(".vhost__bio")?.textContent);
+  expect("details: the related links are the studio's", rd.querySelectorAll(".vlinks .chip").length === 3, String(rd.querySelectorAll(".vlinks .chip").length));
+  expect("details: a link points where it says", rd.querySelector('.vlinks .chip[href="https://youtube.com/@cineaura"]') !== null);
+  rd.querySelector("[data-v-chapter]").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await wait(60);
+  expect("details: jumping a chapter throws nothing", richBoot.errors.length === 0, richBoot.errors.join(" | "));
+
   const noStudio = studioBoot(null);
   await import(`file://${join(root, "assets/js/videos.js")}?p=studio2`);
   await wait(120);

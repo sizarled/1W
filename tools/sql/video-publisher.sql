@@ -62,6 +62,18 @@ begin
       'logo_url',   v_hub.logo_url,
       'cover_url',  v_hub.cover_url,
       'visibility', v_hub.visibility,
+      'description', v_hub.description,
+      'field',      v_hub.field,
+      'links',      coalesce(v_hub.links, '[]'::jsonb),
+      'subscribers', (select count(*) from public.creator_subscriptions s where s.hub = v_hub.id),
+      'published',  (select count(*) from public.member_content c
+                      where c.hub = v_hub.id and c.status = 'published'),
+      'host',       (select jsonb_build_object(
+                        'id',       m.member_id,
+                        'name',     coalesce(nullif(btrim(m.full_name), ''), m.username, m.member_id),
+                        'username', m.username,
+                        'avatar',   m.avatar_url)
+                       from public.members m where m.id = v_hub.owner),
       'creator',    (select m.member_id from public.members m where m.id = v_hub.owner)
     )
   );
@@ -138,6 +150,17 @@ begin
       'logo_url',   v_hub.logo_url,
       'cover_url',  v_hub.cover_url,
       'visibility', v_hub.visibility,
+      'description', v_hub.description,
+      'field',      v_hub.field,
+      'links',      coalesce(v_hub.links, '[]'::jsonb),
+      'subscribers', (select count(*) from public.creator_subscriptions s where s.hub = v_hub.id),
+      'published',  (select count(*) from public.member_content c
+                      where c.hub = v_hub.id and c.status = 'published'),
+      'host',       jsonb_build_object(
+                        'id',       v_member.member_id,
+                        'name',     coalesce(nullif(btrim(v_member.full_name), ''), v_member.username, v_member.member_id),
+                        'username', v_member.username,
+                        'avatar',   v_member.avatar_url),
       'creator',    v_member.member_id
     )
   );

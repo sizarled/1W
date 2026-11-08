@@ -1736,3 +1736,128 @@
 .vhost__meta a:hover {
   border-bottom-color: var(--text);
 }
+
+/* ------------------------------------------------------------------ */
+/* the details under a video                                          */
+/* ------------------------------------------------------------------ */
+/* Chapters, the studio's counts, and its own links. All of it is read
+   from what the member wrote — nothing is invented, and a description
+   with no time in it draws no chapter list. */
+.vback-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.vback-row .vback {
+  margin-bottom: 0;
+}
+
+.vback[hidden] {
+  display: none;
+}
+
+.vchaps {
+  display: grid;
+  gap: 0.15rem;
+  margin: 0.4rem 0 0.2rem;
+  padding: 0.5rem;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-soft);
+}
+
+.vchaps__btn {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  padding: 0.42rem 0.5rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.vchaps__btn:hover {
+  background: var(--ghost);
+}
+
+.vchaps__btn:hover .vchaps__label {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.vchaps__n {
+  font-size: 0.72rem;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.vchaps__label {
+  font-size: 0.86rem;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vchaps__time {
+  font-size: 0.76rem;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.vhost__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 0.25rem 0 0;
+  font-size: 0.76rem;
+  color: var(--faint);
+}
+
+.vhost__stats b {
+  color: var(--text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  margin-right: 0.2rem;
+}
+
+.vhost__bio {
+  margin: 0.35rem 0 0;
+  font-size: 0.86rem;
+  line-height: 1.55;
+  color: var(--muted);
+  max-width: 62ch;
+}
+
+.vlinks {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.2rem 0 0.4rem;
+}
+
+.vlinks__head {
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.vlinks__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.vlinks .chip {
+  text-decoration: none;
+}

@@ -511,11 +511,23 @@ function watchMarkup(v, res) {
   const age = AGE_LABEL[meta.age] || "";
   const lang = LANG_LABEL[v.language] || (v.language ? String(v.language).toUpperCase() : "");
   const desc = String(v.description || "").trim();
+  const chapters = chaptersOf(desc, meta);
+  /* the studio's own links, under the video that studio published */
+  const links = (state.hub && Array.isArray(state.hub.links) ? state.hub.links : [])
+    .map((link) => ({
+      label: String(link.label || link.name || "Link").trim(),
+      url: String(link.url || "").trim(),
+      icon: iconForLink(link.url),
+    }))
+    .filter((link) => link.url && link.label);
 
   return `
     <div class="vwatch" data-orientation="${state.orientation}">
       <div class="vwatch__main">
-        <a class="vback" href="#" data-v-back>${icon("arrowLeft")} All videos</a>
+        <div class="vback-row">
+          <a class="vback" href="${esc(state.hub && state.hub.name ? creatorUrl(state.hub.code || state.hub.id, state.hub.creator || host.id) : "#")}" data-v-studio-back ${state.hub && state.hub.name ? "" : "hidden"}>${icon("arrowLeft")} Back to the ${esc(hubKindWord(state.hub && state.hub.kind).toLowerCase())}</a>
+          <a class="vback" href="#" data-v-back>${icon("film")} All videos</a>
+        </div>
 
         ${res.locked ? lockedMarkup(res.video) : playerMarkup(v, meta)}
 
@@ -527,6 +539,7 @@ function watchMarkup(v, res) {
             <span>${esc(timeAgo(v.published_at) || "unpublished")}</span>
             ${lang ? `<i></i><span>${esc(lang)}</span>` : ""}
             ${age ? `<i></i><span>${esc(age)}</span>` : ""}
+            ${v.minutes ? `<i></i><span>${esc(num(Number(v.minutes) || 0))} minutes</span>` : ""}
             <i></i>
             <span>${esc(VIS_LABEL[v.visibility] || "Public")}</span>
             ${v.status && v.status !== "published" ? `<i></i><span>${esc(v.status === "scheduled" ? `scheduled for ${new Date(v.scheduled_at).toLocaleString()}` : v.status)}</span>` : ""}
@@ -534,6 +547,24 @@ function watchMarkup(v, res) {
         </div>
 
         ${res.locked ? "" : actionsMarkup(v)}
+
+        ${
+          chapters.length
+            ? `<ol class="vchaps" data-v-chapters>
+                 ${chapters
+                   .map(
+                     (row) => `<li class="vchaps__row">
+                       <button class="vchaps__btn" type="button" data-v-chapter="${row.start}" title="Jump to ${esc(stamp(row.start))}">
+                         <span class="vchaps__n">${esc(String(row.n).padStart(2, "0"))}</span>
+                         <span class="vchaps__label">${esc(row.label)}</span>
+                         <span class="vchaps__time">${esc(stamp(row.start))}</span>
+                       </button>
+                     </li>`
+                   )
+                   .join("")}
+               </ol>`
+            : ""
+        }
 
         <div class="vhost"${state.hub && state.hub.name ? ' data-v-host="studio"' : ' data-v-host="member"'}>
           ${
@@ -550,7 +581,11 @@ function watchMarkup(v, res) {
             ${
               state.hub && state.hub.name
                 ? `<p class="vhost__name"><a href="${esc(creatorUrl(state.hub.code || state.hub.id, state.hub.creator || host.id))}">${esc(state.hub.name)}</a></p>
-                   <p class="vhost__meta"><span class="vhost__kind">${esc(hubKindWord(state.hub.kind))}</span>${state.hub.code ? ` · ${esc(state.hub.code)}` : ""} · by <a href="${esc(creatorUrl("", host.id))}">${esc(host.name || host.username || "a member")}</a></p>`
+                   <p class="vhost__meta"><span class="vhost__kind">${esc(hubKindWord(state.hub.kind))}</span>${state.hub.code ? ` · ${esc(state.hub.code)}` : ""} · by <a href="${esc(creatorUrl("", host.id))}">${esc(host.name || host.username || "a member")}</a></p>
+                   <p class="vhost__stats">
+                     ${state.hub.subscribers != null ? `<span><b>${esc(compact(Number(state.hub.subscribers) || 0))}</b> subscribers</span>` : ""}
+                     ${state.hub.published != null ? `<span><b>${esc(num(Number(state.hub.published) || 0))}</b> releases</span>` : ""}
+                   </p>`
                 : `<p class="vhost__name">${esc(host.name || host.username || "A member")}</p>
                    <p class="vhost__meta">${host.username ? esc(host.username) + " · " : ""}${esc(num(host.followers || 0))} followers</p>`
             }
@@ -561,6 +596,20 @@ function watchMarkup(v, res) {
               : ""
           }
         </div>
+
+        ${state.hub && state.hub.description ? `<p class="vhost__bio">${esc(state.hub.description)}</p>` : ""}
+
+        ${
+          links.length
+            ? `<div class="vlinks" data-v-links>
+                 <span class="vlinks__head">Related links</span>
+                 <div class="vlinks__row">
+                   ${links.map((link) => `<a class="chip" href="${esc(link.url)}" target="_blank" rel="noopener noreferrer">${icon(link.icon || "link")}${esc(link.label)}</a>`).join("")}
+                   ${state.hub && state.hub.name ? `<a class="chip" href="${esc(creatorUrl(state.hub.code || state.hub.id, state.hub.creator || host.id))}" data-v-studio-link>${icon("bookmark")}Playlists</a>` : ""}
+                 </div>
+               </div>`
+            : ""
+        }
 
         ${
           desc
@@ -743,6 +792,74 @@ async function studioOfMember(video) {
   return null;
 }
 
+/** A link's own mark, from where it points. */
+function iconForLink(url) {
+  const href = String(url || "").toLowerCase();
+  if (href.includes("youtube") || href.includes("youtu.be")) return "play";
+  if (href.includes("instagram")) return "image";
+  if (href.includes("twitter") || href.includes("//x.com")) return "send";
+  if (href.includes("playlist")) return "bookmark";
+  if (href.includes("t.me") || href.includes("telegram")) return "send";
+  return "globe";
+}
+
+/** seconds → 0:00 / 1:02:03 */
+function stamp(seconds) {
+  const total = Math.max(0, Math.round(Number(seconds) || 0));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const sec = String(total % 60).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${sec}` : `${m}:${sec}`;
+}
+
+/** "0:37" / "1:02:03" → seconds */
+function secondsOf(text) {
+  const parts = String(text || "").split(":").map((part) => Number(part));
+  if (parts.some((part) => Number.isNaN(part))) return 0;
+  return parts.reduce((total, part) => total * 60 + part, 0);
+}
+
+/**
+ * The chapters a description already carries.
+ *
+ * A member writes `(0:37 - 14:00)` after the name of the passage, or a
+ * plain `00:00 Introduction`; both are read here, in the order they
+ * appear, and never invented: a line without a time is prose, not a
+ * chapter, and a description with no time in it produces no chapter list.
+ */
+function chaptersOf(desc, meta) {
+  const declared = Array.isArray(meta && meta.chapters) ? meta.chapters : [];
+  if (declared.length) {
+    return declared
+      .map((row, index) => ({
+        n: index + 1,
+        label: String(row.label || row.title || "").trim(),
+        start: secondsOf(row.start || row.time),
+      }))
+      .filter((row) => row.label && row.start >= 0);
+  }
+  const lines = String(desc || "").split(/\r?\n/);
+  const out = [];
+  const range = /(\d{1,2}:\d{2}(?::\d{2})?)\s*(?:[-–—]|to)\s*(\d{1,2}:\d{2}(?::\d{2})?)/;
+  const lead = /^\s*(\d{1,2}:\d{2}(?::\d{2})?)\s*[-–—:·]?\s*(.+)$/;
+  lines.forEach((line) => {
+    const text = line.trim();
+    if (!text) return;
+    const span = text.match(range);
+    if (span) {
+      /* the passage is named before its time: "… comedies: (0:37 - 14:00) …" */
+      const label = text.split(/[:：]/)[0].replace(/\(.*$/, "").trim();
+      if (label && label.length < 90) out.push({ label, start: secondsOf(span[1]) });
+      return;
+    }
+    const head = text.match(lead);
+    if (head && /[a-z\u0600-\u06ff]/i.test(head[2])) out.push({ label: head[2].trim(), start: secondsOf(head[1]) });
+  });
+  return out
+    .sort((a, b) => a.start - b.start)
+    .map((row, index) => ({ ...row, n: index + 1 }));
+}
+
 /** "Studio One" → "SO" — the letters a logo-less studio stands on. */
 function initialsOf(name) {
   return String(name || "")
@@ -891,6 +1008,29 @@ function bindWatch() {
   if (!root) return;
 
   root.onclick = async (event) => {
+    /* a chapter is a place in the file: jump, or say the frame is not ours */
+    const chapter = event.target.closest("[data-v-chapter]");
+    if (chapter) {
+      event.preventDefault();
+      const seconds = Number(chapter.getAttribute("data-v-chapter")) || 0;
+      const media = root.querySelector("video");
+      if (media) {
+        try {
+          media.currentTime = seconds;
+          const played = media.play();
+          if (played && played.catch) played.catch(() => {});
+        } catch {
+          /* the browser refused the seek; the label below still says where */
+        }
+        return;
+      }
+      return toast({
+        title: stamp(seconds),
+        message: "This source plays in its own frame, so the track changes inside it.",
+        iconName: "clock",
+      });
+    }
+
     const open = event.target.closest("[data-v-open]");
     if (open) {
       /* let the hash change do the work, but keep it snappy */
