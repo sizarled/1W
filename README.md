@@ -1933,10 +1933,11 @@ in the same file, or, when that call is not on the server yet, the `creator_publ
 page already makes (a channel first, then a server or a cinema, never a private hub). No studio at
 all, and the member's face is the publisher, which is the honest answer.
 
-Test: `node tools/video-smoke.mjs` — **536/536** (feed, sort, search, watch, reaction→comment, a chapter
-index on YouTube and Vimeo and none on Streamtape, the frame's colour both ways, a locked door and its password, a missing video, the editor signed out and in, the payload of a
-publish, of an exclusive rule set and of a private list, the player and the sixteen host cases, the
-oEmbed stills, the studio picker, the contents rail, and the forwarding page).
+Test: `node tools/video-smoke.mjs` — **555/555** (feed, sort, search, watch, reaction→comment, a chapter
+index on YouTube and Vimeo and none on Streamtape, the frame's colour both ways, the hour, the gate and its thirty seconds, a locked door and its password, a missing video, the
+editor signed out and in, the payload of a publish, of an exclusive rule set and of a private list, the
+player and the sixteen host cases, the oEmbed stills, the studio picker, the contents rail, and the
+forwarding page).
 
 **The whole screen.** The player carries its way out in the corner — a disc that stays quiet until the
 pointer is near and is always there once the screen is the player — and pressing it, or **F**, makes
@@ -1949,6 +1950,27 @@ turn with it (`expand` → `collapse`). A real file in a `<video>` gets the same
 which only enlarges the video element itself — falls back to `webkitEnterFullscreen()`. Nothing fires
 while the member is typing, so a comment box keeps its own `f`. The cinema page's stage
 (`watch.html`, `[data-w-stage]`) carries the same door in the same corner, with the same key.
+
+**An hour of watching is paid for by thirty seconds.** Watching is counted where it happens — a
+`<video>`'s own `timeupdate`, or a frame's through the player.js bridge — one played step at a time; a
+jump (a seek, a laptop that slept) is refused rather than believed, and a frame that will never say its
+time is counted while it is on the screen and the page is visible. The ledger lives in `localStorage`
+(`1w.videos.watched`, `1w.videos.adsPaid`), so it survives a reload and a visit that ends mid-hour.
+
+At **sixty minutes** the next video asks first. Its player is drawn with a gate over it, and the frame
+behind the gate is `inert` — no click, no tab key and no keyboard reaches the film: the press goes to
+**Open the link**, which opens [`asiafilm.org/4/…`](https://asiafilm.org/4/e476b83b0c777b7828ac79fef485bd1a)
+in a new tab. The count starts **only then**, and it is wall-clock time measured while that page reports
+itself open (`window.closed`), four times a second — so switching tabs does not pause it, closing the ad
+does, and a background tab whose timers the browser throttles still lands on the right number when it
+next fires. A closed ad says where the count stopped and can be opened again. A popup the browser holds
+back is said out loud, and the link itself is offered.
+
+At **thirty seconds** the gate pays: `1w.videos.watched` drops by the hour, `1w.videos.adsPaid` goes up,
+the gate removes itself, the `inert` comes off the frame and the film is asked to start — a `<video>` by
+itself, a frame through the bridge. The link, the count and the hour are three constants at the top of
+`assets/js/ads.js`; changing the ad is one line. The gate is on the videos watch page; the cinema stage
+(`watch.html`) is not covered yet — it is the same gate, waiting to be asked for.
 
 **The host's own button works, because the frame is allowed to ask.** A full-screen request made from
 inside an `<iframe>` is granted only when the frame is permitted to make it, so every player frame the
@@ -2320,7 +2342,7 @@ the editors need**, each pinned to a name pattern and a set of extensions (`user
 | `node tools/rte-smoke.mjs` | **45/45** (every command, links, insertion, history, paste, drop, keys, toolbar state) |
 | `node tools/article-smoke.mjs` | **281/281** |
 | `node tools/blog-smoke.mjs` | **82/82** (the address, the closed door, the hero, the home, a section, the search, the plain cover) |
-| `node tools/video-smoke.mjs` | **536/536** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
+| `node tools/video-smoke.mjs` | **555/555** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
 | `node tools/media-smoke.mjs` | **89/89** (the address book, the three pages, the portrait stage, the locked item, the shelves) |
 
 ### The six OAuth apps — one checklist each
@@ -3383,6 +3405,7 @@ assets/js/blog.js           blog.html: one blog as a reader meets it — its cov
 assets/css/blog.css         that page: the cover hero, the rows, the section cards
 assets/js/contents.js       the contents rail both editors carry: the piece's headings, the form's sections
 assets/js/rte.js            the writing surface: ranges, formatting, history, paste, keys
+assets/js/ads.js            the hour, the thirty seconds, and the gate before the film
 assets/js/player-frame.js   the player.js bridge: steering a frame we do not own
 assets/js/vendor/           third-party files kept verbatim: player-0.1.0.min.js (BSD) + its licence
 assets/js/embed.js          the one host list: YouTube · Vimeo · Dailymotion · TikTok · Facebook·

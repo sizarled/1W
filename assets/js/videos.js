@@ -111,6 +111,7 @@ function signedIn() {
 /** The host list lives in one place now: see assets/js/embed.js. */
 import { embedUrl, fullscreenSrc, FRAME_ALLOW, autoThumb, isFile, streamtapeId, tapeColour, canSeek } from "./embed.js";
 import { currentTheme } from "./theme.js";
+import { adDue, adGateMarkup, mountAdGate, addWatched } from "./ads.js";
 
 export { embedUrl, autoThumb, isFile, sourceKind } from "./embed.js";
 
@@ -412,17 +413,22 @@ function fullscreenButton() {
   return `<button class="vplayer__fs" type="button" data-v-fs aria-pressed="false" aria-label="Full screen" title="Full screen (F)">${icon("expand")}</button>`;
 }
 
-function playerShell(inner) {
-  return `<div class="vplayer" data-v-player>${inner}${fullscreenButton()}</div>`;
+function playerShell(inner, { gated = false } = {}) {
+  /* an ad is not a poster on top of a working player: the frame behind the
+     gate is inert, so neither a click nor a tab key reaches the film */
+  const covered = gated ? inner.replace(/<(iframe|video)\b/, "<$1 inert") : inner;
+  return `<div class="vplayer" data-v-player>${covered}${gated ? adGateMarkup() : ""}${fullscreenButton()}</div>`;
 }
 
 function playerMarkup(v, meta) {
   const src = (v.video && v.video.embed) || v.embed || "";
+  /* an hour of watching has gone by: this video asks first */
+  const gated = adDue();
   if (!src) {
     return playerShell(`<div class="vplayer__idle"><p class="vplayer__note">This video has no source yet.</p></div>`);
   }
   if (isFile(src)) {
-    return playerShell(`<video controls playsinline preload="metadata" poster="${esc(stillOf(v))}" src="${esc(src)}"></video>`);
+    return playerShell(`<video controls playsinline preload="metadata" poster="${esc(stillOf(v))}" src="${esc(src)}"></video>`, { gated });
   }
   /* the frame's address carries the platform's own full-screen flag, so its
      button is in its chrome too, beside this page's corner button — and the
@@ -434,7 +440,8 @@ function playerMarkup(v, meta) {
     return playerShell(`<div class="vplayer__idle"><p class="vplayer__note">This source cannot be shown here.</p></div>`);
   }
   return playerShell(
-    `<iframe src="${esc(src2)}" title="${esc(v.title || "Video")}" loading="lazy" allow="${esc(FRAME_ALLOW)}" allowfullscreen webkitallowfullscreen mozallowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`
+    `<iframe src="${esc(src2)}" title="${esc(v.title || "Video")}" loading="lazy" allow="${esc(FRAME_ALLOW)}" allowfullscreen webkitallowfullscreen mozallowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`,
+    { gated }
   );
 }
 
@@ -1073,6 +1080,10 @@ async function openWatch(code, orientation) {
      the reader is inside lights up as it plays */
   const ownMedia = $(".vplayer video");
   if (ownMedia && $("[data-v-chapter]")) followMedia(ownMedia);
+  /* the hour is counted from the player's own clock, and a gate that is on the
+     page is wired to its link */
+  startWatchClock();
+  mountWatchAd();
   const saveBtn = $("[data-v-save]");
   if (saveBtn) {
     const saved = savedSet().has(v.code || v.id);
@@ -1085,6 +1096,9 @@ async function openWatch(code, orientation) {
 function showBrowse() {
   state.view = "browse";
   state.code = "";
+  /* a clock that counted a video which is no longer on the page must stop */
+  if (typeof stopWatchClock === "function") stopWatchClock();
+  stopWatchClock = null;
   const host = watchEl();
   if (host) {
     host.hidden = true;
@@ -1307,6 +1321,106 @@ function seekMedia(media, seconds, play) {
   if (media.readyState >= 1) apply();
   else media.addEventListener("loadedmetadata", apply, { once: true });
 }
+
+/* ------------------------------------------------------------------ */
+/* the hour behind the ad                                             */
+/* ------------------------------------------------------------------ */
+/* Watching is counted where it happens: a `<video>`'s own `timeupdate`, or a
+   frame's through the player.js bridge. A jump is not watching — only a step
+   the player actually played is booked — and a frame that will not tell its
+   time is counted while it is on the screen and the page is visible, which is
+   an approximation and the only honest one available. */
+
+let stopWatchClock = null;
+
+function startWatchClock() {
+  if (typeof stopWatchClock === "function") stopWatchClock();
+  stopWatchClock = null;
+  const root = watchEl();
+  if (!root) return;
+
+  const media = root.querySelector(".vplayer video");
+  if (media) {
+    let last = null;
+    const onTime = () => {
+      const at = Number(media.currentTime) || 0;
+      if (last !== null) {
+        const moved = at - last;
+        if (moved > 0 && moved <= 2) addWatched(moved);
+      }
+      last = at;
+    };
+    media.addEventListener("timeupdate", onTime);
+    stopWatchClock = () => media.removeEventListener("timeupdate", onTime);
+    return;
+  }
+
+  const frame = root.querySelector(".vplayer iframe");
+  if (!frame) return;
+  let lastSecond = null;
+  let answeredAt = 0;
+  const following = followFrame(frame, ({ seconds }) => {
+    const at = Number(seconds) || 0;
+    answeredAt = Date.now();
+    if (lastSecond !== null) {
+      const moved = at - lastSecond;
+      if (moved > 0 && moved <= 2) addWatched(moved);
+    }
+    lastSecond = at;
+  });
+  const ticker = setInterval(() => {
+    /* the frame leaves the page: the clock goes with it */
+    if (!frame.isConnected) {
+      clearInterval(ticker);
+      return;
+    }
+    if (document.visibilityState !== "visible") return;
+    /* a frame that answered in the last five seconds is counted by its own
+       clock; one that never answers is counted by the wall clock */
+    if (Date.now() - answeredAt < 5000) return;
+    addWatched(1);
+  }, 1000);
+  stopWatchClock = () => {
+    clearInterval(ticker);
+    following
+      .then((stop) => {
+        if (typeof stop === "function") stop();
+      })
+      .catch(() => {});
+  };
+}
+
+/**
+ * The gate, wired to its link.
+ *
+ * When the count is done the gate removes itself, the player underneath is no
+ * longer inert, and the film is asked to start — a `<video>` by itself, a frame
+ * through the bridge it answers.
+ */
+function mountWatchAd() {
+  const gate = $("[data-v-ad]");
+  if (!gate) return;
+  mountAdGate(gate);
+}
+
+/* the count is done: the film behind the gate is let go of, and asked to start */
+document.addEventListener("1w:ad-paid", () => {
+  const root = watchEl();
+  if (!root) return;
+  root.querySelectorAll(".vplayer [inert]").forEach((el) => el.removeAttribute("inert"));
+  const media = root.querySelector(".vplayer video");
+  if (media) {
+    try {
+      const started = media.play();
+      if (started && started.catch) started.catch(() => {});
+    } catch {
+      /* the browser wants a press; the video is open to be pressed */
+    }
+  }
+  const frame = root.querySelector(".vplayer iframe");
+  if (frame) seekFrame(frame, 0, { play: true }).catch(() => {});
+  toast({ title: "Open", message: "The count is done — the video is yours.", iconName: "play" });
+});
 
 /** The chapter list follows a file of our own — one follower at a time. */
 function followMedia(media) {
