@@ -1308,8 +1308,9 @@ function seekMedia(media, seconds, play) {
   else media.addEventListener("loadedmetadata", apply, { once: true });
 }
 
-/** The chapter list follows a file of our own. */
+/** The chapter list follows a file of our own — one follower at a time. */
 function followMedia(media) {
+  if (typeof stopPlayhead === "function") stopPlayhead();
   const tick = () => {
     if (media.isConnected) markChapterAt(media.currentTime || 0);
   };
