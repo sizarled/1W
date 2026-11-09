@@ -16,7 +16,7 @@
  *     meta{ age, download, vertical, source, platform, keywords, host_file }
  *   })
  *
- * The same call edits: `?id=Video-001005` pre-fills the form from
+ * The same call edits: `?id=VID-001005` pre-fills the form from
  * video_get, and the payload carries the code back.
  *
  * A file uploaded while a **studio** is chosen does not go to the site's
@@ -30,7 +30,7 @@
  * a platform refuses a link from anywhere else.
  */
 import { rpc } from "./data.js";
-import { videoUrl } from "./media.js";
+import { videoUrl, shapeOf } from "./media.js";
 import { qs, qsa, esc } from "./utils.js";
 import { icon } from "./icons.js";
 import { toast } from "./ui.js";
@@ -78,6 +78,8 @@ const S = {
   age: "none",
   download: false,
   vertical: false,
+  /* the member moved the box themselves — the file no longer decides */
+  verticalTouched: false,
   status: "draft",
   hub: "",
   hubName: "",
@@ -685,6 +687,26 @@ function paintAll() {
   paintHub();
   paintAge();
   paintStatus();
+  paintCodeHint();
+}
+
+/**
+ * The code a video will carry, said before it is minted: `VID-` for a wide
+ * one, `VSR-` for a vertical one. An existing video keeps its number when it
+ * changes shape — only the three letters move.
+ */
+function paintCodeHint() {
+  const note = $("[data-ved-code-hint]");
+  if (!note) return;
+  const prefix = S.vertical ? "VSR" : "VID";
+  const number = String(S.code || "").replace(/^[A-Za-z]+-/, "");
+  if (!S.code) {
+    note.textContent = `A new code is minted with this shape: ${prefix}-######.`;
+    return;
+  }
+  note.textContent = /^[A-Za-z]+-[0-9]+$/.test(S.code) && !S.code.startsWith(`${prefix}-`)
+    ? `Its code becomes ${prefix}-${number} — the number stays, the three letters follow the shape.`
+    : `Its code is ${S.code}.`;
 }
 
 /* ================================================================== */
@@ -905,6 +927,7 @@ function resetForm() {
   S.age = "none";
   S.download = false;
   S.vertical = false;
+  S.verticalTouched = false;
   S.status = "draft";
   S.busy = false;
   /* the hub is the desk's, and it stays: the next video goes to the same place */
@@ -1096,7 +1119,7 @@ async function loadExisting(code) {
   S.mode = hostFile?.id || !PLATFORM_VALUES.includes(savedKind) ? "file" : "link";
   S.platform = S.mode === "link" ? (PLATFORM_VALUES.includes(savedPlatform) ? savedPlatform : savedKind) : "";
   /* the name the file actually has, against the code it should carry: a file
-     uploaded before the code changed (`PST-001032.mp4`) is renamed on the next
+     uploaded under an older code (`PST-001039.mp4`, `Video-001039.mp4`) is renamed on the next
      save, so the host and the video agree again */
   const hostExt = hostFile?.ext || extensionOf({ name: hostFile?.name || ".mp4" });
   const wanted = S.code ? `${S.code}.${hostExt}` : "";
@@ -1124,6 +1147,7 @@ async function loadExisting(code) {
   }
   S.download = Boolean(meta.download);
   S.vertical = Boolean(meta.vertical);
+  S.verticalTouched = false;
   S.chapters = Array.isArray(meta.chapters)
     ? meta.chapters.map((row) => ({ time: chapterTime(row.start || row.time || ""), label: String(row.label || row.title || "") }))
     : [];
@@ -1405,6 +1429,67 @@ document.addEventListener("webkitfullscreenchange", paintPreviewFullscreen);
 const IMAGE_TYPES = /^image\/(png|jpeg|webp|gif)$/;
 const VIDEO_TYPES = /^video\/(mp4|webm|ogg|quicktime)$/;
 
+/**
+ * The shape of a file the member just picked — `"v"`, `"h"`, or `""` when the
+ * browser will not say (no metadata, a codec it cannot read, a sandbox without
+ * object URLs). It reads `videoWidth`/`videoHeight` off a detached element and
+ * gives up after four seconds, because a file that never answers must not hold
+ * the upload.
+ */
+async function orientationOfFile(file) {
+  if (!file || typeof document === "undefined") return "";
+  let url = "";
+  try {
+    url = URL.createObjectURL(file);
+  } catch {
+    return "";
+  }
+  const probe = document.createElement("video");
+  probe.preload = "metadata";
+  probe.muted = true;
+  const shape = await new Promise((resolve) => {
+    let settled = false;
+    const done = (value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(value);
+    };
+    const timer = setTimeout(() => done(""), 4000);
+    probe.addEventListener("loadedmetadata", () => done(shapeOf(probe.videoWidth, probe.videoHeight)), { once: true });
+    probe.addEventListener("error", () => done(""), { once: true });
+    try {
+      probe.src = url;
+    } catch {
+      done("");
+    }
+  });
+  try {
+    URL.revokeObjectURL(url);
+  } catch {
+    /* nothing to release */
+  }
+  return shape;
+}
+
+/**
+ * The file says its own shape, and the box follows it — unless the member has
+ * already answered by hand. This is where a phone-first clip becomes a `VSR-`
+ * code without anyone having to know that the code says the shape. It writes
+ * nothing into the upload's own line: the hint under the box is the place for
+ * it, and the progress notes stay the progress notes.
+ */
+function applyFileShape(shape) {
+  if (!shape || S.verticalTouched) return;
+  const vertical = shape === "v";
+  if (S.vertical === vertical) return;
+  S.vertical = vertical;
+  const box = $("[data-ved-vertical]");
+  if (box) box.checked = vertical;
+  paintCodeHint();
+  scheduleDraft();
+}
+
 function fileNote(text, tone = "") {
   const note = $("[data-ved-file-note]");
   if (!note) return;
@@ -1677,6 +1762,8 @@ async function nameHostFile() {
 
 async function uploadVideoFile(file) {
   if (!file) return;
+  /* the shape is read while the upload runs: a big file must not wait on it */
+  orientationOfFile(file).then(applyFileShape).catch(() => "");
   if (!VIDEO_TYPES.test(file.type)) {
     fileNote("MP4, WEBM, OGG or MOV — those are the files a browser can play.", "error");
     return;
@@ -2202,6 +2289,9 @@ function bind() {
   /* extras */
   $("[data-ved-vertical]")?.addEventListener("change", (event) => {
     S.vertical = event.target.checked;
+    /* a decision made by hand outranks anything the file says */
+    S.verticalTouched = true;
+    paintCodeHint();
   });
   $("[data-ved-download]")?.addEventListener("change", (event) => {
     S.download = event.target.checked;

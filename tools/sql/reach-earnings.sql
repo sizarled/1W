@@ -192,7 +192,7 @@ begin
 end;
 $function$;
 
-/** The same, for an item handed in by its code — `Video-001032` or a podcast code. */
+/** The same, for an item handed in by its code — `VID-001032` or a podcast code. */
 create or replace function public.reach_item_of(p_code text)
 returns jsonb
 language plpgsql

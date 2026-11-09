@@ -1657,7 +1657,7 @@ Home
 └ Users
   └ Studio
     └ <studio code>          IDST100001
-      └ <video code>.mp4     Video-001100.mp4
+      └ <video code>.mp4     VID-001100.mp4
 ```
 
 `assets/js/streamtape.js` makes the folders on the way in (`Users` and `Studio` once, the studio's
@@ -1675,23 +1675,39 @@ the **name is not stored**, because the name is the video's own code, so the rec
 between the upload and the rename. A file without a studio, or one under 50 MB without a studio
 chosen, still goes to the site's storage; a studio's file may be up to 2 GB.
 
-**A video's code says "video".** Every post is minted from one default — `'PST-' || nextval` — so a
-video and an article looked alike (`PST-001032`). A video now carries its own prefix:
+**A video's code says what it is, and what shape it is.** Every post used to be minted from one
+default — `'PST-' || nextval` — so a video and an article looked alike (`PST-001039`), and a vertical
+video and a wide one could not be told apart either. A video now carries its shape in its code:
 
 ```
-Video-001032    a video
-PST-001032      anything else — an article, a question, a recommendation
+VID-001039    a video, wide
+VSR-001039    a video, vertical — a Short, a Reel, a phone recording
+PST-001039    anything else — an article, a question, a recommendation
 ```
 
 A column default cannot look at another column of the row it fills, so the default is gone and a
-`before insert` trigger (`tools/sql/video-codes.sql`) mints the code from `content_type`, from the
-same `post_seq` — the numbers stay dense and in order, and an explicit code is still honoured. The
-same migration renames the videos that already exist (`PST-001032` → `Video-001032`), which means an
-address that carries an old code (`videos.html#/v/PST-001032`) no longer finds its video.
+trigger (`tools/sql/video-codes.sql`) mints the code from `content_type` and
+`video_meta->>'vertical'`, from the same `post_seq` — the numbers stay dense and in order, and an
+explicit code is still honoured. The trigger fires on insert and on an update that touches
+`video_meta` or `content_type`, so flipping the editor's “A vertical video” box moves the three
+letters and **keeps the number**. The same migration renames the rows that already exist:
+`PST-001039` became `VID-001039`, and the deleted vertical `PST-001038` became `VSR-001038`.
 
-The file on Streamtape is named after the code, so a file uploaded before this change is still called
-`PST-001032.mp4`. `meta.host_file` now keeps the name the file actually has; opening such a video in
-the editor and saving it renames the file to the code it now carries.
+An old code still finds its video: `post_resolve` falls back to the number when the exact code is not
+there, so `videos.html#/h/ID=PST-001039`, `…/ID=Video-001039` and `…/ID=VID-001039` are one address
+to the same row. The bar is then rewritten to the code the video carries now, with the shape it has
+and the second it was asked to start at kept (`#/h/ID=VID-001039&t=90s`), so a bookmark taken before
+the code moved ends up pointing at the code that exists.
+
+The editor no longer asks the member which shape their file is: the file is measured
+(`videoWidth`/`videoHeight` off a detached `<video>`, four seconds at most) and the box follows it —
+`VSR` for a portrait clip, `VID` for a wide one — with a line under the box that says which prefix
+the video will carry. A member who ticks or unticks the box themselves has the last word, and the
+measurement never holds up the upload.
+
+The file on Streamtape is named after the code, so a file uploaded under an older code is still called
+`PST-001039.mp4`. `meta.host_file` keeps the name the file actually has; opening such a video in the
+editor and saving it renames the file to the code it now carries.
 
 **One way to the host, and the browser holds nothing.** The way in is the edge function
 `supabase/functions/studio-upload/index.ts`, deployed on this project: Streamtape's **API Login** and
@@ -1737,13 +1753,13 @@ an **automatic** picture. Nothing is stored twice: the address is the host's, an
 directly.
 
 Streamtape keeps the account's own pictures in **Home / Thumbnails**, matched to a video by name: a
-`Video-001100.jpg` there is the picture of `Video-001100.mp4`. So the account can replace a studio's
+`VID-001100.jpg` there is the picture of `VID-001100.mp4`. So the account can replace a studio's
 stills without touching the site, and the editor reads whichever picture is current — the hint under
 the field says where it came from and that it can be replaced.
 
 The member's own picture wins over it: **Upload**, a pasted address, or a dropped file sets the
 thumbnail, and the automatic one is never put back over a chosen one. A picture the member uploads is
-also copied into **Home / Thumbnails** under the video's own name (`Video-001100.jpg`), so the host's
+also copied into **Home / Thumbnails** under the video's own name (`VID-001100.jpg`), so the host's
 own player wears the same card the site does — best-effort, after the video has its code, and a host
 that refuses an image costs nothing. `stillOf()` in `videos.js` is the reading side: a card, a row, a
 poster or the player falls back to the host's still, so a video saved before this change still shows
@@ -1800,7 +1816,7 @@ the hub's own library) *and* the `posts` this page publishes into that hub — s
 [the studio a video goes into](#the-studio-a-video-goes-into).
 
 DDL + functions: `tools/sql/videos-page.sql` — **applied**, and exercised on the real database: a
-published video came back with its code (`Video-001005`), a guest saw it in the feed and its
+published video came back with its code (`VID-001005`), a guest saw it in the feed and its
 `impressions` ticked; a private one stayed `locked` for a guest, `asks_password` was true, a wrong
 password stayed locked and the right one opened it; an exclusive one dated to Morocco stayed shut for a
 guest and for an Andorran member, and opened for the Moroccan one; a draft was absent from the feed but
@@ -1881,7 +1897,7 @@ in the same file, or, when that call is not on the server yet, the `creator_publ
 page already makes (a channel first, then a server or a cinema, never a private hub). No studio at
 all, and the member's face is the publisher, which is the honest answer.
 
-Test: `node tools/video-smoke.mjs` — **474/474** (feed, sort, search, watch, reaction→comment, a locked
+Test: `node tools/video-smoke.mjs` — **489/489** (feed, sort, search, watch, reaction→comment, a locked
 door and its password, a missing video, the editor signed out and in, the payload of a publish, of an
 exclusive rule set and of a private list, the player and the sixteen host cases, the oEmbed stills, the
 studio picker, the contents rail, and the forwarding page).
@@ -2148,7 +2164,7 @@ Ctrl+Enter, a draft payload, an audience payload, a private payload with its mem
 going to review, and the shared word-count / reading-time rules).
 
 Eleven pieces from @ledsizar, @jhon007 and @ledsizar7 remain on the index — nine public, one
-exclusive (`Video-001020`, open to LV5–LV10) and one private (`Video-001021`, the password is
+exclusive (`VID-001020`, open to LV5–LV10) and one private (`VID-001021`, the password is
 `1world2026`), so both gates can be seen without publishing anything.
 
 ### A blog's reading page — `blog.html?studio=<code>`
@@ -2258,7 +2274,7 @@ the editors need**, each pinned to a name pattern and a set of extensions (`user
 | `node tools/rte-smoke.mjs` | **45/45** (every command, links, insertion, history, paste, drop, keys, toolbar state) |
 | `node tools/article-smoke.mjs` | **281/281** |
 | `node tools/blog-smoke.mjs` | **82/82** (the address, the closed door, the hero, the home, a section, the search, the plain cover) |
-| `node tools/video-smoke.mjs` | **474/474** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
+| `node tools/video-smoke.mjs` | **489/489** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
 | `node tools/media-smoke.mjs` | **89/89** (the address book, the three pages, the portrait stage, the locked item, the shelves) |
 
 ### The six OAuth apps — one checklist each

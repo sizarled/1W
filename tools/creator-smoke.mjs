@@ -1922,7 +1922,7 @@ async function reachPass() {
       remaining: 380,
       day: "2026-12-05",
       rows: [
-        { kind: "post", ref: "post-a", code: "Video-001032", title: "The first film", points: 200, shown: 120, rank: 5000, reached_updates: 40, reached_suggestions: 60, reached_search: 20 },
+        { kind: "post", ref: "post-a", code: "VID-001032", title: "The first film", points: 200, shown: 120, rank: 5000, reached_updates: 40, reached_suggestions: 60, reached_search: 20 },
         { kind: "content", ref: "content-b", code: "PST-000901", title: "A long talk", points: 0, shown: 0, rank: 1500, reached_updates: 0, reached_suggestions: 0, reached_search: 0 },
       ],
     },
@@ -1942,7 +1942,7 @@ async function reachPass() {
   expect("reach: the studio's number is shown, not typed", /500/.test(total) && !view.qs("[data-cr-reach-total] input"), total);
   expect("reach: and it says what it is made of", /100 from the level \+ 400 from the interactions/.test(total), total);
   expect("reach: one row per item", view.qsa("[data-reach-row]").length === 2, String(view.qsa("[data-reach-row]").length));
-  expect("reach: a row names the item and its code", /The first film[\s\S]*Video-001032/.test(view.text('[data-reach-row="post-a"]')), view.text('[data-reach-row="post-a"]').slice(0, 90));
+  expect("reach: a row names the item and its code", /The first film[\s\S]*VID-001032/.test(view.text('[data-reach-row="post-a"]')), view.text('[data-reach-row="post-a"]').slice(0, 90));
   expect("reach: the item's reach is in its own field", view.qs('[data-cr-reach-points="post-a"]')?.value === "200", view.qs('[data-cr-reach-points="post-a"]')?.value);
   expect("reach: its ranking points are read, not typed", view.text('[data-cr-reach-rank="post-a"]') === "5,000" && !view.qs("input[data-cr-reach-rank]"), view.text('[data-cr-reach-rank="post-a"]'));
   expect("reach: what has been shown is counted", /120/.test(view.text('[data-reach-row="post-a"]')), view.text('[data-reach-row="post-a"]'));
@@ -2004,7 +2004,7 @@ async function reachPass() {
   /* a server without the table: the door still opens, and says what is missing */
   scenario = {
     hubs: [hub({ id: "hub-ch", kind: "channel", name: "Studio One" })],
-    items: [item({ id: "vid-1", kind: "video", code: "Video-001032", title: "The first film", status: "published" })],
+    items: [item({ id: "vid-1", kind: "video", code: "VID-001032", title: "The first film", status: "published" })],
     reachMissing: true,
   };
   const offline = await boot(73, { search: "?section=studio&hub=hub-ch&tab=reach" });
@@ -2013,7 +2013,7 @@ async function reachPass() {
   expect("reach: a server without the table still opens the tab", /not connected yet/.test(offline.text(".cr-bar")), offline.text(".cr-bar"));
   expect("reach: the panel is drawn, not blank", /Reach points for this studio/.test(offlineView), offlineView.slice(0, 140));
   expect("reach: it names the files that are missing", /studio-reach\.sql/.test(offlineView) && /reach-earnings\.sql/.test(offlineView), offlineView.slice(0, 200));
-  expect("reach: the shelf is read from the live table", /The first film/.test(offlineView) && /Video-001032/.test(offlineView), offlineView.slice(0, 240));
+  expect("reach: the shelf is read from the live table", /The first film/.test(offlineView) && /VID-001032/.test(offlineView), offlineView.slice(0, 240));
   expect("reach: nothing is offered for saving", !offline.qs("[data-cr-reach-save]"), "a save button was drawn");
   expect("reach: no errors on the way", offline.errors.length === 0, offline.errors.join(" | "));
   offline.window.close();
@@ -2033,7 +2033,7 @@ async function reachPass() {
       spent: 0,
       remaining: 500,
       day: "2026-12-05",
-      rows: [{ kind: "post", ref: "post-a", code: "Video-001032", title: "The first film", points: 200, shown: 0, rank: 5000, reached_updates: 0, reached_suggestions: 0, reached_search: 0 }],
+      rows: [{ kind: "post", ref: "post-a", code: "VID-001032", title: "The first film", points: 200, shown: 0, rank: 5000, reached_updates: 0, reached_suggestions: 0, reached_search: 0 }],
     },
   };
   const refused = await boot(71, { search: "?section=studio&hub=hub-ch&tab=reach" });

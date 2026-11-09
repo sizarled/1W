@@ -980,6 +980,26 @@ async function openWatch(code, orientation) {
   }
 
   const v = res.video || {};
+
+  /* the address follows the row. A code carries the video's shape now
+     (`VID-001039`, `VSR-001039`), and an address written before the code moved
+     (`PST-001039`, `Video-001039`) still opens the video — so the bar is
+     rewritten to the code the video carries, with the shape it has, and the
+     second it was asked to start at is kept. */
+  const liveCode = String(v.code || "");
+  const liveShape = v.meta && (v.meta.vertical === true || v.meta.vertical === "true") ? "v" : state.orientation;
+  if (liveCode && (liveCode !== state.code || liveShape !== state.orientation)) {
+    const at = timeOf(location.hash);
+    state.code = liveCode;
+    state.orientation = liveShape;
+    const hash = videoUrl(liveCode, liveShape).replace(/^[^#]*/, "");
+    try {
+      history.replaceState(null, "", `${location.pathname}${location.search}${at ? `${hash}&t=${at}s` : hash}`);
+    } catch {
+      /* a browser that refuses history still shows the video */
+    }
+  }
+
   state.reaction = (v.mine && Number(v.mine.reaction)) || 0;
   state.canComment = state.reaction !== 0;
   host.innerHTML = watchMarkup(v, res);

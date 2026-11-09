@@ -71,6 +71,18 @@ export function orientationOf(value) {
   return "h";
 }
 
+/**
+ * A picture's own shape — `1080 × 1920` is `"v"`, `1920 × 1080` is `"h"`.
+ * Nothing measured (0), a square, or a missing side answers `""`, and the
+ * caller keeps the shape it already had rather than guessing.
+ */
+export function shapeOf(width, height) {
+  const w = Number(width) || 0;
+  const h = Number(height) || 0;
+  if (!w || !h || w === h) return "";
+  return h > w ? "v" : "h";
+}
+
 /** `"p"`, `"podcast"`, `"audio"` → `"p"`; `"m"`, `"song"`, `"music"` → `"m"`. */
 export function audioKeyOf(value) {
   const raw = String(value || "").trim().toLowerCase();
@@ -308,6 +320,7 @@ export default {
   PLAYLIST_SHELVES,
   MEDIA_PAGES,
   orientationOf,
+  shapeOf,
   audioKeyOf,
   shelfOf,
   shelfOfKind,

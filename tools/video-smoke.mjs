@@ -531,6 +531,43 @@ const choosePlatform = (document, window, value) => {
 }
 
 /* ================================================================== */
+/* an old code opens the video, and the bar says the code it has now   */
+/* ================================================================== */
+{
+  const { document, window } = boot("videos.html", {
+    hash: "#/h/ID=PST-001039&t=90s",
+    fetchImpl: (href) => {
+      const fn = fnName(href);
+      if (fn === "video_feed") return reply({ ...FEED, rows: [], total: 0, fields: [] });
+      if (fn === "video_mine") return reply({ ok: true, rows: [] });
+      if (fn === "video_get") {
+        return reply({
+          ok: true,
+          video: {
+            id: "vid-39",
+            code: "VID-001039",
+            title: "The first film",
+            embed: "https://streamtape.com/e/abc",
+            meta: { vertical: false },
+            counters: {},
+            mine: { reaction: 0 },
+            host: { name: "Jhon", username: "@jhon" },
+          },
+          related: [],
+          more: [],
+        });
+      }
+      return reply([]);
+    },
+  });
+  await import(`file://${join(root, "assets/js/videos.js")}?oldcode`);
+  await wait(120);
+  expect("codes: an old code still opens the video", Boolean(document.querySelector(".vwatch")), "no watch");
+  expect("codes: the bar wears the current code", window.location.hash.startsWith("#/h/ID=VID-001039"), window.location.hash);
+  expect("codes: and the second is kept", /[?&]t=90s/.test(window.location.hash), window.location.hash);
+}
+
+/* ================================================================== */
 /* pass 5 — the editor, signed out                                    */
 /* ================================================================== */
 {
@@ -798,7 +835,7 @@ async function editor(tag) {
       if (fn === "creator_hubs_list") {
         return reply({ ok: true, hubs: [{ code: "IDST100001", name: "CineAura", kind: "channel" }] });
       }
-      if (fn === "video_save") return reply({ ok: true, code: "Video-001100", status: "published" });
+      if (fn === "video_save") return reply({ ok: true, code: "VID-001100", status: "published" });
       if (href.includes("/functions/v1/studio-upload")) {
         const url = new URL(href);
         const action = url.searchParams.get("action");
@@ -900,7 +937,7 @@ async function editor(tag) {
   await wait(200);
   expect(
     "studio upload: the file is renamed to the video's own code",
-    tape.renames.length === 1 && tape.renames[0].name === "Video-001100.mp4" && tape.renames[0].file === "fid1",
+    tape.renames.length === 1 && tape.renames[0].name === "VID-001100.mp4" && tape.renames[0].file === "fid1",
     JSON.stringify(tape.renames)
   );
   const studioPayload = lastCall(calls, "video_save")?.body?.p_payload;
@@ -943,8 +980,8 @@ async function editor(tag) {
   /* a file uploaded before the code changed is renamed to the code it has now */
   const renames = [];
   const ctx = boot("video-editor.html", {
-    hash: "#?id=Video-000001",
-    url: "video-editor.html?id=Video-000001",
+    hash: "#?id=VID-000001",
+    url: "video-editor.html?id=VID-000001",
     storage: STORAGE,
     fetchImpl: (href) => {
       const fn = fnName(href);
@@ -958,7 +995,7 @@ async function editor(tag) {
           mine: true,
           video: {
             id: "v1",
-            code: "Video-000001",
+            code: "VID-000001",
             title: "Older file",
             status: "draft",
             visibility: "general",
@@ -972,7 +1009,7 @@ async function editor(tag) {
           },
         });
       }
-      if (fn === "video_save") return reply({ ok: true, code: "Video-000001", status: "draft" });
+      if (fn === "video_save") return reply({ ok: true, code: "VID-000001", status: "draft" });
       if (href.includes("/functions/v1/studio-upload")) {
         const url = new URL(href);
         if (url.searchParams.get("action") === "file/rename") {
@@ -992,7 +1029,7 @@ async function editor(tag) {
   await wait(150);
   expect(
     "codes: a file still called by the old code is renamed to the new one",
-    renames.length === 1 && renames[0].file === "fid9" && renames[0].name === "Video-000001.mp4",
+    renames.length === 1 && renames[0].file === "fid9" && renames[0].name === "VID-000001.mp4",
     JSON.stringify(renames)
   );
 }
@@ -1666,14 +1703,35 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
 }
 
 /* ================================================================== */
+/* the shape a code carries                                          */
+/* ================================================================== */
+{
+  const media = await import(`file://${join(root, "assets/js/media.js")}?shape`);
+  expect("shape: a phone clip is vertical", media.shapeOf(1080, 1920) === "v", media.shapeOf(1080, 1920));
+  expect("shape: a film is horizontal", media.shapeOf(1920, 1080) === "h", media.shapeOf(1920, 1080));
+  expect("shape: a square is neither", media.shapeOf(1080, 1080) === "", media.shapeOf(1080, 1080));
+  expect("shape: nothing measured says nothing", media.shapeOf(0, 1920) === "" && media.shapeOf(undefined, 1080) === "");
+  const editor = readFileSync(join(root, "assets/js/video-editor.js"), "utf8");
+  expect("shape: the picked file is measured", editor.includes("orientationOfFile(file).then(applyFileShape)"));
+  expect("shape: the box follows the file", editor.includes("function applyFileShape") && editor.includes("box.checked = vertical"));
+  expect("shape: a hand-made choice outranks it", editor.includes("S.verticalTouched = true") && editor.includes("if (!shape || S.verticalTouched) return"));
+  const page = readFileSync(join(root, "video-editor.html"), "utf8");
+  expect("shape: the page says which prefix each shape carries", page.includes("data-ved-code-hint") && page.includes("<b>VSR</b>") && page.includes("<b>VID</b>"));
+}
+
+/* ================================================================== */
 /* pass 13 — the old address and the stylesheet                       */
 /* ================================================================== */
 {
   const html = readFileSync(join(root, "video.html"), "utf8");
   expect("video.html: it forwards to the videos page", html.includes("videos.html#/v/") && html.includes('get("id")'));
   const codes = readFileSync(join(root, "tools/sql/video-codes.sql"), "utf8");
-  expect("codes: a video is minted with its own prefix", codes.includes("'Video-'") && codes.includes("content_type = 'video'"));
-  expect("codes: and the videos already out there are renamed", codes.includes("set post_code = 'Video-' || substring"));
+  expect("codes: a wide video is minted VID-", codes.includes("'VID-'") && codes.includes("content_type is distinct from 'video'"));
+  expect("codes: a vertical one is minted VSR-", codes.includes("'VSR-'") && codes.includes("video_meta ->> 'vertical'"));
+  expect("codes: an article still takes PST-", codes.includes("'PST-'"));
+  expect("codes: the rows already out there keep their number", codes.includes("substring(x.post_code from '[0-9]+$')"));
+  expect("codes: and an update follows the shape", codes.includes("before insert or update of video_meta, content_type"));
+  expect("codes: an older code still finds its row", codes.includes("substring(ref from '[0-9]+$')"));
   expect("codes: the old default is dropped first", codes.includes("alter column post_code drop default"));
   expect("video.html: it replaces, not pushes", html.includes("location.replace"));
 
@@ -2063,7 +2121,7 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
       if (fn === "creator_hubs_list") {
         return reply({ ok: true, hubs: [{ code: "IDST100001", name: "CineAura", kind: "channel" }] });
       }
-      if (fn === "video_save") return reply({ ok: true, code: "Video-001100", status: "published" });
+      if (fn === "video_save") return reply({ ok: true, code: "VID-001100", status: "published" });
       if (href.includes("/functions/v1/studio-upload")) {
         const url = new URL(href);
         const action = url.searchParams.get("action");
@@ -2185,7 +2243,7 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
   );
   expect(
     "still: and the picture is copied there under the video's own name",
-    tape.thumbs.some((row) => row.name === "Video-001100.jpg"),
+    tape.thumbs.some((row) => row.name === "VID-001100.jpg"),
     JSON.stringify(tape.thumbs.map((row) => row.name))
   );
   expect("still: nothing threw in the editor", studioCtx.errors.length === 0, studioCtx.errors.join(" | "));
@@ -2208,7 +2266,7 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
   delete globalThis.XMLHttpRequest;
   const openCtx = boot("video-editor.html", {
     storage: STORAGE,
-    url: "video-editor.html?id=Video-000001",
+    url: "video-editor.html?id=VID-000001",
     fetchImpl: (href) => {
       const fn = fnName(href);
       if (fn === "creator_hubs_list") {
@@ -2219,7 +2277,7 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
           ok: true,
           video: {
             id: "post-1",
-            code: "Video-000001",
+            code: "VID-000001",
             title: "Already on the host",
             description: "",
             thumbnail: null,

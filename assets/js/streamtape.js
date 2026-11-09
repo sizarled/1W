@@ -9,7 +9,7 @@
  *     └ Users
  *         └ Studio
  *             └ <studio code>          e.g. IDST100001
- *                 └ <video code>.mp4   e.g. Video-001100.mp4
+ *                 └ <video code>.mp4   e.g. VID-001100.mp4, VSR-001101.mp4
  *
  * The folder is made on the way in — `Users` and `Studio` once, the studio's
  * own folder the first time that studio uploads — and their ids are remembered
@@ -27,7 +27,7 @@
  * renaming never breaks the link already in the field.
  *
  *   const out = await uploadToStudio(file, {
- *     studio: "IDST100001", name: "Video-001100.mp4",
+ *     studio: "IDST100001", name: "VID-001100.mp4",
  *     onStage: (text) => note(text),
  *   });
  *   out.embed   → https://streamtape.com/e/<id>
@@ -41,7 +41,7 @@ const CACHE_KEY = "1w.streamtape.folders";
  * The account's own shelf for pictures: **Home / Thumbnails**.
  *
  * Streamtape reads a video's splash from here, matched by name — a picture
- * called `Video-001100.jpg` is the picture for `Video-001100.mp4`. The editor
+ * called `VID-001100.jpg` is the picture for `VID-001100.mp4`. The editor
  * reads it back through `getsplash`, and writes a member's own picture into it
  * so the host's player shows the same card the site does.
  */
@@ -375,7 +375,7 @@ export async function uploadToStudio(file, { studio, name, onStage, onProgress }
   };
 }
 
-/** Give a file the video's own name — `Video-001100.mp4`. */
+/** Give a file the video's own name — `VID-001100.mp4`, or `VSR-…` for a vertical one. */
 export async function renameFile(id, name, studio) {
   if (!id || !name) return false;
   await call("file/rename", { file: id, name, studio });
