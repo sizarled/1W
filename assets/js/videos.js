@@ -28,6 +28,7 @@ import { icon } from "./icons.js";
 import { toast } from "./ui.js";
 import { sessionToken, getMember } from "./session.js";
 import { parseRoute, videoUrl, orientationOf, creatorUrl, timeOf, ORIENTATIONS } from "./media.js";
+import { seekFrame, followFrame } from "./player-frame.js";
 
 const PAGE = 24;
 
@@ -922,6 +923,8 @@ async function openWatch(code, orientation) {
     showBrowse();
     return;
   }
+  if (typeof stopPlayhead === "function") stopPlayhead();
+  stopPlayhead = null;
   state.view = "watch";
   state.code = code;
   state.orientation = orientationOf(orientation);
@@ -1054,6 +1057,8 @@ async function openWatch(code, orientation) {
       else button.closest(".vchaps__row")?.classList.remove("is-active");
     });
   }
+  /* the frame's own playhead, for a player that speaks player.js */
+  followPlayerFrame();
   const saveBtn = $("[data-v-save]");
   if (saveBtn) {
     const saved = savedSet().has(v.code || v.id);
@@ -1173,7 +1178,51 @@ function setStartTime(seconds) {
   }
 }
 
-/** Put the frame at that second: a file seeks, a YouTube frame reloads there. */
+/** The stop handle of the frame being followed, so a new video starts clean. */
+let stopPlayhead = null;
+
+/** Light the chapter that holds `seconds`; the others go out. */
+function markChapterAt(seconds) {
+  const buttons = [...(watchEl()?.querySelectorAll("[data-v-chapter]") || [])];
+  if (!buttons.length) return;
+  let active = null;
+  buttons.forEach((button) => {
+    if (Number(button.getAttribute("data-v-chapter")) <= seconds + 0.5) active = button;
+  });
+  buttons.forEach((button) => button.closest(".vchaps__row")?.classList.toggle("is-active", button === active));
+}
+
+/**
+ * The playhead of a frame we do not own, followed for the chapter list.
+ *
+ * A `<video>` reports its own time; a frame reports it through the player.js
+ * bridge, so the chapter the reader is inside lights up as it plays — and a
+ * link that arrives with `&t=90s` opens the frame there even when the frame's
+ * own address has no word for the second.
+ */
+function followPlayerFrame() {
+  const frame = watchEl()?.querySelector(".vplayer iframe");
+  if (!frame || !frame.isConnected) return;
+  const src = frame.getAttribute("src") || "";
+  /* YouTube and Vimeo are already told in their own words by the address, and
+     the second in the address was asked of this frame by `seekPlayer` above */
+  if (/youtube(-nocookie)?\.com\/embed\//i.test(src) || /player\.vimeo\.com/i.test(src)) return;
+  followFrame(frame, ({ seconds }) => {
+    if (frame.isConnected) markChapterAt(seconds);
+  }).then((stop) => {
+    stopPlayhead = typeof stop === "function" ? stop : null;
+  });
+}
+
+/**
+ * Put the player at that second.
+ *
+ * A file seeks itself, a YouTube or Vimeo frame is reloaded with its own word
+ * for the second, and **every other frame is asked through player.js** — the
+ * `postMessage` conversation Streamtape's player answers, where a chapter is
+ * a jump inside the frame rather than a second load of it. A frame that never
+ * answers says so, in words, and the address keeps the second either way.
+ */
 function seekPlayer(seconds, { play = false } = {}) {
   const root = watchEl();
   if (!root || !seconds) return false;
@@ -1209,7 +1258,17 @@ function seekPlayer(seconds, { play = false } = {}) {
     frame.setAttribute("src", `${src.split("#")[0]}#t=${seconds}s`);
     return true;
   }
-  return false;
+  /* the frame is asked and the answer arrives later: `true` means the ask went
+     out, and a silent frame is reported where it can still be read */
+  seekFrame(frame, seconds, { play }).then((ok) => {
+    if (ok) return;
+    toast({
+      title: stamp(seconds),
+      message: "This source plays in its own frame and it did not take the second. The address holds it.",
+      iconName: "clock",
+    });
+  });
+  return true;
 }
 
 function iconForLink(url) {
