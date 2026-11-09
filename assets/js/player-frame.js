@@ -86,6 +86,17 @@ function bridgeFor(frame) {
         new Promise((resolve, reject) => {
           const player = new playerjs.Player(frame);
           record.player = player;
+          /* The library only learns that the frame is loaded from its `load`
+             event, and by the time a chapter is pressed that event is long
+             gone. Without this, `on("ready")` — which is the one message the
+             receiver answers with `ready` — sits in the queue for ever, and a
+             player that does speak is called silent. */
+          try {
+            player.loaded = true;
+            frame.dispatchEvent(new Event("load"));
+          } catch {
+            /* a library of another shape simply keeps its own habits */
+          }
           const timer = setTimeout(() => settle(new Error("the frame did not answer")), PATIENCE);
           /* a frame that said `ready` in the instant between being painted and
              being bridged is still ready: the flag is read as well as the word */

@@ -2449,6 +2449,7 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
   const frameEl = ctx.document.querySelector(".vplayer iframe");
   const srcBefore = frameEl?.getAttribute("src") || "";
   expect("tape: the Streamtape frame is on the page", /streamtape\.com\/e\/abc123/.test(srcBefore), srcBefore);
+  expect("tape: the host's player is painted in the page's own dark", /[?&]color=255,255,255(&|$)/.test(srcBefore), srcBefore);
   const buttons = [...ctx.document.querySelectorAll("[data-v-chapter]")];
   expect("tape: the chapter list is on the page", buttons.length === 2, String(buttons.length));
   expect(
@@ -2456,10 +2457,13 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
     asked.some((href) => href.includes("action=file/stream") && href.includes("file=abc123")),
     asked.join(" | ")
   );
-  expect("tape: no bridge is planted in a frame that answers no message", bridged === 0, String(bridged));
+  expect("tape: nothing is bridged before a chapter is asked for", bridged === 0, String(bridged));
 
   buttons[1].dispatchEvent(new ctx.window.MouseEvent("click", { bubbles: true }));
-  await wait(60);
+  await wait(30);
+  /* the frame is asked first, and the file answers when it stays silent */
+  expect("tape: the frame is asked before anything is fetched", bridged === 1, String(bridged));
+  for (let tries = 0; tries < 60 && !ctx.document.querySelector(".vplayer video"); tries += 1) await wait(50);
 
   const fileEl = ctx.document.querySelector(".vplayer video");
   expect("tape: the frame becomes the file", !!fileEl, ctx.document.querySelector(".vplayer")?.innerHTML.slice(0, 120));
@@ -2510,6 +2514,126 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
   const said = [...ctx.document.querySelectorAll(".toast__msg")].map((n) => n.textContent).join(" | ");
   expect("tape refused: the page says the second is in the address", /address bar keeps the second/i.test(said), said);
   expect("tape: nothing threw", ctx.errors.length === 0, ctx.errors.join(" | "));
+
+  /* 4. a frame that does answer player.js keeps the second inside itself:
+        nothing is relayed, and the chapter list follows the frame's playhead */
+  const jumped = [];
+  let played = 0;
+  let litFromFrame = 0;
+  globalThis.playerjs = {
+    Player: class {
+      constructor() {}
+      on(event, cb) {
+        if (event === "ready") setTimeout(() => cb({}), 0);
+        if (event === "timeupdate") {
+          setTimeout(() => {
+            litFromFrame += 1;
+            cb({ seconds: 90, duration: 600 });
+          }, 10);
+        }
+      }
+      off() {}
+      setCurrentTime(seconds) {
+        jumped.push(seconds);
+      }
+      play() {
+        played += 1;
+      }
+      getCurrentTime(cb) {
+        cb(90);
+      }
+    },
+  };
+  const heard = [];
+  const talking = boot("videos.html", {
+    hash: "#/h/ID=VID-000901",
+    fetchImpl: (href) => {
+      const fn = fnName(href);
+      if (fn === "video_feed") return reply({ ...FEED, rows: [], total: 0, fields: [] });
+      if (fn === "video_mine") return reply({ ok: true, rows: [] });
+      if (fn === "video_get") {
+        return reply({
+          ok: true,
+          video: {
+            ...card({ code: "VID-000901", title: "A film that listens", embed: "https://streamtape.com/e/abc901" }),
+            video: {
+              meta: { vertical: false, chapters: [{ start: "0:00", label: "Intro" }, { start: "1:30", label: "The body" }] },
+              embed: "https://streamtape.com/e/abc901",
+            },
+          },
+          related: [],
+          more: [],
+        });
+      }
+      if (href.includes("/functions/v1/studio-upload")) {
+        heard.push(href);
+        return reply({ status: 200, msg: "OK", result: { bytes: 1 } });
+      }
+      return reply([]);
+    },
+  });
+  await import(`file://${join(root, "assets/js/videos.js")}?ptalk`);
+  await wait(320);
+  const warm = heard.length;
+  const talkButtons = [...talking.document.querySelectorAll("[data-v-chapter]")];
+  expect("bridge: the frame on a chaptered film is there", talkButtons.length === 2, String(talkButtons.length));
+  talkButtons[1].dispatchEvent(new talking.window.MouseEvent("click", { bubbles: true }));
+  await wait(150);
+  expect("bridge: the frame takes the second itself", jumped[0] === 90, String(jumped[0]));
+  expect("bridge: and plays on from there", played === 1, String(played));
+  expect("bridge: no file is relayed, so nothing is spent", heard.length === warm, `${warm} → ${heard.length}`);
+  expect("bridge: the host's own player stays on the page", talking.document.querySelectorAll(".vplayer iframe").length === 1, String(talking.document.querySelectorAll(".vplayer iframe").length));
+  expect("bridge: the frame is still the host's own, coloured for the page", /[?&]color=255,255,255(&|$)/.test(talking.document.querySelector(".vplayer iframe")?.getAttribute("src") || ""), talking.document.querySelector(".vplayer iframe")?.getAttribute("src") || "");
+  expect("bridge: nothing becomes a file", !talking.document.querySelector(".vplayer video"));
+  expect("bridge: the second is still written into the address", /[?&]t=90s/.test(talking.window.location.hash), talking.window.location.hash);
+  const litByFrame = [...talking.document.querySelectorAll(".vchaps__row")].map((row) => (row.classList.contains("is-active") ? "on" : "off"));
+  expect("bridge: the chapter list follows the frame's playhead", litByFrame.join(",") === "off,on", `${litByFrame.join(",")} / ticks ${litFromFrame}`);
+  expect("bridge: nothing threw", talking.errors.length === 0, talking.errors.join(" | "));
+
+  /* 5. the colour the host paints itself, and the page it has to agree with */
+  const { tapeColour } = await import(`file://${join(root, "assets/js/embed.js")}?colour`);
+  expect("colour: dark asks for white", tapeColour("https://streamtape.com/e/abc", "dark") === "https://streamtape.com/e/abc?color=255,255,255", tapeColour("https://streamtape.com/e/abc", "dark"));
+  expect("colour: light asks for black", tapeColour("https://streamtape.com/e/abc", "light") === "https://streamtape.com/e/abc?color=0,0,0", tapeColour("https://streamtape.com/e/abc", "light"));
+  expect(
+    "colour: an older colour is replaced, not stacked",
+    tapeColour("https://streamtape.com/e/abc?color=26,194,102&t=90s", "light") === "https://streamtape.com/e/abc?t=90s&color=0,0,0",
+    tapeColour("https://streamtape.com/e/abc?color=26,194,102&t=90s", "light")
+  );
+  expect(
+    "colour: YouTube is not given a word it does not read",
+    tapeColour("https://www.youtube.com/embed/abc?t=90s", "light") === "https://www.youtube.com/embed/abc?t=90s"
+  );
+  expect("colour: an empty address stays empty", tapeColour("", "dark") === "");
+
+  /* the page paints the frame in its own theme, both ways */
+  const litPage = boot("videos.html", {
+    hash: "#/h/ID=VID-000902",
+    fetchImpl: (href) => {
+      const fn = fnName(href);
+      if (fn === "video_feed") return reply({ ...FEED, rows: [], total: 0, fields: [] });
+      if (fn === "video_mine") return reply({ ok: true, rows: [] });
+      if (fn === "video_get") {
+        return reply({
+          ok: true,
+          video: {
+            ...card({ code: "VID-000902", title: "A film in daylight", embed: "https://streamtape.com/e/abc902" }),
+            video: { meta: { vertical: false, chapters: [{ start: "0:00", label: "Intro" }] }, embed: "https://streamtape.com/e/abc902" },
+          },
+          related: [],
+          more: [],
+        });
+      }
+      return reply([]);
+    },
+  });
+  /* the page is painted before the module that draws the frame is asked for it */
+  litPage.document.documentElement.setAttribute("data-theme", "light");
+  await import(`file://${join(root, "assets/js/videos.js")}?plight`);
+  await wait(300);
+  const litSrc = litPage.document.querySelector(".vplayer iframe")?.getAttribute("src") || "";
+  expect("colour: a light page paints the frame black", /[?&]color=0,0,0(&|$)/.test(litSrc), litSrc);
+  expect("colour: and the page itself is light", litPage.document.documentElement.getAttribute("data-theme") === "light", String(litPage.document.documentElement.getAttribute("data-theme")));
+  expect("colour: nothing threw", litPage.errors.length === 0, litPage.errors.join(" | "));
 }
 
 const failed = checks.filter((c) => !c.ok);

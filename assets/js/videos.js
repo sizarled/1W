@@ -109,7 +109,8 @@ function signedIn() {
 }
 
 /** The host list lives in one place now: see assets/js/embed.js. */
-import { embedUrl, fullscreenSrc, FRAME_ALLOW, autoThumb, isFile, streamtapeId, streamtapeSplash } from "./embed.js";
+import { embedUrl, fullscreenSrc, FRAME_ALLOW, autoThumb, isFile, streamtapeId, streamtapeSplash, tapeColour } from "./embed.js";
+import { currentTheme } from "./theme.js";
 import { tapeSource, prefetchTape } from "./tape-file.js";
 
 export { embedUrl, autoThumb, isFile, sourceKind } from "./embed.js";
@@ -425,7 +426,9 @@ function playerMarkup(v, meta) {
   /* the frame's address carries the platform's own full-screen flag, so its
      button is in its chrome too, beside this page's corner button — and the
      second the address bar holds, so the frame opens where the link says */
-  const src2 = frameWithSecond(fullscreenSrc(src), startAt());
+  /* Streamtape paints its own player in its own green unless it is told which
+     colour this page is made of: black on the light theme, white on the dark */
+  const src2 = tapeColour(frameWithSecond(fullscreenSrc(src), startAt()), currentTheme());
   if (!src2) {
     return playerShell(`<div class="vplayer__idle"><p class="vplayer__note">This source cannot be shown here.</p></div>`);
   }
@@ -1214,9 +1217,8 @@ function followPlayerFrame() {
   /* YouTube and Vimeo are already told in their own words by the address, and
      the second in the address was asked of this frame by `seekPlayer` above */
   if (/youtube(-nocookie)?\.com\/embed\//i.test(src) || /player\.vimeo\.com/i.test(src)) return;
-  /* a Streamtape frame answers no bridge at all — its page has no `message`
-     listener — so nothing is planted in it; a chapter turns it into the file,
-     and `followMedia` follows that instead */
+  /* a Streamtape frame is only bridged when a chapter is actually pressed —
+     the library is not spent on a frame nobody has asked anything of yet */
   if (streamtapeId(src)) return;
   followFrame(frame, ({ seconds }) => {
     if (frame.isConnected) markChapterAt(seconds);
@@ -1298,6 +1300,10 @@ function seekPlayer(seconds, { play = false } = {}) {
  * a player owes the page (the time, the chapter it is inside, the seek) is
  * there again.
  *
+ * The frame is asked first — the host documents player.js, and its player
+ * script carries a receiver, so a second may land inside its own player and
+ * cost nothing. The file is what answers when it does not.
+ *
  * Ordinary watching stays inside the host's player: the relay is only used from
  * the moment a chapter is pressed, and only while this video is on screen.
  */
@@ -1309,14 +1315,51 @@ function tapeSecond(frame, tape, seconds, play) {
     return true;
   }
   const address = tapeSource(tape);
-  if (!address) {
-    /* the relay is off: the second can only be written down */
-    tapeSaysNo(seconds);
-    return true;
-  }
-  swapToTapeFile(frame, tape, address, seconds, play);
+  let settled = false;
+
+  /* what happens when the frame will not take the second */
+  const fallBack = () => {
+    if (settled || !frame || !frame.isConnected) return;
+    settled = true;
+    if (!address) {
+      /* the relay is off: the second can only be written down */
+      tapeSaysNo(seconds);
+      return;
+    }
+    swapToTapeFile(frame, tape, address, seconds, play);
+  };
+
+  /* The host documents player.js, and its player script carries a receiver —
+     so the frame itself is asked first. When it answers, the second is a jump
+     inside the host's own player and nothing is relayed. It is given a short
+     grace, then the file is played instead. */
+  seekFrame(frame, seconds, { play })
+    .then((ok) => {
+      if (!ok) {
+        fallBack();
+        return;
+      }
+      settled = true;
+      markChapterAt(seconds);
+      /* one follower per press: an older one is let go first */
+      if (typeof stopPlayhead === "function") stopPlayhead();
+      stopPlayhead = null;
+      followFrame(frame, ({ seconds: at }) => {
+        if (frame.isConnected) markChapterAt(at);
+      })
+        .then((stop) => {
+          stopPlayhead = typeof stop === "function" ? stop : null;
+        })
+        .catch(() => {});
+    })
+    .catch(fallBack);
+
+  window.setTimeout(fallBack, BRIDGE_GRACE);
   return true;
 }
+
+/** How long the host's own player is given before its file plays instead. */
+const BRIDGE_GRACE = 1200;
 
 /** The one sentence for a second that could not become a player. */
 function tapeSaysNo(seconds) {

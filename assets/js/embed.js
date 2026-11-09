@@ -173,6 +173,30 @@ export function fullscreenSrc(raw = "") {
   return url;
 }
 
+/**
+ * Streamtape's own colour, for a page that is monochrome.
+ *
+ * The host paints its player in its own green unless it is told otherwise:
+ * `?color=26,194,102` is their example, and the value is plain `r,g,b`. A
+ * chapter panel and a player should not argue about colour, so the watch page
+ * asks for **black on the light theme and white on the dark one** — the same
+ * two colours the rest of the page is made of. Any earlier `color` is replaced
+ * rather than stacked, the way the second in the address is.
+ *
+ * Only Streamtape reads it; every other address is answered untouched.
+ */
+export function tapeColour(raw = "", theme = "dark") {
+  const url = String(raw || "");
+  if (!streamtapeId(url)) return url;
+  const wanted = theme === "light" ? "0,0,0" : "255,255,255";
+  const clean = url
+    .replace(/([?&])color=[^&#]*/gi, "$1")
+    .replace(/[?&]$/, "")
+    .replace(/\?&/g, "?")
+    .replace(/&&/g, "&");
+  return `${clean}${clean.includes("?") ? "&" : "?"}color=${wanted}`;
+}
+
 /** The `allow` list an embedded player needs — full screen named on it. */
 export const FRAME_ALLOW =
   "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen";

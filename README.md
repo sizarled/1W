@@ -1892,13 +1892,25 @@ itself reads; the iframe is re-pointed where it stands, so the page is never reb
 — the same element, a different second, inside the frame. A `<video>` is seeked by the browser and a
 Vimeo frame takes `#t=840s`.
 
-**Streamtape's frame answers no one, so its file is played instead.** Checked against the host itself,
-2026-11-09: `https://streamtape.com/e/<id>` is a Plyr over one `<video id="mainvideo">`, the page
-carries no `message` listener, and its player script (`/js/player.ec3b7f.js`, 148 KB) contains no start
-word at all — the only things it reads from its own address are subtitle files (`c1_file`,
-`subtitle_json`). A bridge, a `postMessage`, a re-pointed `src`: none of them move it.
+**Streamtape's frame is asked first, and its file answers when it stays silent.** The host documents
+player.js, and its player script (`/js/player.ec3b7f.js`, 148 KB) does carry the receiver: `Receiver`,
+`setCurrentTime`, `addEventListener("ready")` and the `player.js` context are all in it, registered
+through the bundled library rather than through a literal `window.addEventListener("message", …)` — which
+is why a first read of the file said "no listener" and was wrong.
 
-What does have a second is the file — but not from a page. Streamtape hands an address only to a request
+What was wrong was the conversation, in one exact place. The vendored library learns that a frame is
+loaded only from **that frame's `load` event**, and it holds every message in a queue until it has heard
+it; by the time a reader presses a chapter, the frame finished loading minutes ago, so `on("ready")` —
+the one message the receiver answers with `ready` — never left the page, and the frame was called silent
+after 2.5 seconds. `assets/js/player-frame.js` now tells the frame it is loaded (`player.loaded = true`,
+plus the `load` dispatch the library listens for) before the first ask.
+
+So a Streamtape chapter is **asked of the host's own player first**, and the bridge is given a short
+grace (1.2 s). When it answers, the jump happens inside the frame, the frame's `timeupdate` lights the
+chapter list, and nothing is relayed. When it does not answer, the file is played instead, exactly as
+before.
+
+The file is the fallback, and it does have a second — but not from a page. Streamtape hands an address only to a request
 that holds the account's own ticket, `file/dl` (the call that turns a ticket into an address) sends **no**
 `Access-Control-Allow-Origin`, so no page can read it, and an address made on a server is bound to that
 server's own address and refused for everyone else ("this download link is not for you").
@@ -1918,15 +1930,27 @@ again once, and the page warms the file while it is still being read, so the pre
 `RELAY` at the top of `assets/js/tape-file.js` turns the whole thing off — a chapter then only writes
 the second into the address — for a month the project would rather not pay for.
 
+**The host's player is painted in the page's own colour.** Streamtape paints itself in its own green
+unless the embed's address says otherwise: `?color=r,g,b`, which its documentation gives as
+`…?color=26,194,102` and says works for embeds and video links. A monochrome page has no green in it, so
+`tapeColour` (`assets/js/embed.js`) asks for **`color=0,0,0` on the light theme and `color=255,255,255`
+on the dark one** — the same two colours the player's chrome, the chapter panel and the page are made of.
+It is written into the frame's `src` only, never into the stored address, so a saved link, a share card
+and a re-render are unaffected; an earlier `color` the address already carries is replaced rather than
+stacked, the way the second is. The editor's preview carries it too, so a video looks the same before it
+is published as after. The colour is decided when the frame is painted: toggling the theme mid-film
+repaints the page but not the frame already playing in it — a reload of the frame would throw the
+position away, so it is left alone.
+
 **Every other frame is asked in its own language.** `assets/js/player-frame.js` speaks the
 [Player.js](https://github.com/embedly/player.js) protocol: a `postMessage` conversation with
 `setCurrentTime`, `play`, `pause`, `getDuration` going in, `ready`, `timeupdate`, `ended` coming out — a
 **jump inside the frame**, not a second load of it, with the frame's own `timeupdate` lighting the
 chapter the reader is inside. The library is **vendored** (`assets/js/vendor/player-0.1.0.min.js`, BSD,
 Embed.ly) rather than pulled from a CDN, and it is fetched the first time a frame is actually steered — a
-`<video>`, a YouTube frame and a Streamtape frame never pay for it. A frame that says nothing within 2.5
-seconds is not pretended to have moved: the reader is told the second is in the address, and the next
-click starts a fresh conversation (a slow player is not a broken one).
+`<video>` and a YouTube frame never pay for it. A frame that says nothing within 2.5 seconds is not
+pretended to have moved: a Streamtape frame's file plays instead (above), and any other frame says the
+second is in the address. The next click starts a fresh conversation — a slow player is not a broken one.
 
 Opening a link that carries `&t=1860s` (`?t=1860` is read the same) builds the frame **at** that
 second — `playerMarkup` passes it through `frameWithSecond`, so `#/h/ID=…&t=1860s` opens at 00:31:00
@@ -1940,10 +1964,11 @@ in the same file, or, when that call is not on the server yet, the `creator_publ
 page already makes (a channel first, then a server or a cinema, never a private hub). No studio at
 all, and the member's face is the publisher, which is the honest answer.
 
-Test: `node tools/video-smoke.mjs` — **522/522** (feed, sort, search, watch, reaction→comment, a locked
-door and its password, a missing video, the editor signed out and in, the payload of a publish, of an
-exclusive rule set and of a private list, the player and the sixteen host cases, the oEmbed stills, the
-studio picker, the contents rail, and the forwarding page).
+Test: `node tools/video-smoke.mjs` — **542/542** (feed, sort, search, watch, reaction→comment, a chapter
+taken by the host's own player and the same chapter relayed when it is not, the frame's colour both
+ways, a locked door and its password, a missing video, the editor signed out and in, the payload of a
+publish, of an exclusive rule set and of a private list, the player and the sixteen host cases, the
+oEmbed stills, the studio picker, the contents rail, and the forwarding page).
 
 **The whole screen.** The player carries its way out in the corner — a disc that stays quiet until the
 pointer is near and is always there once the screen is the player — and pressing it, or **F**, makes
@@ -2317,7 +2342,7 @@ the editors need**, each pinned to a name pattern and a set of extensions (`user
 | `node tools/rte-smoke.mjs` | **45/45** (every command, links, insertion, history, paste, drop, keys, toolbar state) |
 | `node tools/article-smoke.mjs` | **281/281** |
 | `node tools/blog-smoke.mjs` | **82/82** (the address, the closed door, the hero, the home, a section, the search, the plain cover) |
-| `node tools/video-smoke.mjs` | **522/522** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
+| `node tools/video-smoke.mjs` | **542/542** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
 | `node tools/media-smoke.mjs` | **89/89** (the address book, the three pages, the portrait stage, the locked item, the shelves) |
 
 ### The six OAuth apps — one checklist each

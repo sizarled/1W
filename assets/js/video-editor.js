@@ -37,7 +37,8 @@ import { toast } from "./ui.js";
 import { sessionToken, getMember } from "./session.js";
 import { COUNTRIES } from "./countries.js";
 import { SUPABASE, storageUrl } from "./config.js";
-import { embedUrl, fullscreenSrc, FRAME_ALLOW, autoThumb, streamtapeSplash, streamtapeId, isFile, sourceKind, sourceLabel, HOSTS, pinterestId, redditPath } from "./embed.js";
+import { embedUrl, fullscreenSrc, FRAME_ALLOW, autoThumb, streamtapeSplash, streamtapeId, isFile, sourceKind, sourceLabel, HOSTS, pinterestId, redditPath, tapeColour } from "./embed.js";
+import { currentTheme } from "./theme.js";
 import { createContents } from "./contents.js";
 import { studioReady, uploadToStudio, renameFile, splashOf, putThumbnail, NOT_CONNECTED } from "./streamtape.js";
 
@@ -1389,7 +1390,8 @@ function paintPlayer() {
     host.innerHTML = `<video controls playsinline preload="metadata"${poster ? ` poster="${esc(poster)}"` : ""} src="${esc(value)}"></video>${disc}`;
     return;
   }
-  const src = fullscreenSrc(value);
+  /* the preview is the watch page's frame, in the watch page's colour */
+  const src = tapeColour(fullscreenSrc(value), currentTheme());
   host.innerHTML = `<iframe src="${esc(src)}" title="The video, before it is published" loading="lazy" allow="${esc(FRAME_ALLOW)}" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>${disc}`;
 }
 
