@@ -2400,38 +2400,18 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
   expect("bridge: and it is not remembered as broken forever", (await bridge.seekFrame({ src: "https://example.com/embed" }, 12)) === false);
   expect("bridge: every attempt is a fresh conversation", built === 2, String(built));
 
-  /* 3. the watch page: a Streamtape chapter is a jump, not a reload */
-  const tape = [];
+  /* 3. the watch page: a Streamtape chapter plays the file itself, because
+        the frame's own player answers no one (see assets/js/tape-file.js) */
+  const relay = "https://vtbqbhuywdhnvitbcsfy.supabase.co/functions/v1/studio-upload?action=file/stream&file=abc123";
+  const asked = [];
+  let bridged = 0;
   globalThis.playerjs = {
     Player: class {
-      constructor(frame) {
-        this.frame = frame;
-        this.isReady = false;
-        this.listeners = {};
-        tape.push(this);
-        setTimeout(() => {
-          this.isReady = true;
-          (this.listeners.ready || []).forEach((cb) => cb());
-        }, 0);
+      constructor() {
+        bridged += 1;
       }
-      on(name, cb) {
-        (this.listeners[name] = this.listeners[name] || []).push(cb);
-      }
-      off(name) {
-        delete this.listeners[name];
-      }
-      setCurrentTime(value) {
-        this.time = value;
-      }
-      getCurrentTime(cb) {
-        cb(this.time || 0);
-      }
-      play() {
-        this.played = true;
-      }
-      emit(name, payload) {
-        (this.listeners[name] || []).forEach((cb) => cb(payload));
-      }
+      on() {}
+      off() {}
     },
   };
   const ctx = boot("videos.html", {
@@ -2445,67 +2425,91 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
           ok: true,
           video: {
             ...card({ code: "VID-000900", title: "A chaptered film", embed: "https://streamtape.com/e/abc123" }),
-            video: { meta: { vertical: false, chapters: [{ start: "0:00", label: "Intro" }, { start: "1:30", label: "The body" }] }, embed: "https://streamtape.com/e/abc123" },
+            video: {
+              meta: { vertical: false, chapters: [{ start: "0:00", label: "Intro" }, { start: "1:30", label: "The body" }] },
+              embed: "https://streamtape.com/e/abc123",
+            },
           },
           related: [],
           more: [],
         });
       }
+      if (href.includes("/functions/v1/studio-upload")) {
+        asked.push(href);
+        return reply({ status: 200, msg: "OK", result: { bytes: 1 } });
+      }
       return reply([]);
     },
   });
-  await import(`file://${join(root, "assets/js/videos.js")}?pframes`);
-  /* two routes reach the same video while the page boots (the hash at load and
-     the change it causes), so the page is given time to settle before it is
-     touched: a reader never clicks inside that first quarter second */
+  await import(`file://${join(root, "assets/js/videos.js")}?ptape`);
+  /* two routes reach the same video while the page boots, and the relay is
+     warmed as soon as the chapters are on the page */
   await wait(320);
 
   const frameEl = ctx.document.querySelector(".vplayer iframe");
   const srcBefore = frameEl?.getAttribute("src") || "";
-  expect("frame: the Streamtape frame is on the page", /streamtape\.com\/e\/abc123/.test(srcBefore), srcBefore);
+  expect("tape: the Streamtape frame is on the page", /streamtape\.com\/e\/abc123/.test(srcBefore), srcBefore);
   const buttons = [...ctx.document.querySelectorAll("[data-v-chapter]")];
-  expect("frame: the chapter list is on the page", buttons.length === 2, String(buttons.length));
-  expect("frame: the Streamtape player is bridged", tape.length >= 1, String(tape.length));
-  const live = tape[tape.length - 1];
-  expect("frame: the bridged element is the one on the page", live.frame === frameEl, `${live.frame?.getAttribute("src")} vs ${srcBefore}`);
+  expect("tape: the chapter list is on the page", buttons.length === 2, String(buttons.length));
+  expect(
+    "tape: the file is warmed while the page is read",
+    asked.some((href) => href.includes("action=file/stream") && href.includes("file=abc123")),
+    asked.join(" | ")
+  );
+  expect("tape: no bridge is planted in a frame that answers no message", bridged === 0, String(bridged));
 
   buttons[1].dispatchEvent(new ctx.window.MouseEvent("click", { bubbles: true }));
   await wait(60);
-  expect("frame: a chapter asks the player for its second", live.time === 90, String(live.time));
-  expect("frame: and plays it", live.played === true);
-  expect(
-    "frame: the frame is not reloaded at all",
-    (ctx.document.querySelector(".vplayer iframe")?.getAttribute("src") || "") === srcBefore,
-    ctx.document.querySelector(".vplayer iframe")?.getAttribute("src")
-  );
-  expect("frame: still one frame, still bridged", ctx.document.querySelectorAll(".vplayer iframe").length === 1, String(ctx.document.querySelectorAll(".vplayer iframe").length));
-  const litRows = [...ctx.document.querySelectorAll(".vchaps__row")].map((row) => (row.classList.contains("is-active") ? "on" : "off"));
-  expect(
-    "frame: the row that was picked is the one lit",
-    litRows.join(",") === "off,on",
-    `${litRows.join(",")} · connected ${buttons[1].isConnected} · ${ctx.document.querySelector(".vchaps")?.innerHTML.slice(0, 120)}`
-  );
-  expect(
-    "frame: the second is in the address",
-    /[?&]t=90s/.test(ctx.window.location.hash),
-    ctx.window.location.hash
-  );
 
-  /* the frame's own playhead lights the chapter the reader is inside */
-  live.emit("timeupdate", { seconds: 0, duration: 240 });
+  const fileEl = ctx.document.querySelector(".vplayer video");
+  expect("tape: the frame becomes the file", !!fileEl, ctx.document.querySelector(".vplayer")?.innerHTML.slice(0, 120));
+  expect("tape: the file is played through the project's relay", fileEl?.getAttribute("src") === relay, fileEl?.getAttribute("src") || "");
+  expect("tape: it is known by the host's id", fileEl?.getAttribute("data-v-tape") === "abc123", fileEl?.getAttribute("data-v-tape") || "");
+  expect("tape: the frame is gone, so nothing plays twice", ctx.document.querySelectorAll(".vplayer iframe").length === 0, String(ctx.document.querySelectorAll(".vplayer iframe").length));
+  expect("tape: the host's own still is the poster", /thumb\.tapecontent\.net\/thumb\/abc123/.test(fileEl?.getAttribute("poster") || ""), fileEl?.getAttribute("poster") || "");
+
+  /* a file knows its own length: the second is applied when the browser says */
+  fileEl.dispatchEvent(new ctx.window.Event("loadedmetadata"));
+  await wait(20);
+  expect("tape: the chapter's second is the file's time", fileEl.currentTime === 90, String(fileEl.currentTime));
+  const litRows = [...ctx.document.querySelectorAll(".vchaps__row")].map((row) => (row.classList.contains("is-active") ? "on" : "off"));
+  expect("tape: the row that was picked is the one lit", litRows.join(",") === "off,on", litRows.join(","));
+  expect("tape: the second is in the address", /[?&]t=90s/.test(ctx.window.location.hash), ctx.window.location.hash);
+
+  /* the chapter list follows the file's own playhead now */
+  fileEl.currentTime = 5;
+  fileEl.dispatchEvent(new ctx.window.Event("timeupdate"));
   await wait(20);
   expect(
-    "frame: the first chapter lights at the beginning",
-    buttons[0].closest(".vchaps__row")?.classList.contains("is-active"),
+    "tape: the first chapter lights when the file is inside it",
+    buttons[0].closest(".vchaps__row")?.classList.contains("is-active") && !buttons[1].closest(".vchaps__row")?.classList.contains("is-active"),
     ctx.document.querySelector(".vchaps")?.innerHTML.slice(0, 90)
   );
-  live.emit("timeupdate", { seconds: 95, duration: 240 });
+  fileEl.currentTime = 95;
+  fileEl.dispatchEvent(new ctx.window.Event("timeupdate"));
   await wait(20);
-  expect(
-    "frame: and the second one lights inside it",
-    buttons[1].closest(".vchaps__row")?.classList.contains("is-active") && !buttons[0].closest(".vchaps__row")?.classList.contains("is-active")
-  );
-  expect("frame: nothing threw", ctx.errors.length === 0, ctx.errors.join(" | "));
+  expect("tape: and the second when it moves on", buttons[1].closest(".vchaps__row")?.classList.contains("is-active"));
+
+  /* a browser that has the file by now reports so, and a seek is immediate */
+  Object.defineProperty(fileEl, "readyState", { value: 4, configurable: true });
+
+  /* a second press is a seek in a file we already have — no new address */
+  const askedBefore = asked.length;
+  buttons[0].dispatchEvent(new ctx.window.MouseEvent("click", { bubbles: true }));
+  await wait(40);
+  expect("tape: a later chapter seeks the same file", ctx.document.querySelector(".vplayer video")?.currentTime === 0, String(ctx.document.querySelector(".vplayer video")?.currentTime));
+  expect("tape: and asks for nothing twice", asked.length === askedBefore, `${askedBefore} → ${asked.length}`);
+
+  /* the relay refuses (a deleted file, a host that will not answer): the host's
+     own player goes back where it stood, and the page says why */
+  ctx.document.querySelector(".vplayer video").dispatchEvent(new ctx.window.Event("error"));
+  await wait(40);
+  const backFrame = ctx.document.querySelector(".vplayer iframe");
+  expect("tape refused: the host's player comes back", /streamtape\.com\/e\/abc123/.test(backFrame?.getAttribute("src") || ""), backFrame?.getAttribute("src") || "");
+  expect("tape refused: the file is out of the page", ctx.document.querySelectorAll(".vplayer video").length === 0, String(ctx.document.querySelectorAll(".vplayer video").length));
+  const said = [...ctx.document.querySelectorAll(".toast__msg")].map((n) => n.textContent).join(" | ");
+  expect("tape refused: the page says the second is in the address", /address bar keeps the second/i.test(said), said);
+  expect("tape: nothing threw", ctx.errors.length === 0, ctx.errors.join(" | "));
 }
 
 const failed = checks.filter((c) => !c.ok);
