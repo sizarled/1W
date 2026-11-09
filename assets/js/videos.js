@@ -132,6 +132,18 @@ function emptyState({ title, text, action = "" }) {
 /* ================================================================== */
 /* cards                                                              */
 /* ================================================================== */
+/**
+ * The picture a card wears: the one stored with the video, and — when the
+ * video has none — the still its host makes for it (YouTube's, or the one
+ * Streamtape keeps for the file, which is where a picture the account put in
+ * Home / Thumbnails is served from). A card is never blank while the host has
+ * a picture of its own.
+ */
+function stillOf(v) {
+  const row = v || {};
+  return String(row.thumbnail || autoThumb(row.video?.embed || row.embed || "") || "");
+}
+
 function cardMarkup(row) {
   const v = row || {};
   const meta = (v.video && v.video.meta) || {};
@@ -147,8 +159,8 @@ function cardMarkup(row) {
     <a class="vcard" href="${esc(videoUrl(v.code || v.id, v.orientation))}" data-v-open="${esc(v.code || v.id)}" data-orientation="${esc(orientationOf(v.orientation))}">
       <div class="vcard__media">
         ${
-          v.thumbnail
-            ? `<img src="${esc(v.thumbnail)}" alt="" loading="lazy" decoding="async" />`
+          stillOf(v)
+            ? `<img src="${esc(stillOf(v))}" alt="" loading="lazy" decoding="async" />`
             : `<div class="vcard__ph">${icon("film")}</div>`
         }
         <span class="vcard__shade"></span>
@@ -182,8 +194,8 @@ function rowMarkup(row) {
     <a class="vrow" href="${esc(videoUrl(v.code || v.id, v.orientation))}" data-v-open="${esc(v.code || v.id)}">
       <span class="vrow__media">
         ${
-          v.thumbnail
-            ? `<img src="${esc(v.thumbnail)}" alt="" loading="lazy" decoding="async" />`
+          stillOf(v)
+            ? `<img src="${esc(stillOf(v))}" alt="" loading="lazy" decoding="async" />`
             : `<span class="vcard__ph">${icon("film")}</span>`
         }
       </span>
@@ -392,7 +404,7 @@ function playerMarkup(v, meta) {
     return playerShell(`<div class="vplayer__idle"><p class="vplayer__note">This video has no source yet.</p></div>`);
   }
   if (isFile(src)) {
-    return playerShell(`<video controls playsinline preload="metadata" poster="${esc(v.thumbnail || "")}" src="${esc(src)}"></video>`);
+    return playerShell(`<video controls playsinline preload="metadata" poster="${esc(stillOf(v))}" src="${esc(src)}"></video>`);
   }
   /* the frame's address carries the platform's own full-screen flag, so its
      button is in its chrome too, beside this page's corner button — and the
@@ -461,7 +473,7 @@ function lockedMarkup(v) {
   const asks = Boolean(v.asks_password);
   return `
     <div class="vplayer">
-      <div class="vplayer__poster" style="${v.thumbnail ? `background-image:url('${esc(v.thumbnail)}')` : ""}"></div>
+      <div class="vplayer__poster" style="${stillOf(v) ? `background-image:url('${esc(stillOf(v))}')` : ""}"></div>
       <div class="vgate">
         <span class="vgate__icon">${icon(asks ? "key" : "lock")}</span>
         <h2>${asks ? "This one needs a password" : "This one is not for everyone"}</h2>

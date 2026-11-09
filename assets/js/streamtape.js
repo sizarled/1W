@@ -37,6 +37,16 @@ import { sessionToken } from "./session.js";
 
 const CACHE_KEY = "1w.streamtape.folders";
 
+/**
+ * The account's own shelf for pictures: **Home / Thumbnails**.
+ *
+ * Streamtape reads a video's splash from here, matched by name — a picture
+ * called `Video-001100.jpg` is the picture for `Video-001100.mp4`. The editor
+ * reads it back through `getsplash`, and writes a member's own picture into it
+ * so the host's player shows the same card the site does.
+ */
+export const THUMBS = "Thumbnails";
+
 /** The studio shelf is reachable: a proxy stands in front, or keys are set. */
 export function studioReady() {
   return Boolean(STREAMTAPE.proxy || (STREAMTAPE.login && STREAMTAPE.key));
@@ -377,4 +387,58 @@ export async function fileInfo(id, studio) {
   const result = await call("file/info", { file: id, studio });
   const row = result && typeof result === "object" ? result[id] || Object.values(result)[0] : null;
   return row && Number(row.status) === 200 ? row : null;
+}
+
+/**
+ * The picture Streamtape keeps for one file — its splash.
+ *
+ * `file/getsplash` answers a URL; when the function in front of the API has not
+ * been redeployed yet, or the file is still converting, the address is worked
+ * out from the id instead. It never throws: a still is a nicety, and a video
+ * must never fail to save because a picture did not answer.
+ */
+export async function splashOf(id, studio) {
+  const key = String(id || "").trim();
+  if (!key) return "";
+  const known = splashAddress(key);
+  try {
+    const result = await call("file/getsplash", { file: key, studio });
+    const url = typeof result === "string" ? result : String(result?.url || result?.thumb || "");
+    return /^https?:\/\//i.test(url) ? url : known;
+  } catch {
+    return known;
+  }
+}
+
+/** The address itself, with no call behind it. */
+function splashAddress(id) {
+  const key = String(id || "").trim();
+  return key ? `https://thumb.tapecontent.net/thumb/${key}/thumb.jpg` : "";
+}
+
+/**
+ * A member's own picture, placed in **Home / Thumbnails** under the video's
+ * name, so the host's own splash is the picture the site shows.
+ *
+ * Best-effort on purpose: the picture is already stored on the site by the
+ * time this runs, so a host that refuses images costs nothing but a shrug.
+ */
+export async function putThumbnail(file, { studio, name } = {}) {
+  if (!file || !studio || !studioReady()) return "";
+  const label = String(name || "").trim();
+  if (!label) return "";
+  try {
+    const folder = await ensureFolder(THUMBS, "", studio, THUMBS);
+    const spot = await call("file/ul", { folder, studio });
+    if (!spot?.url) return "";
+    await postFile(spot.url, file, label, null);
+    return label;
+  } catch {
+    return "";
+  }
+}
+
+/** The folder the pictures live in, made when the account has not got one. */
+export async function thumbFolder(studio) {
+  return ensureFolder(THUMBS, "", studio, THUMBS);
 }

@@ -15,6 +15,7 @@
  *   GET  ?action=file/rename&studio=<code>&file=<id>&name=<name>
  *   GET  ?action=file/info&studio=<code>&file=<id>
  *   GET  ?action=file/find&studio=<code>&folder=<id>&name=<name>
+ *   GET  ?action=file/getsplash&studio=<code>&file=<id>  → the video's own still
  *
  * The answer is Streamtape's own `{ status, msg, result }` — the client reads it
  * exactly as it would read the API, so the shape never has to be learned twice.
@@ -127,7 +128,17 @@ async function api(action: string, params: Json): Promise<Json> {
   }
 }
 
-const ALLOWED = new Set(["file/listfolder", "file/createfolder", "file/ul", "file/rename", "file/info", "file/find"]);
+const ALLOWED = new Set([
+  "file/listfolder",
+  "file/createfolder",
+  "file/ul",
+  "file/rename",
+  "file/info",
+  "file/find",
+  /* the video's own picture: the one Streamtape keeps for the file, which is
+     the one the account sees under Home / Thumbnails when it has put one there */
+  "file/getsplash",
+]);
 
 Deno.serve(async (request: Request): Promise<Response> => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: CORS });
@@ -181,6 +192,12 @@ Deno.serve(async (request: Request): Promise<Response> => {
     const id = hit ? String(hit.linkid || hit.id || "") : "";
     if (!id) return json({ status: 404, msg: "The file is not in the folder yet.", result: null });
     return json({ status: 200, msg: "OK", result: { id, name: String(hit.name || ""), created_at: hit.created_at ?? null } });
+  }
+
+  if (action === "file/getsplash") {
+    /* one file in, one address out — no folder is involved */
+    const answer = await api("file/getsplash", { file });
+    return json(answer);
   }
 
   const answer = await api(action, { folder, name, file, pid });

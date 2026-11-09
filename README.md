@@ -1700,8 +1700,9 @@ function is not deployed yet, or the browser cannot reach it, `streamtape.js` fa
 Streamtape's address directly with the two keys kept in `STREAMTAPE` in `assets/js/config.js` — so a
 studio can upload before the function exists at all. The way that answered last is remembered in
 `localStorage["1w.streamtape.path"]`, and when neither answers the message names both and the deploy
-command instead of pretending the network blinked. The function speaks the same six
-actions (`file/listfolder`, `file/createfolder`, `file/ul`, `file/rename`, `file/info`, `file/find`)
+command instead of pretending the network blinked. The function speaks the same seven
+actions (`file/listfolder`, `file/createfolder`, `file/ul`, `file/rename`, `file/info`, `file/find`,
+`file/getsplash`)
 and answers in Streamtape's own `{ status, msg, result }` shape, so the client reads it exactly as
 it would read the API. The file itself is **not** sent through the function: the browser asks for an
 upload address and posts the film straight to it, so a two-gigabyte upload costs the function one
@@ -1717,6 +1718,28 @@ editor shows that sentence, and nothing pretends a file went anywhere.
 supabase functions deploy studio-upload
 supabase secrets set STREAMTAPE_LOGIN=<api login> STREAMTAPE_KEY=<api key>
 ```
+
+### The thumbnail comes with the file
+
+A video uploaded into a studio does not open with an empty card. The moment the file lands, the
+editor asks the host for the still it keeps for that file — `file/getsplash`, or, when the function
+has not been redeployed yet, the address the same answer gives
+(`https://thumb.tapecontent.net/thumb/<file id>/thumb.jpg`) — and puts it in the Thumbnail field as
+an **automatic** picture. Nothing is stored twice: the address is the host's, and an `<img>` reads it
+directly.
+
+Streamtape keeps the account's own pictures in **Home / Thumbnails**, matched to a video by name: a
+`Video-001100.jpg` there is the picture of `Video-001100.mp4`. So the account can replace a studio's
+stills without touching the site, and the editor reads whichever picture is current — the hint under
+the field says where it came from and that it can be replaced.
+
+The member's own picture wins over it: **Upload**, a pasted address, or a dropped file sets the
+thumbnail, and the automatic one is never put back over a chosen one. A picture the member uploads is
+also copied into **Home / Thumbnails** under the video's own name (`Video-001100.jpg`), so the host's
+own player wears the same card the site does — best-effort, after the video has its code, and a host
+that refuses an image costs nothing. `stillOf()` in `videos.js` is the reading side: a card, a row, a
+poster or the player falls back to the host's still, so a video saved before this change still shows
+a picture instead of a grey rectangle.
 
 The three doors keep their meaning, on the feed as well as on the door:
 
@@ -1850,7 +1873,7 @@ in the same file, or, when that call is not on the server yet, the `creator_publ
 page already makes (a channel first, then a server or a cinema, never a private hub). No studio at
 all, and the member's face is the publisher, which is the honest answer.
 
-Test: `node tools/video-smoke.mjs` — **453/453** (feed, sort, search, watch, reaction→comment, a locked
+Test: `node tools/video-smoke.mjs` — **472/472** (feed, sort, search, watch, reaction→comment, a locked
 door and its password, a missing video, the editor signed out and in, the payload of a publish, of an
 exclusive rule set and of a private list, the player and the sixteen host cases, the oEmbed stills, the
 studio picker, the contents rail, and the forwarding page).
@@ -2227,7 +2250,7 @@ the editors need**, each pinned to a name pattern and a set of extensions (`user
 | `node tools/rte-smoke.mjs` | **45/45** (every command, links, insertion, history, paste, drop, keys, toolbar state) |
 | `node tools/article-smoke.mjs` | **281/281** |
 | `node tools/blog-smoke.mjs` | **82/82** (the address, the closed door, the hero, the home, a section, the search, the plain cover) |
-| `node tools/video-smoke.mjs` | **453/453** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
+| `node tools/video-smoke.mjs` | **472/472** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
 | `node tools/media-smoke.mjs` | **89/89** (the address book, the three pages, the portrait stage, the locked item, the shelves) |
 
 ### The six OAuth apps — one checklist each

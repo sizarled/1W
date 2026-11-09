@@ -202,10 +202,34 @@ export function sourceLabel(raw = "") {
   return kind ? HOSTS[kind] || "Link" : "";
 }
 
-/** YouTube hands over a still for free. Nothing else does without an API. */
+/**
+ * The picture Streamtape keeps for one file — its own automatic thumbnail.
+ *
+ * The address is the host's, not ours: `thumb.tapecontent.net` answers for a
+ * file id, and the same address is what the API's `file/getsplash` hands back.
+ * If the account has put a picture of its own in **Home / Thumbnails** under
+ * the video's name, this address is where it is served from. Nothing to sign,
+ * nothing to fetch: an `<img>` can read it directly.
+ */
+export function streamtapeSplash(id = "") {
+  const key = String(id || "").trim();
+  return key ? `https://thumb.tapecontent.net/thumb/${key}/thumb.jpg` : "";
+}
+
+/** YouTube and Streamtape hand over a still for free. */
 export function autoThumb(raw = "") {
   const id = youtubeId(raw);
-  return id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : "";
+  if (id) return `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+  const tape = streamtapeId(raw);
+  return tape ? streamtapeSplash(tape) : "";
+}
+
+/** Where a still came from, in the words the editor shows. */
+export function stillOrigin(raw = "") {
+  const kind = sourceKind(raw);
+  if (kind === "youtube") return "youtube";
+  if (kind === "streamtape") return "streamtape";
+  return "";
 }
 
 /** Hosts that bring their own picture inside the frame. */

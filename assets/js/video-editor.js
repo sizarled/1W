@@ -37,9 +37,9 @@ import { toast } from "./ui.js";
 import { sessionToken, getMember } from "./session.js";
 import { COUNTRIES } from "./countries.js";
 import { SUPABASE, storageUrl } from "./config.js";
-import { embedUrl, fullscreenSrc, FRAME_ALLOW, autoThumb, isFile, sourceKind, sourceLabel, HOSTS, pinterestId, redditPath } from "./embed.js";
+import { embedUrl, fullscreenSrc, FRAME_ALLOW, autoThumb, streamtapeSplash, streamtapeId, isFile, sourceKind, sourceLabel, HOSTS, pinterestId, redditPath } from "./embed.js";
 import { createContents } from "./contents.js";
-import { studioReady, uploadToStudio, renameFile, NOT_CONNECTED } from "./streamtape.js";
+import { studioReady, uploadToStudio, renameFile, splashOf, putThumbnail, NOT_CONNECTED } from "./streamtape.js";
 
 const S = {
   token: "",
@@ -57,6 +57,12 @@ const S = {
   thumb: "",
   thumbChosen: false,
   thumbAuto: false,
+  /* where an automatic still came from — `youtube` or `streamtape` */
+  thumbFrom: "",
+  /* the picture the member picked, kept so it can be copied to the host once
+     the video has the name it will carry there */
+  thumbFile: null,
+  thumbMirrored: "",
   vis: "general",
   when: "now",
   whenAt: "",
@@ -270,11 +276,18 @@ function paintThumb() {
   const input = $("[data-ved-thumb]");
   if (input && input.value !== S.thumb) input.value = S.thumb;
 
+  /* the button names the host that can hand a still over */
+  const autoLabel = $("[data-ved-thumb-auto-label]");
+  if (autoLabel) autoLabel.textContent = streamtapeId(S.embed) ? "The host's picture" : "From the video";
+
   /* the honest part: only YouTube hands us a still by itself */
   const hint = $("[data-ved-thumb-hint]");
   if (hint) {
     const kind = sourceKind(S.embed);
-    if (src && S.thumbAuto) {
+    if (src && S.thumbAuto && S.thumbFrom === "streamtape") {
+      hint.textContent =
+        "Automatic — the picture Streamtape keeps for this file (Home / Thumbnails, under the video's name). Upload one to replace it.";
+    } else if (src && S.thumbAuto) {
       hint.textContent = "Taken from the video. Upload one to replace it.";
     } else if (src) {
       hint.textContent = "";
@@ -820,6 +833,8 @@ async function save(status) {
   S.code = res.code || S.code;
   S.status = res.status || status;
   await nameHostFile();
+  /* the picture the member chose now has the video's own name to carry */
+  await mirrorThumbToHost();
   paintAll();
 
   if (status === "draft") {
@@ -868,6 +883,9 @@ function resetForm() {
   S.thumb = "";
   S.thumbChosen = false;
   S.thumbAuto = false;
+  S.thumbFrom = "";
+  S.thumbFile = null;
+  S.thumbMirrored = "";
   S.keywords = [];
   S.platform = "";
   S.mode = "file";
@@ -1129,6 +1147,10 @@ async function loadExisting(code) {
     S.lvMin = Math.min(...levels);
     S.lvMax = Math.max(...levels);
   }
+  /* a video with no picture of its own takes the host's own still — the
+     picture Streamtape keeps for the file, which is the picture the account
+     put in Home / Thumbnails when it put one there */
+  if (!S.thumb) void takeHostStill();
   return true;
 }
 
@@ -1162,11 +1184,13 @@ function syncAutoThumb() {
     if (S.thumb === auto) return false;
     S.thumb = auto;
     S.thumbAuto = true;
+    S.thumbFrom = sourceKind(S.embed) === "streamtape" ? "streamtape" : "youtube";
     return true;
   }
   if (S.thumbAuto) {
     S.thumb = "";
     S.thumbAuto = false;
+    S.thumbFrom = "";
     return true;
   }
   return false;
@@ -1182,6 +1206,73 @@ const OEMBED = {
 };
 
 /**
+ * The still Streamtape keeps for one file — its splash.
+ *
+ * A video uploaded to the studio's host gets its picture without anyone
+ * choosing one: the host makes a still of the file, and the account can
+ * replace it by dropping a picture of the same name into **Home / Thumbnails**.
+ * `getsplash` answers which picture is the current one; when the function in
+ * front of the API has not been redeployed yet, the address is worked out from
+ * the file id instead, so the editor never sits on a blank card.
+ */
+async function hostStill(id = "") {
+  const key = String(id || streamtapeId(S.embed) || "").trim();
+  if (!key) return "";
+  const studio = S.host?.studio || studioHub()?.code || "";
+  const url = await splashOf(key, studio).catch(() => "");
+  return url || streamtapeSplash(key);
+}
+
+/**
+ * Put the host's still in the field — unless the member has chosen a picture
+ * of their own, which is never overwritten.
+ *
+ * `force` is for the moment just after an upload: the field may already hold
+ * the address worked out from the id, and this asks the host which picture is
+ * really the current one.
+ */
+async function takeHostStill({ force = false } = {}) {
+  if (S.thumbChosen) return "";
+  const key = streamtapeId(S.embed);
+  if (!key) return "";
+  if (!force && S.thumb) return "";
+  const url = await hostStill(key);
+  if (!url || S.thumbChosen) return "";
+  if (S.thumb === url && S.thumbFrom === "streamtape") return url;
+  S.thumb = url;
+  S.thumbAuto = true;
+  S.thumbFrom = "streamtape";
+  paintThumb();
+  paintPreview();
+  paintPlayer();
+  paintStatus();
+  scheduleDraft();
+  return url;
+}
+
+/**
+ * A picture the member chose, placed in the account's **Home / Thumbnails**
+ * under the video's own name, so the host's player shows the same picture the
+ * site does. The name is only known once the video has its code, so this runs
+ * again after a save.
+ *
+ * Best-effort: the site already holds the picture, and the host refusing an
+ * image is not a reason to fail anything.
+ */
+async function mirrorThumbToHost() {
+  if (!S.thumbFile || !S.thumbChosen) return "";
+  const studio = S.host?.studio || studioHub()?.code || "";
+  const base = String(S.code || "").trim();
+  if (!studio || !base) return "";
+  const ext = (String(S.thumbFile.name || "").split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+  const name = `${base}.${ext === "jpeg" ? "jpg" : ext}`;
+  if (S.thumbMirrored === name) return name;
+  const done = await putThumbnail(S.thumbFile, { studio, name });
+  if (done) S.thumbMirrored = done;
+  return done;
+}
+
+/**
  * Some hosts will hand a still to anyone who asks nicely (oEmbed). We ask
  * once per link, with a short leash, and say nothing when the answer is no —
  * Facebook and Drive insist on a token, and a network that blocks the call
@@ -1189,6 +1280,8 @@ const OEMBED = {
  */
 async function stillFromHost(url) {
   const kind = sourceKind(url);
+  /* Streamtape makes a still of every file it holds — ask it for that one */
+  if (kind === "streamtape") return hostStill(streamtapeId(url));
   const build = OEMBED[kind];
   if (!build) return "";
   let timer = null;
@@ -1484,12 +1577,18 @@ async function uploadThumbnail(file) {
     S.thumb = url;
     S.thumbChosen = true;
     S.thumbAuto = false;
+    S.thumbFrom = "member";
+    S.thumbFile = file;
+    S.thumbMirrored = "";
     paintThumb();
     paintPreview();
     paintPlayer();
     paintStatus();
     scheduleDraft();
     toast({ title: "Picture uploaded", message: "", tone: "success", iconName: "image" });
+    /* the same picture goes to the host's Home / Thumbnails under the video's
+       name, so the player there wears it too — once the video has its name */
+    void mirrorThumbToHost();
   } catch (error) {
     toast({ title: "Upload failed", message: error?.message || "Try again.", tone: "error" });
   }
@@ -1544,6 +1643,10 @@ async function uploadToStudioHost(file, studio) {
       tone: "success",
       iconName: "check",
     });
+    /* the picture comes with the file: the host's own still, unless the member
+       has already chosen one. A still that does not answer never fails an
+       upload that has already happened. */
+    await takeHostStill({ force: true }).catch(() => "");
   } catch (error) {
     endUpload(false, error?.message || "The upload failed.");
     fileNote(error?.message || "The upload failed. Paste a link instead.", "error");
@@ -1956,17 +2059,40 @@ function bind() {
     S.thumb = el.thumb.value.trim();
     S.thumbChosen = Boolean(S.thumb);
     S.thumbAuto = false;
+    S.thumbFrom = S.thumbChosen ? "member" : "";
+    /* a typed address is not a file: there is nothing to copy to the host */
+    if (S.thumbChosen) S.thumbFile = null;
     paintThumb();
     paintPreview();
     paintPlayer();
     scheduleDraft();
   });
-  $("[data-ved-thumb-auto]")?.addEventListener("click", () => {
+  $("[data-ved-thumb-auto]")?.addEventListener("click", async () => {
+    /* a studio's file: ask the host for the still it keeps for that file */
+    if (streamtapeId(S.embed)) {
+      const url = await takeHostStill({ force: true });
+      if (!url) {
+        toast({
+          title: "No still yet",
+          message: "The host has not made one for this file yet — it appears a moment after the upload, or you can upload your own.",
+          tone: "error",
+          iconName: "info",
+        });
+        return;
+      }
+      toast({
+        title: "The host's own picture",
+        message: "Taken from Streamtape — Home / Thumbnails, under the video's name.",
+        tone: "success",
+        iconName: "image",
+      });
+      return;
+    }
     const auto = autoThumb(S.embed);
     if (!auto) {
       toast({
         title: "No still to take",
-        message: "Only YouTube hands over a picture. Upload one for the other hosts.",
+        message: "YouTube and Streamtape hand over a picture. Upload one for the other hosts.",
         tone: "error",
         iconName: "info",
       });
@@ -1975,6 +2101,7 @@ function bind() {
     S.thumb = auto;
     S.thumbAuto = true;
     S.thumbChosen = false;
+    S.thumbFrom = "youtube";
     paintThumb();
     paintPreview();
     paintPlayer();
@@ -1984,6 +2111,9 @@ function bind() {
     S.thumb = "";
     S.thumbChosen = false;
     S.thumbAuto = false;
+    S.thumbFrom = "";
+    S.thumbFile = null;
+    S.thumbMirrored = "";
     paintThumb();
     paintPreview();
     paintPlayer();

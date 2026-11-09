@@ -1986,6 +1986,256 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
   );
 }
 
+/* ================================================================== */
+/* the still the host makes — and the member's own picture over it    */
+/* ================================================================== */
+{
+  const embed = await import(`file://${join(root, "assets/js/embed.js")}?still`);
+  expect(
+    "still: a studio file brings its own picture",
+    embed.autoThumb("https://streamtape.com/e/fid42") === "https://thumb.tapecontent.net/thumb/fid42/thumb.jpg",
+    embed.autoThumb("https://streamtape.com/e/fid42")
+  );
+  expect("still: and YouTube still brings its own", embed.autoThumb("https://youtu.be/dQw4w9WgXcQ").includes("i.ytimg.com"));
+  expect("still: a plain link brings none", embed.autoThumb("https://example.com/film.mp4") === "");
+
+  /* a feed row with no picture of its own wears the host's */
+  const feed = {
+    ok: true,
+    rows: [
+      card({
+        code: "PST-001020",
+        title: "Straight from the host",
+        thumbnail: null,
+        embed: "https://streamtape.com/e/fid42",
+        video: { meta: {}, embed: "https://streamtape.com/e/fid42", file: null, host: { id: "p1", name: "Jhon" } },
+      }),
+    ],
+    fields: [],
+    total: 1,
+    limit: 24,
+    offset: 0,
+    can_publish: false,
+  };
+  const feedCtx = boot("videos.html", {
+    fetchImpl: (href) => {
+      const fn = fnName(href);
+      if (fn === "video_feed") return reply(feed);
+      if (fn === "video_mine") return reply({ ok: true, rows: [] });
+      return reply([]);
+    },
+  });
+  await import(`file://${join(root, "assets/js/videos.js")}?stillfeed`);
+  await wait();
+  expect(
+    "still: a card with no picture wears the host's",
+    /thumb\.tapecontent\.net\/thumb\/fid42\/thumb\.jpg/.test(feedCtx.document.querySelector("[data-v-grid] .vcard img")?.getAttribute("src") || ""),
+    feedCtx.document.querySelector("[data-v-grid] .vcard")?.innerHTML.slice(0, 120)
+  );
+  expect("still: nothing threw on the feed", feedCtx.errors.length === 0, feedCtx.errors.join(" | "));
+
+  /* the editor: upload a file, the host's still lands in the field by itself.
+     The stand-in XHR an earlier pass installed is for the site's own storage,
+     and it would swallow the host's upload address — the host goes by fetch. */
+  delete globalThis.XMLHttpRequest;
+  const tape = { splash: [], thumbs: [], uploads: [], folders: [] };
+  const studioCtx = boot("video-editor.html", {
+    storage: STORAGE,
+    fetchImpl: (href, opts) => {
+      const fn = fnName(href);
+      if (fn === "creator_hubs_list") {
+        return reply({ ok: true, hubs: [{ code: "IDST100001", name: "CineAura", kind: "channel" }] });
+      }
+      if (fn === "video_save") return reply({ ok: true, code: "Video-001100", status: "published" });
+      if (href.includes("/functions/v1/studio-upload")) {
+        const url = new URL(href);
+        const action = url.searchParams.get("action");
+        const folder = url.searchParams.get("folder") || "";
+        if (action === "file/listfolder") {
+          if (!folder) return reply({ status: 200, result: { folders: [{ id: "fld-users", name: "Users" }, { id: "fld-thumbs", name: "Thumbnails" }], files: [] } });
+          return reply({ status: 200, result: { folders: [], files: [] } });
+        }
+        if (action === "file/createfolder") return reply({ status: 200, result: { folderid: "fld-made" } });
+        if (action === "file/ul") {
+          tape.uploads.push(folder);
+          return reply({ status: 200, result: { url: `https://tapecontent.net/xfsupload/${folder}` } });
+        }
+        if (action === "file/rename") return reply({ status: 200, result: true });
+        if (action === "file/getsplash") {
+          tape.splash.push(url.searchParams.get("file"));
+          /* the account's own picture, named after the video, is the splash */
+          return reply({ status: 200, msg: "OK", result: "https://thumb.tapecontent.net/thumb/fid7/custom.jpg" });
+        }
+        return reply({ status: 400, msg: "unexpected call" });
+      }
+      if (href.startsWith("https://tapecontent.net/")) {
+        const sent = opts.body && typeof opts.body.get === "function" ? opts.body.get("file1") : null;
+        tape.thumbs.push({ href, name: sent && sent.name });
+        return reply({ status: 200, result: { id: "fid7", name: sent && sent.name } });
+      }
+      return reply([]);
+    },
+  });
+  await import(`file://${join(root, "assets/js/video-editor.js")}?pstill`);
+  await wait(80);
+
+  const hubSelect = studioCtx.document.querySelector("[data-ved-hub]");
+  hubSelect.value = "IDST100001";
+  hubSelect.dispatchEvent(new studioCtx.window.Event("change", { bubbles: true }));
+  await wait();
+
+  const clip = new studioCtx.window.File([new Uint8Array(2048)], "clip.mp4", { type: "video/mp4" });
+  const picker = studioCtx.document.querySelector("[data-ved-file]");
+  Object.defineProperty(picker, "files", { value: [clip], configurable: true });
+  picker.dispatchEvent(new studioCtx.window.Event("change", { bubbles: true }));
+  await wait(260);
+
+  expect("still: the editor asks the host for the file's picture", tape.splash.includes("fid7"), JSON.stringify(tape.splash));
+  const thumbBox = studioCtx.document.querySelector("[data-ved-thumb-box] img")?.getAttribute("src") || "";
+  expect(
+    "still: the host's own picture is the thumbnail, not a guess",
+    thumbBox === "https://thumb.tapecontent.net/thumb/fid7/custom.jpg",
+    thumbBox
+  );
+  expect(
+    "still: and the field says where it came from",
+    /Home \/ Thumbnails/.test(studioCtx.document.querySelector("[data-ved-thumb-hint]")?.textContent || ""),
+    studioCtx.document.querySelector("[data-ved-thumb-hint]")?.textContent
+  );
+
+  expect(
+    "still: the button offers the host's picture by name",
+    /The host's picture/.test(studioCtx.document.querySelector("[data-ved-thumb-auto]")?.textContent || ""),
+    studioCtx.document.querySelector("[data-ved-thumb-auto]")?.textContent
+  );
+
+  /* the member's own picture replaces it — and goes to Home / Thumbnails too.
+     The picture goes up through XHR (the site's storage, then the host), so the
+     block installs the same stand-in the earlier file pass uses. */
+  class StillXhr {
+    constructor() {
+      this.upload = {};
+      this.status = 0;
+      this.responseText = "";
+    }
+    open(method, url) {
+      this.url = url;
+    }
+    setRequestHeader() {}
+    send(file) {
+      if (String(this.url).includes("tapecontent.net")) {
+        const sent = file && typeof file.get === "function" ? file.get("file1") : file;
+        tape.thumbs.push({ href: this.url, name: sent && sent.name });
+        this.status = 200;
+        this.responseText = JSON.stringify({ status: 200, result: { id: "fid8" } });
+      } else {
+        this.status = 200;
+        this.responseText = "{}";
+      }
+      setTimeout(() => this.onload?.(), 5);
+    }
+  }
+  globalThis.XMLHttpRequest = StillXhr;
+
+  const own = new studioCtx.window.File([new Uint8Array(64)], "mine.jpg", { type: "image/jpeg" });
+  const thumbInput = studioCtx.document.querySelector("[data-ved-thumb-file]");
+  Object.defineProperty(thumbInput, "files", { value: [own], configurable: true });
+  thumbInput.dispatchEvent(new studioCtx.window.Event("change", { bubbles: true }));
+  await wait(200);
+  const ownSrc = studioCtx.document.querySelector("[data-ved-thumb-box] img")?.getAttribute("src") || "";
+  expect("still: the member's own picture wins", /\/users\/posts\//.test(ownSrc) || ownSrc.includes("posts"), ownSrc);
+  expect(
+    "still: and the hint stops saying automatic",
+    !/Home \/ Thumbnails/.test(studioCtx.document.querySelector("[data-ved-thumb-hint]")?.textContent || ""),
+    studioCtx.document.querySelector("[data-ved-thumb-hint]")?.textContent
+  );
+  const stillTitle = studioCtx.document.querySelector("[data-ved-title]");
+  stillTitle.value = "A studio video";
+  stillTitle.dispatchEvent(new studioCtx.window.Event("input", { bubbles: true }));
+  await wait();
+  studioCtx.document.querySelector("[data-ved-publish]").dispatchEvent(new studioCtx.window.MouseEvent("click", { bubbles: true }));
+  await wait(320);
+  expect(
+    "still: the picture is the one saved with the video",
+    String(lastCall(studioCtx.calls, "video_save")?.body?.p_payload?.thumbnail || "").startsWith("http") &&
+      !String(lastCall(studioCtx.calls, "video_save")?.body?.p_payload?.thumbnail || "").includes("thumb.tapecontent.net"),
+    lastCall(studioCtx.calls, "video_save")?.body?.p_payload?.thumbnail
+  );
+  expect(
+    "still: the host is asked for its Thumbnails folder",
+    tape.uploads.includes("fld-thumbs"),
+    JSON.stringify(tape.uploads)
+  );
+  expect(
+    "still: and the picture is copied there under the video's own name",
+    tape.thumbs.some((row) => row.name === "Video-001100.jpg"),
+    JSON.stringify(tape.thumbs.map((row) => row.name))
+  );
+  expect("still: nothing threw in the editor", studioCtx.errors.length === 0, studioCtx.errors.join(" | "));
+
+  /* the schema and the function behind it */
+  const hostFunction = readFileSync(join(root, "supabase/functions/studio-upload/index.ts"), "utf8");
+  expect(
+    "still: the function asks the host for the file's own picture",
+    hostFunction.includes('"file/getsplash"') && hostFunction.includes('api("file/getsplash"'),
+    "getsplash is not allowed"
+  );
+  const hostClient = readFileSync(join(root, "assets/js/streamtape.js"), "utf8");
+  expect(
+    "still: the pictures live in the account's own Thumbnails folder",
+    /export const THUMBS = "Thumbnails"/.test(hostClient) && /export async function putThumbnail/.test(hostClient),
+    "no Thumbnails folder"
+  );
+
+  /* a video already on the host, saved without a picture, takes the host's */
+  delete globalThis.XMLHttpRequest;
+  const openCtx = boot("video-editor.html", {
+    storage: STORAGE,
+    url: "video-editor.html?id=Video-000001",
+    fetchImpl: (href) => {
+      const fn = fnName(href);
+      if (fn === "creator_hubs_list") {
+        return reply({ ok: true, hubs: [{ code: "IDST100001", name: "CineAura", kind: "channel" }] });
+      }
+      if (fn === "video_get") {
+        return reply({
+          ok: true,
+          video: {
+            id: "post-1",
+            code: "Video-000001",
+            title: "Already on the host",
+            description: "",
+            thumbnail: null,
+            status: "published",
+            visibility: "general",
+            language: "en",
+            embed: "https://streamtape.com/e/fid11",
+            video: { meta: {}, embed: "https://streamtape.com/e/fid11", host: null },
+            keywords: [],
+            audience: [],
+          },
+        });
+      }
+      if (href.includes("/functions/v1/studio-upload")) {
+        const url = new URL(href);
+        if (url.searchParams.get("action") === "file/getsplash") {
+          return reply({ status: 200, msg: "OK", result: "https://thumb.tapecontent.net/thumb/fid11/own.jpg" });
+        }
+        return reply({ status: 400, msg: "unexpected call" });
+      }
+      return reply([]);
+    },
+  });
+  await import(`file://${join(root, "assets/js/video-editor.js")}?pstillopen`);
+  await wait(220);
+  expect(
+    "still: a video that was saved without a picture takes the host's",
+    /thumb\/fid11\/own\.jpg/.test(openCtx.document.querySelector("[data-ved-thumb-box] img")?.getAttribute("src") || ""),
+    openCtx.document.querySelector("[data-ved-thumb-box]")?.innerHTML.slice(0, 90)
+  );
+  expect("still: nothing threw while opening it", openCtx.errors.length === 0, openCtx.errors.join(" | "));
+}
+
 const failed = checks.filter((c) => !c.ok);
 checks.forEach((c) => {
   if (!c.ok) console.log(`FAIL  ${c.name}${c.detail ? ` — ${c.detail}` : ""}`);
