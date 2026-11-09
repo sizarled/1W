@@ -242,6 +242,60 @@ async function boot(file, { stored = null, member = null, desktop = true } = {})
   expect("cap: no page errors", p.errors.length === 0, p.errors.join(" | "));
 }
 
+/* ------------------------------------------------------------------ */
+/* 6 — the points counter is live                                     */
+/* ------------------------------------------------------------------ */
+/* The bug this closes: the header sat one action behind, because it was only
+   read on load and every forty-five seconds after it. */
+{
+  const p = await boot("videos.html", {
+    member: { id: "m3", username: "@nour", name: "Nour", points: 100, membership: "free" },
+  });
+
+  let memberReads = 0;
+  const answer = (body) => Promise.resolve({ ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) });
+  globalThis.fetch = (url) => {
+    if (String(url).includes("/members")) {
+      memberReads += 1;
+      return answer([{ id: "m3", username: "@nour", points: 130, membership: "free" }]);
+    }
+    return answer({ ok: true });
+  };
+  p.window.fetch = globalThis.fetch;
+
+  const data = await import(`file://${join(root, "assets/js/data.js")}?live`);
+  const wallet = await import(`file://${join(root, "assets/js/wallet.js")}?live`);
+  let told = 0;
+  p.window.addEventListener("1w:points", () => {
+    told += 1;
+  });
+
+  /* a call that moves points says so; one that does not, does not */
+  await data.rpc("post_react_from", { p_token: "t" });
+  expect("live: a like tells the page the ledger moved", told === 1, String(told));
+  await data.rpc("video_feed", {});
+  expect("live: reading a feed tells it nothing", told === 1, String(told));
+  await data.rpc("post_reshare_from", { p_token: "t" });
+  expect("live: a repost tells it too", told === 2, String(told));
+
+  wallet.watchWallet();
+  p.window.dispatchEvent(new p.window.CustomEvent("1w:points"));
+  await p.wait(400);
+  expect("live: the member is asked once", memberReads >= 1, String(memberReads));
+  expect(
+    "live: and the header moves without a reload",
+    p.qs("[data-wallet-value]")?.textContent === "130",
+    p.qs("[data-wallet-value]")?.textContent
+  );
+
+  /* a signed-in page that comes back to the tab asks again */
+  const before = memberReads;
+  p.document.dispatchEvent(new p.window.Event("visibilitychange"));
+  await p.wait(300);
+  expect("live: coming back to the tab asks again", memberReads > before, `${before} → ${memberReads}`);
+  expect("live: no page errors", p.errors.length === 0, p.errors.join(" | "));
+}
+
 const failed = checks.filter((c) => !c.ok);
 console.log(`shell smoke: ${checks.length - failed.length}/${checks.length}`);
 failed.forEach((c) => console.log(`  ✗ ${c.name}${c.detail ? ` — ${c.detail}` : ""}`));

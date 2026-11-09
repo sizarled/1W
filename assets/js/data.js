@@ -74,6 +74,33 @@ export async function rest(table, { select = "*", filters = {}, order, limit, of
 }
 
 /** Calls a Postgres function through PostgREST (security definer on the server). */
+/**
+ * The calls that move a member's points. Every one of them is answered by the
+ * database with the new row, and every one of them has to be answered by the
+ * page too — the counter in the header is not allowed to sit one action behind.
+ */
+const POINTS_FNS = new Set([
+  "post_react", "post_react_from",
+  "post_comment", "post_comment_from",
+  "post_comment_vote",
+  "post_reshare", "post_reshare_from",
+  "post_report", "post_report_from",
+  "reach_share_visit",
+  "publisher_visit",
+  "video_reaction",
+  "creator_subscribe",
+]);
+
+/** Tell the page that the ledger has moved; the wallet does the asking. */
+function notePoints(fn) {
+  if (!POINTS_FNS.has(String(fn || ""))) return;
+  try {
+    window.dispatchEvent(new CustomEvent("1w:points", { detail: { fn } }));
+  } catch {
+    /* an old browser without CustomEvent still paints on the next tick */
+  }
+}
+
 export async function rpc(fn, body = {}, { keepalive = false } = {}) {
   const res = await fetch(`${SUPABASE.restUrl}/rpc/${fn}`, {
     method: "POST",
@@ -86,6 +113,8 @@ export async function rpc(fn, body = {}, { keepalive = false } = {}) {
     throw new Error(`rpc ${fn} ${res.status} ${text.slice(0, 180)}`);
   }
   const text = await res.text();
+  /* the call landed: whatever it did to the ledger, the page is told at once */
+  notePoints(fn);
   if (!text) return null;
   try {
     return JSON.parse(text);

@@ -1082,7 +1082,7 @@ async function openWatch(code, orientation) {
   if (ownMedia && $("[data-v-chapter]")) followMedia(ownMedia);
   /* the hour is counted from the player's own clock, and a gate that is on the
      page is wired to its link */
-  startWatchClock();
+  startWatchClock(Number(v.minutes) || 0);
   mountWatchAd();
   const saveBtn = $("[data-v-save]");
   if (saveBtn) {
@@ -1333,25 +1333,49 @@ function seekMedia(media, seconds, play) {
 
 let stopWatchClock = null;
 
-function startWatchClock() {
+function startWatchClock(minutes = 0) {
   if (typeof stopWatchClock === "function") stopWatchClock();
   stopWatchClock = null;
   const root = watchEl();
   if (!root) return;
+
+  /* A film is as long as it is. Once its own length has been watched on this
+     page, nothing more is booked — not a loop, not a rewind, not a page left
+     open on the last frame. The row's own `minutes` is the honest guess until
+     the player says its real duration. */
+  let limit = Number(minutes) > 0 ? Number(minutes) * 60 : 0;
+  let counted = 0;
+
+  const book = (moved, total) => {
+    if (Number.isFinite(total) && total > 0) limit = total;
+    if (!(moved > 0) || moved > 2) return;
+    if (limit && counted >= limit - 0.4) return;
+    const room = limit ? Math.max(0, limit - counted) : moved;
+    const take = Math.min(moved, room);
+    if (!(take > 0)) return;
+    counted += take;
+    addWatched(take);
+  };
+  const spent = () => limit > 0 && counted >= limit - 0.4;
 
   const media = root.querySelector(".vplayer video");
   if (media) {
     let last = null;
     const onTime = () => {
       const at = Number(media.currentTime) || 0;
-      if (last !== null) {
-        const moved = at - last;
-        if (moved > 0 && moved <= 2) addWatched(moved);
-      }
+      if (last !== null) book(at - last, Number(media.duration));
       last = at;
     };
+    /* the end of the film is the end of the clock, whatever the page does */
+    const onEnded = () => {
+      if (typeof stopWatchClock === "function") stopWatchClock();
+    };
     media.addEventListener("timeupdate", onTime);
-    stopWatchClock = () => media.removeEventListener("timeupdate", onTime);
+    media.addEventListener("ended", onEnded);
+    stopWatchClock = () => {
+      media.removeEventListener("timeupdate", onTime);
+      media.removeEventListener("ended", onEnded);
+    };
     return;
   }
 
@@ -1359,18 +1383,15 @@ function startWatchClock() {
   if (!frame) return;
   let lastSecond = null;
   let answeredAt = 0;
-  const following = followFrame(frame, ({ seconds }) => {
+  const following = followFrame(frame, ({ seconds, duration }) => {
     const at = Number(seconds) || 0;
     answeredAt = Date.now();
-    if (lastSecond !== null) {
-      const moved = at - lastSecond;
-      if (moved > 0 && moved <= 2) addWatched(moved);
-    }
+    if (lastSecond !== null) book(at - lastSecond, Number(duration));
     lastSecond = at;
   });
   const ticker = setInterval(() => {
     /* the frame leaves the page: the clock goes with it */
-    if (!frame.isConnected) {
+    if (!frame.isConnected || spent()) {
       clearInterval(ticker);
       return;
     }
@@ -1380,7 +1401,7 @@ function startWatchClock() {
     /* a frame that answered in the last five seconds is counted by its own
        clock; one that never answers is counted by the wall clock */
     if (Date.now() - answeredAt < 5000) return;
-    addWatched(1);
+    book(1);
   }, 1000);
   stopWatchClock = () => {
     clearInterval(ticker);

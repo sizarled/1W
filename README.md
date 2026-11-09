@@ -1933,7 +1933,7 @@ in the same file, or, when that call is not on the server yet, the `creator_publ
 page already makes (a channel first, then a server or a cinema, never a private hub). No studio at
 all, and the member's face is the publisher, which is the honest answer.
 
-Test: `node tools/video-smoke.mjs` — **556/556** (feed, sort, search, watch, reaction→comment, a chapter
+Test: `node tools/video-smoke.mjs` — **559/559** (feed, sort, search, watch, reaction→comment, a chapter
 index on YouTube and Vimeo and none on Streamtape, the frame's colour both ways, the hour, the gate and its thirty seconds, a locked door and its password, a missing video, the
 editor signed out and in, the payload of a publish, of an exclusive rule set and of a private list, the
 player and the sixteen host cases, the oEmbed stills, the studio picker, the contents rail, and the
@@ -1956,6 +1956,10 @@ while the member is typing, so a comment box keeps its own `f`. The cinema page'
 jump (a seek, a laptop that slept) is refused rather than believed, and a frame that will never say its
 time is counted while it is on the screen and the page is visible. The ledger lives in `localStorage`
 (`1w.videos.watched`, `1w.videos.adsPaid`), so it survives a reload and a visit that ends mid-hour.
+
+A film is as long as it is: past **its own length** nothing is booked on that page — not a loop, not
+a rewind, not a page left open on the last frame. The duration is the player's when it says it (a
+`<video>`'s `duration`, a frame's through the bridge) and the row's own `minutes` until then.
 
 At **sixty minutes** the next video asks first. Its player is drawn with a gate over it, and the frame
 behind the gate is `inert` — no click, no tab key and no keyboard reaches the film: the press goes to
@@ -2342,8 +2346,9 @@ the editors need**, each pinned to a name pattern and a set of extensions (`user
 | `node tools/rte-smoke.mjs` | **45/45** (every command, links, insertion, history, paste, drop, keys, toolbar state) |
 | `node tools/article-smoke.mjs` | **281/281** |
 | `node tools/blog-smoke.mjs` | **82/82** (the address, the closed door, the hero, the home, a section, the search, the plain cover) |
-| `node tools/video-smoke.mjs` | **556/556** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
+| `node tools/video-smoke.mjs` | **559/559** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
 | `node tools/media-smoke.mjs` | **89/89** (the address book, the three pages, the portrait stage, the locked item, the shelves) |
+| `node tools/shell-smoke.mjs` | **67/67** (which page carries which menu, the signed-in header, the header wallet — one ask per action, the number moving without a reload, a re-ask on return to the tab) |
 
 ### The six OAuth apps — one checklist each
 
@@ -3358,8 +3363,14 @@ Points can be credited from any page with:
 OneW.awardPoints(120, "Review published"); // banner + add-point.mp3
 ```
 
-The wallet also polls the `members` row every 45 s while a member is signed in, so points
-added server-side show up with the banner and the sound automatically.
+**The counter is live, not eventual.** Three things keep `Your points · Level` true to the second:
+every call that moves points — a like, a dislike, a comment, a vote, a repost, a report, a share, a
+visit — is named in `POINTS_FNS` in `assets/js/data.js`, and after it lands the page is told
+(`1w:points`); coming back to the tab or focusing the window asks at once; and a slow poll of the
+`members` row every 30 s is the safety net for a change made on another device. Several asks in the
+same breath are one ask (`refreshWallet` debounces for 120 ms), so three actions in a row cannot make
+the number step backwards as their answers land out of order. The banner and the level-up sound follow
+the same path (`syncFromMember`).
 
 **Preview helper:** open the console and run `OneW.demoSignIn()` to see the signed-in
 state locally (no server call). `OneW.signOut()` returns to the guest view.

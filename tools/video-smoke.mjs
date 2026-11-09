@@ -2707,6 +2707,53 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
   owed.document.querySelector(".vplayer")?.remove();
   await wait(1200);
 
+  /* a film is as long as it is: past its own length nothing is booked, even
+     with the page left open on its last frame.
+
+     Every page opened above is closed as far as its clock is concerned first:
+     the ledger is one key, so a player left running in an earlier window would
+     book its second into this page's total and make the count flaky. */
+  booted.forEach((w) => w.document.querySelectorAll(".vplayer").forEach((n) => n.remove()));
+  await wait(1200);
+  const capped = boot("videos.html", {
+    hash: "#/h/ID=VID-000920",
+    fetchImpl: (href) => {
+      const fn = fnName(href);
+      if (fn === "video_feed") return reply({ ...FEED, rows: [], total: 0, fields: [] });
+      if (fn === "video_mine") return reply({ ok: true, rows: [] });
+      if (fn === "video_get") {
+        return reply({
+          ok: true,
+          video: {
+            ...card({ code: "VID-000920", title: "A short film", embed: "https://cdn.example.com/film.mp4", minutes: 1 }),
+            minutes: 1,
+            video: { meta: { vertical: false, chapters: [] }, embed: "https://cdn.example.com/film.mp4" },
+          },
+          related: [],
+          more: [],
+        });
+      }
+      return reply([]);
+    },
+  });
+  await import(`file://${join(root, "assets/js/videos.js")}?pcap`);
+  await wait(320);
+  const clip = capped.document.querySelector(".vplayer video");
+  expect("clock: the film is a file of its own", !!clip);
+  Object.defineProperty(clip, "duration", { value: 3, configurable: true });
+  const bookedBefore = ads.watchedSeconds();
+  [1, 2, 3, 4, 5].forEach((second) => {
+    clip.currentTime = second;
+    clip.dispatchEvent(new capped.window.Event("timeupdate"));
+  });
+  await wait(30);
+  const booked = ads.watchedSeconds() - bookedBefore;
+  expect("clock: it books the film's own length and no more", Math.round(booked) === 3, String(booked));
+  clip.currentTime = 9;
+  clip.dispatchEvent(new capped.window.Event("timeupdate"));
+  await wait(30);
+  expect("clock: staying on the last frame books nothing", Math.round(ads.watchedSeconds() - bookedBefore) === 3, String(ads.watchedSeconds() - bookedBefore));
+
   /* 6. a link that still carries a second on a Streamtape video: the address
         keeps it, and the frame is not touched to chase it */
   const late = boot("videos.html", {

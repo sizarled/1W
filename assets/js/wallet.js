@@ -9,6 +9,8 @@ import { num } from "./utils.js";
 import { capFor, levelInfo } from "./levels.js";
 
 let pollHandle = null;
+let pending = null;
+let live = false;
 
 export function levelCap(member = getMember()) {
   return capFor(member?.membership || "free");
@@ -84,20 +86,70 @@ export function syncFromMember(member = getMember()) {
   if (changes.levelUp) levelToast(changes.level);
 }
 
-export function startWalletPolling(intervalMs = 45000) {
+/**
+ * Ask the server for the member's row, now, and paint what comes back.
+ *
+ * Several asks in the same breath are one ask: a like, a comment and a share
+ * pressed in a row must not become three round trips, and the counter must not
+ * be seen to step backwards as they land out of order.
+ */
+export function refreshWallet(delayMs = 120) {
+  if (!getMember()) {
+    renderWallet();
+    return Promise.resolve(null);
+  }
+  if (pending) clearTimeout(pending);
+  return new Promise((resolve) => {
+    pending = setTimeout(async () => {
+      pending = null;
+      const fresh = await refreshMember().catch(() => null);
+      if (fresh) syncFromMember(fresh);
+      else renderWallet();
+      resolve(fresh);
+    }, delayMs);
+  });
+}
+
+/**
+ * Keep the counter live.
+ *
+ * Three things make it real time rather than *eventually* right: every call
+ * that moves points says so (see `notePoints` in `data.js`), coming back to the
+ * tab asks at once, and a slow poll is the safety net for a change made on
+ * another device.
+ */
+export function watchWallet(intervalMs = 30000) {
+  if (!live) {
+    live = true;
+    window.addEventListener("1w:points", () => refreshWallet());
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) refreshWallet(0);
+    });
+    window.addEventListener("focus", () => refreshWallet(0));
+  }
+  /* a member who signs in after the page was read starts the poll too */
+  startWalletPolling(intervalMs);
+}
+
+export function startWalletPolling(intervalMs = 30000) {
   stopWalletPolling();
   if (!getMember()) return;
   noteSeen(getMember());
-  pollHandle = setInterval(async () => {
+  pollHandle = setInterval(() => {
     if (document.hidden) return;
-    const fresh = await refreshMember();
-    if (fresh) syncFromMember(fresh);
+    refreshMember()
+      .then((fresh) => {
+        if (fresh) syncFromMember(fresh);
+      })
+      .catch(() => {});
   }, intervalMs);
 }
 
 export function stopWalletPolling() {
   if (pollHandle) clearInterval(pollHandle);
   pollHandle = null;
+  if (pending) clearTimeout(pending);
+  pending = null;
 }
 
 export { noteSeen };

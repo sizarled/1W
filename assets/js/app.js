@@ -5,7 +5,7 @@
  */
 import { mountShell } from "./shell.js?v=20261116b";
 import { getMember, refreshMember, setMember, signOut, noteSeen } from "./session.js";
-import { awardPoints, renderWallet, startWalletPolling, syncFromMember } from "./wallet.js";
+import { awardPoints, renderWallet, syncFromMember, watchWallet, refreshWallet } from "./wallet.js";
 import { toast } from "./ui.js";
 import { avatarPlaceholder, enableDragScrollAll } from "./utils.js";
 import { startVisitTracking, finishVisit, lastVisitError } from "./visits.js?v=20261101a";
@@ -87,7 +87,9 @@ async function boot() {
       noteSeen(fresh);
       syncFromMember(fresh);
     }
-    startWalletPolling();
+    /* the counter is live from here on: an action, a tab coming back, or a
+       change made elsewhere all move it without a reload */
+    watchWallet();
   }
 
   renderWallet();
@@ -103,6 +105,7 @@ window.OneW = {
   toast,
   signOut,
   refreshMember,
+  refreshWallet,
   setMember,
   enableDragScrollAll,
   visits: { start: startVisitTracking, finish: finishVisit, lastError: lastVisitError },
@@ -134,7 +137,7 @@ window.OneW = {
     };
     setMember(member);
     noteSeen(member);
-    startWalletPolling();
+    watchWallet();
     toast({ tone: "success", iconName: "user", title: `Signed in as ${username}`, message: "Local preview session." });
     return member;
   },
