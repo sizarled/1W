@@ -1066,6 +1066,7 @@ function renderReach(host, hub, tab) {
       <div class="cr-bar__left">
         <span class="cr-bar__title">${esc(tab.label)}</span>
         <span class="cr-bar__count">
+          ${esc(hub?.name || "This studio")}${hub?.code ? ` · ${esc(hub.code)}` : ""} ·
           ${limitless ? "no limit" : `${num(points)} points`} · ${num(spent)} spent · ${limitless ? "and never spent out" : `${num(remaining)} left today`}
         </span>
       </div>

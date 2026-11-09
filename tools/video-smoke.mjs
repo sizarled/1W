@@ -90,8 +90,8 @@ function card(over = {}) {
 const FEED = {
   ok: true,
   rows: [
-    card(),
-    card({ code: "PST-001011", title: "Elephants Dream", id: "22222222-2222-4222-8222-222222222222" }),
+    card({ rank_points: 240 }),
+    card({ code: "PST-001011", title: "Elephants Dream", id: "22222222-2222-4222-8222-222222222222", rank_points: 90 }),
     card({ code: "PST-001012", title: "For Bigger Blazes", id: "33333333-3333-4333-8333-333333333333" }),
   ],
   fields: [
@@ -270,6 +270,31 @@ const choosePlatform = (document, window, value) => {
   search.dispatchEvent(new window.Event("input", { bubbles: true }));
   await wait(400);
   expect("feed: the search reaches the server", lastCall(calls, "video_feed")?.body.p_search === "bunny", lastCall(calls, "video_feed")?.body.p_search);
+
+  /* the search is where ranking points are earned, so the search is where
+     every card wears them — and the feed, before it, does not */
+  const rankChips = document.querySelectorAll("[data-v-grid] .vcard__rank");
+  expect("search: every result shows its ranking points", rankChips.length === 3, String(rankChips.length));
+  expect("search: the number is the row's own", rankChips[0]?.textContent.trim() === "240", rankChips[0]?.textContent);
+  expect("search: a video with none says zero", rankChips[2]?.textContent.trim() === "0", rankChips[2]?.textContent);
+  expect(
+    "search: the chip says what the number is",
+    /Ranking points/.test(rankChips[0]?.getAttribute("title") || "") && /Ranking points/.test(rankChips[0]?.getAttribute("aria-label") || ""),
+    rankChips[0]?.outerHTML?.slice(0, 120)
+  );
+  expect(
+    "search: the count line says so",
+    /3 videos · ranking points on every card/.test(document.querySelector("[data-v-count]")?.textContent || ""),
+    document.querySelector("[data-v-count]")?.textContent
+  );
+  search.value = "";
+  search.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await wait(400);
+  expect(
+    "feed: a plain feed carries no ranking chips",
+    document.querySelectorAll("[data-v-grid] .vcard__rank").length === 0,
+    String(document.querySelectorAll("[data-v-grid] .vcard__rank").length)
+  );
 }
 
 /* ================================================================== */

@@ -144,8 +144,15 @@ function stillOf(v) {
   return String(row.thumbnail || autoThumb(row.video?.embed || row.embed || "") || "");
 }
 
-function cardMarkup(row) {
+/**
+ * One card. `rank` asks for the ranking points as well — a search is the one
+ * surface where they mean something, because they are earned there (every
+ * interaction a search brings), and the video that stands higher in a search
+ * is the video with more of them.
+ */
+function cardMarkup(row, { rank = false } = {}) {
   const v = row || {};
+  const ranking = Number(v.rank_points) || 0;
   const meta = (v.video && v.video.meta) || {};
   const host = (v.video && v.video.host) || v.publisher || {};
   const counters = v.counters || {};
@@ -183,6 +190,11 @@ function cardMarkup(row) {
           <span>${icon("thumbUp")}${esc(compact(counters.likes || 0))}</span>
           <span>${icon("comment")}${esc(compact(counters.comments || 0))}</span>
           <span>${icon("eye")}${esc(compact(counters.impressions || 0))}</span>
+          ${
+            rank
+              ? `<span class="vcard__rank" title="Ranking points — what this video has earned in search" aria-label="Ranking points: ${esc(num(ranking))}">${icon("chart")}${esc(num(ranking))}</span>`
+              : ""
+          }
         </p>
       </div>
     </a>`;
@@ -230,13 +242,15 @@ function renderCount() {
     host.textContent = "";
     return;
   }
-  host.textContent = `${num(total)} ${total === 1 ? "video" : "videos"}`;
+  const ranked = Boolean(state.search.trim());
+  host.textContent = `${num(total)} ${total === 1 ? "video" : "videos"}${ranked ? " · ranking points on every card" : ""}`;
 }
 
 function renderGrid({ append = false } = {}) {
   const host = gridEl();
   if (!host) return;
-  const html = state.rows.map(cardMarkup).join("");
+  const ranked = Boolean(state.search.trim());
+  const html = state.rows.map((row) => cardMarkup(row, { rank: ranked })).join("");
   if (append) host.insertAdjacentHTML("beforeend", html);
   else host.innerHTML = html;
 

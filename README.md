@@ -1897,7 +1897,7 @@ in the same file, or, when that call is not on the server yet, the `creator_publ
 page already makes (a channel first, then a server or a cinema, never a private hub). No studio at
 all, and the member's face is the publisher, which is the honest answer.
 
-Test: `node tools/video-smoke.mjs` — **489/489** (feed, sort, search, watch, reaction→comment, a locked
+Test: `node tools/video-smoke.mjs` — **495/495** (feed, sort, search, watch, reaction→comment, a locked
 door and its password, a missing video, the editor signed out and in, the payload of a publish, of an
 exclusive rule set and of a private list, the player and the sixteen host cases, the oEmbed stills, the
 studio picker, the contents rail, and the forwarding page).
@@ -2274,7 +2274,7 @@ the editors need**, each pinned to a name pattern and a set of extensions (`user
 | `node tools/rte-smoke.mjs` | **45/45** (every command, links, insertion, history, paste, drop, keys, toolbar state) |
 | `node tools/article-smoke.mjs` | **281/281** |
 | `node tools/blog-smoke.mjs` | **82/82** (the address, the closed door, the hero, the home, a section, the search, the plain cover) |
-| `node tools/video-smoke.mjs` | **489/489** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
+| `node tools/video-smoke.mjs` | **495/495** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
 | `node tools/media-smoke.mjs` | **89/89** (the address book, the three pages, the portrait stage, the locked item, the shelves) |
 
 ### The six OAuth apps — one checklist each
@@ -2750,7 +2750,7 @@ node tools/dashboard-smoke.mjs   # 272 checks: the five gates, rail, popover, co
 node tools/sidebar-smoke.mjs     # 93 checks: the edge, the pin, Escape, the mobile drawer, the dashboard menu
 node tools/panel-smoke.mjs       # 90 checks: the desk's three states, the rows, the switch, the dialog, the shelf
 node tools/court-smoke.mjs       # 115 checks: the four steps, uploads, both doors, the court room
-node tools/creator-smoke.mjs     # 448 checks: the search (owners + publishers), the tables, the editors, a publisher's seat, the head of the page, the Reach tab
+node tools/creator-smoke.mjs     # 449 checks: the search (owners + publishers), the tables, the editors, a publisher's seat, the head of the page, the Reach tab
 node tools/media-smoke.mjs       # 89 checks: the address book, videos.html#/h|v/, audio.html#/p|m/, playlist.html#/videos|podcasts|songs/
 node tools/publisher-smoke.mjs   # 52 checks: the program, the seat, the links, and the hand-off to the creator page
 node tools/iptv-smoke.mjs        # 43 checks: the playlists, the groups, the page, the deep links
@@ -2892,6 +2892,15 @@ top (what the level gives plus what the interactions earned), then one row per p
 | **Reached in the suggestions** | the people it reached on the home pages and the rail beside a player today |
 | **Reached in search** | the people who met it in a search result today |
 | **Ranking points** | what it has earned from search interactions — read, never typed |
+
+**Two places the numbers are worn.** *Studio → Reach* is the one place the **reach** points are
+shown, and the bar over the table names the studio they belong to — `Studio One · IDST100001 · 500
+points · 120 spent · 380 left today` — so a member with three studios never has to guess whose day is
+on the screen. The **ranking** points are worn by the item itself: every card in a **search result**
+carries its own number in a pill beside the counts (`240` with a chart mark, its tooltip and its
+`aria-label` saying *ranking points*), and the line above the grid says `3 videos · ranking points on
+every card`. A plain feed carries none: nothing is earned outside a search, and a number on every card
+of the home page would say nothing.
 
 Every point the day spends leaves a row in `reach_impressions` (`hub_id`, item, ref, **source**,
 profile, day), and `reach_claim` now carries the surface it was asked on — `notification`,

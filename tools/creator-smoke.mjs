@@ -1935,8 +1935,10 @@ async function reachPass() {
   expect("reach: the tab is offered in the studio", tabs.includes("reach"), tabs.join(","));
   expect("reach: it asked the server for the studio's day", calls.some((c) => c.includes("hub_reach_get")), calls.join(" "));
 
-  const day = view.text(".cr-bar__count");
+  const day = view.text(".cr-bar__count").replace(/\s+/g, " ").trim();
   expect("reach: the day is said in points, spent and left", /500 points · 120 spent · 380 left today/.test(day), day);
+  /* the points are one studio's, so the bar says whose before it says how many */
+  expect("reach: the bar names the studio the points belong to", /^Studio One · IDST100001 ·/.test(day), day);
 
   const total = view.text("[data-cr-reach-total]");
   expect("reach: the studio's number is shown, not typed", /500/.test(total) && !view.qs("[data-cr-reach-total] input"), total);
