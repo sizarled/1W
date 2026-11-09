@@ -1953,8 +1953,9 @@ while the member is typing, so a comment box keeps its own `f`. The cinema page'
 **The host's own button works, because the frame is allowed to ask.** A full-screen request made from
 inside an `<iframe>` is granted only when the frame is permitted to make it, so every player frame the
 project builds — the watch page, the cinema stage, the editor's preview — carries `allow="… fullscreen"`
-**and** `allowfullscreen` **and** `webkitallowfullscreen` (the last one for older Safari and the iOS
-WebView, which know no `allow`). It is asserted in `video-smoke`, so it cannot be dropped by accident.
+**and** `allowfullscreen` **and** `webkitallowfullscreen` **and** `mozallowfullscreen` (the last two
+for the Safari, iOS WebView and old Firefox versions that know no `allow` — those honour only their own
+attribute, and a frame they do not recognise simply cannot ask). It is asserted in `video-smoke`, so it cannot be dropped by accident.
 If the player's own button still does nothing, the refusal is above the page — a browser that does not
 offer full screen on that device, or this page itself running inside another frame that was not allowed
 to go full screen.

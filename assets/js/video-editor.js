@@ -1407,7 +1407,7 @@ function paintPlayer() {
   }
   /* the preview is the watch page's frame, in the watch page's colour */
   const src = tapeColour(fullscreenSrc(value), currentTheme());
-  host.innerHTML = `<iframe src="${esc(src)}" title="The video, before it is published" loading="lazy" allow="${esc(FRAME_ALLOW)}" allowfullscreen webkitallowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>${disc}`;
+  host.innerHTML = `<iframe src="${esc(src)}" title="The video, before it is published" loading="lazy" allow="${esc(FRAME_ALLOW)}" allowfullscreen webkitallowfullscreen mozallowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>${disc}`;
 }
 
 /* the same door the watch page has, for the preview */

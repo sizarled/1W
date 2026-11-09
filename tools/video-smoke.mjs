@@ -2452,7 +2452,7 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
   const frameMarkup = ctx.document.querySelector(".vplayer iframe")?.outerHTML || "";
   expect(
     "fullscreen: the frame is allowed to go full screen",
-    /allow="[^"]*fullscreen/.test(frameMarkup) && /allowfullscreen/.test(frameMarkup) && /webkitallowfullscreen/.test(frameMarkup),
+    /allow="[^"]*fullscreen/.test(frameMarkup) && /allowfullscreen/.test(frameMarkup) && /webkitallowfullscreen/.test(frameMarkup) && /mozallowfullscreen/.test(frameMarkup),
     frameMarkup.slice(0, 220)
   );
   expect(
