@@ -1931,9 +1931,10 @@ in the same file, or, when that call is not on the server yet, the `creator_publ
 page already makes (a channel first, then a server or a cinema, never a private hub). No studio at
 all, and the member's face is the publisher, which is the honest answer.
 
-Test: `node tools/video-smoke.mjs` — **567/567** (feed, sort, search, watch, reaction→comment, a chapter
+Test: `node tools/video-smoke.mjs` — **569/569** (feed, sort, search, watch, reaction→comment, a chapter
 index on YouTube and Vimeo and none on Streamtape, the frame's colour both ways, the gate and its
-count, a new video behind it and a seen one in front of it, the task after twenty, a locked door and its password, a missing video, the
+count, a new video behind it and a seen one in front of it, the task after twenty (and a guest
+who is asked for the count instead), a locked door and its password, a missing video, the
 editor signed out and in, the payload of a publish, of an exclusive rule set and of a private list, the
 player and the sixteen host cases, the oEmbed stills, the studio picker, the contents rail, and the
 forwarding page).
@@ -2363,7 +2364,7 @@ the editors need**, each pinned to a name pattern and a set of extensions (`user
 | `node tools/rte-smoke.mjs` | **45/45** (every command, links, insertion, history, paste, drop, keys, toolbar state) |
 | `node tools/article-smoke.mjs` | **293/293** (the index, the reader, the gates, the editors) |
 | `node tools/blog-smoke.mjs` | **82/82** (the address, the closed door, the hero, the home, a section, the search, the plain cover) |
-| `node tools/video-smoke.mjs` | **567/567** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal, the gate and the task) |
+| `node tools/video-smoke.mjs` | **569/569** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal, the gate and the task) |
 | `node tools/media-smoke.mjs` | **95/95** (the address book, the three pages, the portrait stage, the locked item, the shelves) |
 | `node tools/shell-smoke.mjs` | **67/67** (which page carries which menu, the signed-in header, the header wallet — one ask per action, the number moving without a reload, a re-ask on return to the tab) |
 

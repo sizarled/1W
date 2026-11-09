@@ -2763,7 +2763,11 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
   /* twenty new videos gone by: the gate asks for a task instead of a count */
   const taskPage = boot("videos.html", {
     hash: "#/h/ID=VID-000930",
-    storage: { "1w.gate.since": JSON.stringify({ videos: 20 }) },
+    storage: {
+      "1w.gate.since": JSON.stringify({ videos: 20 }),
+      /* a task is credited to a member, so this one is signed in */
+      "1w.member": JSON.stringify({ id: "m-task", username: "@task", name: "Task", level: 2, points: 0 }),
+    },
     fetchImpl: (href) => {
       const fn = fnName(href);
       if (fn === "video_feed") return reply({ ...FEED, rows: [], total: 0, fields: [] });
@@ -2792,6 +2796,35 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
     taskPage.document.querySelector(".vplayer iframe")?.hasAttribute("inert") === true
   );
   expect("task: nothing threw", taskPage.errors.length === 0, taskPage.errors.join(" | "));
+
+  /* a guest has no task to complete: the gate asks for the count instead, so
+     nobody is held in front of a door they cannot open */
+  const guest = boot("videos.html", {
+    hash: "#/h/ID=VID-000931",
+    storage: { "1w.gate.since": JSON.stringify({ videos: 20 }) },
+    fetchImpl: (href) => {
+      const fn = fnName(href);
+      if (fn === "video_feed") return reply({ ...FEED, rows: [], total: 0, fields: [] });
+      if (fn === "video_mine") return reply({ ok: true, rows: [] });
+      if (fn === "video_get") {
+        return reply({
+          ok: true,
+          video: {
+            ...card({ code: "VID-000931", title: "For a guest", embed: "https://streamtape.com/e/abc931" }),
+            video: { meta: { vertical: false, chapters: [] }, embed: "https://streamtape.com/e/abc931" },
+          },
+          related: [],
+          more: [],
+        });
+      }
+      return reply([]);
+    },
+  });
+  await import(`file://${join(root, "assets/js/videos.js")}?pguest`);
+  await wait(320);
+  const guestGate = guest.document.querySelector(".vplayer [data-v-ad]");
+  expect("task: a guest is asked for the count, not a task", guestGate?.classList.contains("vad--task") === false && Boolean(guestGate), guestGate?.className || "no gate");
+  expect("task: and nothing threw for them", guest.errors.length === 0, guest.errors.join(" | "));
 
   /* 6. a link that still carries a second on a Streamtape video: the address
         keeps it, and the frame is not touched to chase it */
@@ -2839,6 +2872,9 @@ booted.forEach((window) => {
   }
 });
 await wait(1400);
+/* the lead watcher is one timer for the whole process, not one per window */
+const { stopWatchingLeads } = await import(`file://${join(root, "assets/js/offers.js")}`);
+stopWatchingLeads();
 
 const failed = checks.filter((c) => !c.ok);
 checks.forEach((c) => {

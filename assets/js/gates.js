@@ -196,7 +196,10 @@ function taskMarkup(kind, offers = []) {
  */
 export function mountGate(host, { kind = "videos", id = "", onPaid = null } = {}) {
   if (!host) return () => {};
-  const need = gateNeed(kind, id);
+  let need = gateNeed(kind, id);
+  /* a guest has no task to complete: they are asked for the count instead, so
+     nobody is ever held in front of a door they cannot open */
+  if (need === "task" && !getMember()?.id) need = "ad";
   if (!need) {
     if (typeof onPaid === "function") onPaid();
     return () => {};
