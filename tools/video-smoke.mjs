@@ -2916,9 +2916,9 @@ const VERTICAL = verticalCard({
   });
   await import(`file://${join(root, "assets/js/videos.js")}?shape2`);
   await wait(120);
-  expect("shape: a portrait video opens portrait", document.querySelector(".vwatch")?.getAttribute("data-orientation") === "v", document.querySelector(".vwatch")?.getAttribute("data-orientation"));
-  expect("shape: the address follows the row", window.location.hash === "#/v/ID=VSR-001040", window.location.hash);
-  expect("shape: the video is on the page", /ameliadimz/.test(document.querySelector("[data-v-watch]")?.textContent || ""), document.querySelector("[data-v-watch]")?.textContent?.slice(0, 60));
+  expect("shape: a portrait row is handed to the vertical format", window.location.hash === "#/v/ID=VSR-001040", window.location.hash);
+  expect("shape: this stage does not draw it", !document.querySelector(".vwatch"), "the landscape stage drew a portrait video");
+  expect("shape: the grid steps aside", document.querySelector("[data-v-browse]")?.hidden === true);
   expect("shape: nothing threw", errors.length === 0, errors.join(" | "));
 }
 
@@ -2936,7 +2936,7 @@ const VERTICAL = verticalCard({
   });
   await import(`file://${join(root, "assets/js/videos.js")}?shape3`);
   await wait(120);
-  expect("shape: the older address opens the video", document.querySelector(".vwatch")?.getAttribute("data-orientation") === "v");
+  expect("shape: the older address finds the row", document.querySelector(".vwatch") === null, "drew it twice");
   expect("shape: and is rewritten to the canonical one", window.location.hash === "#/v/ID=VSR-001040", window.location.hash);
 }
 
@@ -2954,8 +2954,23 @@ const VERTICAL = verticalCard({
   });
   await import(`file://${join(root, "assets/js/videos.js")}?shape4`);
   await wait(120);
-  expect("shape: a landscape row opens landscape", document.querySelector(".vwatch")?.getAttribute("data-orientation") === "h", document.querySelector(".vwatch")?.getAttribute("data-orientation"));
-  expect("shape: and its address is corrected too", window.location.hash === "#/h/ID=VID-001039", window.location.hash);
+  expect("shape: #/v/ belongs to the vertical format, whatever the row", !document.querySelector(".vwatch") && window.location.hash === "#/v/ID=VID-001039", window.location.hash);
+
+  /* the videos format still owns #/h/ and the bare page */
+  const flat = boot("videos.html", {
+    hash: "#/h/ID=VID-001039",
+    fetchImpl: (href) => {
+      const fn = fnName(href);
+      if (fn === "video_get") return reply({ ok: true, video: card({ code: "VID-001039", orientation: "h" }), related: [], more: [], locked: false });
+      if (fn === "video_hub") return reply({ ok: true, hub: { name: "Hello", code: "IDST100001", creator: "@ledsizar7", links: [] } });
+      if (fn === "post_comments") return reply({ ok: true, comments: [], count: 0, reaction: null, can_comment: false });
+      return reply({ ok: true, rows: [], total: 0 });
+    },
+  });
+  await import(`file://${join(root, "assets/js/videos.js")}?shape5`);
+  await wait(120);
+  expect("shape: a landscape row still opens the videos stage", flat.document.querySelector(".vwatch")?.getAttribute("data-orientation") === "h", flat.document.querySelector(".vwatch")?.getAttribute("data-orientation"));
+  expect("shape: and its address is left alone", flat.window.location.hash === "#/h/ID=VID-001039", flat.window.location.hash);
 }
 
 /* a page that is still open holds its clocks: the suite closes them so the

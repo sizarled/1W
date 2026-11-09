@@ -1,11 +1,15 @@
 /**
- * vertical.js — vertical.html, the 9:16 shelf and its viewer.
+ * vertical.js — the 9:16 shelf and its viewer, inside `videos.html`.
  * ------------------------------------------------------------------
- * Two screens, one address:
+ * Two screens, one page, and the address says which one is on:
  *
- *   vertical.html              the shelf — every vertical video as a 9:16 card
- *   vertical.html#/v/ID=…      one video, with the one before and the one after
+ *   videos.html#/vertical     the shelf — every vertical video as a 9:16 card
+ *   videos.html#/v/ID=…       one video, with the one before and the one after
  *                             standing beside it
+ *
+ * `#/h/…` and the bare page belong to `videos.js`; this file keeps out of them
+ * (and hides its own screens) so the two formats never draw over each other.
+ * `vertical.html` is only a door that forwards to this page.
  *
  * Nothing is invented here. The shelf asks the database for the videos whose
  * publisher ticked **vertical** (`video_vertical_feed`), and a video is opened
@@ -34,6 +38,13 @@ import { creatorUrl } from "./media.js";
 import { isFile, autoThumb, fullscreenSrc, tapeColour, FRAME_ALLOW } from "./embed.js";
 import { currentTheme } from "./theme.js";
 import { gateNeed, mountGate } from "./gates.js";
+
+/* The vertical format lives on the videos page now — the page the whole site
+   already calls `videos.html`. A video addressed `#/v/ID=…` is drawn here in 9:16,
+   a landscape one `#/h/ID=…` is left to `videos.js`, and the shelf itself is
+   `#/vertical`. `vertical.html` is only a door that forwards to this page. */
+const HOST_PAGE = "videos.html";
+const hosted = Boolean(document.querySelector("[data-v-browse]"));
 
 const PAGE = 24;
 const SAVED_KEY = "1w.videos.saved";
@@ -65,6 +76,7 @@ const state = {
 };
 
 const $ = (sel, root = document) => qs(sel, root);
+const pageEl = () => $("[data-vert-page]");
 const browseEl = () => $("[data-vert-browse]");
 const watchRoot = () => $("[data-vert-watch]");
 const gridEl = () => $("[data-vert-grid]");
@@ -124,7 +136,12 @@ function categoryOf(v) {
 
 /** The address of one video — the only state this page has. */
 function hrefOf(code) {
-  return `vertical.html#/v/ID=${encodeURIComponent(String(code || ""))}`;
+  return `${HOST_PAGE}#/v/ID=${encodeURIComponent(String(code || ""))}`;
+}
+
+/** The shelf's own address — where "back to the shelf" goes. */
+function shelfHref() {
+  return hosted ? "#/vertical" : `${HOST_PAGE}#/vertical`;
 }
 
 function routeOf() {
@@ -133,7 +150,10 @@ function routeOf() {
   if (byId) return { view: "watch", code: decodeURIComponent(byId[1]) };
   const plain = raw.match(/^v\/([A-Za-z0-9-]+)$/);
   if (plain) return { view: "watch", code: plain[1] };
-  return { view: "grid", code: "" };
+  if (/^vertical(\/|$)/i.test(raw)) return { view: "shelf", code: "" };
+  /* on a page of its own (the old `vertical.html`) no address is the shelf;
+     hosted, no address belongs to `videos.js`, so this format stays out of it */
+  return hosted ? { view: "none", code: "" } : { view: "shelf", code: "" };
 }
 
 function savedSet() {
@@ -526,7 +546,7 @@ function viewerMarkup(v, res) {
   return `
     <div class="v9view" data-v9-view>
       <div class="v9view__bar">
-        <a class="v9back" href="vertical.html" data-v9-back>${icon("arrowLeft")} The vertical shelf</a>
+        <a class="v9back" href="${esc(shelfHref())}" data-v9-back>${icon("arrowLeft")} The vertical shelf</a>
         ${position ? `<span class="v9pos" data-v9-pos>${esc(position)}</span>` : ""}
       </div>
 
@@ -729,12 +749,13 @@ async function openWatch(code) {
   delete document.documentElement.dataset.vertMoved;
   const seq = ++state.seqWatch;
 
+  if (pageEl()) pageEl().hidden = false;
   if (browseEl()) browseEl().hidden = true;
   host.hidden = false;
   stopMedia();
   host.innerHTML = `
     <div class="v9view">
-      <div class="v9view__bar"><a class="v9back" href="vertical.html" data-v9-back>${icon("arrowLeft")} The vertical shelf</a></div>
+      <div class="v9view__bar"><a class="v9back" href="${esc(shelfHref())}" data-v9-back>${icon("arrowLeft")} The vertical shelf</a></div>
       <div class="v9stage">
         <span class="v9side v9side--empty" aria-hidden="true"></span>
         <div class="v9player"><div class="v9player__box"><div class="v9player__load"><span class="v9spin" aria-hidden="true"></span><span>Preparing the video…</span></div></div></div>
@@ -755,14 +776,14 @@ async function openWatch(code) {
   if (!res || res.ok !== true) {
     host.innerHTML = `
       <div class="v9view">
-        <div class="v9view__bar"><a class="v9back" href="vertical.html" data-v9-back>${icon("arrowLeft")} The vertical shelf</a></div>
+        <div class="v9view__bar"><a class="v9back" href="${esc(shelfHref())}" data-v9-back>${icon("arrowLeft")} The vertical shelf</a></div>
         ${emptyState({
           title: res && res.error === "not_found" ? "That video is gone" : "The video did not load",
           text:
             res && res.error === "not_found"
               ? "The link may be old, or the publisher deleted it."
               : "The server is not reachable from here. Try again in a moment.",
-          action: `<a class="btn btn--ghost btn--sm" href="vertical.html">${icon("arrowLeft")} Back to the shelf</a>`,
+          action: `<a class="btn btn--ghost btn--sm" href="${esc(shelfHref())}">${icon("arrowLeft")} Back to the shelf</a>`,
         })}
       </div>`;
     return;
@@ -779,7 +800,14 @@ async function openWatch(code) {
   /* a landscape row is not this shelf's: it goes to the page it belongs to
      rather than sitting in a 9:16 box with two black bands */
   if (String(state.video.orientation || "").toLowerCase() === "h") {
-    const away = `videos.html#/h/ID=${encodeURIComponent(String(state.video.code || code))}`;
+    if (hosted) {
+      /* on the videos page the format simply hands the address back */
+      const hash = `#/h/ID=${encodeURIComponent(String(state.video.code || code))}`;
+      document.documentElement.dataset.vertMoved = hash;
+      location.hash = hash;
+      return;
+    }
+    const away = `${HOST_PAGE}#/h/ID=${encodeURIComponent(String(state.video.code || code))}`;
     /* a note for whoever is looking at the page in a harness that cannot
        navigate — the browser itself only needs the line below */
     document.documentElement.dataset.vertMoved = away;
@@ -806,6 +834,22 @@ async function openWatch(code) {
   loadComments(state.code);
 }
 
+/** Step out of the page: the horizontal feed owns the address now. */
+function hideVertical() {
+  closeGate();
+  stopMedia();
+  state.view = "none";
+  state.code = "";
+  const host = watchRoot();
+  if (host) {
+    host.hidden = true;
+    host.innerHTML = "";
+  }
+  if (pageEl()) pageEl().hidden = true;
+  if (browseEl()) browseEl().hidden = true;
+  delete document.documentElement.dataset.vertView;
+}
+
 function showShelf({ scroll = true } = {}) {
   state.view = "grid";
   state.code = "";
@@ -816,6 +860,7 @@ function showShelf({ scroll = true } = {}) {
     host.hidden = true;
     host.innerHTML = "";
   }
+  if (pageEl()) pageEl().hidden = false;
   if (browseEl()) browseEl().hidden = false;
   document.documentElement.dataset.vertView = "shelf";
   document.title = "Vertical Videos — 1World Web";
@@ -835,7 +880,7 @@ function step(delta) {
   }
   const code = String(row.code || row.id || "");
   if (!code) return;
-  location.hash = hrefOf(code).replace(/^vertical\.html/, "");
+  location.hash = `#/v/ID=${encodeURIComponent(code)}`;
 }
 
 /* ================================================================== */
@@ -989,7 +1034,7 @@ function bindViewer() {
 
     if (target.closest("[data-v9-share]")) {
       event.preventDefault();
-      const url = `${location.origin}${location.pathname}${hrefOf(state.code).replace(/^vertical\.html/, "")}`;
+      const url = `${location.origin}${location.pathname}#/v/ID=${encodeURIComponent(state.code)}`;
       if (signedIn()) {
         rpc("post_reshare_from", { p_token: state.token, p_ref: state.code, p_source: "vertical" })
           .then((res) => {
@@ -1344,11 +1389,20 @@ window.addEventListener("1w:session", () => {
 async function render() {
   const route = routeOf();
   bindViewer();
+
+  if (route.view === "none") {
+    hideVertical();
+    return;
+  }
+
   if (route.view === "watch" && route.code) {
     await openWatch(route.code);
     return;
   }
-  if (state.view === "watch") showShelf({ scroll: false });
+
+  /* the shelf: the first visit fetches it, a return draws what is in hand */
+  showShelf({ scroll: false });
+  if (!state.loaded && !state.loading) await loadFeed();
 }
 
 async function boot() {
@@ -1356,8 +1410,6 @@ async function boot() {
   enableDragScrollAll();
   bindShelf();
   bindViewer();
-  showShelf({ scroll: false });
-  await loadFeed();
   window.addEventListener("hashchange", render);
   await render();
 }

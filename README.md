@@ -1931,7 +1931,7 @@ in the same file, or, when that call is not on the server yet, the `creator_publ
 page already makes (a channel first, then a server or a cinema, never a private hub). No studio at
 all, and the member's face is the publisher, which is the honest answer.
 
-Test: `node tools/video-smoke.mjs` — **582/582** (feed, sort, search, watch, reaction→comment, a chapter
+Test: `node tools/video-smoke.mjs` — **583/583** (feed, sort, search, watch, reaction→comment, a chapter
 index on YouTube and Vimeo and none on Streamtape, the frame's colour both ways, the gate and its
 count, a new video behind it and a seen one in front of it, the task after twenty (and a guest
 who is asked for the count instead), a locked door and its password, a missing video, the
@@ -2364,30 +2364,39 @@ the editors need**, each pinned to a name pattern and a set of extensions (`user
 | `node tools/rte-smoke.mjs` | **45/45** (every command, links, insertion, history, paste, drop, keys, toolbar state) |
 | `node tools/article-smoke.mjs` | **293/293** (the index, the reader, the gates, the editors) |
 | `node tools/blog-smoke.mjs` | **82/82** (the address, the closed door, the hero, the home, a section, the search, the plain cover) |
-| `node tools/video-smoke.mjs` | **582/582** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal, the gate and the task) |
+| `node tools/video-smoke.mjs` | **583/583** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal, the gate and the task) |
 | `node tools/media-smoke.mjs` | **95/95** (the address book, the three pages, the portrait stage, the locked item, the shelves) |
 | `node tools/shell-smoke.mjs` | **67/67** (which page carries which menu, the signed-in header, the header wallet — one ask per action, the number moving without a reload, a re-ask on return to the tab) |
 
-### Vertical videos — the 9:16 shelf
+### Vertical videos — one page, two formats
 
-**`vertical.html`** is its own page, not a second site: the same header in the same order, the same
-sidebar, the same footer, both themes. It is reachable from the Videos page (a *Vertical videos*
-button beside *Publish a video*), from the sidebar's Browse group and from the footer — the header
-itself is untouched.
-
-Two screens, one address:
+The vertical shelf and its 9:16 viewer live **inside `videos.html`**. There is no second page to
+keep in step: the address decides which format draws the screen, and both formats sit on the same
+header, sidebar, footer and themes.
 
 | Address | What it is |
 | --- | --- |
-| `vertical.html` | the shelf — every vertical video as a 9:16 card |
-| `vertical.html#/v/ID=VSR-001039` | one video, the one before and the one after beside it |
+| `videos.html` | the videos feed, as it always was |
+| `videos.html#/vertical` | the shelf — every vertical video as a 9:16 card |
+| `videos.html#/v/ID=VSR-001040` | one vertical video in the 9:16 viewer, the one before and the one after beside it |
+| `videos.html#/h/ID=VID-001039` | one landscape video on the videos page's own stage |
+
+`vertical.html` is kept as a **door**: it forwards the hash it was given to `videos.html` and lands
+an empty address on `#/vertical`, so every link written before the merge still arrives.
+
+Two files, one page, no overlap: `videos.js` owns `#/h/…` and the bare page (feed, editor links,
+landscape watch); `vertical.js` owns `#/v/…` and `#/vertical`. Each listens to the address and
+steps out of the other's way — when the vertical format owns the screen the feed and the landscape
+player are hidden, anything playing is stopped, and `document.documentElement.dataset.watchMode`
+says which one is on. The shelf is reached from the Videos page (*Vertical videos*), the sidebar's
+Browse group and the footer.
 
 A vertical video is **not a new kind of row**. It is a `posts` row with `content_type = 'video'`
 whose publisher ticked the editor's “A vertical video” box — `video_meta->>'vertical'` — and whose
 code carries `VSR-` (the trigger in `tools/sql/video-codes.sql` already keeps that prefix). The
 shelf asks the database for exactly those, so a landscape video can never appear in it, and a
-landscape link that reaches the shelf (`vertical.html#/v/ID=VID-…`) is handed to
-`videos.html#/h/ID=…` instead of being drawn in a 9:16 box:
+landscape link that reaches the vertical viewer (`#/v/ID=VID-…`) is handed to `#/h/ID=…` instead
+of being drawn in a 9:16 box:
 
 | Call | What it answers |
 | --- | --- |
@@ -2397,10 +2406,9 @@ landscape link that reaches the shelf (`vertical.html#/v/ID=VID-…`) is handed 
 
 `video_card` also carries **`orientation`** — `v` when the row is vertical, `h` when it is not.
 That one field is why a vertical video can be opened from anywhere: the videos grid links it
-`videos.html#/v/ID=…`, the card wears a *Vertical* tag, suggestions keep to the shape on screen,
-and the watch page trusts the row over the address — `#/h/ID=VSR-…` and the older
-`#/v/VSR-…` both open it and both end up at the canonical portrait address, while a landscape row
-addressed as portrait walks back to `#/h/`. Before it existed the card could not say which way round
+`#/v/ID=…`, the card wears a *Vertical* tag, suggestions keep to the shape on screen, and the page
+trusts the row over the address — `#/h/ID=VSR-…` and the older `#/v/VSR-…` both end up at the
+canonical portrait address, while a landscape row addressed as portrait walks back to `#/h/`. Before it existed the card could not say which way round
 it was, so every link to a vertical video was a landscape one and the videos page drew it in a
 16:9 stage.
 
@@ -2429,10 +2437,11 @@ What makes it a vertical viewer rather than a grid with big cards:
   (block is remembered on the device, as on the videos page); the studio's own links; an expandable
   description; and the comments, with the reaction rule stated rather than a dead box.
 
-Test: `node tools/vertical-smoke.mjs` — **119/119** (the shelf, the card's badge and length, sort
-and search reaching the feed, the viewer and its seven actions, next/previous leaving one player,
-the reaction→comment rule, saved/share/follow/report/vote calls, the keyboard and its refusal past
-the ends, a gone video, a locked one, the gate for a guest, and the page and stylesheet's promises).
+Test: `node tools/vertical-smoke.mjs` — **125/125** (the shelf inside `videos.html`, the card's
+badge and length, sort and search reaching the feed, the viewer and its seven actions,
+next/previous leaving one player, the reaction→comment rule, saved/share/follow/report/vote calls,
+the keyboard and its refusal past the ends, a gone video, a locked one, the gate for a guest, the
+landscape hand-back, and the page, its stylesheet and the forwarding door).
 
 ### The six OAuth apps — one checklist each
 

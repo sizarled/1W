@@ -183,8 +183,12 @@ const queue = [
   const tall = boot("videos.html", { hash: "#/v/ID=video001032", fetchImpl: stub });
   await importPage("videos");
   await wait(150);
-  expect("videos: #/v/ is the portrait stage", qs(tall.document, "[data-v-watch] [data-orientation]")?.getAttribute("data-orientation") === "v", qs(tall.document, "[data-v-watch] [data-orientation]")?.getAttribute("data-orientation"));
-  expect("videos: the tall one still asks for the same video", tall.calls.find((c) => fnName(c.href) === "video_get")?.body?.p_ref === "video001032");
+  /* `#/v/` is the vertical format's address now: it lives on the videos page
+     too, but `videos.js` steps aside and leaves the screen to it — so the
+     landscape stage and the landscape grid are out of the way */
+  expect("videos: #/v/ leaves the portrait stage to the vertical format", !qs(tall.document, "[data-v-watch] .vwatch"), "the videos stage drew it");
+  expect("videos: and the grid steps aside", qs(tall.document, "[data-v-browse]")?.hidden === true);
+  expect("videos: this format does not spend the tall one's call", !tall.calls.find((c) => fnName(c.href) === "video_get"), "video_get was spent");
 
   const old = boot("videos.html", { hash: "#/v/CA4728CD", fetchImpl: stub });
   await importPage("videos");

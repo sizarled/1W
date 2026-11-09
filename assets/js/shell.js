@@ -44,7 +44,6 @@ const SIDEBAR_PAGES = new Set([
   "watch.html",
   "videos.html",
   "video-editor.html",
-  "vertical.html",
   "articles.html",
   "article.html",
   "article-editor.html",

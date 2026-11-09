@@ -232,7 +232,7 @@ export const SIDEBAR_NAV = [
     items: [
       { label: "Creators", href: "creator.html?section=creators", icon: "users" },
       { label: "Videos", href: "videos.html", icon: "video" },
-      { label: "Vertical", href: "vertical.html", icon: "smartphone" },
+      { label: "Vertical", href: "videos.html#/vertical", icon: "smartphone" },
       { label: "Podcast", href: "podcast.html", icon: "mic" },
       { label: "Pictures", href: "pictures.html", icon: "image" },
       { label: "Documents", href: "documents.html", icon: "file" },
@@ -278,7 +278,7 @@ export const FOOTER_NAV = [
     title: "Browse",
     links: [
       { label: "Videos", href: "videos.html" },
-      { label: "Vertical videos", href: "vertical.html" },
+      { label: "Vertical videos", href: "videos.html#/vertical" },
       { label: "Podcast", href: "podcast.html" },
       { label: "Pictures", href: "pictures.html" },
       { label: "Documents", href: "documents.html" },

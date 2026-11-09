@@ -245,7 +245,8 @@ const server =
 /* pass 1 — the shelf                                                 */
 /* ================================================================== */
 {
-  const { document, calls, errors, window } = boot("vertical.html", {
+  const { document, calls, errors, window } = boot("videos.html", {
+    hash: "#/vertical",
     storage: { ...SIGNED },
     fetchImpl: server({ getVideo: () => ({ ok: true, video: vcard() }) }),
   });
@@ -253,8 +254,10 @@ const server =
   await wait(120);
 
   const cards = document.querySelectorAll("[data-vert-grid] .v9card");
+  expect("shelf: the vertical block is on the page", document.querySelector("[data-vert-page]")?.hidden === false);
+  expect("shelf: the shelf is the part on show", document.querySelector("[data-vert-browse]")?.hidden === false);
   expect("shelf: three cards", cards.length === 3, cards.length);
-  expect("shelf: a card links by its code", cards[0]?.getAttribute("href") === "vertical.html#/v/ID=VSR-000001", cards[0]?.getAttribute("href"));
+  expect("shelf: a card links by its code", cards[0]?.getAttribute("href") === "videos.html#/v/ID=VSR-000001", cards[0]?.getAttribute("href"));
   expect("shelf: the card says vertical", /Vertical/.test(cards[0]?.querySelector(".v9card__badge")?.textContent || ""), cards[0]?.querySelector(".v9card__badge")?.textContent);
   expect("shelf: the length is on the card", cards[0]?.querySelector(".v9card__dur")?.textContent === "1:20", cards[0]?.querySelector(".v9card__dur")?.textContent);
   expect("shelf: minutes become a length too", cards[2]?.querySelector(".v9card__dur")?.textContent === "2:00", cards[2]?.querySelector(".v9card__dur")?.textContent);
@@ -272,10 +275,10 @@ const server =
   expect("shelf: nothing threw", errors.length === 0, errors.join(" | "));
 
   /* sort */
-  document.querySelector('[data-sort="popular"]').dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  document.querySelector('[data-vert-sort] [data-sort="popular"]').dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
   await wait(120);
   expect("shelf: a sort reaches the server", lastCall(calls, "video_vertical_feed")?.body.p_sort === "popular", JSON.stringify(lastCall(calls, "video_vertical_feed")?.body));
-  expect("shelf: the active sort moves", document.querySelector('[data-sort="popular"]').classList.contains("is-active"));
+  expect("shelf: the active sort moves", document.querySelector('[data-vert-sort] [data-sort="popular"]').classList.contains("is-active"));
 
   /* search, debounced */
   const search = document.querySelector("[data-vert-search]");
@@ -289,7 +292,8 @@ const server =
 /* a shelf with more behind it offers the way to it */
 {
   const many = { ...FEED, total: 40 };
-  const { document, window, calls } = boot("vertical.html", {
+  const { document, window, calls } = boot("videos.html", {
+    hash: "#/vertical",
     storage: { ...SIGNED },
     fetchImpl: (href) => {
       if (fnName(href) === "video_vertical_feed") {
@@ -311,7 +315,8 @@ const server =
 
 /* an empty shelf explains itself, and offers the way to publish */
 {
-  const { document } = boot("vertical.html", {
+  const { document } = boot("videos.html", {
+    hash: "#/vertical",
     storage: { ...SIGNED },
     fetchImpl: (href) => (fnName(href) === "video_vertical_feed" ? reply({ ok: true, rows: [], total: 0 }) : reply([])),
   });
@@ -328,7 +333,7 @@ const server =
 /* ================================================================== */
 let viewer;
 {
-  const { document, calls, errors, window } = boot("vertical.html", {
+  const { document, calls, errors, window } = boot("videos.html", {
     hash: "#/v/ID=VSR-000001",
     storage: { ...SIGNED },
     fetchImpl: server(),
@@ -368,7 +373,7 @@ let viewer;
 
   const nextSide = document.querySelector('[data-v9-side="next"]');
   expect("viewer: the next video stands beside it", /A rooftop and one cat/.test(nextSide?.getAttribute("aria-label") || ""), nextSide?.getAttribute("aria-label"));
-  expect("viewer: the next side links by code", nextSide?.getAttribute("href") === "vertical.html#/v/ID=VSR-000002", nextSide?.getAttribute("href"));
+  expect("viewer: the next side links by code", nextSide?.getAttribute("href") === "videos.html#/v/ID=VSR-000002", nextSide?.getAttribute("href"));
   expect("viewer: there is no previous at the first", document.querySelector("[data-v9-prev]")?.disabled === true);
   expect("viewer: the next button is live", document.querySelector("[data-v9-next]")?.disabled === false);
   expect("viewer: nothing threw", errors.length === 0, errors.join(" | "));
@@ -385,14 +390,14 @@ let viewer;
   expect("next: the address follows", window.location.hash === "#/v/ID=VSR-000002", window.location.hash);
   expect("next: the player was asked for the new code", lastCall(calls, "video_get")?.body.p_ref === "VSR-000002", JSON.stringify(lastCall(calls, "video_get")?.body));
   expect("next: only one player is left", document.querySelectorAll("[data-v9-player] video, [data-v9-player] iframe").length === 1, document.querySelectorAll("[data-v9-player] video, [data-v9-player] iframe").length);
-  expect("next: the previous side now points back", document.querySelector('[data-v9-side="prev"]')?.getAttribute("href") === "vertical.html#/v/ID=VSR-000001", document.querySelector('[data-v9-side="prev"]')?.getAttribute("href"));
+  expect("next: the previous side now points back", document.querySelector('[data-v9-side="prev"]')?.getAttribute("href") === "videos.html#/v/ID=VSR-000001", document.querySelector('[data-v9-side="prev"]')?.getAttribute("href"));
   expect("next: the position moved", document.querySelector("[data-v9-pos]")?.textContent === "2 of 3", document.querySelector("[data-v9-pos]")?.textContent);
   expect("next: the previous button is live now", document.querySelector("[data-v9-prev]")?.disabled === false);
   expect("next: nothing threw on the way", errors.length === 0, errors.join(" | "));
 
   /* the side card is a link, so it carries the address itself */
   const side = document.querySelector('[data-v9-side="next"]');
-  expect("next: the neighbour is a real address", side?.getAttribute("href") === "vertical.html#/v/ID=VSR-000000", side?.getAttribute("href"));
+  expect("next: the neighbour is a real address", side?.getAttribute("href") === "videos.html#/v/ID=VSR-000000", side?.getAttribute("href"));
 
   /* and back */
   document.querySelector("[data-v9-prev]").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
@@ -493,8 +498,8 @@ let viewer;
   expect("keys: up walks back", window.location.hash === "#/v/ID=VSR-000002", window.location.hash);
   document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
   await wait(150);
-  expect("keys: escape gives the shelf back", window.location.hash === "", window.location.hash);
-  expect("keys: the shelf is on screen again", document.querySelector("[data-vert-browse]")?.hidden === false);
+  expect("keys: escape gives the address back", window.location.hash === "", window.location.hash);
+  expect("keys: the vertical block steps away", document.querySelector("[data-vert-page]")?.hidden === true);
   expect("keys: the player is gone", document.querySelectorAll("[data-v9-player] video, [data-v9-player] iframe").length === 0);
 }
 
@@ -534,7 +539,7 @@ let viewer;
 /* pass 6 — gone, locked, and behind the gate                         */
 /* ================================================================== */
 {
-  const { document } = boot("vertical.html", {
+  const { document } = boot("videos.html", {
     hash: "#/v/ID=VSR-404404",
     storage: { ...SIGNED },
     fetchImpl: (href) => (fnName(href) === "video_get" ? reply({ ok: false, error: "not_found" }) : reply({ ok: true, rows: [], total: 0 })),
@@ -547,7 +552,7 @@ let viewer;
 
 {
   const locked = vcard({ code: "VSR-000777", title: "A door with a word" });
-  const { document } = boot("vertical.html", {
+  const { document } = boot("videos.html", {
     hash: "#/v/ID=VSR-000777",
     storage: { ...SIGNED },
     fetchImpl: (href) => {
@@ -566,7 +571,7 @@ let viewer;
 
 /* a new vertical video, for a guest: the count comes first — never a task */
 {
-  const { document } = boot("vertical.html", {
+  const { document } = boot("videos.html", {
     hash: "#/v/ID=VSR-000900",
     storage: {},
     fetchImpl: (href) => {
@@ -589,7 +594,7 @@ let viewer;
 {
   const wide = vcard({ code: "VID-001039", title: "A wide shot", orientation: "h" });
   wide.video = { ...wide.video, meta: { ...wide.video.meta, vertical: false } };
-  const { document } = boot("vertical.html", {
+  const { document } = boot("videos.html", {
     hash: "#/v/ID=VID-001039",
     storage: { ...SIGNED },
     fetchImpl: (href) => {
@@ -602,8 +607,8 @@ let viewer;
   await import(`file://${join(root, "assets/js/vertical.js")}?g4`);
   await wait(200);
   expect(
-    "shelf: a landscape video is sent to the videos page",
-    document.documentElement.dataset.vertMoved === "videos.html#/h/ID=VID-001039",
+    "shelf: a landscape video is handed back to the videos format",
+    document.documentElement.dataset.vertMoved === "#/h/ID=VID-001039",
     document.documentElement.dataset.vertMoved
   );
   expect("shelf: and nothing of it is drawn here", !document.querySelector(".v9info__title") && !document.querySelector("[data-v9-player] video"));
@@ -613,15 +618,23 @@ let viewer;
 /* pass 7 — the page and its stylesheet                               */
 /* ================================================================== */
 {
-  const html = readFileSync(join(root, "vertical.html"), "utf8");
-  expect("page: it is the site's own page", /data-page="vertical"/.test(html));
+  const html = readFileSync(join(root, "videos.html"), "utf8");
+  expect("page: the format lives on the videos page", /data-page="videos"/.test(html));
   expect("page: the header is the site's", /data-site-header/.test(html));
   expect("page: the sidebar is the site's", /data-site-sidebar/.test(html));
   expect("page: the footer is the site's", /data-site-footer/.test(html));
-  expect("page: it carries its stylesheet", /assets\/css\/vertical\.css/.test(html));
-  expect("page: it carries its script", /assets\/js\/vertical\.js/.test(html));
-  expect("page: it asks for both views", /data-vert-browse/.test(html) && /data-vert-watch/.test(html));
-  expect("page: it is noindexed while it beds in", /noindex/.test(html));
+  expect("page: it carries the vertical stylesheet", /assets\/css\/vertical\.css/.test(html));
+  expect("page: it carries the vertical script", /assets\/js\/vertical\.js/.test(html));
+  expect("page: both formats have their containers", /data-v-browse/.test(html) && /data-v-watch/.test(html) && /data-vert-browse/.test(html) && /data-vert-watch/.test(html));
+  expect("page: the vertical block starts out of the way", /<div data-vert-page hidden>/.test(html));
+  expect("page: the shelf is reached from the page itself", /href="#\/vertical"/.test(html));
+
+  /* `vertical.html` is only a door now: it forwards the hash it was given,
+     and an empty hash lands on the shelf */
+  const stub = readFileSync(join(root, "vertical.html"), "utf8");
+  expect("door: vertical.html forwards to the videos page", /location\.replace\("videos\.html"/.test(stub), "no forward");
+  expect("door: an empty address lands on the shelf", /#\/vertical/.test(stub));
+  expect("door: it keeps the hash it was given", /location\.hash/.test(stub));
 
   expect("css: the stage has three columns", /\.v9stage\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*auto\s*minmax\(0,\s*1fr\)/s.test(css));
   expect("css: the player is nine by sixteen", /\.v9player__box\s*\{[^}]*aspect-ratio:\s*9\s*\/\s*16/s.test(css));

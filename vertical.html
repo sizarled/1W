@@ -3,89 +3,42 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Vertical Videos — 1World Web</title>
-    <meta name="description" content="The vertical shelf: every 9:16 video members publish, one screen at a time, with the one before and the one after beside it." />
-    <meta name="theme-color" content="#060607" />
+    <title>Vertical videos — 1World Web</title>
     <meta name="robots" content="noindex" />
     <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="assets/css/base.css?v=20261116a" />
-    <link rel="stylesheet" href="assets/css/layout.css?v=20261116a" />
-    <link rel="stylesheet" href="assets/css/components.css?v=20261215a" />
-    <link rel="stylesheet" href="assets/css/vertical.css?v=20261216a" />
     <script>
-      /* apply the saved theme (or the OS preference) before first paint */
+      /*
+       * `vertical.html` is no longer a page of its own: the vertical format
+       * lives inside `videos.html`, where the address decides which format
+       * draws the screen — `#/v/ID=…` is 9:16, `#/h/ID=…` is the videos page's
+       * own stage, `#/vertical` is the shelf.
+       *
+       * This file keeps every old link working: it forwards the hash it was
+       * given, and an empty hash lands on the shelf.
+       */
       (function () {
-        try {
-          var saved = JSON.parse(localStorage.getItem("1w.theme") || "null");
-          var theme =
-            saved === "light" || saved === "dark"
-              ? saved
-              : window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
-                ? "light"
-                : "dark";
-          document.documentElement.dataset.theme = theme;
-          var meta = document.querySelector('meta[name="theme-color"]');
-          if (meta) meta.setAttribute("content", theme === "light" ? "#f4f4f5" : "#060607");
-        } catch (e) {}
+        var hash = window.location.hash || "";
+        if (hash === "#" || hash === "#/") hash = "";
+        window.location.replace("videos.html" + (hash || "#/vertical"));
       })();
     </script>
-    <script type="module" src="assets/js/app.js?v=20261216a"></script>
-    <script type="module" src="assets/js/vertical.js?v=20261216b"></script>
+    <noscript><meta http-equiv="refresh" content="0; url=videos.html#/vertical" /></noscript>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #060607;
+        color: #f6f6f7;
+        font: 500 15px/1.6 Inter, system-ui, sans-serif;
+      }
+      a {
+        color: inherit;
+      }
+    </style>
   </head>
-  <body data-page="vertical" data-title="Vertical Videos">
-    <a class="skip-link" href="#main">Skip to content</a>
-    <div data-site-header></div>
-    <div data-site-sidebar></div>
-
-    <main class="site-main vert" id="main">
-      <div class="wrap">
-        <!-- ============================================================ -->
-        <!-- the shelf: every vertical video, as a 9:16 card               -->
-        <!-- ============================================================ -->
-        <div data-vert-browse>
-          <header class="vert__head">
-            <div class="vert__intro">
-              <p class="eyebrow"><span class="eyebrow__dot"></span>Vertical shelf</p>
-              <h1 class="vert__title">Vertical Videos</h1>
-              <p class="vert__sub">
-                The short, tall ones. One screen at a time, the one before and the one after beside it —
-                and on a phone, a swipe. Only videos their publisher marked vertical live here.
-              </p>
-            </div>
-            <div class="vert__acts">
-              <a class="btn btn--ghost btn--sm" href="videos.html"><i data-icon="film"></i> All videos</a>
-              <a class="btn btn--primary" href="video-editor.html"><i data-icon="upload"></i> Publish a vertical</a>
-            </div>
-          </header>
-
-          <div class="vertbar">
-            <label class="vertbar__search">
-              <i data-icon="search"></i>
-              <input class="input" type="search" data-vert-search placeholder="Search a vertical video" aria-label="Search the vertical shelf" autocomplete="off" />
-            </label>
-            <span class="vertbar__count" data-vert-count></span>
-            <div class="segmented" data-vert-sort role="tablist" aria-label="Sort the shelf">
-              <button class="segmented__btn is-active" type="button" role="tab" aria-selected="true" data-sort="new">New</button>
-              <button class="segmented__btn" type="button" role="tab" aria-selected="false" data-sort="popular">Popular</button>
-              <button class="segmented__btn" type="button" role="tab" aria-selected="false" data-sort="liked">Most liked</button>
-            </div>
-          </div>
-
-          <div class="v9grid" data-vert-grid></div>
-          <div data-vert-empty hidden></div>
-          <div class="v9more" data-vert-more></div>
-        </div>
-
-        <!-- ============================================================ -->
-        <!-- one vertical video (rendered from the hash)                   -->
-        <!-- ============================================================ -->
-        <div data-vert-watch hidden></div>
-      </div>
-    </main>
-
-    <div data-site-footer></div>
+  <body>
+    <p>Vertical videos live on the <a href="videos.html#/vertical">videos page</a>.</p>
   </body>
 </html>

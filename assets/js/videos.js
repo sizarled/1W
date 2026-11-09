@@ -1051,6 +1051,15 @@ async function openWatch(code, orientation) {
      second it was asked to start at is kept. */
   const liveCode = String(v.code || "");
   const liveShape = shapeOf(v) || state.orientation;
+
+  /* the row is vertical, the address said landscape: hand the address to the
+     vertical format, which will draw it in 9:16 */
+  if (liveShape === "v") {
+    const hash = videoUrl(liveCode, "v").replace(/^[^#]*/, "");
+    document.documentElement.dataset.watchMode = "v";
+    location.hash = hash;
+    return;
+  }
   if (liveCode && (liveCode !== state.code || liveShape !== state.orientation)) {
     const at = timeOf(location.hash);
     state.code = liveCode;
@@ -1066,6 +1075,7 @@ async function openWatch(code, orientation) {
   state.reaction = (v.mine && Number(v.mine.reaction)) || 0;
   state.canComment = state.reaction !== 0;
   host.innerHTML = watchMarkup(v, res);
+  document.documentElement.dataset.watchMode = "h";
   document.title = `${v.title || "Video"} — 1World Web`;
   const descEl = $("[data-v-desc]");
   if (descEl && descEl.scrollHeight <= descEl.clientHeight + 4) {
@@ -1121,6 +1131,28 @@ async function openWatch(code, orientation) {
   loadComments(v.code || v.id);
 }
 
+/* ================================================================== */
+/* two formats, one page                                              */
+/* ================================================================== */
+/* The address says which format owns the screen: `#/v/ID=…` is the vertical
+   one (drawn by `vertical.js`), `#/h/ID=…` and no address are this file's.
+   `#/vertical` is the vertical shelf. When the vertical format owns the page,
+   this file steps out of the way — its grid and player are hidden, anything
+   playing is stopped — rather than drawing a second screen underneath. */
+function verticalAddress(next) {
+  const raw = String(location.hash || "").replace(/^#\/?/, "").toLowerCase();
+  if (/^vertical(\/|$)/.test(raw)) return true;
+  return Boolean(next && next.surface === "videos" && next.orientation === "v" && next.id);
+}
+
+function yieldToVertical() {
+  showBrowse();
+  if (typeof stopPlayhead === "function") stopPlayhead();
+  stopPlayhead = null;
+  if (browseEl()) browseEl().hidden = true;
+  document.documentElement.dataset.watchMode = "v";
+}
+
 function showBrowse() {
   state.view = "browse";
   state.code = "";
@@ -1132,6 +1164,7 @@ function showBrowse() {
     host.innerHTML = "";
   }
   if (browseEl()) browseEl().hidden = false;
+  document.documentElement.dataset.watchMode = "h";
   document.title = "Videos — 1World Web";
 }
 
@@ -1503,6 +1536,10 @@ function hubKindWord(kind) {
 
 function route() {
   const next = parseRoute(location.hash);
+  if (verticalAddress(next)) {
+    yieldToVertical();
+    return;
+  }
   if (next.surface === "videos" && next.id) openWatch(next.id, next.orientation || "h");
   else showBrowse();
 }
