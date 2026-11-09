@@ -434,7 +434,7 @@ function playerMarkup(v, meta) {
     return playerShell(`<div class="vplayer__idle"><p class="vplayer__note">This source cannot be shown here.</p></div>`);
   }
   return playerShell(
-    `<iframe src="${esc(src2)}" title="${esc(v.title || "Video")}" loading="lazy" allow="${esc(FRAME_ALLOW)}" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`
+    `<iframe src="${esc(src2)}" title="${esc(v.title || "Video")}" loading="lazy" allow="${esc(FRAME_ALLOW)}" allowfullscreen webkitallowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`
   );
 }
 

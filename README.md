@@ -1933,7 +1933,7 @@ in the same file, or, when that call is not on the server yet, the `creator_publ
 page already makes (a channel first, then a server or a cinema, never a private hub). No studio at
 all, and the member's face is the publisher, which is the honest answer.
 
-Test: `node tools/video-smoke.mjs` — **535/535** (feed, sort, search, watch, reaction→comment, a chapter
+Test: `node tools/video-smoke.mjs` — **536/536** (feed, sort, search, watch, reaction→comment, a chapter
 index on YouTube and Vimeo and none on Streamtape, the frame's colour both ways, a locked door and its password, a missing video, the editor signed out and in, the payload of a
 publish, of an exclusive rule set and of a private list, the player and the sixteen host cases, the
 oEmbed stills, the studio picker, the contents rail, and the forwarding page).
@@ -1949,6 +1949,15 @@ turn with it (`expand` → `collapse`). A real file in a `<video>` gets the same
 which only enlarges the video element itself — falls back to `webkitEnterFullscreen()`. Nothing fires
 while the member is typing, so a comment box keeps its own `f`. The cinema page's stage
 (`watch.html`, `[data-w-stage]`) carries the same door in the same corner, with the same key.
+
+**The host's own button works, because the frame is allowed to ask.** A full-screen request made from
+inside an `<iframe>` is granted only when the frame is permitted to make it, so every player frame the
+project builds — the watch page, the cinema stage, the editor's preview — carries `allow="… fullscreen"`
+**and** `allowfullscreen` **and** `webkitallowfullscreen` (the last one for older Safari and the iOS
+WebView, which know no `allow`). It is asserted in `video-smoke`, so it cannot be dropped by accident.
+If the player's own button still does nothing, the refusal is above the page — a browser that does not
+offer full screen on that device, or this page itself running inside another frame that was not allowed
+to go full screen.
 
 **The platforms bring their own button too.** The page's corner disc is not the only way out: the
 frame's address asks each platform for its **own** full-screen control as well — YouTube gets
@@ -2310,7 +2319,7 @@ the editors need**, each pinned to a name pattern and a set of extensions (`user
 | `node tools/rte-smoke.mjs` | **45/45** (every command, links, insertion, history, paste, drop, keys, toolbar state) |
 | `node tools/article-smoke.mjs` | **281/281** |
 | `node tools/blog-smoke.mjs` | **82/82** (the address, the closed door, the hero, the home, a section, the search, the plain cover) |
-| `node tools/video-smoke.mjs` | **535/535** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
+| `node tools/video-smoke.mjs` | **536/536** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
 | `node tools/media-smoke.mjs` | **89/89** (the address book, the three pages, the portrait stage, the locked item, the shelves) |
 
 ### The six OAuth apps — one checklist each

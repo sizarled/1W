@@ -1027,7 +1027,7 @@ function startPlayer() {
 function mountIframe(url) {
   const frame = qs("[data-w-frame]");
   if (!frame) return;
-  frame.innerHTML = `<iframe src="${esc(url)}" title="Player" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="origin"></iframe>`;
+  frame.innerHTML = `<iframe src="${esc(url)}" title="Player" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen webkitallowfullscreen referrerpolicy="origin"></iframe>`;
 }
 
 /* ----- viewing-code gate ------------------------------------------- */

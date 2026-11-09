@@ -2447,6 +2447,14 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
   const srcBefore = frameEl?.getAttribute("src") || "";
   expect("tape: the Streamtape frame is on the page", /streamtape\.com\/e\/abc123/.test(srcBefore), srcBefore);
   expect("tape: the host's player is painted in the page's own dark", /[?&]color=255,255,255(&|$)/.test(srcBefore), srcBefore);
+  /* the host's own full-screen button is a request made from inside a frame:
+     it is only granted when the frame is allowed to ask */
+  const frameMarkup = ctx.document.querySelector(".vplayer iframe")?.outerHTML || "";
+  expect(
+    "fullscreen: the frame is allowed to go full screen",
+    /allow="[^"]*fullscreen/.test(frameMarkup) && /allowfullscreen/.test(frameMarkup) && /webkitallowfullscreen/.test(frameMarkup),
+    frameMarkup.slice(0, 220)
+  );
   expect(
     "tape: no chapter index is drawn for a host that reads no second",
     ctx.document.querySelectorAll("[data-v-chapter]").length === 0,
