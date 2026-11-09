@@ -172,6 +172,37 @@ create table if not exists public.reach_seen (
 alter table public.reach_seen enable row level security;
 
 -- ------------------------------------------------------------------
+-- 3a. who was reached, and where
+-- ------------------------------------------------------------------
+/*
+ * One row per person reached, with **the surface they were reached on**:
+ *
+ *   notification   the updates rail (what a follower is handed)
+ *   suggestion     the home pages and the rail beside a player
+ *   search         a search result
+ *   feed / share   the rest, so nothing is lost
+ *
+ * The tab counts these three, per item, for today — reach is a day's budget,
+ * so the numbers beside a video are the people it reached before midnight.
+ */
+create table if not exists public.reach_impressions (
+  id       bigint generated always as identity primary key,
+  hub_id   uuid not null references public.creator_hubs (id) on delete cascade,
+  item     text not null default 'post' check (item in ('post', 'content')),
+  ref      uuid not null,
+  source   text not null default 'suggestion'
+             check (source in ('notification', 'suggestion', 'search', 'feed', 'share', 'profile')),
+  profile  uuid references public.profiles (id) on delete set null,
+  day      date not null default current_date,
+  at       timestamptz not null default now()
+);
+
+create index if not exists reach_impressions_item_idx on public.reach_impressions (ref, day, source);
+create index if not exists reach_impressions_hub_idx  on public.reach_impressions (hub_id, day);
+
+alter table public.reach_impressions enable row level security;
+
+-- ------------------------------------------------------------------
 -- 4. the gate
 -- ------------------------------------------------------------------
 /**
@@ -208,7 +239,7 @@ $function$;
  *
  * The studio's own members are always allowed and never counted.
  */
-create or replace function public.reach_claim(p_hub uuid, p_kind text, p_ref uuid, p_profile uuid)
+create or replace function public.reach_claim(p_hub uuid, p_kind text, p_ref uuid, p_profile uuid, p_source text default 'suggestion')
 returns boolean
 language plpgsql
 security definer
@@ -220,6 +251,8 @@ declare
   v_owner  uuid;
   v_seen   boolean;
   v_cap    integer;
+  v_src    text := case when btrim(coalesce(p_source, '')) in ('notification', 'suggestion', 'search', 'feed', 'share', 'profile')
+                        then btrim(p_source) else 'suggestion' end;
 begin
   v_budget := public.reach_sync(p_hub);
   if v_budget.hub_id is null then
@@ -282,9 +315,17 @@ begin
          updated_at = now()
    where hub_id = p_hub;
 
+  /* who was reached, and on which surface — the numbers the tab shows */
+  insert into public.reach_impressions (hub_id, item, ref, source, profile, day)
+  values (p_hub, case when p_kind = 'content' then 'content' else 'post' end, p_ref, v_src, p_profile, current_date);
+
   return true;
 end;
 $function$;
+
+/* the older three-argument gate, gone: a call that names no surface is a
+   suggestion, which is what the default above says */
+drop function if exists public.reach_claim(uuid, text, uuid, uuid);
 
 /**
  * The same gate, but from inside a list: one video, one person.
@@ -294,7 +335,8 @@ $function$;
  * Anything that is not the studio's item, or a studio that has never been
  * configured, passes without a word.
  */
-create or replace function public.reach_visible(p_post uuid, p_profile uuid)
+drop function if exists public.reach_visible(uuid, uuid);
+create or replace function public.reach_visible(p_post uuid, p_profile uuid, p_source text default 'suggestion')
 returns boolean
 language plpgsql
 security definer
@@ -307,12 +349,13 @@ begin
   if v_hub is null then
     return true;
   end if;
-  return public.reach_claim(v_hub, 'post', p_post, p_profile);
+  return public.reach_claim(v_hub, 'post', p_post, p_profile, p_source);
 end;
 $function$;
 
 /** The same for a podcast, a song or a playlist. */
-create or replace function public.reach_visible_content(p_content uuid, p_profile uuid)
+drop function if exists public.reach_visible_content(uuid, uuid);
+create or replace function public.reach_visible_content(p_content uuid, p_profile uuid, p_source text default 'suggestion')
 returns boolean
 language plpgsql
 security definer
@@ -325,7 +368,7 @@ begin
   if v_hub is null then
     return true;
   end if;
-  return public.reach_claim(v_hub, 'content', p_content, p_profile);
+  return public.reach_claim(v_hub, 'content', p_content, p_profile, p_source);
 end;
 $function$;
 
@@ -334,7 +377,8 @@ $function$;
  * out — in the order they were given. Anything that is not a studio's item
  * passes untouched, so a page can hand it everything it was about to draw.
  */
-create or replace function public.reach_screen(p_token text, p_codes jsonb)
+drop function if exists public.reach_screen(text, jsonb);
+create or replace function public.reach_screen(p_token text, p_codes jsonb, p_source text default 'suggestion')
 returns jsonb
 language plpgsql
 security definer
@@ -386,7 +430,7 @@ begin
         continue;
       end if;
 
-      if public.reach_claim(v_hub, v_kind, v_ref, v_me.id) then
+      if public.reach_claim(v_hub, v_kind, v_ref, v_me.id, p_source) then
         v_allowed := array_append(v_allowed, v_code);
         select * into v_budget from public.hub_reach where hub_id = v_hub;
         select * into v_item from public.reach_items where kind = v_kind and ref = v_ref;
@@ -454,7 +498,7 @@ begin
   select coalesce(jsonb_agg(row order by row ->> 'sort', row ->> 'title'), '[]'::jsonb)
     into v_rows
     from (
-      /* a video, from posts */
+      /* a video, from posts — with the three surfaces counted beside it */
       select jsonb_build_object(
                'kind', 'post',
                'ref', p.id,
@@ -463,7 +507,13 @@ begin
                'sort', to_char(coalesce(p.published_at, p.created_at), 'YYYYMMDDHH24MISS'),
                'points', coalesce(r.points, 0),
                'shown', coalesce(r.shown, 0),
-               'rank', p.rank_points
+               'rank', p.rank_points,
+               'reached_updates', (select count(*) from public.reach_impressions i
+                                    where i.ref = p.id and i.day = current_date and i.source = 'notification'),
+               'reached_suggestions', (select count(*) from public.reach_impressions i
+                                        where i.ref = p.id and i.day = current_date and i.source = 'suggestion'),
+               'reached_search', (select count(*) from public.reach_impressions i
+                                   where i.ref = p.id and i.day = current_date and i.source = 'search')
              ) as row
         from public.posts p
         left join public.reach_items r on r.kind = 'post' and r.ref = p.id
@@ -472,7 +522,7 @@ begin
       union all
 
       /* a podcast, or a song on the music shelf — one row each, each with its
-         own ranking points */
+         own ranking points and its own three surfaces */
       select jsonb_build_object(
                'kind', 'content',
                'ref', c.id,
@@ -481,7 +531,13 @@ begin
                'sort', to_char(coalesce(c.published_at, c.created_at), 'YYYYMMDDHH24MISS'),
                'points', coalesce(r.points, 0),
                'shown', coalesce(r.shown, 0),
-               'rank', c.rank_points
+               'rank', c.rank_points,
+               'reached_updates', (select count(*) from public.reach_impressions i
+                                    where i.ref = c.id and i.day = current_date and i.source = 'notification'),
+               'reached_suggestions', (select count(*) from public.reach_impressions i
+                                        where i.ref = c.id and i.day = current_date and i.source = 'suggestion'),
+               'reached_search', (select count(*) from public.reach_impressions i
+                                   where i.ref = c.id and i.day = current_date and i.source = 'search')
              ) as row
         from public.member_content c
         left join public.reach_items r on r.kind = 'content' and r.ref = c.id
@@ -624,18 +680,18 @@ $function$;
 -- 6. grants — the gate, the screen, and the studio's own tab
 -- ------------------------------------------------------------------
 revoke all on function public.reach_tick(uuid) from public;
-revoke all on function public.reach_claim(uuid, text, uuid, uuid) from public;
-revoke all on function public.reach_visible(uuid, uuid) from public;
-revoke all on function public.reach_visible_content(uuid, uuid) from public;
-revoke all on function public.reach_screen(text, jsonb) from public;
+revoke all on function public.reach_claim(uuid, text, uuid, uuid, text) from public;
+revoke all on function public.reach_visible(uuid, uuid, text) from public;
+revoke all on function public.reach_visible_content(uuid, uuid, text) from public;
+revoke all on function public.reach_screen(text, jsonb, text) from public;
 revoke all on function public.hub_reach_get(text, text) from public;
 revoke all on function public.hub_reach_save(text, text, jsonb) from public;
 
 /* the feeds and the pages ask the gate as the person looking, so anon may ask
    too — a visitor with no session is never remembered, and each look spends */
-grant execute on function public.reach_visible(uuid, uuid) to anon, authenticated, service_role;
-grant execute on function public.reach_visible_content(uuid, uuid) to anon, authenticated, service_role;
-grant execute on function public.reach_screen(text, jsonb) to anon, authenticated, service_role;
+grant execute on function public.reach_visible(uuid, uuid, text) to anon, authenticated, service_role;
+grant execute on function public.reach_visible_content(uuid, uuid, text) to anon, authenticated, service_role;
+grant execute on function public.reach_screen(text, jsonb, text) to anon, authenticated, service_role;
 grant execute on function public.hub_reach_get(text, text) to anon, authenticated, service_role;
 grant execute on function public.hub_reach_save(text, text, jsonb) to anon, authenticated, service_role;
 

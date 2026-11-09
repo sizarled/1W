@@ -2703,7 +2703,7 @@ node tools/dashboard-smoke.mjs   # 272 checks: the five gates, rail, popover, co
 node tools/sidebar-smoke.mjs     # 93 checks: the edge, the pin, Escape, the mobile drawer, the dashboard menu
 node tools/panel-smoke.mjs       # 90 checks: the desk's three states, the rows, the switch, the dialog, the shelf
 node tools/court-smoke.mjs       # 115 checks: the four steps, uploads, both doors, the court room
-node tools/creator-smoke.mjs     # 416 checks: the search (owners + publishers), the tables, the editors, a publisher's seat, the Reach tab
+node tools/creator-smoke.mjs     # 423 checks: the search (owners + publishers), the tables, the editors, a publisher's seat, the Reach tab
 node tools/media-smoke.mjs       # 89 checks: the address book, videos.html#/h|v/, audio.html#/p|m/, playlist.html#/videos|podcasts|songs/
 node tools/publisher-smoke.mjs   # 52 checks: the program, the seat, the links, and the hand-off to the creator page
 node tools/iptv-smoke.mjs        # 43 checks: the playlists, the groups, the page, the deep links
@@ -2834,10 +2834,26 @@ lets a studio type its own size: the field is read-only and says where the numbe
 from the level + 400 from the interactions`), and the ranking column is read-only too — it is earned,
 never typed.
 
-**The studio decides the split.** *Studio → Reach* is a tab in `creator.html` — the day's total in one
-field, one row per published item with the points it may take and the ranking points it keeps. The
-plan is summed as it is typed and a plan that spends more than the studio owns is refused **on the
-page** and again on the server (`over_budget`), so the distribution can never exceed the account.
+**The studio decides the split.** *Studio → Reach* is a tab in `creator.html`: the day's total at the
+top (what the level gives plus what the interactions earned), then one row per published item —
+
+| column | what it says |
+| --- | --- |
+| **Item** | the video, podcast or song, with its code |
+| **Reach today** | the points the studio gives that item (and, under them, how many of them are spent) |
+| **Reached in the updates** | the people the item reached on the updates rail today |
+| **Reached in the suggestions** | the people it reached on the home pages and the rail beside a player today |
+| **Reached in search** | the people who met it in a search result today |
+| **Ranking points** | what it has earned from search interactions — read, never typed |
+
+Every point the day spends leaves a row in `reach_impressions` (`hub_id`, item, ref, **source**,
+profile, day), and `reach_claim` now carries the surface it was asked on — `notification`,
+`suggestion`, `search`, or `feed`/`share`/`profile` — so the three numbers beside an item are counted
+from what actually happened rather than guessed. `video_feed` names `search` when it is holding a
+search and `suggestion` when it is the home page, and the rail beside the player names `suggestion`.
+
+The plan is summed as it is typed and a plan that spends more than the studio owns is refused **on
+the page** and again on the server (`over_budget`), so the distribution can never exceed the account.
 
 ```sql
 -- hand a studio its authority

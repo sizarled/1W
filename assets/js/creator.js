@@ -840,11 +840,22 @@ function emptyBlock(iconName, title, text, action = "") {
  * the ceiling for the day, and a plan that spends more is refused here and
  * again on the server.
  */
+/**
+ * One item, one line.
+ *
+ * What the studio reads across the row is the picture the brief asks for: the
+ * points it gave this item, then the people it actually **reached** on each of
+ * the three surfaces — the updates, the suggestions, a search result — and,
+ * last, the ranking points the item has earned from search interactions.
+ */
 function reachRow(row) {
   const points = Number(row.points) || 0;
   const shown = Number(row.shown) || 0;
   const left = points > 0 ? Math.max(0, points - shown) : null;
   const kind = row.kind === "content" ? "podcast" : "video";
+  const updates = Number(row.reached_updates) || 0;
+  const suggestions = Number(row.reached_suggestions) || 0;
+  const search = Number(row.reached_search) || 0;
   return `
     <tr class="cr-row" data-reach-row="${esc(row.ref)}" data-reach-kind="${esc(row.kind)}">
       <td>
@@ -856,9 +867,11 @@ function reachRow(row) {
         <input class="dsh-input cr-reach__input" type="number" min="0" step="50"
                value="${points}" data-cr-reach-points="${esc(row.ref)}"
                aria-label="Reach points for ${esc(row.title || "this item")}" />
+        <span class="cr-reach__left">${num(shown)} shown${left === null ? "" : ` · ${num(left)} left`}</span>
       </td>
-      <td class="cr-reach__num">${num(shown)}</td>
-      <td class="cr-reach__num">${left === null ? "—" : num(left)}</td>
+      <td class="cr-reach__num" data-cr-reach-updates="${esc(row.ref)}">${num(updates)}</td>
+      <td class="cr-reach__num" data-cr-reach-suggestions="${esc(row.ref)}">${num(suggestions)}</td>
+      <td class="cr-reach__num" data-cr-reach-search="${esc(row.ref)}">${num(search)}</td>
       <td class="cr-reach__num" data-cr-reach-rank="${esc(row.ref)}">${num(Number(row.rank) || 0)}</td>
     </tr>`;
 }
@@ -938,8 +951,9 @@ function renderReach(host, hub, tab) {
                     <th>Item</th>
                     <th>Kind</th>
                     <th>Reach today</th>
-                    <th>Shown</th>
-                    <th>Left</th>
+                    <th>Reached in the updates</th>
+                    <th>Reached in the suggestions</th>
+                    <th>Reached in search</th>
                     <th>Ranking points</th>
                   </tr>
                 </thead>

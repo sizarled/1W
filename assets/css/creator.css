@@ -3958,9 +3958,30 @@ a.crp-ad:hover {
   text-align: end;
 }
 
+/* under the allocation: what has been spent of it, in a whisper */
+.cr-reach__left {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.66rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
 .cr-reach__num {
   font-variant-numeric: tabular-nums;
   color: var(--text-2);
+  white-space: nowrap;
+}
+
+/* seven columns: the table scrolls sideways on a narrow screen rather than
+   squeezing a number into two lines */
+.cr-reach .dsh-table-wrap {
+  overflow-x: auto;
+}
+
+.cr-reach .dsh-table th,
+.cr-reach .dsh-table td {
   white-space: nowrap;
 }
 

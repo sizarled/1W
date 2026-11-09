@@ -149,8 +149,10 @@ begin
                 join public.keywords k on k.id = pk.keyword_id
                where pk.post_id = p.id and lower(k.keyword) = lower(v_field)))
        /* reach gates the page, rank orders it: a video whose studio has spent
-          its day falls out here, and the next one moves up by itself */
-       and public.reach_visible(p.id, v_me.id)
+          its day falls out here, and the next one moves up by itself. The
+          surface is named, so the studio's tab can count the people a search
+          brought apart from the ones the suggestions brought */
+       and public.reach_visible(p.id, v_me.id, case when v_search <> '' then 'search' else 'suggestion' end)
      order by (case when v_sort = 'new' then extract(epoch from p.published_at) else p.rank_points end) desc nulls last,
               (case when v_sort = 'liked' then p.likes
                     when v_sort = 'discussed' then p.comments_pos + p.comments_neg
@@ -284,7 +286,7 @@ begin
                select 1 from public.post_keywords a
                  join public.post_keywords b on b.keyword_id = a.keyword_id
                 where a.post_id = v_id and b.post_id = p.id)
-             and public.reach_visible(p.id, v_me.id)
+             and public.reach_visible(p.id, v_me.id, 'suggestion')
            order by p.published_at asc
            limit 10) r;
 

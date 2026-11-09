@@ -1914,8 +1914,8 @@ async function reachPass() {
       remaining: 380,
       day: "2026-12-05",
       rows: [
-        { kind: "post", ref: "post-a", code: "Video-001032", title: "The first film", points: 200, shown: 120, rank: 5000 },
-        { kind: "content", ref: "content-b", code: "PST-000901", title: "A long talk", points: 0, shown: 0, rank: 1500 },
+        { kind: "post", ref: "post-a", code: "Video-001032", title: "The first film", points: 200, shown: 120, rank: 5000, reached_updates: 40, reached_suggestions: 60, reached_search: 20 },
+        { kind: "content", ref: "content-b", code: "PST-000901", title: "A long talk", points: 0, shown: 0, rank: 1500, reached_updates: 0, reached_suggestions: 0, reached_search: 0 },
       ],
     },
   };
@@ -1938,7 +1938,15 @@ async function reachPass() {
   expect("reach: the item's reach is in its own field", view.qs('[data-cr-reach-points="post-a"]')?.value === "200", view.qs('[data-cr-reach-points="post-a"]')?.value);
   expect("reach: its ranking points are read, not typed", view.text('[data-cr-reach-rank="post-a"]') === "5,000" && !view.qs("input[data-cr-reach-rank]"), view.text('[data-cr-reach-rank="post-a"]'));
   expect("reach: what has been shown is counted", /120/.test(view.text('[data-reach-row="post-a"]')), view.text('[data-reach-row="post-a"]'));
-  expect("reach: an unplaced item draws on the studio's rest", /—/.test(view.text('[data-reach-row="content-b"]')), view.text('[data-reach-row="content-b"]'));
+  expect("reach: an unplaced item says it has spent nothing", /0 shown/.test(view.text('[data-reach-row="content-b"]')), view.text('[data-reach-row="content-b"]'));
+
+  /* the three surfaces, beside the allocation, and the total at the top */
+  const heads = view.qsa(".cr-reach thead th").map((th) => th.textContent.trim());
+  expect("reach: the table names the three surfaces", heads.join(" | ") === "Item | Kind | Reach today | Reached in the updates | Reached in the suggestions | Reached in search | Ranking points", heads.join(" | "));
+  expect("reach: the updates' people are counted", view.text('[data-cr-reach-updates="post-a"]') === "40", view.text('[data-cr-reach-updates="post-a"]'));
+  expect("reach: the suggestions' people are counted", view.text('[data-cr-reach-suggestions="post-a"]') === "60", view.text('[data-cr-reach-suggestions="post-a"]'));
+  expect("reach: the search's people are counted", view.text('[data-cr-reach-search="post-a"]') === "20", view.text('[data-cr-reach-search="post-a"]'));
+  expect("reach: the day's total is above the table", /500/.test(view.text("[data-cr-reach-total]")), view.text("[data-cr-reach-total]"));
   expect("reach: the meter shows the day spent", view.qs(".cr-reach__meter-fill")?.getAttribute("style")?.includes("24%"), view.qs(".cr-reach__meter-fill")?.getAttribute("style"));
   expect("reach: the plan is summed as it is typed", /200 \/ 500 allocated/.test(view.text("[data-cr-reach-plan]")), view.text("[data-cr-reach-plan]"));
 
@@ -2000,6 +2008,8 @@ async function reachPass() {
   expect("reach sql: a day per studio", /create table if not exists public\.hub_reach/.test(reachSql), "hub_reach missing");
   expect("reach sql: one allocation per item", /create table if not exists public\.reach_items/.test(reachSql), "reach_items missing");
   expect("reach sql: a refresh costs nothing", /create table if not exists public\.reach_seen/.test(reachSql), "reach_seen missing");
+  expect("reach sql: every reach leaves a row saying where it happened", /create table if not exists public\.reach_impressions/.test(reachSql) && /i\.source = 'search'/.test(reachSql), "impressions missing");
+  expect("reach sql: the gate knows the surface", /reach_claim\(p_hub uuid, p_kind text, p_ref uuid, p_profile uuid, p_source text default 'suggestion'\)/.test(reachSql), "no source on the gate");
   expect("reach sql: a podcast ranks like a video", /member_content[\s\S]*rank_points/.test(reachSql), "no rank column for member content");
   expect("reach sql: the gate is one function", /function public\.reach_claim/.test(reachSql) && /function public\.reach_screen/.test(reachSql), "no gate");
   expect("reach sql: the studio can never spend past its day", /over_budget/.test(reachSql) && /if v_total > v_points then/.test(reachSql), "no ceiling");
@@ -2007,7 +2017,11 @@ async function reachPass() {
   expect("reach sql: a studio is always its level plus its earnings", /b\.base \+ b\.earned/.test(reachSql), "the total is not derived");
 
   const videosSql = readFileSync(join(root, "tools/sql/videos-page.sql"), "utf8");
-  expect("reach: the feed is gated by it", /and public\.reach_visible\(p\.id, v_me\.id\)/.test(videosSql), "the feed is not gated");
+  expect(
+    "reach: the feed is gated by it, and names the surface",
+    /and public\.reach_visible\(p\.id, v_me\.id, case when v_search <> '' then 'search' else 'suggestion' end\)/.test(videosSql),
+    "the feed is not gated"
+  );
   expect("reach: the rail beside a video goes by upload time", /coalesce\(jsonb_agg\(public\.video_card\(r\.id, v_me\.id\) order by r\.published_at asc\)/.test(videosSql), "the rail is not in upload order");
 }
 
