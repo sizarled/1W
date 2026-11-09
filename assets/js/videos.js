@@ -109,7 +109,8 @@ function signedIn() {
 }
 
 /** The host list lives in one place now: see assets/js/embed.js. */
-import { embedUrl, fullscreenSrc, FRAME_ALLOW, autoThumb, isFile } from "./embed.js";
+import { embedUrl, fullscreenSrc, FRAME_ALLOW, autoThumb, isFile, streamtapeId, streamtapeSplash } from "./embed.js";
+import { tapeAddress, tapeReady, forgetTape, prefetchTape } from "./tape-file.js";
 
 export { embedUrl, autoThumb, isFile, sourceKind } from "./embed.js";
 
@@ -1059,6 +1060,12 @@ async function openWatch(code, orientation) {
   }
   /* the frame's own playhead, for a player that speaks player.js */
   followPlayerFrame();
+  /* the file behind a Streamtape frame is asked for while the page is still
+     being read: a chapter on such a video plays the file itself, and the host
+     makes the reader wait a few seconds for the ticket */
+  const tapeFrame = $(".vplayer iframe");
+  const tapeId = tapeFrame ? streamtapeId(tapeFrame.getAttribute("src") || "") : "";
+  if (tapeId && $("[data-v-chapter]")) prefetchTape(tapeId);
   const saveBtn = $("[data-v-save]");
   if (saveBtn) {
     const saved = savedSet().has(v.code || v.id);
@@ -1207,6 +1214,10 @@ function followPlayerFrame() {
   /* YouTube and Vimeo are already told in their own words by the address, and
      the second in the address was asked of this frame by `seekPlayer` above */
   if (/youtube(-nocookie)?\.com\/embed\//i.test(src) || /player\.vimeo\.com/i.test(src)) return;
+  /* a Streamtape frame answers no bridge at all — its page has no `message`
+     listener — so nothing is planted in it; a chapter turns it into the file,
+     and `followMedia` follows that instead */
+  if (streamtapeId(src)) return;
   followFrame(frame, ({ seconds }) => {
     if (frame.isConnected) markChapterAt(seconds);
   }).then((stop) => {
@@ -1218,29 +1229,21 @@ function followPlayerFrame() {
  * Put the player at that second.
  *
  * A file seeks itself, a YouTube or Vimeo frame is reloaded with its own word
- * for the second, and **every other frame is asked through player.js** — the
- * `postMessage` conversation Streamtape's player answers, where a chapter is
- * a jump inside the frame rather than a second load of it. A frame that never
- * answers says so, in words, and the address keeps the second either way.
+ * for the second, **a Streamtape frame is replaced by the file behind it** —
+ * its player answers no one and reads no second (see `tape-file.js`) — and
+ * every other frame is asked through player.js, which costs nothing and may be
+ * answered. A frame that never answers says so, in words, and the address keeps
+ * the second either way.
  */
 function seekPlayer(seconds, { play = false } = {}) {
   const root = watchEl();
-  if (!root || !seconds) return false;
+  if (!root) return false;
+  /* nought is a second like any other: the first chapter of a file that has
+     already started is where the reader wants to be again */
+  seconds = Math.max(0, Math.round(Number(seconds) || 0));
   const media = root.querySelector("video");
   if (media) {
-    const apply = () => {
-      try {
-        media.currentTime = seconds;
-        if (play) {
-          const started = media.play();
-          if (started && started.catch) started.catch(() => {});
-        }
-      } catch {
-        /* the browser refused the seek; the time is still in the address */
-      }
-    };
-    if (media.readyState >= 1) apply();
-    else media.addEventListener("loadedmetadata", apply, { once: true });
+    seekMedia(media, seconds, play);
     return true;
   }
   const frame = root.querySelector(".vplayer iframe");
@@ -1258,6 +1261,8 @@ function seekPlayer(seconds, { play = false } = {}) {
     frame.setAttribute("src", `${src.split("#")[0]}#t=${seconds}s`);
     return true;
   }
+  const tape = streamtapeId(src);
+  if (tape) return tapeSecond(frame, tape, seconds, play);
   /* the frame is asked and the answer arrives later: `true` means the ask went
      out, and a silent frame is reported where it can still be read */
   seekFrame(frame, seconds, { play }).then((ok) => {
@@ -1269,6 +1274,115 @@ function seekPlayer(seconds, { play = false } = {}) {
     });
   });
   return true;
+}
+
+/**
+ * A chapter on a Streamtape video.
+ *
+ * The host's player cannot be told a second — its page has no `message`
+ * listener and its player reads no start word — so the second is given to the
+ * **file**, which has one of its own: the frame becomes a `<video>` playing the
+ * same film from that second, and from then on everything a player owes the
+ * page (the time, the chapter it is inside, the seek) is there again.
+ *
+ * The address of the file is asked for as the page is read (`prefetchTape`), so
+ * the usual press is immediate; a page whose first press comes earlier waits
+ * out the host's own few seconds rather than pretending. If the host will not
+ * give an address at all, the chapter says so instead of doing nothing.
+ */
+function tapeSecond(frame, tape, seconds, play) {
+  if (!seconds) {
+    /* the beginning is where the frame already is: no address is asked for,
+       and pressing the first chapter on a file restarts it */
+    markChapterAt(0);
+    return true;
+  }
+  const ready = tapeReady(tape);
+  if (ready) {
+    swapToTapeFile(frame, tape, ready, seconds, play);
+    return true;
+  }
+  if (frame) frame.closest("[data-v-player]")?.classList.add("is-waiting");
+  tapeAddress(tape)
+    .then((url) => {
+      if (!frame || !frame.isConnected) return;
+      frame.closest("[data-v-player]")?.classList.remove("is-waiting");
+      if (!url) {
+        tapeSaysNo(seconds);
+        return;
+      }
+      swapToTapeFile(frame, tape, url, seconds, play);
+    })
+    .catch(() => tapeSaysNo(seconds));
+  return true;
+}
+
+/** The one sentence for a host that keeps its file to itself. */
+function tapeSaysNo(seconds) {
+  toast({
+    title: stamp(seconds),
+    message: "The host's player has no second to give and its file address did not come. The address bar keeps the second.",
+    iconName: "clock",
+  });
+}
+
+/** The frame becomes the file, at that second. */
+function swapToTapeFile(frame, tape, url, seconds, play) {
+  if (!frame || !frame.isConnected || !url) return;
+  const video = document.createElement("video");
+  video.setAttribute("controls", "");
+  video.setAttribute("playsinline", "");
+  video.setAttribute("preload", "metadata");
+  video.setAttribute("poster", streamtapeSplash(tape));
+  video.setAttribute("title", frame.getAttribute("title") || "Video");
+  video.setAttribute("data-v-tape", tape);
+  video.src = url;
+
+  if (typeof stopPlayhead === "function") stopPlayhead();
+  stopPlayhead = null;
+  frame.replaceWith(video);
+
+  seekMedia(video, seconds, play);
+  followMedia(video);
+  markChapterAt(seconds);
+
+  /* a made address has a life; a stale one is asked for again, once */
+  video.addEventListener("error", () => {
+    if (video.dataset.vAgain) return;
+    video.dataset.vAgain = "1";
+    forgetTape(tape);
+    tapeAddress(tape).then((fresh) => {
+      if (!fresh || !video.isConnected) return;
+      video.src = fresh;
+      seekMedia(video, seconds, play);
+    });
+  });
+}
+
+/** Put a `<video>` at a second, now or as soon as it knows its own length. */
+function seekMedia(media, seconds, play) {
+  const apply = () => {
+    try {
+      media.currentTime = seconds;
+      if (play) {
+        const started = media.play();
+        if (started && started.catch) started.catch(() => {});
+      }
+    } catch {
+      /* the browser refused the seek; the time is still in the address */
+    }
+  };
+  if (media.readyState >= 1) apply();
+  else media.addEventListener("loadedmetadata", apply, { once: true });
+}
+
+/** The chapter list follows a file of our own. */
+function followMedia(media) {
+  const tick = () => {
+    if (media.isConnected) markChapterAt(media.currentTime || 0);
+  };
+  media.addEventListener("timeupdate", tick);
+  stopPlayhead = () => media.removeEventListener("timeupdate", tick);
 }
 
 function iconForLink(url) {

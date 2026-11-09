@@ -1351,7 +1351,8 @@
   .vcard__media img,
   .vcard__play,
   .vsk__media,
-  .vsk__line {
+  .vsk__line,
+  .vplayer.is-waiting::after {
     transition: none;
     animation: none;
   }
@@ -1687,6 +1688,32 @@
   display: block;
   background: #000;
   object-fit: cover;
+}
+
+/* a chapter on a host that has to make the address of its file first: a thin
+ * line along the foot of the stage, so a pressed chapter shows that something
+ * is on its way rather than nothing at all. It leaves when the file arrives.
+ */
+.vplayer.is-waiting::after {
+  content: "";
+  position: absolute;
+  z-index: 4;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  width: 34%;
+  background: var(--text);
+  opacity: 0.6;
+  animation: vwait 1.15s ease-in-out infinite;
+}
+
+@keyframes vwait {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
 }
 
 /* the way out to the whole screen ------------------------------------

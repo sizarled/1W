@@ -15,6 +15,7 @@
 // GET ?action=file/info&studio=<code>&file=<id>
 // GET ?action=file/find&studio=<code>&folder=<id>&name=<name>
 // GET ?action=file/getsplash&studio=<code>&file=<id>   the video's own still
+// GET ?action=file/ticket&file=<id>                    a download ticket
 //
 // The answer is Streamtape's own { status, msg, result } — the client reads it
 // exactly as it would read the API, so the shape never has to be learned twice.
@@ -28,6 +29,17 @@
 // Every action names the studio it is about, and the member's token must be one
 // that may publish into that studio — the same list the editor's own picker is
 // built from. A token that owns nothing gets 403 and the API is never called.
+//
+// `file/ticket` is the one door a reader may knock on — no session, no studio —
+// because it is not about publishing but about **watching**: a Streamtape frame
+// cannot be told a second from outside (its page carries no `postMessage`
+// listener and its player reads no start word), so a chapter plays the file
+// itself, and Streamtape only hands out the address of a file to the browser
+// that will play it. The function mints the ticket — that half needs the
+// credentials — and the reader's own browser turns it into an address that
+// belongs to that reader. The ticket is only minted for a file that is one of
+// the site's published videos (`video_file_published`), and it is kept for a
+// couple of minutes so a page's first chapter does not mint one per click.
 //
 // Secrets: STREAMTAPE_LOGIN (the API Login), STREAMTAPE_KEY (the API Key).
 // SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are provided by the runtime.
@@ -132,6 +144,12 @@ const ALLOWED = new Set([
   "file/getsplash",
 ]);
 
+/* The ticket a chapter is played with: minted once per file per couple of
+   minutes, handed out with the wait already counted down, so a reader who asks
+   again — or a second reader — is told nothing they have to sit through. */
+const TICKETS = new Map<string, { answer: Json; readyAt: number }>();
+const TICKET_LIFE = 120_000;
+
 Deno.serve(async (request: Request): Promise<Response> => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (request.method !== "GET" && request.method !== "POST") {
@@ -140,7 +158,10 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
   const url = new URL(request.url);
   const action = String(url.searchParams.get("action") || "").replace(/^\/+/, "");
-  if (!ALLOWED.has(action)) {
+  /* `file/ticket` is the reader's door and is answered below; every other
+     action is a studio's, and a studio's door is the member's */
+  const isTicket = action === "file/ticket";
+  if (!isTicket && !ALLOWED.has(action)) {
     return json({ status: 400, msg: "Unknown action.", result: null }, 400);
   }
 
@@ -153,6 +174,35 @@ Deno.serve(async (request: Request): Promise<Response> => {
       },
       503,
     );
+  }
+
+  /* the one public door: a ticket for a published video's file */
+  if (isTicket) {
+    const wanted = String(url.searchParams.get("file") || "").trim();
+    if (!wanted) return json({ status: 400, msg: "No file named.", result: null }, 400);
+    if (!/^[\w-]{4,40}$/.test(wanted)) {
+      return json({ status: 400, msg: "That is not a file id.", result: null }, 400);
+    }
+
+    const now = Date.now();
+    const kept = TICKETS.get(wanted);
+    if (kept && kept.readyAt + TICKET_LIFE > now) {
+      const left = Math.max(0, Math.ceil((kept.readyAt - now) / 1000));
+      const result = { ...(kept.answer.result as Json), wait_time: left };
+      return json({ status: 200, msg: "OK", result });
+    }
+
+    const published = (await rpc("video_file_published", { p_file: wanted })) as unknown as boolean | null;
+    if (published !== true) {
+      return json({ status: 403, msg: "That file is not one of the site's videos.", result: null }, 403);
+    }
+
+    const answer = await api("file/dlticket", { file: wanted });
+    if (Number(answer.status) === 200 && answer.result) {
+      const wait = Number((answer.result as Json).wait_time) || 0;
+      TICKETS.set(wanted, { answer, readyAt: Date.now() + wait * 1000 });
+    }
+    return json(answer);
   }
 
   const token = tokenOf(request);
