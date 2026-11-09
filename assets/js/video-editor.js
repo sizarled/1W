@@ -37,7 +37,7 @@ import { toast } from "./ui.js";
 import { sessionToken, getMember } from "./session.js";
 import { COUNTRIES } from "./countries.js";
 import { SUPABASE, storageUrl } from "./config.js";
-import { embedUrl, fullscreenSrc, FRAME_ALLOW, autoThumb, streamtapeSplash, streamtapeId, isFile, sourceKind, sourceLabel, HOSTS, pinterestId, redditPath, tapeColour } from "./embed.js";
+import { embedUrl, fullscreenSrc, FRAME_ALLOW, autoThumb, streamtapeSplash, streamtapeId, isFile, sourceKind, sourceLabel, HOSTS, pinterestId, redditPath, tapeColour, canSeek } from "./embed.js";
 import { currentTheme } from "./theme.js";
 import { createContents } from "./contents.js";
 import { studioReady, uploadToStudio, renameFile, splashOf, putThumbnail, NOT_CONNECTED } from "./streamtape.js";
@@ -202,6 +202,8 @@ function paintCounters() {
 }
 
 function paintPreview() {
+  /* the index is offered by the same link that decides whether it can be read */
+  paintChapters();
   const media = $("[data-ved-preview-media]");
   if (media) {
     const src = S.thumb || autoThumb(S.embed);
@@ -375,6 +377,19 @@ function paintChapters() {
   const host = $("[data-ved-chapters]");
   if (!host) return;
   const rows = S.chapters;
+  /* a chapter is a promise that a press moves the player, so the editor only
+     offers an index where the watch page can keep it */
+  const seekable = canSeek(S.embed);
+  const box = $("[data-ved-chapters-box]");
+  if (box) box.setAttribute("data-ved-chapters-off", seekable ? "" : "1");
+  const note = $("[data-ved-chapters-hint]");
+  if (note) {
+    note.innerHTML = seekable
+      ? "The index of the video: a time and what happens there, in order. The watch page draws it under the player — <b>00:38 · Overview</b>, <b>01:35 · Analysis</b> — and a click on one jumps to that moment. Leave it empty and no list is drawn."
+      : "This host's player reads no second, so the watch page draws <b>no chapter list</b> for it. A chapter is only offered where a second can be spent: a file of your own, or a YouTube, Vimeo or Facebook link. Anything written here is kept, and simply not shown.";
+  }
+  const addButton = $("[data-ved-chapter-add]");
+  if (addButton) addButton.disabled = !seekable;
   host.innerHTML = rows.length
     ? rows
         .map(

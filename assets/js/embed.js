@@ -220,6 +220,28 @@ export function sourceKind(raw = "") {
   return "embed";
 }
 
+/**
+ * Where a chapter can actually be spent.
+ *
+ * A chapter is a second, and a second needs a player that will take one. A file
+ * of our own always will (`<video>` seeks itself). A frame will only when its
+ * host reads a start word in the frame's address — YouTube's `&t=90s` (with
+ * `&start=90`), Vimeo's `#t=90s`, and Facebook's plugin `&t=90`. Everything
+ * else — Streamtape above all — is a page we cannot move, so its videos carry
+ * **no chapter index at all** rather than an index that does nothing.
+ *
+ * This is the one list to edit when a host is found to take a second.
+ */
+export const SEEKING_HOSTS = ["youtube", "vimeo", "facebook"];
+
+/** Whether a source can be put at a second at all. */
+export function canSeek(raw = "") {
+  const url = String(raw || "").trim();
+  if (!url) return false;
+  if (isFile(url)) return true;
+  return SEEKING_HOSTS.includes(sourceKind(url));
+}
+
 /** The label the page shows for a source. */
 export function sourceLabel(raw = "") {
   const kind = sourceKind(raw);

@@ -1726,11 +1726,10 @@ upload address and posts the film straight to it, so a two-gigabyte upload costs
 small JSON answer. `file/find` is the safety net for a host whose upload endpoint refuses to be read
 across origins — the function lists the folder and names the file instead.
 
-It also speaks one action that is no studio's at all: **`file/stream`**, the reader's door. It relays a
-published video's file — `Range` in, `206` and `Content-Range` out — with no session, because a chapter
-has to become a second on a host whose own player takes none (see *A chapter is a second in the
-address*). It answers only for a file that is one of the site's published videos (`video_file_published`,
-`tools/sql/tape-file.sql`) and keeps the address it makes for five minutes.
+Every action here is a studio's, and every one of them needs a member's token: there is no reader's
+door on this function. There used to be one — **`file/stream`**, which relayed a published video's own
+bytes so a Streamtape chapter could become a real second — and it is gone (see *A chapter is a second
+in the address, where the platform has one*). Nothing here is public any more.
 
 Before any call it asks `creator_hubs_list` (and `publisher_hubs`, for the desk) with the member's
 token: if the studio named in the request is not one that token may publish into, the answer is 403
@@ -1746,6 +1745,9 @@ It is deployed, and it was asked on the live endpoint: no token answers `401` "S
 action outside the seven answers `400`, a token that publishes into no studio answers `403` without
 Streamtape ever being called, and a token that owns a studio gets Streamtape's own answer —
 `file/listfolder` returned the account's folders (`Subtitles`, `Thumbnails`, `Users`) and its files.
+After the relay was removed (version 6) the same endpoint was asked again: `action=file/stream` answers
+**`400` "Unknown action."** — the door is closed, not hidden — while `action=file/info` still answers
+`401` "Sign in first." without a session.
 Source the function from its file, not from a copy: a `/** … */` block header sent through the
 management API comes back truncated, so the deployed file keeps its notes as `//` lines.
 
@@ -1846,12 +1848,17 @@ as *by @handle*. A video with no studio keeps the member's face and follower cou
 answers it is `video_hub(ref)` in `tools/sql/video-publisher.sql`; `video_get` is untouched, so the
 screen asks for the video and its studio side by side.
 
-**The index is written in the editor.** The video form carries a **Chapters** card — a numbered row of
-a time and what happens there, added and removed in place, starting a minute after the last row so a
-member typing one after another never restarts at `00:00`. Times are accepted as `0:38`, `00:38` or
-`1:02:03` and stored as `m:ss`; a row without both halves is dropped on save, never saved
-half-written; the list is stored sorted in `meta.chapters` and travels with the video, so the watch
-page draws it under the player without reading the description.
+**The index is written in the editor — where the platform can read it.** The video form carries a
+**Chapters** card — a numbered row of a time and what happens there, added and removed in place,
+starting a minute after the last row so a member typing one after another never restarts at `00:00`.
+Times are accepted as `0:38`, `00:38` or `1:02:03` and stored as `m:ss`; a row without both halves is
+dropped on save, never saved half-written; the list is stored sorted in `meta.chapters` and travels
+with the video, so the watch page draws it under the player without reading the description.
+
+The card knows the source. Pasted a **YouTube, Vimeo or Facebook** link, or uploaded a **file**, and the
+card reads as it always did. Pasted a link to a host whose player takes no second — Streamtape above
+all — and the card says so in place: *the watch page draws no chapter list for this host*, the **Add a
+chapter** button goes quiet, and anything already written is kept, not deleted, and simply not shown.
 
 **The publisher card carries its own two doors.** Under the studio's name: its counts (subscribers,
 releases), its blurb, then **Subscribe** — the hub's own subscription (`creator_subscribe`), not the
@@ -1870,7 +1877,8 @@ always beside them, so a studio that wrote no links still has one way into its s
 **The details under the video.** The watch screen carries, in the reference's order: *Back to the
 studio* (the kind's own word) beside *All videos*; the player; the action row; the **chapter panel** —
 read from the description or written in the editor, `Comedy beats: (0:37 - 14:00) …` becomes
-`01 · 0:37 · Comedy beats`, clickable, with a fold button and the picked row marked; the facts line
+`01 · 0:37 · Comedy beats`, clickable, with a fold button and the picked row marked, and **absent
+entirely** for a source that cannot be moved to a second; the facts line
 with the minutes; the title; the description; the studio card with its subscribers, its releases and
 its blurb, its own links (website, YouTube, Instagram, X) beside a *Playlists* door; the tags; and the
 comments. Nothing is invented: no time in the description, no
@@ -1884,63 +1892,23 @@ own neighbours), *More from <publisher>*, and — under both — **Suggested for
 it, same shape only, eight at most. It is a call of its own and never holds the page up; a video the
 viewer already has on the page is never suggested back to them.
 
-**A chapter is a second in the address — and in the frame.** Picking one seeks the frame *and* writes
-`…&t=840s` at the end of the address, the way the reference does, replacing any earlier second rather
-than stacking one. On a YouTube embed the same second goes **into the frame's own address**, in the
-shape YouTube writes it, `…&t=840s`, with `&start=840` beside it because that is the word the embed
-itself reads; the iframe is re-pointed where it stands, so the page is never rebuilt under the member
-— the same element, a different second, inside the frame. A `<video>` is seeked by the browser and a
-Vimeo frame takes `#t=840s`.
+**A chapter is a second in the address, where the platform has one.** Picking one seeks the player *and*
+writes `…&t=840s` at the end of the address, the way the reference does, replacing any earlier second
+rather than stacking one. A chapter list is a promise — a press moves the player — so the list is drawn
+only where that promise can be kept: a **file of our own** (a `<video>` seeks itself) and the hosts that
+read a second in their frame's own address: **YouTube** (`&t=840s`, with `&start=840` beside it because
+that is the word the embed reads), **Vimeo** (`#t=840s`) and **Facebook** (its plugin's `&t=840`). The
+iframe is re-pointed where it stands, so the page is never rebuilt under the member — the same element,
+a different second, inside the frame. `SEEKING_HOSTS` in `assets/js/embed.js` is that list, and
+`canSeek` is the one question the watch page asks before it draws an index at all.
 
-**Streamtape's frame is asked first, and its file answers when it stays silent.** The host documents
-player.js, and its player script (`/js/player.ec3b7f.js`, 148 KB) does carry the receiver: `Receiver`,
-`setCurrentTime`, `addEventListener("ready")` and the `player.js` context are all in it, registered
-through the bundled library rather than through a literal `window.addEventListener("message", …)` — which
-is why a first read of the file said "no listener" and was wrong.
-
-What was wrong was the conversation, in one exact place. The vendored library learns that a frame is
-loaded only from **that frame's `load` event**, and it holds every message in a queue until it has heard
-it; by the time a reader presses a chapter, the frame finished loading minutes ago, so `on("ready")` —
-the one message the receiver answers with `ready` — never left the page, and the frame was called silent
-after 2.5 seconds. `assets/js/player-frame.js` now tells the frame it is loaded (`player.loaded = true`,
-plus the `load` dispatch the library listens for) before the first ask.
-
-So a Streamtape chapter is **asked of the host's own player first**, and the bridge is given a short
-grace (1.2 s). When it answers, the jump happens inside the frame, the frame's `timeupdate` lights the
-chapter list, and nothing is relayed. When it does not answer, the file is played instead, exactly as
-before.
-
-The file is the fallback, and it does have a second — but not from a page. Streamtape hands an address only to a request
-that holds the account's own ticket, `file/dl` (the call that turns a ticket into an address) sends **no**
-`Access-Control-Allow-Origin`, so no page can read it, and an address made on a server is bound to that
-server's own address and refused for everyone else ("this download link is not for you").
-
-So the project relays it. `studio-upload?action=file/stream&file=<id>` mints the ticket, asks for the
-address, and passes the bytes through — `Range` and all, `206`, `Content-Range`, `video/mp4` — to the
-reader's player. `assets/js/tape-file.js` is the client side: a chapter swaps the frame for a `<video>`
-pointed at that address, at that second, and from then on the chapter list, the playhead and
-`&t=840s` in the address all work as they do on any file. The frame goes back, in the same place, if the
-file does not come through, and the page says so.
-
-Two things keep the relay small. It is used **only from the moment a chapter is pressed**, so ordinary
-watching stays inside the host's player and costs the project nothing; and it answers only for a file
-that is one of the site's published videos (`video_file_published`, `tools/sql/tape-file.sql`), so it is
-not a door to the whole account. The address it makes is kept for five minutes, a refused one is made
-again once, and the page warms the file while it is still being read, so the press itself is immediate.
-`RELAY` at the top of `assets/js/tape-file.js` turns the whole thing off — a chapter then only writes
-the second into the address — for a month the project would rather not pay for.
-
-**The host's player is painted in the page's own colour.** Streamtape paints itself in its own green
-unless the embed's address says otherwise: `?color=r,g,b`, which its documentation gives as
-`…?color=26,194,102` and says works for embeds and video links. A monochrome page has no green in it, so
-`tapeColour` (`assets/js/embed.js`) asks for **`color=0,0,0` on the light theme and `color=255,255,255`
-on the dark one** — the same two colours the player's chrome, the chapter panel and the page are made of.
-It is written into the frame's `src` only, never into the stored address, so a saved link, a share card
-and a re-render are unaffected; an earlier `color` the address already carries is replaced rather than
-stacked, the way the second is. The editor's preview carries it too, so a video looks the same before it
-is published as after. The colour is decided when the frame is painted: toggling the theme mid-film
-repaints the page but not the frame already playing in it — a reload of the frame would throw the
-position away, so it is left alone.
+**A Streamtape video therefore carries no chapter index at all.** That host's frame cannot be moved from
+outside: its player page is another document and reads no start word, so a press could only be answered
+by fetching the file — and the only way to fetch it was through the project, at the film's own size per
+full view. That relay is **removed**, not switched off: the function has no reader's door any more, the
+client module is gone, and a Streamtape video simply shows its film. A description that still carries
+times keeps them as words, and a link that still carries `&t=90s` keeps it in the address; nothing
+pretends to move.
 
 **Every other frame is asked in its own language.** `assets/js/player-frame.js` speaks the
 [Player.js](https://github.com/embedly/player.js) protocol: a `postMessage` conversation with
@@ -1949,8 +1917,9 @@ position away, so it is left alone.
 chapter the reader is inside. The library is **vendored** (`assets/js/vendor/player-0.1.0.min.js`, BSD,
 Embed.ly) rather than pulled from a CDN, and it is fetched the first time a frame is actually steered — a
 `<video>` and a YouTube frame never pay for it. A frame that says nothing within 2.5 seconds is not
-pretended to have moved: a Streamtape frame's file plays instead (above), and any other frame says the
-second is in the address. The next click starts a fresh conversation — a slow player is not a broken one.
+pretended to have moved: the page says the second is in the address, and the next click starts a fresh
+conversation — a slow player is not a broken one. A video whose host is on neither list is watched, not
+indexed.
 
 Opening a link that carries `&t=1860s` (`?t=1860` is read the same) builds the frame **at** that
 second — `playerMarkup` passes it through `frameWithSecond`, so `#/h/ID=…&t=1860s` opens at 00:31:00
@@ -1964,9 +1933,8 @@ in the same file, or, when that call is not on the server yet, the `creator_publ
 page already makes (a channel first, then a server or a cinema, never a private hub). No studio at
 all, and the member's face is the publisher, which is the honest answer.
 
-Test: `node tools/video-smoke.mjs` — **542/542** (feed, sort, search, watch, reaction→comment, a chapter
-taken by the host's own player and the same chapter relayed when it is not, the frame's colour both
-ways, a locked door and its password, a missing video, the editor signed out and in, the payload of a
+Test: `node tools/video-smoke.mjs` — **535/535** (feed, sort, search, watch, reaction→comment, a chapter
+index on YouTube and Vimeo and none on Streamtape, the frame's colour both ways, a locked door and its password, a missing video, the editor signed out and in, the payload of a
 publish, of an exclusive rule set and of a private list, the player and the sixteen host cases, the
 oEmbed stills, the studio picker, the contents rail, and the forwarding page).
 
@@ -2342,7 +2310,7 @@ the editors need**, each pinned to a name pattern and a set of extensions (`user
 | `node tools/rte-smoke.mjs` | **45/45** (every command, links, insertion, history, paste, drop, keys, toolbar state) |
 | `node tools/article-smoke.mjs` | **281/281** |
 | `node tools/blog-smoke.mjs` | **82/82** (the address, the closed door, the hero, the home, a section, the search, the plain cover) |
-| `node tools/video-smoke.mjs` | **542/542** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
+| `node tools/video-smoke.mjs` | **535/535** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
 | `node tools/media-smoke.mjs` | **89/89** (the address book, the three pages, the portrait stage, the locked item, the shelves) |
 
 ### The six OAuth apps — one checklist each
@@ -3406,7 +3374,6 @@ assets/css/blog.css         that page: the cover hero, the rows, the section car
 assets/js/contents.js       the contents rail both editors carry: the piece's headings, the form's sections
 assets/js/rte.js            the writing surface: ranges, formatting, history, paste, keys
 assets/js/player-frame.js   the player.js bridge: steering a frame we do not own
-assets/js/tape-file.js      the file behind a Streamtape frame: the relay a chapter plays
 assets/js/vendor/           third-party files kept verbatim: player-0.1.0.min.js (BSD) + its licence
 assets/js/embed.js          the one host list: YouTube · Vimeo · Dailymotion · TikTok · Facebook·
                             Drive · Pinterest · Reddit · a file — for the editor and the watch screen
