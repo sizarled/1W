@@ -2858,6 +2858,106 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
   expect("late: nothing threw", late.errors.length === 0, late.errors.join(" | "));
 }
 
+/* ================================================================== */
+/* the shape of a row — a vertical video on the videos page            */
+/* ================================================================== */
+/* `video_card` says which way round the row is (`orientation`). The page has
+   to trust the row, not the address: the grid links a vertical video with
+   `#/v/`, and an address written the other way round is corrected instead of
+   refusing the video. A card without the field still answers from
+   `video.meta.vertical`, so an older reply keeps working. */
+function verticalCard(over = {}) {
+  const base = card(over);
+  const embed = "https://streamtape.com/e/0VBMbg4YOVsbOPK";
+  base.embed = embed;
+  base.orientation = "v";
+  base.video = { ...base.video, embed, file: null, meta: { ...base.video.meta, vertical: true, platform: "streamtape" } };
+  return base;
+}
+
+const VERTICAL = verticalCard({
+  code: "VSR-001040",
+  id: "a64bbf69-6624-472f-9342-87ce65d6b939",
+  title: "ameliadimz",
+  description: "ameliadimz_1793984401_4024553875183097546_215516840",
+});
+
+{
+  const feed = { ok: true, rows: [VERTICAL, card({ code: "VID-001039" })], fields: [], total: 2, limit: 24, offset: 0, can_publish: false };
+  const { document, errors } = boot("videos.html", {
+    fetchImpl: (href) => {
+      const fn = fnName(href);
+      if (fn === "video_feed") return reply(feed);
+      if (fn === "video_mine") return reply({ ok: true, rows: [] });
+      return reply([]);
+    },
+  });
+  await import(`file://${join(root, "assets/js/videos.js")}?shape1`);
+  await wait(80);
+  const cards = document.querySelectorAll("[data-v-grid] .vcard");
+  expect("shape: the vertical card links portrait", cards[0]?.getAttribute("href") === "videos.html#/v/ID=VSR-001040", cards[0]?.getAttribute("href"));
+  expect("shape: and says so", cards[0]?.getAttribute("data-orientation") === "v", cards[0]?.getAttribute("data-orientation"));
+  expect("shape: the card is tagged vertical", /Vertical/.test(cards[0]?.textContent || ""), cards[0]?.textContent?.slice(0, 80));
+  expect("shape: the landscape card stays landscape", cards[1]?.getAttribute("href") === "videos.html#/h/ID=VID-001039", cards[1]?.getAttribute("href"));
+  expect("shape: nothing threw", errors.length === 0, errors.join(" | "));
+}
+
+/* the address says landscape, the row says portrait: the row wins */
+{
+  const { document, window, errors } = boot("videos.html", {
+    hash: "#/h/ID=VSR-001040",
+    fetchImpl: (href) => {
+      const fn = fnName(href);
+      if (fn === "video_get") return reply({ ok: true, video: VERTICAL, related: [], more: [], locked: false });
+      if (fn === "video_hub") return reply({ ok: true, hub: { name: "Hello", code: "IDST100001", creator: "@ledsizar7", links: [] } });
+      if (fn === "post_comments") return reply({ ok: true, comments: [], count: 0, reaction: null, can_comment: false });
+      return reply({ ok: true, rows: [], total: 0 });
+    },
+  });
+  await import(`file://${join(root, "assets/js/videos.js")}?shape2`);
+  await wait(120);
+  expect("shape: a portrait video opens portrait", document.querySelector(".vwatch")?.getAttribute("data-orientation") === "v", document.querySelector(".vwatch")?.getAttribute("data-orientation"));
+  expect("shape: the address follows the row", window.location.hash === "#/v/ID=VSR-001040", window.location.hash);
+  expect("shape: the video is on the page", /ameliadimz/.test(document.querySelector("[data-v-watch]")?.textContent || ""), document.querySelector("[data-v-watch]")?.textContent?.slice(0, 60));
+  expect("shape: nothing threw", errors.length === 0, errors.join(" | "));
+}
+
+/* the older address, `#/v/<code>` with no `ID=`, is the same video */
+{
+  const { document, window } = boot("videos.html", {
+    hash: "#/v/VSR-001040",
+    fetchImpl: (href) => {
+      const fn = fnName(href);
+      if (fn === "video_get") return reply({ ok: true, video: VERTICAL, related: [], more: [], locked: false });
+      if (fn === "video_hub") return reply({ ok: true, hub: { name: "Hello", code: "IDST100001", creator: "@ledsizar7", links: [] } });
+      if (fn === "post_comments") return reply({ ok: true, comments: [], count: 0, reaction: null, can_comment: false });
+      return reply({ ok: true, rows: [], total: 0 });
+    },
+  });
+  await import(`file://${join(root, "assets/js/videos.js")}?shape3`);
+  await wait(120);
+  expect("shape: the older address opens the video", document.querySelector(".vwatch")?.getAttribute("data-orientation") === "v");
+  expect("shape: and is rewritten to the canonical one", window.location.hash === "#/v/ID=VSR-001040", window.location.hash);
+}
+
+/* and a landscape video addressed as portrait comes back to landscape */
+{
+  const { document, window } = boot("videos.html", {
+    hash: "#/v/ID=VID-001039",
+    fetchImpl: (href) => {
+      const fn = fnName(href);
+      if (fn === "video_get") return reply({ ok: true, video: card({ code: "VID-001039", orientation: "h" }), related: [], more: [], locked: false });
+      if (fn === "video_hub") return reply({ ok: true, hub: { name: "Hello", code: "IDST100001", creator: "@ledsizar7", links: [] } });
+      if (fn === "post_comments") return reply({ ok: true, comments: [], count: 0, reaction: null, can_comment: false });
+      return reply({ ok: true, rows: [], total: 0 });
+    },
+  });
+  await import(`file://${join(root, "assets/js/videos.js")}?shape4`);
+  await wait(120);
+  expect("shape: a landscape row opens landscape", document.querySelector(".vwatch")?.getAttribute("data-orientation") === "h", document.querySelector(".vwatch")?.getAttribute("data-orientation"));
+  expect("shape: and its address is corrected too", window.location.hash === "#/h/ID=VID-001039", window.location.hash);
+}
+
 /* a page that is still open holds its clocks: the suite closes them so the
    process can end, the way a browser does when the tab is shut */
 booted.forEach((window) => {

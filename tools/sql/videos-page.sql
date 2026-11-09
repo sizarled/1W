@@ -54,6 +54,15 @@ security definer
 set search_path to 'public', 'pg_temp'
 as $$
   select public.post_card(p_post, p_viewer) || jsonb_build_object(
+    /* which way round the video is. A card that does not say is a card every
+       page reads as landscape, and a vertical video opened from the videos
+       grid then sat in a 16:9 stage — the row knows, so the row says it, and
+       every link, badge and suggestion can be built from it */
+    'orientation', case
+                     when lower(coalesce(p.video_meta ->> 'vertical', 'false')) in ('true', 't', '1', 'yes', 'on')
+                       then 'v'
+                     else 'h'
+                   end,
     'video', jsonb_build_object(
       'meta', coalesce(p.video_meta, '{}'::jsonb),
       'embed', p.embed_url,

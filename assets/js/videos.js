@@ -148,6 +148,31 @@ function stillOf(v) {
 }
 
 /**
+ * Which way round a row is.
+ *
+ * The card says it (`orientation`, from `video_meta->>'vertical'`), and an
+ * older reply that predates the field still carries the flag in
+ * `video.meta.vertical` — either way the answer is the row's, never the
+ * address's. A video opened from a landscape-looking link is drawn portrait
+ * because the row is portrait, and a landscape video opened from a portrait
+ * link is drawn landscape for the same reason: the address is made to follow
+ * the row, not the other way round.
+ */
+function shapeOf(row) {
+  const v = row || {};
+  if (v.orientation) return orientationOf(v.orientation);
+  const meta = (v.video && v.video.meta) || v.meta || {};
+  if (Object.prototype.hasOwnProperty.call(meta, "vertical")) {
+    const flag = meta.vertical;
+    if (flag === true || flag === 1) return "v";
+    return ["true", "t", "1", "yes", "on"].includes(String(flag || "").toLowerCase()) ? "v" : "h";
+  }
+  /* a row that says nothing leaves the answer to the address — an older reply
+     predates the field, and the address it was opened with is all there is */
+  return "";
+}
+
+/**
  * One card. `rank` asks for the ranking points as well — a search is the one
  * surface where they mean something, because they are earned there (every
  * interaction a search brings), and the video that stands higher in a search
@@ -155,6 +180,7 @@ function stillOf(v) {
  */
 function cardMarkup(row, { rank = false } = {}) {
   const v = row || {};
+  const shape = shapeOf(v) || "h";
   const ranking = Number(v.rank_points) || 0;
   const meta = (v.video && v.video.meta) || {};
   const host = (v.video && v.video.host) || v.publisher || {};
@@ -166,7 +192,7 @@ function cardMarkup(row, { rank = false } = {}) {
       : "";
 
   return `
-    <a class="vcard" href="${esc(videoUrl(v.code || v.id, v.orientation))}" data-v-open="${esc(v.code || v.id)}" data-orientation="${esc(orientationOf(v.orientation))}">
+    <a class="vcard" href="${esc(videoUrl(v.code || v.id, shape))}" data-v-open="${esc(v.code || v.id)}" data-orientation="${esc(shape)}">
       <div class="vcard__media">
         ${
           stillOf(v)
@@ -175,6 +201,7 @@ function cardMarkup(row, { rank = false } = {}) {
         }
         <span class="vcard__shade"></span>
         <span class="vcard__tags">
+          ${shape === "v" ? `<span class="badge badge--solid">Vertical</span>` : ""}
           ${age ? `<span class="badge badge--solid">${esc(age)}</span>` : ""}
           ${v.visibility && v.visibility !== "general" ? `<span class="badge">${esc(VIS_LABEL[v.visibility] || v.visibility)}</span>` : ""}
         </span>
@@ -206,7 +233,7 @@ function cardMarkup(row, { rank = false } = {}) {
 function rowMarkup(row) {
   const v = row || {};
   return `
-    <a class="vrow" href="${esc(videoUrl(v.code || v.id, v.orientation))}" data-v-open="${esc(v.code || v.id)}">
+    <a class="vrow" href="${esc(videoUrl(v.code || v.id, shapeOf(v) || "h"))}" data-v-open="${esc(v.code || v.id)}">
       <span class="vrow__media">
         ${
           stillOf(v)
@@ -929,7 +956,7 @@ async function loadSuggested(code, orientation) {
     .filter((row) => {
       const id = String(row.code || row.id || "");
       if (!id || seen.has(id)) return false;
-      const shape = String(row.orientation || (row.video && row.video.meta && row.video.meta.orientation) || "");
+      const shape = shapeOf(row);
       return !orientation || !shape || shape === orientation;
     })
     .slice(0, 8);
@@ -1023,7 +1050,7 @@ async function openWatch(code, orientation) {
      rewritten to the code the video carries, with the shape it has, and the
      second it was asked to start at is kept. */
   const liveCode = String(v.code || "");
-  const liveShape = v.meta && (v.meta.vertical === true || v.meta.vertical === "true") ? "v" : state.orientation;
+  const liveShape = shapeOf(v) || state.orientation;
   if (liveCode && (liveCode !== state.code || liveShape !== state.orientation)) {
     const at = timeOf(location.hash);
     state.code = liveCode;

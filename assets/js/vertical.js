@@ -726,6 +726,7 @@ async function openWatch(code) {
   state.comments = null;
   state.canComment = false;
   state.reaction = 0;
+  delete document.documentElement.dataset.vertMoved;
   const seq = ++state.seqWatch;
 
   if (browseEl()) browseEl().hidden = true;
@@ -774,6 +775,17 @@ async function openWatch(code) {
   state.video = res.video || {};
   state.res = res;
   state.key = "";
+
+  /* a landscape row is not this shelf's: it goes to the page it belongs to
+     rather than sitting in a 9:16 box with two black bands */
+  if (String(state.video.orientation || "").toLowerCase() === "h") {
+    const away = `videos.html#/h/ID=${encodeURIComponent(String(state.video.code || code))}`;
+    /* a note for whoever is looking at the page in a harness that cannot
+       navigate — the browser itself only needs the line below */
+    document.documentElement.dataset.vertMoved = away;
+    location.replace(away);
+    return;
+  }
 
   /* a link that names an old code still lands on the video it means */
   const liveCode = String(state.video.code || code);

@@ -585,6 +585,30 @@ let viewer;
   expect("gate: it is the videos rule", /20/.test(gate?.textContent || ""), gate?.textContent?.slice(0, 120));
 }
 
+/* a landscape row has no place on this shelf: it is handed to the videos page */
+{
+  const wide = vcard({ code: "VID-001039", title: "A wide shot", orientation: "h" });
+  wide.video = { ...wide.video, meta: { ...wide.video.meta, vertical: false } };
+  const { document } = boot("vertical.html", {
+    hash: "#/v/ID=VID-001039",
+    storage: { ...SIGNED },
+    fetchImpl: (href) => {
+      const fn = fnName(href);
+      if (fn === "video_get") return reply({ ok: true, video: wide, related: [], more: [], locked: false });
+      if (fn === "video_hub") return reply(HUB);
+      return reply({ ok: true, rows: [], total: 0 });
+    },
+  });
+  await import(`file://${join(root, "assets/js/vertical.js")}?g4`);
+  await wait(200);
+  expect(
+    "shelf: a landscape video is sent to the videos page",
+    document.documentElement.dataset.vertMoved === "videos.html#/h/ID=VID-001039",
+    document.documentElement.dataset.vertMoved
+  );
+  expect("shelf: and nothing of it is drawn here", !document.querySelector(".v9info__title") && !document.querySelector("[data-v9-player] video"));
+}
+
 /* ================================================================== */
 /* pass 7 — the page and its stylesheet                               */
 /* ================================================================== */

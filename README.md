@@ -1931,11 +1931,11 @@ in the same file, or, when that call is not on the server yet, the `creator_publ
 page already makes (a channel first, then a server or a cinema, never a private hub). No studio at
 all, and the member's face is the publisher, which is the honest answer.
 
-Test: `node tools/video-smoke.mjs` — **569/569** (feed, sort, search, watch, reaction→comment, a chapter
+Test: `node tools/video-smoke.mjs` — **582/582** (feed, sort, search, watch, reaction→comment, a chapter
 index on YouTube and Vimeo and none on Streamtape, the frame's colour both ways, the gate and its
 count, a new video behind it and a seen one in front of it, the task after twenty (and a guest
 who is asked for the count instead), a locked door and its password, a missing video, the
-editor signed out and in, the payload of a publish, of an exclusive rule set and of a private list, the
+shape of a row both ways round, the editor signed out and in, the payload of a publish, of an exclusive rule set and of a private list, the
 player and the sixteen host cases, the oEmbed stills, the studio picker, the contents rail, and the
 forwarding page).
 
@@ -2364,7 +2364,7 @@ the editors need**, each pinned to a name pattern and a set of extensions (`user
 | `node tools/rte-smoke.mjs` | **45/45** (every command, links, insertion, history, paste, drop, keys, toolbar state) |
 | `node tools/article-smoke.mjs` | **293/293** (the index, the reader, the gates, the editors) |
 | `node tools/blog-smoke.mjs` | **82/82** (the address, the closed door, the hero, the home, a section, the search, the plain cover) |
-| `node tools/video-smoke.mjs` | **569/569** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal, the gate and the task) |
+| `node tools/video-smoke.mjs` | **582/582** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal, the gate and the task) |
 | `node tools/media-smoke.mjs` | **95/95** (the address book, the three pages, the portrait stage, the locked item, the shelves) |
 | `node tools/shell-smoke.mjs` | **67/67** (which page carries which menu, the signed-in header, the header wallet — one ask per action, the number moving without a reload, a re-ask on return to the tab) |
 
@@ -2385,13 +2385,24 @@ Two screens, one address:
 A vertical video is **not a new kind of row**. It is a `posts` row with `content_type = 'video'`
 whose publisher ticked the editor's “A vertical video” box — `video_meta->>'vertical'` — and whose
 code carries `VSR-` (the trigger in `tools/sql/video-codes.sql` already keeps that prefix). The
-shelf asks the database for exactly those, so a landscape video can never appear in it:
+shelf asks the database for exactly those, so a landscape video can never appear in it, and a
+landscape link that reaches the shelf (`vertical.html#/v/ID=VID-…`) is handed to
+`videos.html#/h/ID=…` instead of being drawn in a 9:16 box:
 
 | Call | What it answers |
 | --- | --- |
 | `video_vertical_feed(token, sort, search, limit, offset)` | `{ ok, rows[], total, limit, offset }` — `rows` are `video_card` rows, sorted `new` / `popular` / `liked`, filtered on the title or the description, and held to the same two rules as the videos page: `post_visible_to` and `reach_visible` (a search counts as a search) |
 | `video_get(token, ref, key)` | the video itself — the same call the videos page opens a video with |
 | `video_hub(ref)` | the studio: its name, its followers and the links it publishes |
+
+`video_card` also carries **`orientation`** — `v` when the row is vertical, `h` when it is not.
+That one field is why a vertical video can be opened from anywhere: the videos grid links it
+`videos.html#/v/ID=…`, the card wears a *Vertical* tag, suggestions keep to the shape on screen,
+and the watch page trusts the row over the address — `#/h/ID=VSR-…` and the older
+`#/v/VSR-…` both open it and both end up at the canonical portrait address, while a landscape row
+addressed as portrait walks back to `#/h/`. Before it existed the card could not say which way round
+it was, so every link to a vertical video was a landscape one and the videos page drew it in a
+16:9 stage.
 
 DDL + function: `tools/sql/vertical-page.sql` — **applied** to the project. Nothing was duplicated
 for this page: a like is `post_react_from`, a comment is `post_comment_from` (after a reaction, the
@@ -2418,7 +2429,7 @@ What makes it a vertical viewer rather than a grid with big cards:
   (block is remembered on the device, as on the videos page); the studio's own links; an expandable
   description; and the comments, with the reaction rule stated rather than a dead box.
 
-Test: `node tools/vertical-smoke.mjs` — **117/117** (the shelf, the card's badge and length, sort
+Test: `node tools/vertical-smoke.mjs` — **119/119** (the shelf, the card's badge and length, sort
 and search reaching the feed, the viewer and its seven actions, next/previous leaving one player,
 the reaction→comment rule, saved/share/follow/report/vote calls, the keyboard and its refusal past
 the ends, a gone video, a locked one, the gate for a guest, and the page and stylesheet's promises).
