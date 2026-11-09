@@ -3,7 +3,7 @@
  * Mounts the shell, restores the session and, on the homepage, boots the
  * section controllers.
  */
-import { mountShell } from "./shell.js?v=20261116b";
+import { mountShell } from "./shell.js?v=20261216a";
 import { getMember, refreshMember, setMember, signOut, noteSeen } from "./session.js";
 import { awardPoints, renderWallet, syncFromMember, watchWallet, refreshWallet } from "./wallet.js";
 import { toast } from "./ui.js";

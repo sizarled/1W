@@ -2368,6 +2368,61 @@ the editors need**, each pinned to a name pattern and a set of extensions (`user
 | `node tools/media-smoke.mjs` | **95/95** (the address book, the three pages, the portrait stage, the locked item, the shelves) |
 | `node tools/shell-smoke.mjs` | **67/67** (which page carries which menu, the signed-in header, the header wallet — one ask per action, the number moving without a reload, a re-ask on return to the tab) |
 
+### Vertical videos — the 9:16 shelf
+
+**`vertical.html`** is its own page, not a second site: the same header in the same order, the same
+sidebar, the same footer, both themes. It is reachable from the Videos page (a *Vertical videos*
+button beside *Publish a video*), from the sidebar's Browse group and from the footer — the header
+itself is untouched.
+
+Two screens, one address:
+
+| Address | What it is |
+| --- | --- |
+| `vertical.html` | the shelf — every vertical video as a 9:16 card |
+| `vertical.html#/v/ID=VSR-001039` | one video, the one before and the one after beside it |
+
+A vertical video is **not a new kind of row**. It is a `posts` row with `content_type = 'video'`
+whose publisher ticked the editor's “A vertical video” box — `video_meta->>'vertical'` — and whose
+code carries `VSR-` (the trigger in `tools/sql/video-codes.sql` already keeps that prefix). The
+shelf asks the database for exactly those, so a landscape video can never appear in it:
+
+| Call | What it answers |
+| --- | --- |
+| `video_vertical_feed(token, sort, search, limit, offset)` | `{ ok, rows[], total, limit, offset }` — `rows` are `video_card` rows, sorted `new` / `popular` / `liked`, filtered on the title or the description, and held to the same two rules as the videos page: `post_visible_to` and `reach_visible` (a search counts as a search) |
+| `video_get(token, ref, key)` | the video itself — the same call the videos page opens a video with |
+| `video_hub(ref)` | the studio: its name, its followers and the links it publishes |
+
+DDL + function: `tools/sql/vertical-page.sql` — **applied** to the project. Nothing was duplicated
+for this page: a like is `post_react_from`, a comment is `post_comment_from` (after a reaction, the
+site's rule), a vote is `post_comment_vote`, a report is `post_report_from`, a share is
+`post_reshare_from` + `reach_share_link`, a follow is `profile_follow_toggle`, a message is
+`msg_send`, and *Watch later* writes the same `1w.videos.saved` list the videos page reads. A new
+video still passes the gate in `gates.js` — 20 seconds, and a task after 20 new videos — over the
+player, and a guest is asked for the count, never for a task.
+
+What makes it a vertical viewer rather than a grid with big cards:
+
+- **One player.** Only the video on screen mounts a `<video>`/frame; the neighbours are pictures.
+  Moving on pauses and unloads the old one first, so two videos never run at once.
+- **Moving on is the address.** Next, previous, the two round arrows, the arrow keys, a swipe on a
+  phone and a press on a neighbour all rewrite the hash; the address is the only state, so every
+  video has a shareable link and a link opens on its own — one page of the feed is fetched to find
+  where it sits.
+- **The neighbours.** Desktop: 9:16 player centred, the previous and next beside it smaller,
+  blurred and dimmed, both tappable. Under 1180 px they step out of the way, and on a phone the
+  player takes the column with the arrows over it, safe-area padding and a swipe up/down.
+- **The page around it.** Vertical badge, title, category (the main keyword), publisher, views,
+  date and length above the actions; the seven round actions (description, like, dislike,
+  comments, watch later, share, report); the publisher card with follow, message, report and block
+  (block is remembered on the device, as on the videos page); the studio's own links; an expandable
+  description; and the comments, with the reaction rule stated rather than a dead box.
+
+Test: `node tools/vertical-smoke.mjs` — **117/117** (the shelf, the card's badge and length, sort
+and search reaching the feed, the viewer and its seven actions, next/previous leaving one player,
+the reaction→comment rule, saved/share/follow/report/vote calls, the keyboard and its refusal past
+the ends, a gone video, a locked one, the gate for a guest, and the page and stylesheet's promises).
+
 ### The six OAuth apps — one checklist each
 
 The dashboard can hold eight networks. Two of them (Telegram, WhatsApp) link with a code we
