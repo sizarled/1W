@@ -2703,7 +2703,7 @@ node tools/dashboard-smoke.mjs   # 272 checks: the five gates, rail, popover, co
 node tools/sidebar-smoke.mjs     # 93 checks: the edge, the pin, Escape, the mobile drawer, the dashboard menu
 node tools/panel-smoke.mjs       # 90 checks: the desk's three states, the rows, the switch, the dialog, the shelf
 node tools/court-smoke.mjs       # 115 checks: the four steps, uploads, both doors, the court room
-node tools/creator-smoke.mjs     # 423 checks: the search (owners + publishers), the tables, the editors, a publisher's seat, the Reach tab
+node tools/creator-smoke.mjs     # 433 checks: the search (owners + publishers), the tables, the editors, a publisher's seat, the Reach tab
 node tools/media-smoke.mjs       # 89 checks: the address book, videos.html#/h|v/, audio.html#/p|m/, playlist.html#/videos|podcasts|songs/
 node tools/publisher-smoke.mjs   # 52 checks: the program, the seat, the links, and the hand-off to the creator page
 node tools/iptv-smoke.mjs        # 43 checks: the playlists, the groups, the page, the deep links
@@ -2854,6 +2854,12 @@ search and `suggestion` when it is the home page, and the rail beside the player
 
 The plan is summed as it is typed and a plan that spends more than the studio owns is refused **on
 the page** and again on the server (`over_budget`), so the distribution can never exceed the account.
+
+**The tab is a door even before the table exists.** `hub_reach_get` is caught, not trusted: on a
+database where `studio-reach.sql` has not been run yet, pressing **Reach** still opens the tab — the
+shelf comes from `creator_items` (which is already live), the total is the level's floor, and the
+panel says which two files are missing instead of leaving the view on the tab the member just left.
+`switchTab` catches a failing loader for the same reason: no tab can strand the page.
 
 ```sql
 -- hand a studio its authority

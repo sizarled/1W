@@ -74,7 +74,7 @@ const SECTIONS = [
       { key: "podcasts", label: "Podcasts", type: "list", kind: "podcast", cols: ["item", "vis", "minutes", "likes", "dislikes", "comments", "shares", "reports", "act"], actions: ["edit", "link", "delete"] },
       { key: "playlists", label: "Playlists", type: "list", kind: "playlist", cols: ["item", "vis", "minutes", "likes", "dislikes", "comments", "shares", "reports", "act"], actions: ["edit", "link", "delete"] },
       /* how far the studio's work travels, and how high it ranks */
-      { key: "reach", label: "Reach", type: "reach" },
+      { key: "reach", label: "Reach", type: "reach", fallbackKind: "video" },
     ],
     /* A video is not typed into this table any more. `video-editor.html` is
        the video form — the player, the thumbnail, the audience, the schedule —
@@ -346,6 +346,7 @@ const state = {
   /* the studio's reach: its day, and a row per item */
   reach: null,
   reachError: "",
+  reachFallback: [],
   search: "",
   busy: false,
   editor: null,
@@ -876,15 +877,88 @@ function reachRow(row) {
     </tr>`;
 }
 
+/**
+ * The same tab, before its table is on the server.
+ *
+ * The door still opens — the shelf comes from `creator_items`, which is
+ * already live — but nothing is written: the panel says what is missing and
+ * offers no Save, so a studio is never handed a number that means nothing.
+ */
+function renderReachOffline(host, tab) {
+  const rows = state.reachFallback || [];
+  const base = 100 * (Number(state.level) || 0);
+  host.innerHTML = `
+    <div class="cr-bar">
+      <div class="cr-bar__left">
+        <span class="cr-bar__title">${esc(tab.label)}</span>
+        <span class="cr-bar__count">not connected yet</span>
+      </div>
+    </div>
+    <div class="cr-reach">
+      <div class="cr-reach__day">
+        <div class="cr-reach__field" data-cr-reach-total>
+          <span>Reach points for this studio</span>
+          <strong class="cr-reach__total">${num(base)}</strong>
+          <span class="cr-reach__split">from the level — the interactions are not counted until the table is there</span>
+        </div>
+        <p class="cr-reach__note">
+          The reach table is not on the server yet: run <code>tools/sql/studio-reach.sql</code> and
+          <code>tools/sql/reach-earnings.sql</code> and this tab fills itself. The shelf below is read
+          from the studio's own items, so the door can be opened in the meantime.
+        </p>
+      </div>
+      ${
+        rows.length
+          ? `<div class="dsh-table-wrap cr-table">
+              <table class="dsh-table">
+                <thead>
+                  <tr>
+                    <th>Item</th>
+                    <th>Kind</th>
+                    <th>Reach today</th>
+                    <th>Reached in the updates</th>
+                    <th>Reached in the suggestions</th>
+                    <th>Reached in search</th>
+                    <th>Ranking points</th>
+                  </tr>
+                </thead>
+                <tbody>${rows
+                  .map(
+                    (row) => `<tr class="cr-row" data-reach-row="${esc(row.ref)}" data-reach-kind="${esc(row.kind)}">
+                      <td>
+                        <span class="cr-reach__title">${esc(row.title || "Untitled")}</span>
+                        <span class="cr-reach__code">${esc(row.code || "")}</span>
+                      </td>
+                      <td><span class="cr-pill">video</span></td>
+                      <td class="cr-reach__num">0</td>
+                      <td class="cr-reach__num">0</td>
+                      <td class="cr-reach__num">0</td>
+                      <td class="cr-reach__num">0</td>
+                      <td class="cr-reach__num">0</td>
+                    </tr>`
+                  )
+                  .join("")}</tbody>
+              </table>
+            </div>`
+          : emptyBlock("upload", "Nothing to place yet", "Publish a video in this studio and it appears here.")
+      }
+    </div>`;
+  hydrateIcons(host);
+}
+
 function renderReach(host, hub, tab) {
   const data = state.reach;
+  if (!data && state.reachError === "server") return renderReachOffline(host, tab);
+
   if (!data) {
     host.innerHTML = emptyBlock(
       "gauge",
       "Reach could not be read",
       state.reachError === "hub_role"
         ? "This studio is not one you run."
-        : "The server did not answer with the studio's reach. Try again in a moment.",
+        : state.reachError === "server"
+          ? "The studio's reach table is not on the server yet — run tools/sql/studio-reach.sql and this tab fills itself. Nothing else is affected."
+          : "The server did not answer with the studio's reach. Try again in a moment.",
       `<button class="dsh-btn dsh-btn--sm" type="button" data-cr-reach-reload><i data-icon="refresh"></i> Try again</button>`
     );
     hydrateIcons(host);
@@ -1706,9 +1780,44 @@ async function loadTab() {
     state.subscribers = res && res.ok ? res.rows || [] : [];
   }
   if (tab.type === "reach") {
-    const res = await rpc("hub_reach_get", { p_token: state.token, p_hub: hub.code || hub.id });
-    state.reach = res && res.ok ? res : null;
-    state.reachError = res && !res.ok ? res.error || "reach" : "";
+    state.reachFallback = [];
+    /* a server that has not got the table yet must not stop the studio from
+       opening: the call is caught, and the tab says so in place */
+    try {
+      const res = await rpc("hub_reach_get", { p_token: state.token, p_hub: hub.code || hub.id });
+      state.reach = res && res.ok ? res : null;
+      state.reachError = res && !res.ok ? res.error || "reach" : "";
+    } catch {
+      state.reach = null;
+      state.reachError = "server";
+      /* the tab still opens: the shelf is read from the table that is already
+         live, and the panel says plainly that the numbers are not connected */
+      state.reachFallback = [];
+      try {
+        const shelf = await rpc("creator_items", {
+          p_token: state.token,
+          p_hub: hub.id,
+          p_kind: tab.fallbackKind || "video",
+          p_status: "published",
+          p_search: "",
+        });
+        const rows = shelf && shelf.ok ? shelf.rows || [] : [];
+        state.reachFallback = rows.map((row) => ({
+          kind: "post",
+          ref: row.id,
+          code: row.code,
+          title: row.title,
+          points: 0,
+          shown: 0,
+          rank: 0,
+          reached_updates: 0,
+          reached_suggestions: 0,
+          reached_search: 0,
+        }));
+      } catch {
+        /* an empty shelf is still a shelf */
+      }
+    }
   }
 }
 
@@ -1759,7 +1868,13 @@ async function switchTab(key) {
   state.tab = key;
   state.view = "list";
   state.editor = null;
-  await loadTab();
+  /* a tab that cannot read its own table still opens, and says why: the page
+     never stays on the tab the member just left */
+  try {
+    await loadTab();
+  } catch {
+    /* the view is drawn below either way */
+  }
   await refresh();
   syncUrl();
 }

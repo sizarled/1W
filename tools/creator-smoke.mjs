@@ -262,6 +262,14 @@ function stubFetch(url, opts = {}) {
   }
 
   if (href.includes("/rpc/hub_reach_get")) {
+    if (scenario.reachMissing) {
+      return Promise.resolve({
+        ok: false,
+        status: 404,
+        json: async () => ({ message: "Could not find the function" }),
+        text: async () => JSON.stringify({ message: "Could not find the function public.hub_reach_get" }),
+      });
+    }
     const reach = scenario.reach || {
       hub: { id: "hub-ch", code: "IDST100001", name: "Studio One", kind: "channel" },
       configured: true,
@@ -1981,10 +1989,52 @@ async function reachPass() {
   expect("reach: no errors", view.errors.length === 0, view.errors.join(" | "));
   view.window.close();
 
+  /* the tab is a door too: pressing it opens the panel, like the others */
+  const clicked = await boot(72, { search: "?section=studio&hub=hub-ch" });
+  await clicked.wait(320);
+  const reachTab = clicked.qs('[data-cr-tab="reach"]');
+  expect("reach: the tab is one of the doors", Boolean(reachTab), clicked.qsa("[data-cr-tab]").map((b) => b.getAttribute("data-cr-tab")).join(","));
+  reachTab.dispatchEvent(new clicked.window.MouseEvent("click", { bubbles: true }));
+  await clicked.wait(320);
+  expect("reach: pressing it shows the panel", Boolean(clicked.qs("[data-cr-reach-total]")), clicked.text("[data-cr-view]").slice(0, 160));
+  expect("reach: and the tab is marked as the one in use", clicked.qs('[data-cr-tab="reach"]')?.getAttribute("aria-selected") === "true", clicked.qs('[data-cr-tab="reach"]')?.getAttribute("aria-selected"));
+  expect("reach: no errors on the way", clicked.errors.length === 0, clicked.errors.join(" | "));
+  clicked.window.close();
+
+  /* a server without the table: the door still opens, and says what is missing */
+  scenario = {
+    hubs: [hub({ id: "hub-ch", kind: "channel", name: "Studio One" })],
+    items: [item({ id: "vid-1", kind: "video", code: "Video-001032", title: "The first film", status: "published" })],
+    reachMissing: true,
+  };
+  const offline = await boot(73, { search: "?section=studio&hub=hub-ch&tab=reach" });
+  await offline.wait(340);
+  const offlineView = offline.text("[data-cr-view]");
+  expect("reach: a server without the table still opens the tab", /not connected yet/.test(offline.text(".cr-bar")), offline.text(".cr-bar"));
+  expect("reach: the panel is drawn, not blank", /Reach points for this studio/.test(offlineView), offlineView.slice(0, 140));
+  expect("reach: it names the files that are missing", /studio-reach\.sql/.test(offlineView) && /reach-earnings\.sql/.test(offlineView), offlineView.slice(0, 200));
+  expect("reach: the shelf is read from the live table", /The first film/.test(offlineView) && /Video-001032/.test(offlineView), offlineView.slice(0, 240));
+  expect("reach: nothing is offered for saving", !offline.qs("[data-cr-reach-save]"), "a save button was drawn");
+  expect("reach: no errors on the way", offline.errors.length === 0, offline.errors.join(" | "));
+  offline.window.close();
+  scenario.reachMissing = false;
+
   /* a server that refuses anyway: over budget is said, not swallowed */
-  scenario.reach = {
-    ...scenario.reach,
-    rows: [{ kind: "post", ref: "post-a", code: "Video-001032", title: "The first film", points: 200, shown: 0, rank: 5000 }],
+  scenario = {
+    hubs: [hub({ id: "hub-ch", kind: "channel", name: "Studio One" })],
+    items: [],
+    reach: {
+      hub: { id: "hub-ch", code: "IDST100001", name: "Studio One", kind: "channel" },
+      configured: true,
+      base: 100,
+      earned: 400,
+      limitless: false,
+      points: 500,
+      spent: 0,
+      remaining: 500,
+      day: "2026-12-05",
+      rows: [{ kind: "post", ref: "post-a", code: "Video-001032", title: "The first film", points: 200, shown: 0, rank: 5000, reached_updates: 0, reached_suggestions: 0, reached_search: 0 }],
+    },
   };
   const refused = await boot(71, { search: "?section=studio&hub=hub-ch&tab=reach" });
   await refused.wait(320);
@@ -1993,7 +2043,7 @@ async function reachPass() {
   refused.click(refused.qs("[data-cr-reach-save]"));
   await refused.wait(160);
   expect("reach: the field is drawn for the one item", refused.qsa("[data-cr-reach-points]").length === 1, String(refused.qsa("[data-cr-reach-points]").length));
-  expect("reach: a refused save is reported", /Reach saved|Not saved/.test(refused.document.body.textContent), "no word after the save");
+  expect("reach: a refused save is reported", /Reach saved|Not saved|More than the day allows/.test(refused.document.body.textContent), "no word after the save");
   refused.window.close();
 
   /* the schema behind the tab */
