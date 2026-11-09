@@ -922,9 +922,14 @@ async function editor(tag) {
     cfg.STREAMTAPE.proxy
   );
   expect(
-    "studio upload: and a direct way stands behind it",
-    Boolean(cfg.STREAMTAPE.login && cfg.STREAMTAPE.key),
-    `${cfg.STREAMTAPE.login ? "login set" : "no login"}`
+    "studio upload: the browser holds no key at all",
+    !cfg.STREAMTAPE.login && !cfg.STREAMTAPE.key,
+    `${cfg.STREAMTAPE.login ? "login set" : "no login"}, ${cfg.STREAMTAPE.key ? "key set" : "no key"}`
+  );
+  const siteConfig = readFileSync(join(root, "assets/js/config.js"), "utf8");
+  expect(
+    "studio upload: no key is written into the page's config",
+    !/120GYLeBYluelxJ|010abc21eb8af8b77b42/.test(siteConfig)
   );
   const hostFunction = readFileSync(join(root, "supabase/functions/studio-upload/index.ts"), "utf8");
   expect(
@@ -993,7 +998,12 @@ async function editor(tag) {
 }
 
 {
-  /* the day the function is not deployed: the direct way takes over */
+  /* the day the function is not deployed: the direct way takes over. The
+     shipped config carries no keys at all, so the harness lends the running
+     module two — the road still has to work for whoever fills them by hand. */
+  const cfgLive = await import(`file://${join(root, "assets/js/config.js")}`);
+  cfgLive.STREAMTAPE.login = "harness-login";
+  cfgLive.STREAMTAPE.key = "harness-key";
   const direct = { calls: [], uploads: 0 };
   const ctx = boot("video-editor.html", {
     storage: STORAGE,
@@ -1066,6 +1076,13 @@ async function editor(tag) {
     "direct way: the path is remembered",
     ctx.window.localStorage.getItem("1w.streamtape.path") === "direct",
     ctx.window.localStorage.getItem("1w.streamtape.path")
+  );
+  /* the harness keys are lent, not shipped */
+  cfgLive.STREAMTAPE.login = "";
+  cfgLive.STREAMTAPE.key = "";
+  expect(
+    "direct way: the shipped config still holds no key",
+    !cfgLive.STREAMTAPE.login && !cfgLive.STREAMTAPE.key
   );
 }
 

@@ -66,9 +66,10 @@ export function embedOf(id) {
  *
  *   proxy   the `studio-upload` function — the browser holds no credential,
  *           and the function decides which studio the token may upload into.
- *   direct  Streamtape's own address, with the keys from `config.js`. It is the
- *           fallback for the day the function is not deployed yet, or the day
- *           the browser cannot reach it at all.
+ *   direct  Streamtape's own address, with `STREAMTAPE.login`/`key` from
+ *           `config.js`. Those slots are empty now that the function is
+ *           deployed, so this road is only there for the day the function is
+ *           gone and someone deliberately fills them again.
  *
  * The one that answered last is remembered, so the failing one is not asked
  * again on every keystroke.

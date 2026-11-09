@@ -1693,14 +1693,15 @@ The file on Streamtape is named after the code, so a file uploaded before this c
 `PST-001032.mp4`. `meta.host_file` now keeps the name the file actually has; opening such a video in
 the editor and saving it renames the file to the code it now carries.
 
-**Two ways to the host, and the page tries them in order.** The preferred way is the edge function
-`supabase/functions/studio-upload/index.ts`: Streamtape's **API Login** and **API Key** (the key is the
-"API password") are its secrets, and the page only ever holds the member's own session token. If the
-function is not deployed yet, or the browser cannot reach it, `streamtape.js` falls back to
-Streamtape's address directly with the two keys kept in `STREAMTAPE` in `assets/js/config.js` — so a
-studio can upload before the function exists at all. The way that answered last is remembered in
-`localStorage["1w.streamtape.path"]`, and when neither answers the message names both and the deploy
-command instead of pretending the network blinked. The function speaks the same seven
+**One way to the host, and the browser holds nothing.** The way in is the edge function
+`supabase/functions/studio-upload/index.ts`, deployed on this project: Streamtape's **API Login** and
+**API Key** (the key is the "API password") are its secrets, and the page only ever holds the
+member's own session token. `STREAMTAPE.login` and `STREAMTAPE.key` in `assets/js/config.js` are
+**empty on purpose** — `streamtape.js` still knows the direct road, and filling them is the escape
+hatch for a day the function itself is gone, but nothing in the browser is worth stealing today. The
+way that answered last is remembered in `localStorage["1w.streamtape.path"]`, and when the function
+cannot be reached the message names it and the deploy command instead of pretending the network
+blinked. The function speaks the same seven
 actions (`file/listfolder`, `file/createfolder`, `file/ul`, `file/rename`, `file/info`, `file/find`,
 `file/getsplash`)
 and answers in Streamtape's own `{ status, msg, result }` shape, so the client reads it exactly as
@@ -1718,6 +1719,13 @@ editor shows that sentence, and nothing pretends a file went anywhere.
 supabase functions deploy studio-upload
 supabase secrets set STREAMTAPE_LOGIN=<api login> STREAMTAPE_KEY=<api key>
 ```
+
+It is deployed, and it was asked on the live endpoint: no token answers `401` "Sign in first.", an
+action outside the seven answers `400`, a token that publishes into no studio answers `403` without
+Streamtape ever being called, and a token that owns a studio gets Streamtape's own answer —
+`file/listfolder` returned the account's folders (`Subtitles`, `Thumbnails`, `Users`) and its files.
+Source the function from its file, not from a copy: a `/** … */` block header sent through the
+management API comes back truncated, so the deployed file keeps its notes as `//` lines.
 
 ### The thumbnail comes with the file
 
@@ -1873,7 +1881,7 @@ in the same file, or, when that call is not on the server yet, the `creator_publ
 page already makes (a channel first, then a server or a cinema, never a private hub). No studio at
 all, and the member's face is the publisher, which is the honest answer.
 
-Test: `node tools/video-smoke.mjs` — **472/472** (feed, sort, search, watch, reaction→comment, a locked
+Test: `node tools/video-smoke.mjs` — **474/474** (feed, sort, search, watch, reaction→comment, a locked
 door and its password, a missing video, the editor signed out and in, the payload of a publish, of an
 exclusive rule set and of a private list, the player and the sixteen host cases, the oEmbed stills, the
 studio picker, the contents rail, and the forwarding page).
@@ -2250,7 +2258,7 @@ the editors need**, each pinned to a name pattern and a set of extensions (`user
 | `node tools/rte-smoke.mjs` | **45/45** (every command, links, insertion, history, paste, drop, keys, toolbar state) |
 | `node tools/article-smoke.mjs` | **281/281** |
 | `node tools/blog-smoke.mjs` | **82/82** (the address, the closed door, the hero, the home, a section, the search, the plain cover) |
-| `node tools/video-smoke.mjs` | **472/472** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
+| `node tools/video-smoke.mjs` | **474/474** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
 | `node tools/media-smoke.mjs` | **89/89** (the address book, the three pages, the portrait stage, the locked item, the shelves) |
 
 ### The six OAuth apps — one checklist each

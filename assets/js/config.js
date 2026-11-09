@@ -40,14 +40,16 @@ export function storageUrl(path) {
  * the site's storage: it goes to Streamtape, under
  * `Home / Users / Studio / <studio code> / <video code>.<ext>`.
  *
- * The preferred way is the `studio-upload` Edge Function, where the API Login
- * and API Key are secrets (`supabase secrets set STREAMTAPE_LOGIN=…
- * STREAMTAPE_KEY=…`): the browser then holds only a session token, and the
- * function decides which studio that token may upload into.
+ * The way in is the `studio-upload` Edge Function, where the API Login and API
+ * Key are secrets (`supabase secrets set STREAMTAPE_LOGIN=… STREAMTAPE_KEY=…`):
+ * the browser holds only a session token, and the function decides which studio
+ * that token may upload into. The function is deployed on this project, and the
+ * two slots below are **empty on purpose** — nothing in the browser is worth
+ * stealing.
  *
- * `login` and `key` below are the **fallback**: if the function is not deployed
- * yet or cannot be reached, `streamtape.js` speaks to the API directly with
- * them. Empty both once the function is live.
+ * `login` and `key` stay in the shape because `streamtape.js` still knows the
+ * direct road: filling them is the escape hatch for a day the function is gone,
+ * not a second road that normal use takes. Leave them empty.
  */
 export const STREAMTAPE = {
   api: "https://api.streamtape.com",
@@ -57,12 +59,13 @@ export const STREAMTAPE = {
   users: "Users",
   shelf: "Studio",
   /**
-   * The direct way — used only when the function cannot be reached (not
-   * deployed yet, or blocked). Deploy `studio-upload` and empty these two and
-   * the browser stops holding the account's keys at all.
+   * The direct road, kept empty: the credentials live in the function's
+   * secrets and nowhere else. Filling these would put the account's keys in
+   * every member's browser again — only worth it to reach the host on a day
+   * the function itself is gone.
    */
-  login: "010abc21eb8af8b77b42",
-  key: "120GYLeBYluelxJ",
+  login: "",
+  key: "",
 };
 
 /* ------------------------------------------------------------------ */

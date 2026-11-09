@@ -1,47 +1,39 @@
-/**
- * 1World — the studio's host (Supabase edge function).
- * ------------------------------------------------------------------
- * A studio's video files do not live on the site: they live on **Streamtape**,
- * in the account's own tree —
- *
- *   Home / Users / Studio / <studio code> / <video code>.mp4
- *
- * The browser is not trusted with the Streamtape credentials, so it talks to
- * this function instead, and the function talks to the API:
- *
- *   GET  ?action=file/listfolder&studio=<code>&folder=<id>
- *   GET  ?action=file/createfolder&studio=<code>&name=<name>&pid=<id>
- *   GET  ?action=file/ul&studio=<code>&folder=<id>      → an upload address
- *   GET  ?action=file/rename&studio=<code>&file=<id>&name=<name>
- *   GET  ?action=file/info&studio=<code>&file=<id>
- *   GET  ?action=file/find&studio=<code>&folder=<id>&name=<name>
- *   GET  ?action=file/getsplash&studio=<code>&file=<id>  → the video's own still
- *
- * The answer is Streamtape's own `{ status, msg, result }` — the client reads it
- * exactly as it would read the API, so the shape never has to be learned twice.
- *
- * The file itself is **not** sent through here: the browser asks for an upload
- * address and posts the file straight to it, so a two-gigabyte film costs this
- * function one small JSON answer. `file/find` is the safety net for the case
- * where the browser cannot read the upload answer (a host without CORS on its
- * upload endpoint): the function lists the folder and names the file instead.
- *
- * Every action names the studio it is about, and the member's token must be one
- * that may **publish into that studio** — the same list the editor's own picker
- * is built from. A token that owns nothing gets 403 and the API is never called.
- *
- * Secrets:
- *   STREAMTAPE_LOGIN   the API Login  (Streamtape → Account Settings)
- *   STREAMTAPE_KEY     the API Key    (the "API password")
- *   SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are provided by the runtime.
- *
- * Deploy:
- *   supabase functions deploy studio-upload
- *   supabase secrets set STREAMTAPE_LOGIN=… STREAMTAPE_KEY=…
- *
- * With the secrets missing the function answers 503 with a sentence, and the
- * editor shows it — it never pretends a file went anywhere.
- */
+// 1World — the studio's host (Supabase edge function).
+// ------------------------------------------------------------------
+// A studio's video files do not live on the site: they live on Streamtape, in
+// the account's own tree:
+//
+// Home / Users / Studio / <studio code> / <video code>.mp4
+//
+// The browser is not trusted with the Streamtape credentials, so it talks to
+// this function instead, and the function talks to the API:
+//
+// GET ?action=file/listfolder&studio=<code>&folder=<id>
+// GET ?action=file/createfolder&studio=<code>&name=<name>&pid=<id>
+// GET ?action=file/ul&studio=<code>&folder=<id>        an upload address
+// GET ?action=file/rename&studio=<code>&file=<id>&name=<name>
+// GET ?action=file/info&studio=<code>&file=<id>
+// GET ?action=file/find&studio=<code>&folder=<id>&name=<name>
+// GET ?action=file/getsplash&studio=<code>&file=<id>   the video's own still
+//
+// The answer is Streamtape's own { status, msg, result } — the client reads it
+// exactly as it would read the API, so the shape never has to be learned twice.
+//
+// The file itself is not sent through here: the browser asks for an upload
+// address and posts the file straight to it, so a two-gigabyte film costs this
+// function one small JSON answer. file/find is the safety net for the case
+// where the browser cannot read the upload answer (a host without CORS on its
+// upload endpoint): the function lists the folder and names the file instead.
+//
+// Every action names the studio it is about, and the member's token must be one
+// that may publish into that studio — the same list the editor's own picker is
+// built from. A token that owns nothing gets 403 and the API is never called.
+//
+// Secrets: STREAMTAPE_LOGIN (the API Login), STREAMTAPE_KEY (the API Key).
+// SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are provided by the runtime.
+//
+// With the secrets missing the function answers 503 with a sentence, and the
+// editor shows it — it never pretends a file went anywhere.
 
 const API = "https://api.streamtape.com";
 const LOGIN = Deno.env.get("STREAMTAPE_LOGIN") ?? "";
@@ -135,8 +127,8 @@ const ALLOWED = new Set([
   "file/rename",
   "file/info",
   "file/find",
-  /* the video's own picture: the one Streamtape keeps for the file, which is
-     the one the account sees under Home / Thumbnails when it has put one there */
+  // the video's own picture: the one Streamtape keeps for the file, which is
+  // the one the account sees under Home / Thumbnails when it has put one there
   "file/getsplash",
 ]);
 
@@ -180,7 +172,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
   const pid = String(url.searchParams.get("pid") || "").trim();
 
   if (action === "file/find") {
-    /* the browser could not read the upload's answer — the folder names it */
+    // the browser could not read the upload's answer — the folder names it
     const listing = await api("file/listfolder", { folder });
     if (Number(listing.status) !== 200) return json(listing);
     const box = (listing.result || {}) as Json;
@@ -195,7 +187,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
   }
 
   if (action === "file/getsplash") {
-    /* one file in, one address out — no folder is involved */
+    // one file in, one address out — no folder is involved
     const answer = await api("file/getsplash", { file });
     return json(answer);
   }
