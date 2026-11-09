@@ -73,7 +73,6 @@ export async function rest(table, { select = "*", filters = {}, order, limit, of
   return res;
 }
 
-/** Calls a Postgres function through PostgREST (security definer on the server). */
 /**
  * The calls that move a member's points. Every one of them is answered by the
  * database with the new row, and every one of them has to be answered by the
@@ -101,6 +100,7 @@ function notePoints(fn) {
   }
 }
 
+/** Calls a Postgres function through PostgREST (security definer on the server). */
 export async function rpc(fn, body = {}, { keepalive = false } = {}) {
   const res = await fetch(`${SUPABASE.restUrl}/rpc/${fn}`, {
     method: "POST",
