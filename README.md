@@ -1897,6 +1897,19 @@ YouTube frame never pays for it. A frame that says nothing within 2.5 seconds is
 moved: the reader is told the second is in the address, and the next click starts a fresh conversation
 (a slow player is not a broken one).
 
+**What Streamtape's frame actually does: nothing.** Checked against the host itself, 2026-11-09:
+`https://streamtape.com/e/<id>` is a Plyr over one `<video id="mainvideo">`, the page carries no
+`message` listener, and its player script (`/js/player.ec3b7f.js`, 148 KB) contains no start word at
+all — the only things it reads from its own address are subtitle files (`c1_file`, `subtitle_json`). A
+bridge, a `postMessage`, a re-pointed `src`: none of them move it, and the second stays in the address.
+The file behind the frame is no way round either. `file/dlticket` → `file/dl` hands out an address, but
+`file/dl` sends **no** `Access-Control-Allow-Origin`, so a page can never read it; a server can read it,
+and the address it gets is bound to the server's own address and refused for everyone else ("this
+download link is not for you"). So a chapter on a Streamtape video is a **time, not a jump** — until the
+studio's files are served from somewhere that can be seeked: the watch page already plays a plain
+`<video>` (a file link, or the site's own storage) with chapters, the playhead and the address all
+working, and nothing about that path changed.
+
 Opening a link that carries `&t=1860s` (`?t=1860` is read the same) builds the frame **at** that
 second — `playerMarkup` passes it through `frameWithSecond`, so `#/h/ID=…&t=1860s` opens at 00:31:00
 inside the iframe without a second load — and the chapter that second belongs to is the one marked.
