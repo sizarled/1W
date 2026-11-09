@@ -2076,11 +2076,65 @@ async function reachPass() {
 }
 
 /* ------------------------------------------------------------------ */
+/* the head of the page: cover, mark, numbers, and what it still lacks */
+/* ------------------------------------------------------------------ */
+async function headPass() {
+  scenario = {
+    hubs: [hub({ id: "hub-ch", kind: "channel", name: "Studio One", subscribers: 1200, items: 3, published: 2, drafts: 1, minutes: 420, likes: 90, reports: 1 })],
+    items: [item({ id: "it-1", kind: "video", title: "The first film", status: "published" })],
+    categories: [],
+  };
+  const bare = await boot(81, { search: "?section=studio&hub=hub-ch&tab=videos" });
+  await bare.wait(240);
+  const head = bare.qs("[data-cr-hubhead]");
+  expect("head: the cover and the mark are one block", Boolean(head?.querySelector(".cr-hubhead__hero .cr-hubhead__plate")), "the plate is not inside the hero");
+  expect("head: the mark sits in that block", Boolean(bare.qs(".cr-hubhead__plate .cr-hubhead__logo")), "no mark in the plate");
+  expect("head: the numbers run in a strip", bare.qsa(".cr-hubhead__strip .cr-stat").length === 7, String(bare.qsa(".cr-hubhead__strip .cr-stat").length));
+  expect("head: every number carries its name", /subscribers[\s\S]*items[\s\S]*published[\s\S]*drafts[\s\S]*minutes watched[\s\S]*likes[\s\S]*reports/i.test(bare.text(".cr-hubhead__strip")), bare.text(".cr-hubhead__strip"));
+  expect("head: the page says what it still lacks", /Finishing touches/.test(bare.text(".cr-hubhead__ready")) && /3 \/ 6/.test(bare.text(".cr-hubhead__ready")), bare.text(".cr-hubhead__ready"));
+  expect("head: and names it", /a cover, a logo, a category/.test(bare.text(".cr-hubhead__ready")), bare.text(".cr-hubhead__ready"));
+  expect("head: without a cover the head asks for one", /Add a cover/.test(bare.text(".cr-hubhead__seat--add")), bare.text(".cr-hubhead__top"));
+  expect("head: the managing row carries the mark", bare.text("[data-cr-hub-mark]").trim() === "ST" && !bare.hidden("[data-cr-hub-mark]"), bare.text("[data-cr-hub-mark]"));
+  expect("head: no errors", bare.errors.length === 0, bare.errors.join(" | "));
+  bare.window.close();
+
+  /* the same page once it has a cover, a logo and a category */
+  scenario = {
+    hubs: [
+      hub({
+        id: "hub-ch",
+        kind: "channel",
+        name: "Studio One",
+        subscribers: 1200,
+        items: 3,
+        published: 2,
+        drafts: 1,
+        categories: 2,
+        cover_url: "https://example.com/cover.jpg",
+        logo_url: "https://example.com/logo.png",
+      }),
+    ],
+    items: [item({ id: "it-1", kind: "video", title: "The first film", status: "published" })],
+    categories: [{ id: "cat-1", name: "Documentary", level: 1, parent: null, items: 1 }],
+  };
+  const full = await boot(82, { search: "?section=studio&hub=hub-ch&tab=videos" });
+  await full.wait(240);
+  expect("head: a cover of its own is worn", full.qs("[data-cr-hubhead]")?.getAttribute("data-cover") === "1" && Boolean(full.qs(".cr-hubhead__cover")), "the cover is not in the art");
+  expect("head: the mark becomes the logo", Boolean(full.qs(".cr-hubhead__plate .cr-hubhead__logo img")), "no logo in the plate");
+  expect("head: with nothing missing, the meter says so", /The page is complete/.test(full.text(".cr-hubhead__ready")) && /6 \/ 6/.test(full.text(".cr-hubhead__ready")), full.text(".cr-hubhead__ready"));
+  expect("head: and it stops asking for a cover", !full.qs(".cr-hubhead__seat--add"), "still asking");
+  expect("head: the doors are the dashboard and the visitor's page", Boolean(full.qs('.cr-hubhead__acts a[href="dashboard.html#creator"]')) && Boolean(full.qs('.cr-hubhead__acts a[href*="creator.html?studio="]')), "a door is missing");
+  expect("head: no errors", full.errors.length === 0, full.errors.join(" | "));
+  full.window.close();
+}
+
+/* ------------------------------------------------------------------ */
 /* results                                                             */
 /* ------------------------------------------------------------------ */
 await main();
 await seatPass();
 await reachPass();
+await headPass();
 const failed = checks.filter((c) => !c.ok);
 checks.forEach((c) => {
   console.log(`${c.ok ? "ok  " : "FAIL"}  ${c.name}${c.ok || !c.detail ? "" : ` — ${c.detail}`}`);

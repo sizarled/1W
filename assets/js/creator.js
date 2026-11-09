@@ -670,6 +670,17 @@ function withHub(href) {
 function renderTop() {
   const section = sectionOf(state.section);
   const hubs = hubsOf(section.kind);
+  const mark = el("[data-cr-hub-mark]");
+  const managing = currentHub();
+  if (mark) {
+    mark.hidden = !managing;
+    mark.innerHTML = managing
+      ? managing.logo_url
+        ? `<img src="${esc(managing.logo_url)}" alt="" width="32" height="32" loading="lazy" />`
+        : `<span>${esc(String(managing.name || "?").trim().slice(0, 2).toUpperCase())}</span>`
+      : "";
+  }
+
   const select = el("[data-cr-hub]");
   if (select) {
     select.innerHTML = hubs.length
@@ -729,38 +740,113 @@ function renderHubHead() {
   host.hidden = false;
   host.style.display = "";
   host.dataset.kind = hub.kind || "";
-  const logo = hub.logo_url
-    ? `<img src="${esc(hub.logo_url)}" alt="" width="84" height="84" />`
-    : esc(String(hub.name || "?").trim().slice(0, 2).toUpperCase());
+  host.dataset.cover = hub.cover_url ? "1" : "0";
+
   const section = sectionOf(state.section);
   const seat = seatOf(hub);
   const seatNote = seat === "publisher" ? "publisher seat" : seat === "staff" ? "staff access" : "owner";
-  const cover = hub.cover_url
+  const initials = esc(String(hub.name || "?").trim().slice(0, 2).toUpperCase());
+  const logo = hub.logo_url
+    ? `<img src="${esc(hub.logo_url)}" alt="" width="96" height="96" />`
+    : `<span class="cr-mono">${initials}</span>`;
+
+  /* the cover is the picture; with none, the plate carries a drawn weave so
+     the top of the page is never a blank window */
+  const art = hub.cover_url
     ? `<img class="cr-hubhead__cover" src="${esc(hub.cover_url)}" alt="" loading="lazy" />`
     : "";
+
+  /* what the page is made of — read from the hub it already carries */
+  const marks = [
+    [Boolean(hub.cover_url), "a cover"],
+    [Boolean(hub.logo_url), "a logo"],
+    [Boolean(String(hub.description || "").trim()), "a description"],
+    [Boolean(String(hub.field || "").trim()), "a field"],
+    [Boolean(hub.niches?.length), "a niche"],
+    [Boolean(hub.categories), "a category"],
+  ];
+  const ready = marks.filter(([on]) => on).length;
+  const missing = marks.filter(([on]) => !on).map(([, what]) => what);
+  const readyPct = Math.round((ready / marks.length) * 100);
+
+  /* the numbers it lives on, one cell each */
+  const published = hub.published === undefined || hub.published === null ? hub.items || 0 : hub.published;
+  const stats = [
+    ["users", hub.subscribers || 0, "subscribers"],
+    ["file", hub.items || 0, "items"],
+    ["upload", published, "published"],
+    ["pen", hub.drafts || 0, "drafts"],
+    ["clock", hub.minutes || 0, "minutes watched"],
+    ["thumbUp", hub.likes || 0, "likes"],
+    ["flag", hub.reports || 0, "reports"],
+  ];
+
+  const where = [String(hub.field || "").trim() || "No field yet"];
+  if (hub.niches?.length) where.push(hub.niches.join(", "));
+  where.push(`${num(hub.categories || 0)} ${Number(hub.categories) === 1 ? "category" : "categories"}`);
+
   host.innerHTML = `
-    <div class="cr-hubhead__banner">
-      ${cover}
-      <span class="cr-hubhead__scrim" aria-hidden="true"></span>
-      <p class="cr-hubhead__eyebrow">
-        <span class="cr-hubhead__kind">${esc(section.label)}</span>
-        ${hub.code ? `<span class="cr-hubhead__dot" aria-hidden="true"></span><span class="cr-hubhead__code">${esc(hub.code)}</span>` : ""}
-      </p>
-    </div>
-    <div class="cr-hubhead__bar">
-      <span class="cr-hubhead__logo">${logo}</span>
-      <div class="cr-hubhead__id">
-        <span class="cr-hubhead__name">${esc(hub.name)}</span>
-        <span class="cr-hubhead__sub">${esc(hub.field || "No field yet")}${hub.niches?.length ? ` · ${esc(hub.niches.join(", "))}` : ""} · ${esc(seatNote)}</span>
-        <div class="cr-hubhead__stats">
-          <span class="cr-pill" data-tone="${esc(hub.visibility)}"><i data-icon="shield"></i>${esc(visLabel(hub.visibility))}</span>
-          <span class="cr-pill"><i data-icon="users"></i><b>${esc(num(hub.subscribers || 0))}</b> subscribers</span>
-          <span class="cr-pill"><i data-icon="file"></i><b>${esc(num(hub.items || 0))}</b> items</span>
-          <span class="cr-pill"><i data-icon="clock"></i><b>${esc(num(hub.minutes || 0))}</b> min</span>
-          <span class="cr-pill"><i data-icon="thumbUp"></i><b>${esc(num(hub.likes || 0))}</b></span>
-          <span class="cr-pill"><i data-icon="flag"></i><b>${esc(num(hub.reports || 0))}</b></span>
+    <div class="cr-hubhead__hero">
+      <div class="cr-hubhead__art">
+        ${art}
+        <span class="cr-hubhead__weave" aria-hidden="true"></span>
+        <span class="cr-hubhead__scrim" aria-hidden="true"></span>
+        <span class="cr-hubhead__grain" aria-hidden="true"></span>
+      </div>
+
+      <div class="cr-hubhead__top">
+        <p class="cr-hubhead__eyebrow">
+          <span class="cr-hubhead__kind">${esc(section.label)}</span>
+          ${hub.code ? `<span class="cr-hubhead__dot" aria-hidden="true"></span><span class="cr-hubhead__code">${esc(hub.code)}</span>` : ""}
+        </p>
+        <div class="cr-hubhead__side">
+          ${
+            hub.cover_url
+              ? ""
+              : `<a class="cr-hubhead__seat cr-hubhead__seat--add" href="dashboard.html#creator"><i data-icon="image"></i>Add a cover</a>`
+          }
+          <span class="cr-hubhead__seat" data-seat="${esc(seat)}"><i data-icon="${seat === "publisher" ? "key" : seat === "staff" ? "users" : "crown"}"></i>${esc(seatNote)}</span>
         </div>
       </div>
+
+      <div class="cr-hubhead__plate">
+        <span class="cr-hubhead__logo ${hub.logo_url ? "has-img" : "is-mono"}" data-cr-hub-logo>${logo}</span>
+        <div class="cr-hubhead__id">
+          <div class="cr-hubhead__line">
+            <span class="cr-hubhead__name">${esc(hub.name)}</span>
+            <span class="cr-pill" data-tone="${esc(hub.visibility)}"><i data-icon="shield"></i>${esc(visLabel(hub.visibility))}</span>
+          </div>
+          <span class="cr-hubhead__sub">${esc(where[0])} · ${esc(where.slice(1).join(" · "))}</span>
+        </div>
+        <div class="cr-hubhead__acts">
+          <a class="cr-hubhead__act" href="dashboard.html#creator"><i data-icon="settings"></i> Edit the page</a>
+          ${hub.code ? `<a class="cr-hubhead__act" href="${studioLink(hub.code)}"><i data-icon="eye"></i> See it as a visitor</a>` : ""}
+        </div>
+      </div>
+    </div>
+
+    <div class="cr-hubhead__strip">
+      ${stats
+        .map(
+          ([iconName, value, label]) =>
+            `<span class="cr-stat"><i data-icon="${esc(iconName)}"></i><b>${esc(num(value || 0))}</b><span>${esc(label)}</span></span>`
+        )
+        .join("")}
+    </div>
+
+    <div class="cr-hubhead__ready ${ready === marks.length ? "is-done" : ""}" data-cr-ready="${readyPct}">
+      <div class="cr-hubhead__ready-head">
+        <span>${ready === marks.length ? "The page is complete" : "Finishing touches"}</span>
+        <b>${ready} / ${marks.length}</b>
+      </div>
+      <div class="cr-hubhead__ready-bar"><span style="width: ${readyPct}%"></span></div>
+      <p class="cr-hubhead__ready-note">
+        ${
+          ready === marks.length
+            ? "A cover, a logo, a description, a field, a niche and a category — the page has all of them."
+            : `Still to add: ${esc(missing.join(", "))}. A cover and a logo are set on <a href="dashboard.html#creator">the dashboard</a>.`
+        }
+      </p>
     </div>`;
   hydrateIcons(host);
 }

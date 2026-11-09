@@ -494,6 +494,33 @@
   font-weight: 550;
 }
 
+/* the mark of the page being managed, beside its name */
+.cr-pick__mark {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: linear-gradient(155deg, color-mix(in srgb, var(--text) 9%, var(--surface-2)), var(--surface-2));
+  color: var(--text);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.cr-pick__mark[hidden] {
+  display: none;
+}
+
+.cr-pick__mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .cr-pick__hint {
   font-size: 0.68rem;
   line-height: 1.5;
@@ -572,70 +599,148 @@
  * is graded down to grey and half hidden — the furniture around it stays the
  * one thing the eye lands on.
  */
-/* the channel head — a cover, a mark, a name and the numbers under it */
+/* the studio head — one hero, not a cover with things dropped on it --- */
+/*
+ * The art fills the top of the page; the identity plate sits *inside* it at
+ * the foot (the mark, the name, the seat, the two doors); the numbers run
+ * under it as a strip of their own; and a thin meter says what the page still
+ * lacks. Nothing is pulled over the edge of anything, so the cover and the
+ * mark can never drift apart — with a picture or without one.
+ *
+ * The plate is glass over the art, built from `--bg`, so it reads the same in
+ * the dark and in the light: the picture is graded to grey, the furniture
+ * around it keeps its contrast.
+ */
 .cr-hubhead {
   position: relative;
   display: grid;
-  gap: 0;
-  padding: clamp(0.9rem, 2vw, 1.2rem) var(--cr-x) 0;
+  gap: clamp(0.55rem, 1.4vw, 0.8rem);
+  padding: clamp(0.75rem, 1.8vw, 1.1rem) var(--cr-x) clamp(0.9rem, 2vw, 1.2rem);
   border-bottom: 1px solid var(--cr-hair);
 }
 
-.cr-hubhead__banner {
+.cr-hubhead__hero {
   position: relative;
   isolation: isolate;
-  min-height: clamp(140px, 20vw, 232px);
-  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: clamp(1.6rem, 5vw, 3rem);
+  min-height: clamp(196px, 24vw, 288px);
+  padding: clamp(0.75rem, 1.6vw, 1rem);
   border: 1px solid var(--line);
+  border-radius: calc(var(--radius) + 6px);
   overflow: hidden;
-  background:
-    radial-gradient(120% 160% at 12% 0%, color-mix(in srgb, var(--text) 12%, transparent), transparent 62%),
-    linear-gradient(140deg, var(--surface-2), var(--bg-soft));
+  background: var(--surface-2);
+  box-shadow: 0 26px 60px -48px rgba(0, 0, 0, 0.95);
+}
+
+.cr-hubhead__art {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
 }
 
 .cr-hubhead__cover {
   position: absolute;
   inset: 0;
-  z-index: -1;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center 40%;
-  filter: grayscale(1) contrast(1.05) brightness(0.82);
+  object-position: center 42%;
+  filter: grayscale(1) contrast(1.05);
+  transform: scale(1.015);
+  transition: transform 1.1s ease;
 }
 
+.cr-hubhead__hero:hover .cr-hubhead__cover {
+  transform: scale(1.045);
+}
+
+/* a cover of its own when the studio has none: hairlines, two washes and the
+   studio's own tone, so the top of the page is never an empty window */
+.cr-hubhead__weave {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(120% 150% at 6% 0%, color-mix(in srgb, var(--text) 14%, transparent), transparent 58%),
+    radial-gradient(90% 130% at 100% 100%, color-mix(in srgb, var(--text) 9%, transparent), transparent 60%),
+    repeating-linear-gradient(118deg, color-mix(in srgb, var(--text) 5%, transparent) 0 1px, transparent 1px 14px),
+    linear-gradient(160deg, var(--surface-2), var(--bg-soft));
+}
+
+.cr-hubhead[data-cover="1"] .cr-hubhead__weave {
+  display: none;
+}
+
+/* the foot of the art fades into the plate; the top stays clear */
 .cr-hubhead__scrim {
   position: absolute;
   inset: 0;
-  z-index: -1;
   background:
-    linear-gradient(180deg, rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.55)),
-    radial-gradient(90% 120% at 0% 100%, rgba(0, 0, 0, 0.55), transparent 70%);
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--bg) 8%, transparent) 0%,
+      transparent 32%,
+      color-mix(in srgb, var(--bg) 74%, transparent) 100%
+    ),
+    radial-gradient(85% 100% at 0% 100%, color-mix(in srgb, var(--bg) 52%, transparent), transparent 64%);
   pointer-events: none;
 }
 
-.cr-hubhead__eyebrow {
+/* a film grain over the picture, the same grain the page already carries */
+.cr-hubhead__grain {
   position: absolute;
-  inset-inline-start: clamp(0.9rem, 2vw, 1.4rem);
-  top: clamp(0.8rem, 1.6vw, 1.1rem);
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  margin: 0;
-  font-size: 0.6rem;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.82);
-  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.6);
+  inset: 0;
+  opacity: 0.16;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+  background-image: radial-gradient(color-mix(in srgb, var(--text) 26%, transparent) 0.5px, transparent 0.6px);
+  background-size: 3px 3px;
 }
 
-.cr-hubhead__kind {
-  padding: 0.18rem 0.55rem;
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  border-radius: 0.4rem;
-  background: rgba(0, 0, 0, 0.32);
-  backdrop-filter: blur(6px);
+.cr-hubhead__top {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.cr-hubhead__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 0.6rem;
+  font-weight: 750;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+.cr-hubhead__kind,
+.cr-hubhead__seat {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  height: 26px;
+  padding: 0 0.62rem;
+  border: 1px solid color-mix(in srgb, var(--text) 15%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg) 66%, transparent);
+  backdrop-filter: blur(10px) saturate(1.2);
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.cr-hubhead__seat[data-seat="owner"] {
+  color: var(--text);
+}
+
+.cr-hubhead__seat svg {
+  opacity: 0.75;
 }
 
 .cr-hubhead__dot {
@@ -643,38 +748,54 @@
   height: 3px;
   border-radius: 999px;
   background: currentColor;
-  opacity: 0.6;
+  opacity: 0.55;
 }
 
 .cr-hubhead__code {
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.1em;
+  color: var(--text-2);
 }
 
-.cr-hubhead__bar {
+/* the plate: the mark and the name in one line, its own glass over the art */
+.cr-hubhead__plate {
+  position: relative;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: end;
-  gap: clamp(0.7rem, 1.6vw, 1.1rem);
-  margin-top: clamp(-2.6rem, -3.2vw, -2rem);
-  padding: 0 clamp(0.8rem, 2vw, 1.4rem) clamp(0.9rem, 1.8vw, 1.2rem);
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: clamp(0.75rem, 1.8vw, 1.15rem);
+  padding: clamp(0.65rem, 1.4vw, 0.85rem);
+  border: 1px solid color-mix(in srgb, var(--text) 13%, transparent);
+  border-radius: calc(var(--radius) + 2px);
+  background: color-mix(in srgb, var(--bg) 74%, transparent);
+  backdrop-filter: blur(20px) saturate(1.25);
+  box-shadow:
+    0 22px 48px -38px rgba(0, 0, 0, 0.95),
+    inset 0 1px 0 color-mix(in srgb, var(--text) 7%, transparent);
 }
 
 .cr-hubhead__logo {
   display: grid;
   place-items: center;
-  width: clamp(58px, 8vw, 84px);
-  height: clamp(58px, 8vw, 84px);
-  border-radius: 50%;
-  border: 2px solid color-mix(in srgb, var(--text) 22%, transparent);
-  background: var(--surface-2);
-  box-shadow: 0 12px 30px -14px rgba(0, 0, 0, 0.95);
-  overflow: hidden;
+  width: clamp(64px, 8.4vw, 92px);
+  height: clamp(64px, 8.4vw, 92px);
   flex: none;
-  font-size: 1rem;
-  font-weight: 800;
-  letter-spacing: 0.03em;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--text) 22%, transparent);
+  border-radius: 26%;
+  background: linear-gradient(
+    155deg,
+    color-mix(in srgb, var(--text) 11%, var(--surface-2)),
+    var(--surface-2) 62%
+  );
+  box-shadow:
+    0 16px 34px -22px rgba(0, 0, 0, 0.95),
+    inset 0 0 0 3px color-mix(in srgb, var(--bg) 55%, transparent);
   color: var(--text);
+  font-size: clamp(1rem, 1.9vw, 1.25rem);
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  line-height: 1;
 }
 
 .cr-hubhead__logo img {
@@ -683,61 +804,249 @@
   object-fit: cover;
 }
 
+.cr-hubhead__logo .cr-mono {
+  display: block;
+  transform: translateY(0.5px);
+}
+
 .cr-hubhead__id {
   display: grid;
-  gap: 0.3rem;
+  gap: 0.28rem;
+  min-width: 0;
+}
+
+.cr-hubhead__line {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
   min-width: 0;
 }
 
 .cr-hubhead__name {
-  font-size: clamp(1.25rem, 2.4vw, 1.75rem);
+  font-size: clamp(1.3rem, 2.6vw, 1.9rem);
   font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
+  letter-spacing: -0.025em;
+  line-height: 1.14;
   color: var(--text);
   overflow-wrap: anywhere;
 }
 
 .cr-hubhead__sub {
-  font-size: 0.79rem;
+  font-size: 0.78rem;
   color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
-.cr-hubhead__stats {
+.cr-hubhead__acts {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   gap: 0.4rem;
-  margin-top: 0.15rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
-.cr-hubhead__stats .cr-pill {
-  height: 28px;
-  padding: 0 0.7rem;
-  font-size: 0.71rem;
+.cr-hubhead__act {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  height: 32px;
+  padding: 0 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  color: var(--text);
+  font-size: 0.73rem;
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease;
 }
 
-.cr-hubhead__stats .cr-pill b {
+.cr-hubhead__act:hover {
+  border-color: var(--text);
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+}
+
+.cr-hubhead__act:first-child {
+  border-color: transparent;
+  background: var(--text);
+  color: var(--bg);
+}
+
+.cr-hubhead__act:first-child:hover {
+  background: color-mix(in srgb, var(--text) 88%, var(--bg));
+}
+
+/* the numbers, one cell each, hairlines between them */
+.cr-hubhead__strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 1px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--line);
+  overflow: hidden;
+}
+
+.cr-stat {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--bg);
+}
+
+.cr-stat > i {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  color: var(--muted);
+}
+
+.cr-stat > b {
+  font-size: 1.02rem;
   font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
   color: var(--text);
 }
 
-@media (max-width: 760px) {
-  .cr-hubhead__bar {
+.cr-stat > span {
+  grid-column: 2;
+  font-size: 0.6rem;
+  font-weight: 650;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* what the page still lacks — a thin meter, never a lecture */
+.cr-hubhead__ready {
+  display: grid;
+  gap: 0.38rem;
+  padding: 0 clamp(0.1rem, 0.4vw, 0.2rem);
+}
+
+.cr-hubhead__ready-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.cr-hubhead__ready-head b {
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.cr-hubhead__ready-bar {
+  height: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  overflow: hidden;
+}
+
+.cr-hubhead__ready-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--text);
+  transition: width 0.5s ease;
+}
+
+.cr-hubhead__ready-note {
+  margin: 0;
+  font-size: 0.73rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.cr-hubhead__ready-note a {
+  color: var(--text);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--text) 40%, transparent);
+  text-underline-offset: 2px;
+}
+
+.cr-hubhead__ready.is-done .cr-hubhead__ready-bar > span {
+  background: linear-gradient(90deg, var(--text), color-mix(in srgb, var(--text) 42%, transparent));
+}
+
+@media (max-width: 900px) {
+  .cr-hubhead__plate {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .cr-hubhead__acts {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 560px) {
+  .cr-hubhead__hero {
+    min-height: 178px;
+  }
+
+  .cr-hubhead__plate {
     grid-template-columns: minmax(0, 1fr);
     justify-items: start;
-    margin-top: -1.6rem;
+    gap: 0.6rem;
   }
 
-  .cr-hubhead__sub {
-    white-space: normal;
+  .cr-hubhead__logo {
+    width: 62px;
+    height: 62px;
+    border-radius: 20px;
   }
 
-  .cr-hubhead__banner {
-    min-height: 120px;
+  .cr-hubhead__acts {
+    width: 100%;
   }
+
+  .cr-hubhead__act {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}
+
+.cr-hubhead__side {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* the one chip that asks for what the page is missing */
+.cr-hubhead__seat--add {
+  border-style: dashed;
+  color: var(--text);
+  text-decoration: none;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease;
+}
+
+.cr-hubhead__seat--add:hover {
+  border-style: solid;
+  border-color: transparent;
+  background: var(--text);
+  color: var(--bg);
 }
 
 

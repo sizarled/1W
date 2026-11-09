@@ -2703,7 +2703,7 @@ node tools/dashboard-smoke.mjs   # 272 checks: the five gates, rail, popover, co
 node tools/sidebar-smoke.mjs     # 93 checks: the edge, the pin, Escape, the mobile drawer, the dashboard menu
 node tools/panel-smoke.mjs       # 90 checks: the desk's three states, the rows, the switch, the dialog, the shelf
 node tools/court-smoke.mjs       # 115 checks: the four steps, uploads, both doors, the court room
-node tools/creator-smoke.mjs     # 433 checks: the search (owners + publishers), the tables, the editors, a publisher's seat, the Reach tab
+node tools/creator-smoke.mjs     # 448 checks: the search (owners + publishers), the tables, the editors, a publisher's seat, the head of the page, the Reach tab
 node tools/media-smoke.mjs       # 89 checks: the address book, videos.html#/h|v/, audio.html#/p|m/, playlist.html#/videos|podcasts|songs/
 node tools/publisher-smoke.mjs   # 52 checks: the program, the seat, the links, and the hand-off to the creator page
 node tools/iptv-smoke.mjs        # 43 checks: the playlists, the groups, the page, the deep links
@@ -2867,6 +2867,24 @@ insert into public.hub_reach (hub_id, points)
 select id, 1500 from public.creator_hubs where code = 'IDST100001'
 on conflict (hub_id) do update set points = excluded.points;
 ```
+
+### The head of the studio
+
+The page opens on `.cr-hubhead__hero`, and it is one block: the cover fills it, the identity plate
+sits **inside** it at the foot — the mark, the name, the visibility, the seat, and the two doors
+(*Edit the page* on the dashboard, *See it as a visitor* on `creator.html?studio=<code>`) — and the
+numbers the studio lives on run under it as a seven-cell strip split by hairlines: subscribers,
+items, published, drafts, minutes watched, likes, reports. Nothing is pulled over the edge of
+anything, so the cover and the mark cannot drift apart at any width; under 560px the plate stacks to
+one column.
+
+With no cover the art is drawn rather than left empty — two washes, a hairline weave and the page's
+own grain — and a dashed **Add a cover** chip sits where the cover would be. Under the strip a
+three-pixel meter counts the six things a page is made of — cover, logo, description, field, niche,
+category — and names what is still missing (linking to `dashboard.html#creator`, where a cover and a
+logo are typed in as URLs); with all six it says *The page is complete* instead. The switcher in the
+sticky bar carries the same mark, so the row that says *Managing* and the page beneath it are never
+two different studios.
 
 `videos-page.sql` was already ordering `video_feed` and the rail beside the player by `rank_points`
 with no writer behind it; `reach_visible` now gates that feed and `video_get`'s suggestion rail was
