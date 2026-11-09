@@ -2689,6 +2689,11 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
     owed.document.querySelector(".vplayer")?.innerHTML.slice(0, 90)
   );
   expect("ad on the page: the count is the whole of it", watchGate?.querySelector("[data-v-ad-dial]")?.textContent === "30", watchGate?.querySelector("[data-v-ad-dial]")?.textContent || "");
+  /* a gate is not watching: the film behind it has not started */
+  const owedBefore = ads.watchedSeconds();
+  await wait(1300);
+  expect("ad on the page: sitting at the gate counts nothing", ads.watchedSeconds() === owedBefore, `${owedBefore} → ${ads.watchedSeconds()}`);
+
   /* the count is done: the film is let go of */
   owed.document.dispatchEvent(new owed.window.Event("1w:ad-paid"));
   await wait(40);

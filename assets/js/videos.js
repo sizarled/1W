@@ -1375,6 +1375,8 @@ function startWatchClock() {
       return;
     }
     if (document.visibilityState !== "visible") return;
+    /* a gate is not watching: the film has not started */
+    if (document.querySelector("[data-v-ad]")) return;
     /* a frame that answered in the last five seconds is counted by its own
        clock; one that never answers is counted by the wall clock */
     if (Date.now() - answeredAt < 5000) return;
