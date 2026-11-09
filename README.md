@@ -96,7 +96,7 @@ watch.html?movie=550&link=link000004      start on a specific member source
 | --- | --- |
 | Title header | Poster, display + original title, tagline, synopsis, certification, status, genres and every TMDB fact (runtime, seasons, rating, director, writers, studios, countries, language). |
 | Actions | Like / dislike (one vote per member, changeable), comments toggle, total minutes, watch later, download, share, report. |
-| Player | Poster + play button + duration. Play opens the **30-second sponsor gate**: the countdown starts when the sponsor link is opened, runs on a stored deadline (so a background tab, a throttled timer or a redirect inside the sponsor page cannot stop it), resumes after a reload and ends only when the window is closed. When it reaches zero `vidsrc.sh/embed/…` loads and the ledger starts. |
+| Player | Poster + play button + duration. Play on a **new** film (30 s) or a **new** episode (15 s) opens the sponsor gate: the count starts when the link opens, stops when its page is closed, and the gate leaves on its own. An episode opened before opens at once. When it is paid `vidsrc.sh/embed/…` loads and the ledger starts. |
 | Viewing code | Five minutes after playback starts — for titles rated **≥ 50 % on TMDB or age-restricted** — the film stops, fullscreen exits and the lock panel asks for a six-digit code. Codes are checked through `verify_watch_code()` against `viewing_codes`; "remember this device" binds the code to a random device id. |
 | Seasons | Season + episode pickers for series; changing either restarts the player and the ledger. |
 | Watch links | The platform source is always first (logo only, URL hidden). Member links show favicon, site name, quality (SD → 8K), audio, subtitles and ads. Picking one loads it in the same player and prints its details underneath. |
@@ -113,7 +113,7 @@ watch.html?movie=550&link=link000004      start on a specific member source
 
 | Condition | What pauses the clock |
 | --- | --- |
-| Play was pressed **and the sponsor countdown has finished** (`state.adCleared`) | the gate, the countdown, a reload mid-countdown — the player cannot open, let alone count, before it ends |
+| Play was pressed **and the gate is paid** (`state.adCleared`) | the gate and its count — the player cannot open, let alone count, before it is done |
 | The tab is visible | switching tabs, minimising, another app in front |
 | The window has focus | clicking a second window (a second desktop window counts as "not watching") |
 | The browser is online | offline / connection lost |
@@ -127,25 +127,23 @@ leaving the player open overnight cannot farm minutes. Accrued seconds live in
 does not reset the allowance — the next day starts a fresh one. When the allowance is
 spent the player keeps playing, the ledger stops and a toast explains it once.
 
-**The sponsor countdown is a deadline, not a tally of ticks.** `state.adDeadline` holds the
-instant the 30 seconds end (`Date.now() + 30 000`), and every beat of the 250 ms timer *reads*
-it instead of adding a second — so a tab the browser throttled for a minute finishes the count
-the moment it is looked at, instead of starting over. The deadline is written to
-`sessionStorage` under `1w.ad.gate` (one ticket per film or episode), which means:
+**The gate counts the link, not this page.** The gate opens the sponsor in a tab of its own and keeps
+the handle, and `assets/js/ads.js` adds only the wall clock that went by while `window.closed` said
+that tab was still open — four times a second. So:
 
 | Event | What happens to the count |
 | --- | --- |
-| A second tab opens (the sponsor link) | nothing — the ticket is this tab's, the clock keeps running |
-| The sponsor page redirects somewhere else | nothing — it has its own document, this one is untouched |
-| The tab is backgrounded, throttled or frozen | nothing — the next beat reads the deadline and catches up |
-| The page is reloaded | it **resumes** from the ticket, it never goes back to 30 |
-| The countdown was already finished here | the next Play opens the player directly |
-| The window is closed | the ticket dies with `sessionStorage`, which is the only thing that stops the clock |
+| A second tab opens (the sponsor link) | the count starts — nothing was counted before it |
+| The tab is backgrounded, throttled or frozen | nothing — the next beat adds the time that really passed |
+| The sponsor page redirects somewhere else | the tab is still open, so the count carries on; closing it is what stops it |
+| The ad's page is closed | the count **stops where it stood**, and says so |
+| The link is opened again | it carries on from there, never from zero |
+| This page is reloaded | it carries on too: the seconds are kept in `sessionStorage` under `1w.ad.spent:<kind>:<id>` |
+| The count is done | the gate removes itself and the content opens by itself |
 
-`state.adCleared` is set by the countdown alone, and `isCounting()`, `startPlayer()` and
-`renderLimitNote()` all read it: the player cannot mount and the ledger cannot tick while the
-sponsor gate is up. Before it ends the line under the player reads
-`Watch time starts when the sponsor countdown ends · this title counts up to 132 min.`
+`state.adCleared` is set by the gate alone, and `isCounting()`, `startPlayer()` and `renderLimitNote()`
+all read it: the player cannot mount and the ledger cannot tick while the gate is up. Before it ends
+the line under the player reads `Watch time starts when the sponsor gate opens · this title counts up to 132 min.`
 
 The line under the player shows the live state — `Counting · 3:20 of 132 min`,
 `Paused — this window is not focused · 3:20 of 132 min`, `Limit reached — all 132 min of
@@ -1933,8 +1931,9 @@ in the same file, or, when that call is not on the server yet, the `creator_publ
 page already makes (a channel first, then a server or a cinema, never a private hub). No studio at
 all, and the member's face is the publisher, which is the honest answer.
 
-Test: `node tools/video-smoke.mjs` — **559/559** (feed, sort, search, watch, reaction→comment, a chapter
-index on YouTube and Vimeo and none on Streamtape, the frame's colour both ways, the hour, the gate and its thirty seconds, a locked door and its password, a missing video, the
+Test: `node tools/video-smoke.mjs` — **567/567** (feed, sort, search, watch, reaction→comment, a chapter
+index on YouTube and Vimeo and none on Streamtape, the frame's colour both ways, the gate and its
+count, a new video behind it and a seen one in front of it, the task after twenty, a locked door and its password, a missing video, the
 editor signed out and in, the payload of a publish, of an exclusive rule set and of a private list, the
 player and the sixteen host cases, the oEmbed stills, the studio picker, the contents rail, and the
 forwarding page).
@@ -1951,30 +1950,48 @@ which only enlarges the video element itself — falls back to `webkitEnterFulls
 while the member is typing, so a comment box keeps its own `f`. The cinema page's stage
 (`watch.html`, `[data-w-stage]`) carries the same door in the same corner, with the same key.
 
-**An hour of watching is paid for by thirty seconds.** Watching is counted where it happens — a
-`<video>`'s own `timeupdate`, or a frame's through the player.js bridge — one played step at a time; a
-jump (a seek, a laptop that slept) is refused rather than believed, and a frame that will never say its
-time is counted while it is on the screen and the page is visible. The ledger lives in `localStorage`
-(`1w.videos.watched`, `1w.videos.adsPaid`), so it survives a reload and a visit that ends mid-hour.
+**A new film asks first — and a film seen before does not.** Nothing is free and nothing is
+endless, and the rule is the same on every shelf; only the numbers differ. The first time a member
+opens an item, a gate stands in front of it: one link, opened, kept open, counted.
 
-A film is as long as it is: past **its own length** nothing is booked on that page — not a loop, not
-a rewind, not a page left open on the last frame. The duration is the player's when it says it (a
-`<video>`'s `duration`, a frame's through the bridge) and the row's own `minutes` until then.
+| kind | the count | a task after |
+| --- | --- | --- |
+| films | 30 s | 30 films |
+| series (per **episode**) | 15 s | 15 episodes |
+| videos | 20 s | 20 videos |
+| podcasts and music | 10 s | 10 items |
+| articles | 20 s | 20 articles |
+| answers | 10 s | 10 answers |
+| documents | 20 s | 20 documents |
+| pictures (per **album**) | 10 s | 10 albums |
 
-At **sixty minutes** the next video asks first. Its player is drawn with a gate over it, and the frame
-behind the gate is `inert` — no click, no tab key and no keyboard reaches the film: the press goes to
-**Open the link**, which opens [`asiafilm.org/4/…`](https://asiafilm.org/4/e476b83b0c777b7828ac79fef485bd1a)
-in a new tab. The count starts **only then**, and it is wall-clock time measured while that page reports
-itself open (`window.closed`), four times a second — so switching tabs does not pause it, closing the ad
-does, and a background tab whose timers the browser throttles still lands on the right number when it
-next fires. A closed ad says where the count stopped and can be opened again. A popup the browser holds
-back is said out loud, and the link itself is offered.
+**The count belongs to the link being open.** The gate opens
+[`asiafilm.org/4/…`](https://asiafilm.org/4/e476b83b0c777b7828ac79fef485bd1a) in a tab of its own and
+keeps the handle: the count starts only when that page opens, runs on wall-clock time while
+`window.closed` says it is still open (four times a second, so a throttled tab lands on the right
+number), and **stops where it stood** the moment it is closed — opening it again carries on instead of
+restarting. When it reaches the kind's own number the gate removes itself and the content opens by
+itself, with nothing to declare and no button to press. A popup the browser holds back is said out
+loud and the link itself is offered.
 
-At **thirty seconds** the gate pays: `1w.videos.watched` drops by the hour, `1w.videos.adsPaid` goes up,
-the gate removes itself, the `inert` comes off the frame and the film is asked to start — a `<video>` by
-itself, a frame through the bridge. The link, the count and the hour are three constants at the top of
-`assets/js/ads.js`; changing the ad is one line. The gate is on the videos watch page; the cinema stage
-(`watch.html`) is not covered yet — it is the same gate, waiting to be asked for.
+**What was opened is remembered, so it is never asked for twice.** The ledger is two keys in
+`localStorage`: `1w.gate.seen` (the ids opened, per kind, newest first, five hundred of each) and
+`1w.gate.since` (new items since the last completed task). It is per device, like the session —
+moving it to the member's row is the next step, and `gates.js` is written as one module so that only
+its `read`/`write` calls change.
+
+**After a batch, one task.** When `since` reaches the kind's own number, the gate does not ask for a
+count — it lists the sponsor offers (`offers.js`, the same feed as the tasks rail) and waits. A task
+is not a button: it is a **conversion the network reports**, which the lead feed writes to
+`taskcomplet`, credits, and announces as `1w:task-done`. That is what removes the gate, opens the item
+it was standing in front of, and starts the batch again at zero.
+
+`gates.js` is the whole policy — the numbers above are one table, `RULES`, and the gate itself is
+drawn by `assets/js/ads.js`. It is wired where there is content to gate: the videos page
+(`videos.js`), films and episodes on the cinema page (`watch.js`, one item per film and one per
+episode), podcasts and songs (`audio.js`, on the press of Play) and articles (`article.js`, over the
+piece's body). The answers, documents and pictures pages are still shell pages with no content of
+their own; their rules are already in the table, so the gate is a call away when those pages land.
 
 **The host's own button works, because the frame is allowed to ask.** A full-screen request made from
 inside an `<iframe>` is granted only when the frame is permitted to make it, so every player frame the
@@ -2096,11 +2113,11 @@ are in `tools/sql/media-pages.sql` — `audio_get(token, ref, kind)` and
 lookup. An item is readable exactly when `creator_hub_view` would have shown it: the hub's door and
 the item's own visibility both decide, and a closed one returns `locked` with the name and no file.
 
-Test: `node tools/media-smoke.mjs` — **89/89**: the grammar writes the four shapes and reads back the
+Test: `node tools/media-smoke.mjs` — **95/95**: the grammar writes the four shapes and reads back the
 six addresses (plus the legacy ones), the video page turns portrait for `#/v/`, the audio page asks
 for the right kind and draws its queue with both ids on the byline, a locked item shows the gate and
-no player, and the playlist page lights the shelf in its address and gives a landscape row `#/h/`
-and a vertical one `#/v/`.
+no player, the playlist page lights the shelf in its address and gives a landscape row `#/h/` and a
+vertical one `#/v/`, and pressing Play on a new podcast stands a ten-second gate in front of it.
 
 ### Member articles — the index, the reader and the writing page
 
@@ -2344,10 +2361,10 @@ the editors need**, each pinned to a name pattern and a set of extensions (`user
 | Gate | Result |
 | --- | --- |
 | `node tools/rte-smoke.mjs` | **45/45** (every command, links, insertion, history, paste, drop, keys, toolbar state) |
-| `node tools/article-smoke.mjs` | **281/281** |
+| `node tools/article-smoke.mjs` | **293/293** (the index, the reader, the gates, the editors) |
 | `node tools/blog-smoke.mjs` | **82/82** (the address, the closed door, the hero, the home, a section, the search, the plain cover) |
-| `node tools/video-smoke.mjs` | **559/559** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal) |
-| `node tools/media-smoke.mjs` | **89/89** (the address book, the three pages, the portrait stage, the locked item, the shelves) |
+| `node tools/video-smoke.mjs` | **567/567** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal, the gate and the task) |
+| `node tools/media-smoke.mjs` | **95/95** (the address book, the three pages, the portrait stage, the locked item, the shelves) |
 | `node tools/shell-smoke.mjs` | **67/67** (which page carries which menu, the signed-in header, the header wallet — one ask per action, the number moving without a reload, a re-ask on return to the tab) |
 
 ### The six OAuth apps — one checklist each

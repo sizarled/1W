@@ -160,32 +160,69 @@ const report = {
   errors,
 };
 
-// interaction: play opens the ad gate, the ad link starts the clock
+// interaction: play on a new episode stands a gate in front of it
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+const gates = await import(`file://${join(root, "assets/js/gates.js")}`);
+const SPONSOR = "https://asiafilm.org/4/e476b83b0c777b7828ac79fef485bd1a";
+/* one second here, so the whole gate is over in a breath */
+const wasSeries = gates.RULES.series.seconds;
+const wasFilm = gates.RULES.films.seconds;
+gates.RULES.series.seconds = 1;
+gates.RULES.films.seconds = 1;
+gates.forgetGates();
+
 document.querySelector("[data-w-play]").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
 report.adGateOpen = document.querySelector("[data-w-ad]").hidden === false;
-report.adCount = text("[data-w-ad-count]");
+report.adKind = __debug.gateKind();
+report.adCount = text("[data-v-ad-dial]");
+report.adCountIsOne = report.adCount === "1";
 report.noCountOnGate = __debug.isCounting() === false;
 report.playerClosedOnGate = document.querySelector("[data-w-frame]").hidden === true;
+report.adLinkIsTheSponsor =
+  document.querySelector("[data-v-ad-fallback]")?.getAttribute("href") === SPONSOR;
 
-const adLink = document.querySelector("[data-w-ad-link]");
-adLink.addEventListener("click", (e) => e.preventDefault(), { capture: true });
-adLink.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
-await pause(1200);
-report.adCountAfterTick = text("[data-w-ad-count]");
-report.ringOffset = document.querySelector("[data-w-ad-progress]").style.strokeDashoffset;
+// the press opens the link in a window of its own, and the handle is the clock
+const opened = [];
+const adWindow = { closed: false };
+window.open = (url) => {
+  opened.push(url);
+  return adWindow;
+};
+document.querySelector("[data-v-ad-open]").click();
+report.adWindowOpened = opened[0] === SPONSOR;
+await pause(600);
+report.adCountedWhileOpen = Number(text("[data-v-ad-dial]")) <= 1;
 
-// the count is a stored deadline for this tab, not a tally of ticks
-const adTicket = JSON.parse(window.sessionStorage.getItem("1w.ad.gate") || "null");
-report.adTicketWritten = Boolean(adTicket && adTicket.deadline > Date.now());
-report.adTicketCountsDown = Number(report.adCountAfterTick) < 30 && Number(report.adCountAfterTick) >= 27;
+// closing the ad's page stops the count where it stood — it does not restart it
+adWindow.closed = true;
+await pause(350);
+const heldAt = text("[data-v-ad-dial]");
+await pause(500);
+report.adStopsWhenClosed = text("[data-v-ad-dial]") === heldAt && Boolean(document.querySelector("[data-v-ad]"));
 
-// a second tab / a suspended tab must not stop it: pagehide is ignored
-window.dispatchEvent(new window.Event("pagehide"));
-document.dispatchEvent(new window.Event("visibilitychange"));
-await pause(700);
-report.adSurvivesPagehide = Boolean(JSON.parse(window.sessionStorage.getItem("1w.ad.gate") || "null")?.deadline > Date.now());
-report.adGateStaysOpen = document.querySelector("[data-w-ad]").hidden === false;
+// opening it again carries on from there, and the gate opens itself when done
+adWindow.closed = false;
+document.querySelector("[data-v-ad-open]").click();
+await pause(1400);
+report.adCleared = __debug.state.adCleared === true && __debug.state.adVerified === true;
+report.adGateClosed = document.querySelector("[data-w-ad]").hidden === true;
+report.gateIsGone = document.querySelector("[data-v-ad]") === null;
+report.playerMounted =
+  document.querySelector("[data-w-frame]").hidden === false &&
+  Boolean(document.querySelector("[data-w-frame] iframe"));
+report.episodeIsRemembered = gates.hasSeen(__debug.gateKind(), __debug.adTicketId()) === true;
+report.batchCounter = gates.since(__debug.gateKind()) === 1;
+
+// an episode that was opened before owes nothing: it opens at once
+__debug.state.adCleared = false;
+__debug.state.adVerified = false;
+report.seenTitleOpensAtOnce = __debug.restoreAdGate() === true && __debug.state.adCleared === true;
+
+// a film and an episode are counted apart, and each asks for its own length
+gates.RULES.series.seconds = wasSeries;
+gates.RULES.films.seconds = wasFilm;
+report.filmRuleSeconds = gates.RULES.films.seconds === 30;
+report.episodeRuleSeconds = gates.RULES.series.seconds === 15;
 
 // ---- watch time: nothing is counted before Play -------------------
 report.noCountBeforePlay = __debug.tracker.seconds === 0 && !calls.some((c) => c.includes("/rpc/log_watchtime"));
@@ -193,58 +230,24 @@ report.limitNoteBeforePlay = text("[data-w-limit]");
 report.capSeconds = __debug.capSeconds();
 report.capMinutes = Math.round(__debug.capSeconds() / 60);
 
-// ---- the countdown still owns the clock: ticks do not count --------
+// ---- the gate still owns the clock: ticks do not count ------------
+const clearedAfterGate = __debug.state.adCleared;
+__debug.state.adCleared = false;
 __debug.state.playbackStarted = true;
 __debug.startTracker();
 for (let i = 0; i < 5; i += 1) __debug.stepTracker();
 report.noCountWhileAd = __debug.tracker.seconds === 0 && __debug.state.adCleared === false;
-__debug.state.playbackStarted = false;
-__debug.tracker.timer && clearInterval(__debug.tracker.timer);
-__debug.tracker.running = false;
-__debug.tracker.timer = null;
-
-// ---- the countdown ends while the tab was away: the player opens ---
-__debug.state.adDeadline = Date.now() - 1;
-__debug.tickAd();
-report.adCleared = __debug.state.adCleared === true && __debug.state.adVerified === true;
-report.adGateClosed = document.querySelector("[data-w-ad]").hidden === true;
-report.playerMounted = document.querySelector("[data-w-frame]").hidden === false &&
-  Boolean(document.querySelector("[data-w-frame] iframe"));
-report.adTicketDropped = window.sessionStorage.getItem("1w.ad.gate") === null;
+__debug.state.adCleared = clearedAfterGate;
+__debug.state.playbackStarted = true;
+__debug.startTracker();
 report.countingAllowedAfterAd = __debug.isCounting() === true;
 
-// ---- after the countdown the ledger ticks once per second ----------
+// ---- after the gate the ledger ticks once per second ---------------
 for (let i = 0; i < 5; i += 1) __debug.stepTracker();
 report.countedAfterPlay = __debug.tracker.seconds;
 report.pendingAfterPlay = __debug.tracker.pending;
 report.limitNoteCounting = text("[data-w-limit]");
 report.limitState = document.querySelector("[data-w-limit]").dataset.state;
-
-// ---- a reload resumes the same countdown, it never restarts it -----
-{
-  const ticketId = __debug.adTicketId();
-  const write = (deadline, id = ticketId) =>
-    window.sessionStorage.setItem("1w.ad.gate", JSON.stringify({ id, deadline }));
-
-  __debug.state.adCleared = false;
-  __debug.state.adVerified = false;
-  __debug.state.adDeadline = 0;
-
-  write(Date.now() + 4000);
-  const resumed = __debug.restoreAdGate();
-  report.adResumesAfterReload = resumed === false && __debug.adRemaining() > 0 && __debug.adRemaining() <= 4;
-
-  write(Date.now() - 1);
-  report.adFinishedBeforeReload = __debug.restoreAdGate() === true && __debug.state.adCleared === true;
-
-  write(Date.now() + 4000, "movie:1");
-  report.adTicketIsPerTitle = __debug.restoreAdGate() === false;
-
-  window.sessionStorage.removeItem("1w.ad.gate");
-  __debug.state.adDeadline = 0;
-  __debug.state.adCleared = true;
-  __debug.state.adVerified = true;
-}
 
 // ---- another window / unfocused tab pauses the clock --------------
 window.dispatchEvent(new window.Event("blur"));
@@ -340,13 +343,13 @@ report.lockVisible = document.querySelector("[data-w-lock]").hidden === false;
 
 const checks = {
   adGateBeforePlayback: report.adGateOpen && report.playerClosedOnGate && report.noCountOnGate,
-  adCountdownRuns: report.adTicketWritten && report.adTicketCountsDown,
-  adCountdownSurvivesBackground: report.adSurvivesPagehide && report.adGateStaysOpen,
+  adIsTheSponsorLink: report.adLinkIsTheSponsor && report.adWindowOpened,
+  adCountIsTheKindsOwn: report.adCountIsOne && report.filmRuleSeconds && report.episodeRuleSeconds,
+  adStopsWhenThePageCloses: report.adCountedWhileOpen && report.adStopsWhenClosed,
   noMinutesWhileTheAdRuns: report.noCountBeforePlay && report.noCountWhileAd,
-  adEndOpensThePlayer: report.adCleared && report.adGateClosed && report.playerMounted && report.adTicketDropped,
+  adEndOpensThePlayer: report.adCleared && report.adGateClosed && report.gateIsGone && report.playerMounted,
   minutesStartAfterTheAd: report.countingAllowedAfterAd,
-  adReloadResumesTheClock:
-    report.adResumesAfterReload && report.adFinishedBeforeReload && report.adTicketIsPerTitle,
+  aSeenItemOwesNothing: report.episodeIsRemembered && report.batchCounter && report.seenTitleOpensAtOnce,
   nothingCountedBeforePlay: report.noCountBeforePlay,
   countsOnlyAfterPlay: report.countedAfterPlay >= 5,
   blurPausesLedger: report.countingPausedWhileUnfocused,

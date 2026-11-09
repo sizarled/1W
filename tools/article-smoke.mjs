@@ -1299,6 +1299,62 @@ const MEMBER = {
   expect("question editor: nothing threw", errors.length === 0, errors.join(" | "));
 }
 
+/* ================================================================== */
+/* pass 12 — a new article asks first                                 */
+/* ================================================================== */
+{
+  /* the reader imports `./gates.js` bare, so this is the same instance */
+  const gates = await import(`file://${join(root, "assets/js/gates.js")}`);
+  gates.forgetGates();
+  gates.RULES.articles.seconds = 1;
+
+  const { document, errors, window } = boot("article.html", {
+    url: "article.html?id=PST-001015",
+    storage: MEMBER,
+    fetchImpl: (href) => {
+      const fn = fnName(href);
+      if (fn === "article_get") return reply(OPEN);
+      if (fn === "post_comments") return reply(COMMENTS);
+      return reply([]);
+    },
+  });
+  await import(`file://${join(root, "assets/js/article.js")}?p12`);
+  await wait(90);
+
+  const gate = document.querySelector("[data-r-reader] [data-v-ad]");
+  expect("gate: a new piece stands behind a gate", Boolean(gate));
+  expect("gate: the words are held back", document.querySelector("[data-r-body]")?.hidden === true);
+  expect("gate: the count is the kind's own", gate?.querySelector("[data-v-ad-dial]")?.textContent === "1", gate?.querySelector("[data-v-ad-dial]")?.textContent || "");
+  expect("gate: the gate names an article", /article/i.test(gate?.querySelector(".vad__tag")?.textContent || ""), gate?.querySelector(".vad__tag")?.textContent || "");
+  expect(
+    "gate: the link is the sponsor's",
+    gate?.querySelector("[data-v-ad-fallback]")?.getAttribute("href") === "https://asiafilm.org/4/e476b83b0c777b7828ac79fef485bd1a"
+  );
+
+  window.open = () => ({ closed: false });
+  gate.querySelector("[data-v-ad-open]").click();
+  await wait(1300);
+  expect("gate: the count opens the piece", document.querySelector("[data-r-body]")?.hidden === false);
+  expect("gate: and the gate is gone", !document.querySelector("[data-v-ad]"));
+  expect("gate: the piece is remembered", gates.hasSeen("articles", "PST-001015") === true);
+  expect("gate: nothing threw", errors.length === 0, errors.join(" | "));
+
+  /* the same piece again: the words are there at once */
+  gates.RULES.articles.seconds = 20;
+  const second = boot("article.html", {
+    url: "article.html?id=PST-001015",
+    storage: MEMBER,
+    fetchImpl: (href) => (fnName(href) === "article_get" ? reply(OPEN) : reply([])),
+  });
+  await wait(5);
+  second.window.localStorage.setItem("1w.gate.seen", JSON.stringify({ articles: ["PST-001015"] }));
+  await import(`file://${join(root, "assets/js/article.js")}?p12b`);
+  await wait(90);
+  expect("gate: a piece read before is not asked for again", !second.document.querySelector("[data-v-ad]"));
+  expect("gate: and its words are open", second.document.querySelector("[data-r-body]")?.hidden === false);
+  expect("gate: nothing threw there either", second.errors.length === 0, second.errors.join(" | "));
+}
+
 /* ------------------------------------------------------------------ */
 /* the report                                                         */
 /* ------------------------------------------------------------------ */

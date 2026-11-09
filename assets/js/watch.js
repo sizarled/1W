@@ -17,6 +17,8 @@ import { toast } from "./ui.js";
 import { playSound } from "./sound.js";
 import { getMember, visitorId } from "./session.js";
 import { awardPoints } from "./wallet.js";
+import { gateNeed, mountGate } from "./gates.js";
+import { loadOffers, watchLeads } from "./offers.js";
 import { rest, rpc } from "./data.js";
 import { deviceId } from "./device.js";
 import { refreshBlockMap, isMediaBlocked, noBlocks, filterBlocked } from "./blocks.js";
@@ -24,8 +26,6 @@ import { refreshBlockMap, isMediaBlocked, noBlocks, filterBlocked } from "./bloc
 /* ================================================================== */
 /* constants                                                          */
 /* ================================================================== */
-const AD_URL = "https://asiafilm.org/4/e476b83b0c777b7828ac79fef485bd1a";
-const AD_SECONDS = 30;
 const CODE_DELAY = 5 * 60; // seconds of playback before the viewing code is required
 const HEARTBEAT = 20; // flush the watch-time ledger every 20 s
 const WATCH_KEY = "1w.watched"; // per-title counted seconds (best effort, survives a reload)
@@ -57,7 +57,6 @@ const state = {
   needsCode: false,
   adVerified: false, // the sponsor countdown finished on this tab
   adCleared: false, // … and therefore the player may count minutes
-  adDeadline: 0, // when the countdown reaches zero (epoch ms)
   codeVerified: false,
   playbackStarted: false,
   adBlocked: false,
@@ -735,9 +734,6 @@ function preparePlayer(detail) {
   setText("[data-w-duration]", label);
   setText("[data-w-duration-sub]", state.kind === "movie" ? "Film" : `S${state.season} · E${state.episode}`);
 
-  const adLink = qs("[data-w-ad-link]");
-  if (adLink) adLink.href = AD_URL;
-
   // a code that is already remembered on this device skips the gate
   const remembered = rememberedCode();
   if (remembered) state.codeVerified = true;
@@ -797,11 +793,6 @@ function wireFullscreen() {
 function wirePlayer() {
   wireFullscreen();
   qs("[data-w-play]")?.addEventListener("click", beginPlayback);
-  const adLink = qs("[data-w-ad-link]");
-  if (adLink) {
-    adLink.href = AD_URL; // live even if the details never arrive
-    adLink.addEventListener("click", startAdCountdown);
-  }
   qs("[data-w-unlock]")?.addEventListener("click", () => {
     const form = qs("[data-w-code-form]");
     if (form) form.hidden = false;
@@ -832,180 +823,74 @@ async function beginPlayback() {
   if (state.adCleared) return startPlayer();
   if (idle) idle.hidden = true;
   const gate = qs("[data-w-ad]");
-  if (gate) gate.hidden = false;
+  if (!gate) return startPlayer();
+  gate.hidden = false;
 
-  // a countdown that is already running on this tab (the page was reloaded
-  // while the sponsor link was open) continues where it was, it never restarts
-  const left = adRemaining();
-  if (state.adDeadline > Date.now()) {
-    setText("[data-w-ad-count]", String(left));
-    resetRing(AD_SECONDS);
-    updateRing(left);
-    resumeAdCountdown();
-    return;
+  /* a film asks for thirty seconds, an episode for fifteen, and both only the
+     first time: what is owed is `gates.js`'s decision, this page only hands it
+     a host and opens the player when the gate is paid */
+  if (!stopGate) {
+    /* the gate draws into a host of its own, so that paying it empties the host
+       and leaves the gate's box in the page for the next episode */
+    let host = qs("[data-w-gate]", gate);
+    if (!host) {
+      host = document.createElement("div");
+      host.setAttribute("data-w-gate", "");
+      host.className = "gate-host";
+      gate.replaceChildren(host);
+    }
+    stopGate = mountGate(host, {
+      kind: gateKind(),
+      id: adTicketId(),
+      onPaid: () => {
+        gate.hidden = true;
+        markAdCleared();
+        startPlayer();
+      },
+    });
   }
-  setText("[data-w-ad-count]", String(AD_SECONDS));
-  resetRing(AD_SECONDS);
+}
+
+/** Which shelf this title belongs to — films and series have their own numbers. */
+function gateKind() {
+  return state.kind === "movie" ? "films" : "series";
 }
 
 /* ------------------------------------------------------------------ */
-/* the sponsor countdown                                              */
+/* the gate                                                           */
 /* ------------------------------------------------------------------ */
-/**
- * The count is a *deadline*, not a tally of ticks.
- *
- * A timer that adds one second per tick stops the moment the tab is throttled,
- * suspended or sent to the background — which is exactly what happens when the
- * sponsor link opens in a second tab, and what the ad network's own redirects
- * do to the first one. So the page stores the instant the countdown ends
- * (`Date.now() + 30s`) and every tick *reads* it: a tab that comes back after
- * two minutes finishes the countdown at once instead of starting a new one.
- *
- * The deadline lives in `sessionStorage`, so a reload resumes it and a closed
- * tab forgets it — the count runs for as long as the window is open, and ends
- * with it. Nothing on the page stops it: not a second tab, not a redirect in
- * the sponsor page, not `pagehide`.
- */
-const AD_KEY = "1w.ad.gate";
-let adTimer = null;
+/* One gate at a time, for one title: a page left behind must not keep a
+   countdown (or the lead watch behind a task) alive. */
 
-/** Which title this countdown belongs to — one ticket per film / episode. */
+let stopGate = null;
+
+function closeGate() {
+  if (typeof stopGate === "function") stopGate();
+  stopGate = null;
+  const gate = qs("[data-w-ad]");
+  if (gate) gate.hidden = true;
+}
+
+/** Which title this gate belongs to — one item per film / episode. */
 function adTicketId() {
   return state.kind === "movie" ? `movie:${state.id}` : `tv:${state.id}:s${state.season}:e${state.episode}`;
 }
 
-function readAdTicket() {
-  try {
-    const raw = JSON.parse(sessionStorage.getItem(AD_KEY) || "null");
-    if (!raw || raw.id !== adTicketId()) return null;
-    const deadline = Number(raw.deadline);
-    return Number.isFinite(deadline) ? { id: raw.id, deadline } : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeAdTicket(deadline) {
-  try {
-    sessionStorage.setItem(AD_KEY, JSON.stringify({ id: adTicketId(), deadline }));
-  } catch {
-    /* private mode — the countdown simply restarts with the page */
-  }
-}
-
-function dropAdTicket() {
-  try {
-    sessionStorage.removeItem(AD_KEY);
-  } catch {
-    /* ignore */
-  }
-}
-
 /**
- * Reads the ticket this tab left behind: an expired one means the countdown
- * already finished here (a reload must not ask for it twice), a live one is
- * picked up by the next Play.
+ * What is owed on this title, read once when the page opens.
+ *
+ * A title that was opened before owes nothing, so the player is open from the
+ * start; anything else stays behind the gate until Play is pressed.
  */
 function restoreAdGate() {
-  const ticket = readAdTicket();
-  if (!ticket) return false;
-  if (Date.now() >= ticket.deadline) {
-    markAdCleared();
-    dropAdTicket();
-    return true;
-  }
-  state.adDeadline = ticket.deadline;
-  return false;
+  if (gateNeed(gateKind(), adTicketId())) return false;
+  markAdCleared();
+  return true;
 }
 
 function markAdCleared() {
   state.adVerified = true;
   state.adCleared = true;
-}
-
-/** Seconds left, read from the deadline — never from a counter of ticks. */
-function adRemaining() {
-  return Math.max(0, Math.ceil((state.adDeadline - Date.now()) / 1000));
-}
-
-function startAdCountdown() {
-  if (state.adCleared) return startPlayer();
-  state.adDeadline = Date.now() + AD_SECONDS * 1000;
-  writeAdTicket(state.adDeadline);
-  resetRing(AD_SECONDS);
-  setText(
-    "[data-w-ad-note]",
-    "The count keeps running while this window is open — if the sponsor tab redirects elsewhere, the clock here is not affected."
-  );
-  resumeAdCountdown();
-}
-
-function resumeAdCountdown() {
-  tickAd();
-  if (adTimer || state.adCleared) return;
-  // a 250ms beat: the number comes from the deadline, so a slept tab is not a
-  // lost second — the next beat finishes a countdown that has already elapsed
-  adTimer = setInterval(tickAd, 250);
-}
-
-function stopAdTimer() {
-  if (!adTimer) return;
-  clearInterval(adTimer);
-  adTimer = null;
-}
-
-function tickAd() {
-  if (state.adCleared || !state.adDeadline) return;
-  const left = adRemaining();
-  setText("[data-w-ad-count]", String(left));
-  updateRing(left);
-  if (left <= 0) finishAdCountdown();
-}
-
-function finishAdCountdown() {
-  stopAdTimer();
-  if (state.adCleared) return;
-  markAdCleared();
-  state.adDeadline = 0;
-  dropAdTicket();
-  const gate = qs("[data-w-ad]");
-  if (gate) gate.hidden = true;
-  startPlayer();
-}
-
-// the tab coming back, the window getting focus, a bfcache restore: all of them
-// just re-read the clock instead of waiting for the next beat
-["visibilitychange", "focus", "pageshow", "online"].forEach((type) => {
-  window.addEventListener(type, () => {
-    if (state.adDeadline && !state.adCleared) tickAd();
-  });
-  document.addEventListener(type, () => {
-    if (state.adDeadline && !state.adCleared) tickAd();
-  });
-});
-
-function ringLength() {
-  const circle = qs("[data-w-ad-progress]");
-  return circle ? 2 * Math.PI * Number(circle.getAttribute("r")) : 226;
-}
-
-function resetRing(total) {
-  const circle = qs("[data-w-ad-progress]");
-  if (!circle) return;
-  circle.dataset.total = String(total);
-  const len = ringLength();
-  circle.style.strokeDasharray = String(len);
-  circle.style.strokeDashoffset = String(len);
-  circle.dataset.total = String(total);
-}
-
-function updateRing(left) {
-  const circle = qs("[data-w-ad-progress]");
-  if (!circle) return;
-  const total = Number(circle.dataset.total || AD_SECONDS);
-  const len = ringLength();
-  const done = clamp((total - left) / total, 0, 1);
-  circle.style.strokeDashoffset = String(len * (1 - done));
 }
 
 function startPlayer() {
@@ -1127,7 +1012,23 @@ function buildEpisodeOptions() {
 }
 
 function changeSource() {
-  if (!qs("[data-w-frame]") || qs("[data-w-frame]").hidden) return;
+  const frameNode = qs("[data-w-frame]");
+  /* another episode is another item: it asks for its own gate first */
+  if (gateNeed(gateKind(), adTicketId())) {
+    closeGate();
+    state.adCleared = false;
+    state.adVerified = false;
+    state.playbackStarted = false;
+    pauseTracker();
+    if (frameNode) {
+      frameNode.hidden = true;
+      frameNode.innerHTML = "";
+    }
+    refreshEpisodeRuntime();
+    beginPlayback();
+    return;
+  }
+  if (!frameNode || frameNode.hidden) return;
   mountIframe(embedUrl(state.activeLink));
   resetPlaybackTimers();
   refreshEpisodeRuntime();
@@ -1291,7 +1192,7 @@ function renderLimitNote() {
   const tally = `${used} of ${cap} min`;
   let text;
   if (state.capReached) text = `Limit reached — all ${cap} min of this title are counted.`;
-  else if (!state.adCleared) text = `Watch time starts when the sponsor countdown ends · this title counts up to ${cap} min.`;
+  else if (!state.adCleared) text = `Watch time starts when the sponsor gate opens · this title counts up to ${cap} min.`;
   else if (!state.playbackStarted) text = `Watch time starts when you press Play · this title counts up to ${cap} min.`;
   else if (codeLockOpen()) text = `Paused — enter your viewing code · ${tally}.`;
   else if (document.hidden) text = `Paused — this tab is in the background · ${tally}.`;
@@ -1765,36 +1666,8 @@ async function loadPrizes() {
 /* ================================================================== */
 /* tasks (offers feed)                                                */
 /* ================================================================== */
-const OFFERS_FEED =
-  "https://dtvpp42hfuyb2.cloudfront.net/public/offers/feed.php?user_id=213564&api_key=f66502e8a3e2f4674d4dfd1291d34a22&s1=&s2=&callback=?";
-const LEADS_FEED = "https://dtvpp42hfuyb2.cloudfront.net/public/external/check2.php?testing=0&callback=?";
-
-function jsonp(url, timeout = 8000) {
-  return new Promise((resolve, reject) => {
-    const cb = `__wcb${Date.now().toString(36)}${Math.floor(Math.random() * 1e4)}`;
-    const script = document.createElement("script");
-    const done = (fn, arg) => {
-      fn(arg);
-      delete window[cb];
-      script.remove();
-    };
-    const timer = setTimeout(() => done(reject, new Error("timeout")), timeout);
-    window[cb] = (data) => {
-      clearTimeout(timer);
-      done(resolve, data);
-    };
-    script.onerror = () => {
-      clearTimeout(timer);
-      done(reject, new Error("blocked"));
-    };
-    script.src = url.replace("callback=?", `callback=${cb}`);
-    document.head.appendChild(script);
-  });
-}
-
 async function loadTasks() {
-  const offers = await safe(jsonp(OFFERS_FEED), null);
-  const list = (Array.isArray(offers) ? offers : []).slice(0, 6);
+  const list = await loadOffers(6);
   if (!list.length) return fillRail("tasks", "");
   state.offers = list;
 
@@ -1830,30 +1703,10 @@ async function logTask(table, offerId) {
   rest(table, { method: "POST", minimal: true, body: { offer_id: String(offerId), idmember: memberUuid() } }).catch(() => {});
 }
 
-let leadsTimer = null;
 function pollLeads() {
-  if (leadsTimer) return;
-  leadsTimer = setInterval(async () => {
-    if (document.hidden) return;
-    const leads = await safe(jsonp(LEADS_FEED), null);
-    if (!Array.isArray(leads) || !leads.length) return;
-    for (const lead of leads) {
-      const offerId = String(lead.offer_id);
-      const payout = Number(lead.points || 0) / 100;
-      if (!memberUuid()) continue;
-      const done = await safe(
-        rest("taskcomplet", {
-          method: "POST",
-          minimal: true,
-          body: { offer_id: offerId, idmember: memberUuid(), payout, points: Math.round(payout * 100) },
-        }),
-        null
-      );
-      if (done) {
-        awardPoints(Math.round(payout * 100), `Task #${offerId}`);
-      }
-    }
-  }, 15000);
+  /* the offers feed is one module (`offers.js`): the same watch serves the rail
+     here and the task gate on every page, and a conversion is credited once */
+  watchLeads({ memberId: memberUuid });
 }
 
 /* ================================================================== */
@@ -2123,12 +1976,11 @@ export default initWatch;
 export const __debug = {
   state,
   tracker,
-  adRemaining,
   adTicketId,
+  gateKind,
+  gateNeed,
   restoreAdGate,
-  startAdCountdown,
-  tickAd,
-  finishAdCountdown,
+  closeGate,
   flushTracker,
   startTracker,
   stepTracker,

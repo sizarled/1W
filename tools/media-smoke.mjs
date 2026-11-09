@@ -250,6 +250,42 @@ const queue = [
 }
 
 /* ================================================================== */
+/* the gate: a new podcast asks first                                 */
+/* ================================================================== */
+{
+  /* audio.js imports `./gates.js` bare, so this is the same instance */
+  const gates = await import(`file://${join(root, "assets/js/gates.js")}`);
+  gates.forgetGates();
+  gates.RULES.audio.seconds = 1;
+
+  const page = boot("audio.html", {
+    hash: "#/p/ID=podcast001032",
+    fetchImpl: (href) => {
+      const fn = fnName(href);
+      if (fn === "audio_get") return reply({ ok: true, locked: false, item: audioItem(), queue, hub: HUB });
+      return reply({ ok: true, rows: [] });
+    },
+  });
+  await importPage("audio");
+  await wait(140);
+
+  page.document.querySelector("[data-a-play]").dispatchEvent(new page.window.MouseEvent("click", { bubbles: true }));
+  await wait(30);
+  const gate = page.document.querySelector("[data-a-card] [data-v-ad]");
+  expect("gate: pressing play on a new podcast is a gate, not a play", Boolean(gate));
+  expect("gate: the count is the kind's own", gate?.querySelector("[data-v-ad-dial]")?.textContent === "1", gate?.querySelector("[data-v-ad-dial]")?.textContent || "");
+  expect("gate: the gate names a podcast or song", /podcast or song/i.test(gate?.querySelector(".vad__tag")?.textContent || ""), gate?.querySelector(".vad__tag")?.textContent || "");
+
+  page.window.open = () => ({ closed: false });
+  gate.querySelector("[data-v-ad-open]").click();
+  await wait(1300);
+  expect("gate: the count opens the player", !page.document.querySelector("[data-a-card] [data-v-ad]"));
+  expect("gate: the item is remembered", gates.hasSeen("audio", "podcast001032") === true);
+  expect("gate: nothing threw", page.errors.length === 0, page.errors.join(" | "));
+  gates.RULES.audio.seconds = 10;
+}
+
+/* ================================================================== */
 /* pass 3 — playlist.html                                             */
 /* ================================================================== */
 {

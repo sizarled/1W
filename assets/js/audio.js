@@ -28,6 +28,7 @@ import { icon } from "./icons.js";
 import { toast } from "./ui.js";
 import { sessionToken } from "./session.js";
 import { parseRoute, audioUrl, AUDIO_KINDS, creatorUrl, readParams } from "./media.js";
+import { gateNeed, mountGate } from "./gates.js";
 
 const state = {
   token: "",
@@ -285,9 +286,30 @@ function bind() {
   }
 }
 
+/** The gate, over the card: a podcast or song that is new to you asks first. */
+function openGate(id) {
+  const card = qs("[data-a-card]");
+  if (!card) return;
+  const host = document.createElement("div");
+  host.className = "aud__ad gate-host";
+  host.setAttribute("data-a-gate", "");
+  card.append(host);
+  mountGate(host, {
+    kind: "audio",
+    id,
+    onPaid: () => {
+      host.remove();
+      togglePlay();
+    },
+  });
+}
+
 function togglePlay() {
   const el = audioEl();
   if (!el) return;
+  /* a press on a new podcast or song is a gate, not a play */
+  const gateId = state.item?.code || state.item?.id || state.id;
+  if (el.paused && gateNeed("audio", gateId)) return openGate(gateId);
   try {
     if (el.paused) {
       const p = el.play();

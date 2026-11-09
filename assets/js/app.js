@@ -46,7 +46,7 @@ async function boot() {
   }
 
   if (document.body.dataset.page === "watch") {
-    const { initWatch } = await import("./watch.js?v=20261212a");
+    const { initWatch } = await import("./watch.js?v=20261215a");
     initWatch().catch((error) => console.warn("[1World] watch page:", error));
   }
 

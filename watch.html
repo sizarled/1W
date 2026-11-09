@@ -13,7 +13,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/css/base.css?v=20261116a" />
     <link rel="stylesheet" href="assets/css/layout.css?v=20261116a" />
-    <link rel="stylesheet" href="assets/css/components.css?v=20261116b" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261215a" />
     <link rel="stylesheet" href="assets/css/watch.css?v=20261206a" />
     <script>
       /* apply the saved theme (or the OS preference) before first paint */
@@ -41,7 +41,7 @@
     <!-- adsterra popunder -->
     <script data-cfasync="false" src="https://aarems.org/1/040ec503f7ba207e96e2acce3de1a24d" async></script>
 
-    <script type="module" src="assets/js/app.js?v=20261214a"></script>
+    <script type="module" src="assets/js/app.js?v=20261215a"></script>
   </head>
   <body data-page="watch" data-title="Watch">
     <a class="skip-link" href="#main">Skip to content</a>
@@ -124,30 +124,9 @@
             <i data-icon="expand"></i>
           </button>
 
-          <!-- ad gate -->
-          <div class="w-player__gate" data-w-ad hidden>
-            <div class="w-gate">
-              <span class="w-gate__icon"><i data-icon="shield"></i></span>
-              <h2 class="w-gate__title">One quick step</h2>
-              <p class="w-gate__text">
-                Open the sponsor link below and keep <b>this window</b> open for <b>30 seconds</b>. The countdown
-                starts the moment the link opens and keeps running here — if the sponsor tab redirects
-                somewhere else, the clock on this page is not affected. Closing this window is the only
-                thing that stops it.
-              </p>
-              <a class="w-gate__link" data-w-ad-link href="https://asiafilm.org/4/e476b83b0c777b7828ac79fef485bd1a" target="_blank" rel="noopener sponsored">
-                <i data-icon="external"></i> Open the link
-              </a>
-              <div class="w-gate__ring" data-w-ad-ring>
-                <svg viewBox="0 0 80 80" aria-hidden="true">
-                  <circle class="track" cx="40" cy="40" r="36"></circle>
-                  <circle class="fill" cx="40" cy="40" r="36" data-w-ad-progress></circle>
-                </svg>
-                <span class="w-gate__count" data-w-ad-count>30</span>
-              </div>
-              <p class="w-gate__text" data-w-ad-note>Waiting for you to open the link…</p>
-            </div>
-          </div>
+          <!-- the gate: drawn by gates.js — a new film asks for 30 seconds, a
+               new episode for 15, and only the first time -->
+          <div class="w-player__gate" data-w-ad hidden></div>
 
           <!-- viewing-code gate -->
           <div class="w-player__gate" data-w-lock hidden>

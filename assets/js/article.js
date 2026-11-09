@@ -23,6 +23,7 @@ import { qs, qsa, esc, compact, timeAgo, avatarPlaceholder } from "./utils.js";
 import { icon } from "./icons.js";
 import { toast } from "./ui.js";
 import { sessionToken } from "./session.js";
+import { gateNeed, mountGate } from "./gates.js";
 
 const SAVED_KEY = "1w.articles.saved";
 const REMIND_KEY = "1w.articles.remind";
@@ -447,6 +448,26 @@ function readerMarkup(data) {
   const bodyEl = qs("[data-r-body]");
   if (bodyEl) bodyEl.innerHTML = body;
   paintContents();
+
+  /* an article that is new to this reader asks first: the piece is held back
+     behind the gate and opens by itself when the count is done */
+  const piece = row.code || row.id;
+  if (bodyEl && gateNeed("articles", piece)) {
+    bodyEl.hidden = true;
+    const host = document.createElement("div");
+    host.className = "gate-host";
+    host.setAttribute("data-art-gate", "");
+    bodyEl.after(host);
+    bodyEl.closest("[data-r-article]")?.classList.add("is-gated");
+    mountGate(host, {
+      kind: "articles",
+      id: piece,
+      onPaid: () => {
+        host.remove();
+        bodyEl.hidden = false;
+      },
+    });
+  }
 
   const tags = qs("[data-r-tags]");
   if (tags) {

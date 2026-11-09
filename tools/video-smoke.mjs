@@ -2470,9 +2470,9 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
     asked.length === 0,
     asked.join(" | ")
   );
-  /* the watch clock bridges the frame to count its own seconds — the bridge
-     doing the job it exists for, not a chapter being asked for one */
-  expect("tape: the frame is bridged, and only by the clock", bridged >= 1, String(bridged));
+  /* nothing is watching this frame's clock any more: the container gets no
+     chapter index, and the gate is asked about the video, not the second */
+  expect("tape: and the frame is never bridged", bridged === 0, String(bridged));
   expect(
     "tape: and the frame's own address is left alone",
     !/[?&](t|start)=90/.test(ctx.document.querySelector(".vplayer iframe")?.getAttribute("src") || ""),
@@ -2606,21 +2606,46 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
   expect("colour: and the page itself is light", litPage.document.documentElement.getAttribute("data-theme") === "light", String(litPage.document.documentElement.getAttribute("data-theme")));
   expect("colour: nothing threw", litPage.errors.length === 0, litPage.errors.join(" | "));
 
-  /* 7. an hour of watching, and the thirty seconds it costs */
+  /* 7. a new video asks first: the gate, its count, and the task after twenty */
   const ads = await import(`file://${join(root, "assets/js/ads.js")}?ads`);
+  /* the page imports `./gates.js` bare, so the same instance is used here —
+     its numbers can be shortened for the test */
+  const gates = await import(`file://${join(root, "assets/js/gates.js")}`);
   const shell = boot("videos.html", { fetchImpl: () => reply([]) });
   shell.window.localStorage.clear();
-  expect("ads: a fresh device owes nothing", ads.adDue() === false, String(ads.watchedSeconds()));
-  for (let i = 0; i < 5; i += 1) ads.addWatched(600);
-  ads.addWatched(599);
-  expect("ads: 59:59 is not an hour", ads.adDue() === false, String(ads.watchedSeconds()));
-  ads.addWatched(1);
-  expect("ads: 60:00 is", ads.adDue() === true, String(ads.watchedSeconds()));
-  ads.addWatched(900);
-  expect("ads: a claim of fifteen minutes at once is refused", ads.watchedSeconds() === 3600, String(ads.watchedSeconds()));
-  ads.payAd();
-  expect("ads: paying starts the hour again", ads.adDue() === false && ads.watchedSeconds() === 0, `${ads.watchedSeconds()}`);
-  expect("ads: and lands on the ledger", ads.adsPaid() === 1, String(ads.adsPaid()));
+  gates.forgetGates();
+
+  /* the policy, without a page: a new item asks, a seen one does not */
+  expect("gate: a new video asks", gates.gateNeed("videos", "VID-000001") === "ad", String(gates.gateNeed("videos", "VID-000001")));
+  expect("gate: the count is the kind's own", gates.gateSeconds("videos") === 20, String(gates.gateSeconds("videos")));
+  gates.payGate("videos", "VID-000001");
+  expect("gate: a paid video is remembered", gates.hasSeen("videos", "VID-000001") === true);
+  expect("gate: and it is not asked for twice", gates.gateNeed("videos", "VID-000001") === null);
+  expect("gate: the batch counts it", gates.since("videos") === 1, String(gates.since("videos")));
+  for (let i = 2; i <= 20; i += 1) gates.payGate("videos", `VID-0000${String(i).padStart(2, "0")}`);
+  expect("gate: twenty new videos", gates.untilTask("videos") === 0, String(gates.untilTask("videos")));
+  expect("gate: the twenty-first asks for a task", gates.gateNeed("videos", "VID-000021") === "task", String(gates.gateNeed("videos", "VID-000021")));
+  gates.clearTask("videos", "VID-000021");
+  expect("gate: a completed task opens it, and starts the batch again", gates.gateNeed("videos", "VID-000021") === null && gates.since("videos") === 0, String(gates.since("videos")));
+  const numbers = {
+    films: [30, 30],
+    series: [15, 15],
+    videos: [20, 20],
+    audio: [10, 10],
+    articles: [20, 20],
+    answers: [10, 10],
+    documents: [20, 20],
+    albums: [10, 10],
+  };
+  const wrong = Object.entries(numbers).filter(([kind, [seconds, after]]) =>
+    gates.RULES[kind].seconds !== seconds || gates.RULES[kind].after !== after);
+  expect("gate: every kind has its own numbers", wrong.length === 0, wrong.map(([kind]) => kind).join(", "));
+  expect(
+    "gate: films and episodes are counted apart",
+    gates.gateNeed("films", "movie:550") === "ad" && gates.gateNeed("series", "tv:1399:s1:e1") === "ad"
+  );
+  gates.forgetGates();
+  expect("gate: forgetting clears both ledgers", gates.since("videos") === 0 && gates.hasSeen("videos", "VID-000001") === false);
 
   /* the gate itself: a short count, driven to the end */
   const pad = shell.document.createElement("div");
@@ -2630,37 +2655,38 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
   expect("ad: the gate is drawn with its own link", gateEl?.querySelector("[data-v-ad-fallback]")?.getAttribute("href") === ads.AD_URL, gateEl?.querySelector("[data-v-ad-fallback]")?.getAttribute("href") || "");
   expect("ad: and the count is untouched before a press", gateEl?.querySelector("[data-v-ad-dial]")?.textContent === "1");
   const opened = [];
+  const adWin = { closed: false };
   shell.window.open = (url) => {
     opened.push(url);
-    return { closed: false, opener: null };
+    return adWin;
   };
   let paid = 0;
   ads.mountAdGate(gateEl, { seconds: 1, onPaid: () => { paid += 1; } });
   gateEl.querySelector("[data-v-ad-open]").click();
   expect("ad: the press opens the ad's own link", opened[0] === ads.AD_URL, opened[0] || "nothing");
   expect("ad: and says the page is open", /open/i.test(gateEl.querySelector("[data-v-ad-said]").textContent), gateEl.querySelector("[data-v-ad-said]").textContent);
-  await wait(1400);
+  await wait(1500);
   expect("ad: when the count is done the gate is gone", paid === 1 && !pad.querySelector("[data-v-ad]"), `paid ${paid}`);
-  expect("ad: and the ledger moved", ads.adsPaid() === 2, String(ads.adsPaid()));
 
-  /* a gate whose page is closed early does not count */
+  /* a closed ad stops the count where it stood, and does not pay */
   const pad2 = shell.document.createElement("div");
   pad2.innerHTML = ads.adGateMarkup({ seconds: 30 });
   shell.document.body.appendChild(pad2);
   const gate2 = pad2.querySelector("[data-v-ad]");
+  adWin.closed = true;
   let early = 0;
-  shell.window.open = () => ({ closed: true, opener: null });
   const stopEarly = ads.mountAdGate(gate2, { seconds: 30, onPaid: () => { early += 1; } });
   gate2.querySelector("[data-v-ad-open]").click();
   await wait(700);
-  stopEarly();
   expect("ad: a closed ad counts nothing", early === 0 && gate2.querySelector("[data-v-ad-dial]").textContent === "30", gate2.querySelector("[data-v-ad-dial]").textContent);
   expect("ad: and the gate is still there", !!pad2.querySelector("[data-v-ad]"));
+  stopEarly();
 
-  /* the watch page draws the gate when an hour is owed, over an inert player */
+  /* the videos page: a new video is held behind the gate, an opened one is not */
+  gates.RULES.videos.seconds = 1;
+  gates.forgetGates();
   const owed = boot("videos.html", {
     hash: "#/h/ID=VID-000910",
-    storage: { "1w.videos.watched": "3600" },
     fetchImpl: (href) => {
       const fn = fnName(href);
       if (fn === "video_feed") return reply({ ...FEED, rows: [], total: 0, fields: [] });
@@ -2669,7 +2695,7 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
         return reply({
           ok: true,
           video: {
-            ...card({ code: "VID-000910", title: "A film after an hour", embed: "https://streamtape.com/e/abc910" }),
+            ...card({ code: "VID-000910", title: "A film for the gate", embed: "https://streamtape.com/e/abc910" }),
             video: { meta: { vertical: false, chapters: [] }, embed: "https://streamtape.com/e/abc910" },
           },
           related: [],
@@ -2688,35 +2714,24 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
     owed.document.querySelector(".vplayer iframe")?.hasAttribute("inert") === true,
     owed.document.querySelector(".vplayer")?.innerHTML.slice(0, 90)
   );
-  expect("ad on the page: the count is the whole of it", watchGate?.querySelector("[data-v-ad-dial]")?.textContent === "30", watchGate?.querySelector("[data-v-ad-dial]")?.textContent || "");
-  /* a gate is not watching: the film behind it has not started */
-  const owedBefore = ads.watchedSeconds();
-  await wait(1300);
-  expect("ad on the page: sitting at the gate counts nothing", ads.watchedSeconds() === owedBefore, `${owedBefore} → ${ads.watchedSeconds()}`);
-
-  /* the count is done: the film is let go of */
-  owed.document.dispatchEvent(new owed.window.Event("1w:ad-paid"));
-  await wait(40);
+  expect("ad on the page: the count is this kind's own", watchGate?.querySelector("[data-v-ad-dial]")?.textContent === "1", watchGate?.querySelector("[data-v-ad-dial]")?.textContent || "");
+  expect("ad on the page: and the gate names a video", /video/i.test(watchGate?.querySelector(".vad__tag")?.textContent || ""), watchGate?.querySelector(".vad__tag")?.textContent || "");
+  owed.window.open = () => ({ closed: false });
+  watchGate.querySelector("[data-v-ad-open]").click();
+  await wait(1400);
   expect(
     "ad on the page: a paid count releases the film",
-    owed.document.querySelector(".vplayer iframe")?.hasAttribute("inert") === false,
+    !owed.document.querySelector(".vplayer [data-v-ad]") &&
+      owed.document.querySelector(".vplayer iframe")?.hasAttribute("inert") === false,
     owed.document.querySelector(".vplayer")?.innerHTML.slice(0, 80)
   );
+  expect("ad on the page: the video is remembered", gates.hasSeen("videos", "VID-000910") === true);
   expect("ad on the page: nothing threw", owed.errors.length === 0, owed.errors.join(" | "));
-  /* the clock stops with the player */
-  owed.document.querySelector(".vplayer")?.remove();
-  await wait(1200);
 
-  /* a film is as long as it is: past its own length nothing is booked, even
-     with the page left open on its last frame.
-
-     Every page opened above is closed as far as its clock is concerned first:
-     the ledger is one key, so a player left running in an earlier window would
-     book its second into this page's total and make the count flaky. */
-  booted.forEach((w) => w.document.querySelectorAll(".vplayer").forEach((n) => n.remove()));
-  await wait(1200);
-  const capped = boot("videos.html", {
-    hash: "#/h/ID=VID-000920",
+  /* the same video again: nothing is asked */
+  const again = boot("videos.html", {
+    hash: "#/h/ID=VID-000910",
+    storage: { "1w.gate.seen": JSON.stringify({ videos: ["VID-000910"] }) },
     fetchImpl: (href) => {
       const fn = fnName(href);
       if (fn === "video_feed") return reply({ ...FEED, rows: [], total: 0, fields: [] });
@@ -2725,9 +2740,8 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
         return reply({
           ok: true,
           video: {
-            ...card({ code: "VID-000920", title: "A short film", embed: "https://cdn.example.com/film.mp4", minutes: 1 }),
-            minutes: 1,
-            video: { meta: { vertical: false, chapters: [] }, embed: "https://cdn.example.com/film.mp4" },
+            ...card({ code: "VID-000910", title: "A film for the gate", embed: "https://streamtape.com/e/abc910" }),
+            video: { meta: { vertical: false, chapters: [] }, embed: "https://streamtape.com/e/abc910" },
           },
           related: [],
           more: [],
@@ -2736,23 +2750,48 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
       return reply([]);
     },
   });
-  await import(`file://${join(root, "assets/js/videos.js")}?pcap`);
+  await import(`file://${join(root, "assets/js/videos.js")}?pseen`);
   await wait(320);
-  const clip = capped.document.querySelector(".vplayer video");
-  expect("clock: the film is a file of its own", !!clip);
-  Object.defineProperty(clip, "duration", { value: 3, configurable: true });
-  const bookedBefore = ads.watchedSeconds();
-  [1, 2, 3, 4, 5].forEach((second) => {
-    clip.currentTime = second;
-    clip.dispatchEvent(new capped.window.Event("timeupdate"));
+  expect(
+    "ad on the page: an opened video is not asked for again",
+    !again.document.querySelector(".vplayer [data-v-ad]") &&
+      again.document.querySelector(".vplayer iframe")?.hasAttribute("inert") === false,
+    again.document.querySelector(".vplayer")?.innerHTML.slice(0, 80)
+  );
+  expect("ad on the page: and nothing threw", again.errors.length === 0, again.errors.join(" | "));
+
+  /* twenty new videos gone by: the gate asks for a task instead of a count */
+  const taskPage = boot("videos.html", {
+    hash: "#/h/ID=VID-000930",
+    storage: { "1w.gate.since": JSON.stringify({ videos: 20 }) },
+    fetchImpl: (href) => {
+      const fn = fnName(href);
+      if (fn === "video_feed") return reply({ ...FEED, rows: [], total: 0, fields: [] });
+      if (fn === "video_mine") return reply({ ok: true, rows: [] });
+      if (fn === "video_get") {
+        return reply({
+          ok: true,
+          video: {
+            ...card({ code: "VID-000930", title: "The twenty-first", embed: "https://streamtape.com/e/abc930" }),
+            video: { meta: { vertical: false, chapters: [] }, embed: "https://streamtape.com/e/abc930" },
+          },
+          related: [],
+          more: [],
+        });
+      }
+      return reply([]);
+    },
   });
-  await wait(30);
-  const booked = ads.watchedSeconds() - bookedBefore;
-  expect("clock: it books the film's own length and no more", Math.round(booked) === 3, String(booked));
-  clip.currentTime = 9;
-  clip.dispatchEvent(new capped.window.Event("timeupdate"));
-  await wait(30);
-  expect("clock: staying on the last frame books nothing", Math.round(ads.watchedSeconds() - bookedBefore) === 3, String(ads.watchedSeconds() - bookedBefore));
+  await import(`file://${join(root, "assets/js/videos.js")}?ptask`);
+  await wait(320);
+  const taskGate = taskPage.document.querySelector(".vplayer [data-v-ad]");
+  expect("task: after twenty new videos the gate asks for a task", taskGate?.classList.contains("vad--task") === true, taskGate?.className || "no gate");
+  expect("task: and says so", /complete one task/i.test(taskGate?.querySelector(".vad__title")?.textContent || ""), taskGate?.querySelector(".vad__title")?.textContent || "");
+  expect(
+    "task: the film behind it is inert",
+    taskPage.document.querySelector(".vplayer iframe")?.hasAttribute("inert") === true
+  );
+  expect("task: nothing threw", taskPage.errors.length === 0, taskPage.errors.join(" | "));
 
   /* 6. a link that still carries a second on a Streamtape video: the address
         keeps it, and the frame is not touched to chase it */
