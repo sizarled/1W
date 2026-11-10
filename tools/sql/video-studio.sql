@@ -22,6 +22,9 @@
      4. creator_items      a studio's Videos tab lists both the hub's own
                            rows and the member videos published into it
      5. creator_hub_json   counts them, so the header and the table agree
+     6. video_thumb_save   writes a video's still — the address the host
+                           answers with — without saving the whole video
+                           a second time
 
    Run order: after videos-page.sql, creator-studio.sql and
    creator-server-cinema.sql (all applied).
@@ -411,7 +414,55 @@ end;
 $$;
 
 /* ------------------------------------------------------------------ */
-/* 7. grants                                                          */
+/* 7. the still, written on its own                                    */
+/* ------------------------------------------------------------------ */
+/**
+ * A video's picture is the host's own answer —
+ * `https://thumb.tapecontent.net/thumb/<file id>/<version>.jpg` — and the
+ * editor only learns that answer once the picture has gone up under the
+ * video's own code, which is *after* the row was written. Saving the whole
+ * video again for one address would re-run every check on it; this writes the
+ * one column, for the video's own author or host, and nothing else.
+ */
+create or replace function public.video_thumb_save(p_token text, p_code text, p_url text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_me   public.members%rowtype := public.member_from_token(p_token);
+  v_post public.posts%rowtype;
+  v_url  text := nullif(btrim(coalesce(p_url, '')), '');
+begin
+  if v_me.id is null then
+    return jsonb_build_object('ok', false, 'error', 'session');
+  end if;
+  /* the column is read by a browser as an address: anything else is refused */
+  if v_url is null or v_url !~* '^https?://' then
+    return jsonb_build_object('ok', false, 'error', 'thumbnail');
+  end if;
+  select * into v_post
+    from public.posts p
+   where upper(p.post_code) = upper(btrim(coalesce(p_code, '')))
+      or p.id::text = lower(btrim(coalesce(p_code, '')))
+   limit 1;
+  if v_post.id is null or v_post.content_type <> 'video' then
+    return jsonb_build_object('ok', false, 'error', 'not_found');
+  end if;
+  /* the same pair member_post_save accepts on an update */
+  if v_me.id not in (v_post.author_profile_id, v_post.host_profile_id) then
+    return jsonb_build_object('ok', false, 'error', 'role');
+  end if;
+  update public.posts p
+     set thumbnail_url = v_url
+   where p.id = v_post.id;
+  return jsonb_build_object('ok', true, 'code', v_post.post_code, 'thumbnail', v_url);
+end;
+$$;
+
+/* ------------------------------------------------------------------ */
+/* 8. grants                                                          */
 /* ------------------------------------------------------------------ */
 revoke all on function public.creator_hub_posts(uuid) from public;
 revoke all on function public.creator_items(text, uuid, text, text, text) from public;
@@ -420,5 +471,7 @@ grant execute on function public.creator_hub_posts(uuid) to anon, authenticated,
 grant execute on function public.creator_items(text, uuid, text, text, text) to anon, authenticated, service_role;
 grant execute on function public.video_card(uuid, uuid) to anon, authenticated, service_role;
 grant execute on function public.video_save(text, jsonb) to anon, authenticated, service_role;
+revoke all on function public.video_thumb_save(text, text, text) from public;
+grant execute on function public.video_thumb_save(text, text, text) to anon, authenticated, service_role;
 
 notify pgrst, 'reload schema';

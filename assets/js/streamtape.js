@@ -476,10 +476,15 @@ export async function splashOf(id, studio) {
   }
 }
 
-/** The address itself, with no call behind it. */
-function splashAddress(id) {
-  const key = String(id || "").trim();
-  return key ? `https://thumb.tapecontent.net/thumb/${key}/thumb.jpg` : "";
+/**
+ * The address, worked out from the id — which the host does **not** answer:
+ * `…/thumb/<file>/thumb.jpg` is a 404, and the version in the middle
+ * (`…/thumb/<file>/<version>.jpg`) is the whole picture. So there is nothing
+ * honest to fall back on, and an unanswered `getsplash` leaves the card without
+ * a picture rather than with a broken one.
+ */
+function splashAddress() {
+  return "";
 }
 
 /**
@@ -490,21 +495,22 @@ function splashAddress(id) {
  * time this runs, so a host that refuses images costs nothing but a shrug.
  */
 export async function putThumbnail(file, { studio, name } = {}) {
-  if (!file || !studio || !studioReady()) return "";
+  if (!file || !studioReady()) return "";
   const label = String(name || "").trim();
   if (!label) return "";
+  const shelf = String(studio || "").trim();
   try {
-    const folder = await ensureFolder(THUMBS, "", studio, THUMBS);
-    const spot = await call("file/ul", { folder, studio });
+    /* a studio's picture sits in the account's own Thumbnails folder, which
+       the browser can name. A member's video has no studio, and the member
+       may not make folders on the host — so the function behind the API does
+       it: `shelf=thumbs` means the account's Thumbnails folder, nothing else */
+    const spot = shelf
+      ? await call("file/ul", { folder: await ensureFolder(THUMBS, "", shelf, THUMBS), studio: shelf })
+      : await call("file/ul", { shelf: "thumbs" });
     if (!spot?.url) return "";
     await postFile(spot.url, file, label, null);
     return label;
   } catch {
     return "";
   }
-}
-
-/** The folder the pictures live in, made when the account has not got one. */
-export async function thumbFolder(studio) {
-  return ensureFolder(THUMBS, "", studio, THUMBS);
 }

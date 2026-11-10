@@ -1443,7 +1443,7 @@ async function editor(tag) {
   globalThis.XMLHttpRequest = FakeXhr;
 
   const seen = [];
-  const tape = { places: [], studios: [], auth: "", splashes: 0 };
+  const tape = { places: [], studios: [], auth: "", splashes: 0, shelf: [] };
   const ctx = boot("video-editor.html", {
     storage: STORAGE,
     fetchImpl: (href, opts) => {
@@ -1457,11 +1457,16 @@ async function editor(tag) {
         tape.auth = (opts.headers && (opts.headers.Authorization || opts.headers.authorization)) || tape.auth;
         if (action === "file/ul") {
           tape.places.push({ folder: url.searchParams.get("folder") });
+          tape.shelf.push(url.searchParams.get("shelf"));
           return reply({ status: 200, result: { url: "https://tapecontent.net/xfsupload/tok" } });
         }
         if (action === "file/getsplash") {
           tape.splashes += 1;
-          return reply({ status: 404, msg: "no still yet", result: null });
+          /* the host has a still for the file the moment a picture of the same
+             name has gone up beside it — before that there is nothing to show */
+          const pictured = uploads.some((row) => /\.(jpg|jpeg|png|webp|gif)$/i.test(String(row.name || "")));
+          if (!pictured) return reply({ status: 404, msg: "no still yet", result: null });
+          return reply({ status: 200, msg: "OK", result: "https://thumb.tapecontent.net/thumb/fid2/host2.jpg" });
         }
         if (action === "file/find") {
           return reply({ status: 200, result: { id: "fid2", name: url.searchParams.get("name") } });
@@ -1505,10 +1510,11 @@ async function editor(tag) {
   expect("files: the note says where the file landed", fileNote.includes("Home / Users / Members"), fileNote);
   expect("files: and how big it was", fileNote.includes("1.0 MB"), fileNote);
   expect("files: a host file is named as one", document.querySelector("[data-ved-source-badge]")?.textContent === "Streamtape", document.querySelector("[data-ved-source-badge]")?.textContent);
+  expect("files: the host was asked for the file's own still", tape.splashes > 0, String(tape.splashes));
   expect(
-    "files: the still the host keeps is already on the card",
-    (document.querySelector("[data-ved-thumb-box] img")?.getAttribute("src") || "").includes("thumb.tapecontent.net/thumb/fid2/thumb.jpg"),
-    document.querySelector("[data-ved-thumb-box] img")?.getAttribute("src")
+    "files: and nothing is drawn when it has none yet — no made-up address",
+    !document.querySelector("[data-ved-thumb-box] img"),
+    document.querySelector("[data-ved-thumb-box]")?.innerHTML.slice(0, 90)
   );
   expect("files: the box says where a no-studio file lands", /Home \/ Users \/ Members/.test(document.querySelector("[data-ved-drop-note]")?.textContent || ""), document.querySelector("[data-ved-drop-note]")?.textContent);
 
@@ -1534,8 +1540,18 @@ async function editor(tag) {
   Object.defineProperty(thumbInput, "files", { value: [{ name: "still.jpg", type: "image/jpeg", size: 2048 }], configurable: true });
   thumbInput.dispatchEvent(new window.Event("change", { bubbles: true }));
   await wait(60);
-  expect("files: the picture was uploaded", uploads.length === 2 && uploads[1].url.includes("/users/posts/"), JSON.stringify(uploads.map((u) => u.url)));
-  expect("files: and becomes the thumbnail", document.querySelector("[data-ved-thumb-box] img")?.getAttribute("src")?.includes("/users/posts/"), document.querySelector("[data-ved-thumb-box]")?.innerHTML.slice(0, 90));
+  /* the picture of a video that lives on the host stays on the host: it waits
+     for the video's own name, and nothing is copied into the site's storage */
+  expect(
+    "files: the picture goes nowhere near the site's storage",
+    uploads.every((row) => !row.url.includes("/storage/v1/") && !row.url.includes("/users/posts/")),
+    JSON.stringify(uploads.map((u) => u.url))
+  );
+  expect(
+    "files: until the video has a name, the card shows no picture rather than someone else's",
+    !document.querySelector("[data-ved-thumb-box] img"),
+    document.querySelector("[data-ved-thumb-box]")?.innerHTML.slice(0, 90)
+  );
 
   /* the hosts the field understands */
   const badge = () => document.querySelector("[data-ved-source-badge]")?.textContent;
@@ -1578,7 +1594,124 @@ async function editor(tag) {
   expect("keys: the age rides in meta", payload.meta?.age === "3", JSON.stringify(payload.meta));
   expect("keys: the file is named as a file or a host", ["file", "dailymotion", "vimeo", "drive", "embed"].includes(payload.meta?.source), payload.meta?.source);
   expect("keys: publishing clears the draft", window.localStorage.getItem("1w.videos.draft") === null, String(window.localStorage.getItem("1w.videos.draft")));
+
   expect("files: nothing threw", ctx.errors.length === 0, ctx.errors.join(" | "));
+}
+
+/* ================================================================== */
+/* pass 8b — a member's picture: the Thumbnails door, and the code    */
+/* ================================================================== */
+{
+  /* the host answers the picture post, and remembers the name it was given */
+  const sent = [];
+  class MemberXhr {
+    constructor() {
+      this.upload = {};
+      this.status = 0;
+      this.responseText = "";
+    }
+    open(method, url) {
+      this.url = url;
+    }
+    setRequestHeader() {}
+    send(body) {
+      const file = body && typeof body.get === "function" ? body.get("file1") : body;
+      sent.push({ url: this.url, name: file && file.name });
+      this.status = 200;
+      this.responseText = JSON.stringify({ status: 200, result: { id: "fid3", name: file && file.name } });
+      setTimeout(() => this.onload?.(), 5);
+    }
+  }
+  globalThis.XMLHttpRequest = MemberXhr;
+
+  const asked = { shelf: [], folders: [], splash: [] };
+  const ctx = boot("video-editor.html", {
+    storage: STORAGE,
+    fetchImpl: (href) => {
+      const fn = fnName(href);
+      if (fn === "creator_hubs_list") return reply({ ok: true, hubs: [] });
+      if (fn === "video_save") return reply({ ok: true, code: "PST-009001", status: "published", scheduled_at: null });
+      if (href.includes("/functions/v1/studio-upload")) {
+        const url = new URL(href);
+        const action = url.searchParams.get("action");
+        if (action === "file/ul") {
+          asked.folders.push(url.searchParams.get("folder"));
+          asked.shelf.push(url.searchParams.get("shelf"));
+          return reply({ status: 200, result: { url: "https://tapecontent.net/xfsupload/member" } });
+        }
+        if (action === "file/getsplash") {
+          asked.splash.push(url.searchParams.get("file"));
+          const pictured = sent.some((row) => /\.(jpg|jpeg|png|webp|gif)$/i.test(String(row.name || "")));
+          if (!pictured) return reply({ status: 404, msg: "no still yet", result: null });
+          return reply({ status: 200, msg: "OK", result: "https://thumb.tapecontent.net/thumb/fid3/member9.jpg" });
+        }
+        if (action === "file/find") return reply({ status: 200, result: { id: "fid3", name: url.searchParams.get("name") } });
+        return reply({ status: 400, msg: "unexpected call" });
+      }
+      return reply([]);
+    },
+  });
+  await import(`file://${join(root, "assets/js/video-editor.js")}?p8bthumb`);
+  await wait(70);
+  const { document, window, calls } = ctx;
+
+  /* a clip goes to the member's own shelf */
+  const drop = document.querySelector("[data-ved-drop]");
+  const dropEvent = new window.Event("drop", { bubbles: true, cancelable: true });
+  dropEvent.dataTransfer = {
+    files: [new window.File([new Uint8Array(1024)], "clip.mp4", { type: "video/mp4" })],
+    getData: () => "",
+  };
+  drop.dispatchEvent(dropEvent);
+  await wait(120);
+  expect("member still: the clip is on the host", asked.shelf.includes(null), JSON.stringify(asked.shelf));
+
+  /* a picture from the machine: no site storage, and no guessed address */
+  const picker = document.querySelector("[data-ved-thumb-file]");
+  Object.defineProperty(picker, "files", {
+    value: [new window.File([new Uint8Array(64)], "mine.jpg", { type: "image/jpeg" })],
+    configurable: true,
+  });
+  picker.dispatchEvent(new window.Event("change", { bubbles: true }));
+  await wait(120);
+  expect(
+    "member still: the picture waits for the video's name — nothing goes up yet",
+    sent.every((row) => !String(row.name || "").endsWith(".jpg")),
+    JSON.stringify(sent.map((row) => row.name))
+  );
+
+  /* publishing gives it the name, and the host's answer becomes the picture */
+  const title = document.querySelector("[data-ved-title]");
+  title.value = "A member's own film";
+  title.dispatchEvent(new window.Event("input", { bubbles: true }));
+  await wait(30);
+  document.querySelector("[data-ved-publish]").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await wait(400);
+
+  expect("member still: the clip was saved", Boolean(lastCall(calls, "video_save")), JSON.stringify(calls.map((c) => fnName(c.href)).slice(-6)));
+  expect(
+    "member still: the Thumbnails door is the member's, with no folder named by the browser",
+    asked.shelf.filter(Boolean).includes("thumbs") && asked.folders.every((folder) => !folder),
+    JSON.stringify({ shelf: asked.shelf, folders: asked.folders })
+  );
+  expect(
+    "member still: the picture goes up under the video's own name",
+    sent.some((row) => row.name === "PST-009001.jpg"),
+    JSON.stringify(sent.map((row) => row.name))
+  );
+  expect(
+    "member still: nothing is copied into the site's storage",
+    sent.every((row) => /tapecontent\.net/.test(String(row.url || ""))),
+    JSON.stringify(sent.map((row) => row.url))
+  );
+  expect(
+    "member still: the card wears the host's still, and the row is pointed at it",
+    /thumb\.tapecontent\.net\/thumb\/fid3\/member9\.jpg/.test(document.querySelector("[data-ved-thumb-box] img")?.getAttribute("src") || "") &&
+      /member9\.jpg/.test(String(lastCall(calls, "video_thumb_save")?.body?.p_url || "")),
+    `${document.querySelector("[data-ved-thumb-box]")?.innerHTML.slice(0, 80)} | ${JSON.stringify(lastCall(calls, "video_thumb_save")?.body || {})}`
+  );
+  expect("member still: nothing threw", ctx.errors.length === 0, ctx.errors.join(" | "));
+  delete globalThis.XMLHttpRequest;
 }
 
 /* ================================================================== */
@@ -2306,9 +2439,16 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
 {
   const embed = await import(`file://${join(root, "assets/js/embed.js")}?still`);
   expect(
-    "still: a studio file brings its own picture",
-    embed.autoThumb("https://streamtape.com/e/fid42") === "https://thumb.tapecontent.net/thumb/fid42/thumb.jpg",
+    "still: a Streamtape link brings no picture by itself — the version is the host's to give",
+    embed.autoThumb("https://streamtape.com/e/fid42") === "",
     embed.autoThumb("https://streamtape.com/e/fid42")
+  );
+  expect(
+    "still: the address is only completed once the version is known",
+    embed.streamtapeSplash("fid42", "v7x1") === "https://thumb.tapecontent.net/thumb/fid42/v7x1.jpg" &&
+      embed.streamtapeSplash("fid42") === "" &&
+      embed.streamtapeSplash("fid42", "thumb") === "https://thumb.tapecontent.net/thumb/fid42/thumb.jpg",
+    embed.streamtapeSplash("fid42", "v7x1")
   );
   expect("still: and YouTube still brings its own", embed.autoThumb("https://youtu.be/dQw4w9WgXcQ").includes("i.ytimg.com"));
   expect("still: a plain link brings none", embed.autoThumb("https://example.com/film.mp4") === "");
@@ -2342,8 +2482,9 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
   await import(`file://${join(root, "assets/js/videos.js")}?stillfeed`);
   await wait();
   expect(
-    "still: a card with no picture wears the host's",
-    /thumb\.tapecontent\.net\/thumb\/fid42\/thumb\.jpg/.test(feedCtx.document.querySelector("[data-v-grid] .vcard img")?.getAttribute("src") || ""),
+    "still: a card with no picture shows a card-shaped hole, not a broken address",
+    !feedCtx.document.querySelector("[data-v-grid] .vcard img") &&
+      Boolean(feedCtx.document.querySelector("[data-v-grid] .vcard__ph")),
     feedCtx.document.querySelector("[data-v-grid] .vcard")?.innerHTML.slice(0, 120)
   );
   expect("still: nothing threw on the feed", feedCtx.errors.length === 0, feedCtx.errors.join(" | "));
@@ -2377,8 +2518,14 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
         if (action === "file/rename") return reply({ status: 200, result: true });
         if (action === "file/getsplash") {
           tape.splash.push(url.searchParams.get("file"));
-          /* the account's own picture, named after the video, is the splash */
-          return reply({ status: 200, msg: "OK", result: "https://thumb.tapecontent.net/thumb/fid7/custom.jpg" });
+          /* the still the host makes itself, and — once a picture of the same
+             name has gone up beside the file — the account's own one */
+          const own = tape.thumbs.some((row) => /\.(jpg|jpeg|png|webp|gif)$/i.test(String((row && row.name) || "")));
+          return reply({
+            status: 200,
+            msg: "OK",
+            result: own ? "https://thumb.tapecontent.net/thumb/fid7/own9.jpg" : "https://thumb.tapecontent.net/thumb/fid7/custom.jpg",
+          });
         }
         return reply({ status: 400, msg: "unexpected call" });
       }
@@ -2457,7 +2604,11 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
   thumbInput.dispatchEvent(new studioCtx.window.Event("change", { bubbles: true }));
   await wait(200);
   const ownSrc = studioCtx.document.querySelector("[data-ved-thumb-box] img")?.getAttribute("src") || "";
-  expect("still: the member's own picture wins", /\/users\/posts\//.test(ownSrc) || ownSrc.includes("posts"), ownSrc);
+  expect(
+    "still: the member's own picture becomes the host's still — nothing is copied to the site",
+    /thumb\.tapecontent\.net\/thumb\/fid7\//.test(ownSrc) && !/\/storage\/v1\/|\/users\/posts\//.test(ownSrc),
+    ownSrc
+  );
   expect(
     "still: and the hint stops saying automatic",
     !/Home \/ Thumbnails/.test(studioCtx.document.querySelector("[data-ved-thumb-hint]")?.textContent || ""),
@@ -2469,11 +2620,11 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
   await wait();
   studioCtx.document.querySelector("[data-ved-publish]").dispatchEvent(new studioCtx.window.MouseEvent("click", { bubbles: true }));
   await wait(320);
+  const savedThumb = String(lastCall(studioCtx.calls, "video_save")?.body?.p_payload?.thumbnail || "");
   expect(
-    "still: the picture is the one saved with the video",
-    String(lastCall(studioCtx.calls, "video_save")?.body?.p_payload?.thumbnail || "").startsWith("http") &&
-      !String(lastCall(studioCtx.calls, "video_save")?.body?.p_payload?.thumbnail || "").includes("thumb.tapecontent.net"),
-    lastCall(studioCtx.calls, "video_save")?.body?.p_payload?.thumbnail
+    "still: the picture saved with the video is the host's own address",
+    /^https:\/\/thumb\.tapecontent\.net\/thumb\/fid7\//.test(savedThumb),
+    savedThumb
   );
   expect(
     "still: the host is asked for its Thumbnails folder",
@@ -2484,6 +2635,11 @@ async function editorWith(tag, { hubs = HUBS, url = "video-editor.html", saveRep
     "still: and the picture is copied there under the video's own name",
     tape.thumbs.some((row) => row.name === "VID-001100.jpg"),
     JSON.stringify(tape.thumbs.map((row) => row.name))
+  );
+  expect(
+    "still: once the picture has the video's name, the row is pointed at the new still",
+    /fid7\/own9\.jpg/.test(String(lastCall(studioCtx.calls, "video_thumb_save")?.body?.p_url || "")),
+    JSON.stringify(lastCall(studioCtx.calls, "video_thumb_save")?.body || {})
   );
   expect("still: nothing threw in the editor", studioCtx.errors.length === 0, studioCtx.errors.join(" | "));
 

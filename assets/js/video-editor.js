@@ -40,7 +40,7 @@ import { toast } from "./ui.js";
 import { sessionToken, getMember } from "./session.js";
 import { COUNTRIES } from "./countries.js";
 import { SUPABASE, storageUrl } from "./config.js";
-import { embedUrl, fullscreenSrc, FRAME_ALLOW, autoThumb, streamtapeSplash, streamtapeId, isFile, sourceKind, sourceLabel, HOSTS, pinterestId, redditPath, tapeColour, canSeek } from "./embed.js";
+import { embedUrl, fullscreenSrc, FRAME_ALLOW, autoThumb, streamtapeId, isFile, sourceKind, sourceLabel, HOSTS, pinterestId, redditPath, tapeColour, canSeek } from "./embed.js";
 import { currentTheme } from "./theme.js";
 import { createContents } from "./contents.js";
 import { studioReady, uploadToStudio, uploadToHost, renameFile, splashOf, putThumbnail, NOT_CONNECTED } from "./streamtape.js";
@@ -875,7 +875,7 @@ async function save(status) {
   S.status = res.status || status;
   await nameHostFile();
   /* the picture the member chose now has the video's own name to carry */
-  await mirrorThumbToHost();
+  await settleChosenPicture();
   paintAll();
 
   if (status === "draft") {
@@ -1261,9 +1261,10 @@ const OEMBED = {
 async function hostStill(id = "") {
   const key = String(id || streamtapeId(S.embed) || "").trim();
   if (!key) return "";
-  const studio = S.host?.studio || studioHub()?.code || "";
-  const url = await splashOf(key, studio).catch(() => "");
-  return url || streamtapeSplash(key);
+  /* `thumb.tapecontent.net/thumb/<file>/thumb.jpg` is not an address the host
+     answers — the version in the middle is the whole picture — so the only
+     still worth showing is the one `getsplash` hands back */
+  return splashOf(key, pictureStudio()).catch(() => "");
 }
 
 /**
@@ -1304,15 +1305,37 @@ async function takeHostStill({ force = false } = {}) {
  */
 async function mirrorThumbToHost() {
   if (!S.thumbFile || !S.thumbChosen) return "";
-  const studio = S.host?.studio || studioHub()?.code || "";
+  const studio = pictureStudio();
   const base = String(S.code || "").trim();
-  if (!studio || !base) return "";
+  if (!base) return "";
   const ext = (String(S.thumbFile.name || "").split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
   const name = `${base}.${ext === "jpeg" ? "jpg" : ext}`;
   if (S.thumbMirrored === name) return name;
   const done = await putThumbnail(S.thumbFile, { studio, name });
   if (done) S.thumbMirrored = done;
   return done;
+}
+
+/**
+ * The moment the video has its code: the picture goes into Home / Thumbnails
+ * under that code, and the host is asked which still it now answers with.
+ *
+ * The row was written a breath earlier — with whatever picture the editor had
+ * then — so a new address is written to it directly rather than saving the
+ * whole video again.
+ */
+async function settleChosenPicture() {
+  if (!S.thumbChosen || !hostId()) return "";
+  const mirrored = await mirrorThumbToHost();
+  if (!mirrored) return "";
+  const still = await splashOf(hostId(), pictureStudio()).catch(() => "");
+  if (!still) return "";
+  const before = S.thumb;
+  setThumb(still, { from: "member" });
+  if (still !== before && S.code) {
+    await rpc("video_thumb_save", { p_token: S.token, p_code: S.code, p_url: still }).catch(() => null);
+  }
+  return still;
 }
 
 /**
@@ -1667,6 +1690,65 @@ function uploadFile(file, folder, note) {
   });
 }
 
+/**
+ * The host file this video already has — the one just uploaded, the one it was
+ * saved with, or the one its link names. All three are the same id.
+ */
+function hostId() {
+  return String(S.host?.id || streamtapeId(S.embed) || "").trim();
+}
+
+/** The studio whose shelf the picture belongs on — empty for a member's own. */
+function pictureStudio() {
+  return S.host?.studio || studioHub()?.code || "";
+}
+
+/**
+ * The one address the page shows as this video's picture, and the one the
+ * server stores. Painting and storing are kept in one place so a picture that
+ * arrives late still reaches the card, the player and the draft.
+ */
+function setThumb(url, { from = "" } = {}) {
+  if (!url || S.thumb === url) return url;
+  S.thumb = url;
+  if (from) S.thumbFrom = from;
+  paintThumb();
+  paintPreview();
+  paintPlayer();
+  paintStatus();
+  scheduleDraft();
+  return url;
+}
+
+/**
+ * The picture the member chose, put where the video itself lives.
+ *
+ * A video on Streamtape keeps its picture **on the host**: the file goes into
+ * the account's Home / Thumbnails under the video's own name, and the address
+ * the site stores is the host's answer — `thumb.tapecontent.net/thumb/<file>/
+ * <version>.jpg`. Nothing is copied into the site's bucket for it.
+ *
+ * A video that is only a link to someone else's player has no host file and no
+ * splash to point at, so that one picture is stored with the site.
+ */
+async function placeChosenPicture() {
+  const key = hostId();
+  /* a file of the member's own is on its way to the host, even in the breath
+     before the upload answers: its picture waits for the name instead of living
+     in the bucket for as long as it takes to save */
+  const hosted = Boolean(key) || S.mode === "file";
+  if (!hosted) {
+    const url = await uploadFile(S.thumbFile, "posts");
+    if (!url) return "";
+    return setThumb(url, { from: "member" });
+  }
+  if (!key) return "";
+  /* the picture can only carry the video's name once the video has one */
+  if (S.code) await mirrorThumbToHost();
+  const still = await splashOf(key, pictureStudio()).catch(() => "");
+  return still ? setThumb(still, { from: "member" }) : "";
+}
+
 async function uploadThumbnail(file) {
   if (!file) return;
   if (!IMAGE_TYPES.test(file.type)) {
@@ -1679,23 +1761,30 @@ async function uploadThumbnail(file) {
   }
   /* the card it becomes is never wider than the page: 1280 is generous */
   file = await shrinkImage(file, { width: 1280 });
+  S.thumbFile = file;
+  S.thumbChosen = true;
+  S.thumbAuto = false;
+  S.thumbFrom = "member";
+  S.thumbMirrored = "";
+  paintThumb();
+  paintPreview();
   try {
-    const url = await uploadFile(file, "posts");
-    S.thumb = url;
-    S.thumbChosen = true;
-    S.thumbAuto = false;
-    S.thumbFrom = "member";
-    S.thumbFile = file;
-    S.thumbMirrored = "";
-    paintThumb();
-    paintPreview();
-    paintPlayer();
-    paintStatus();
-    scheduleDraft();
-    toast({ title: "Picture uploaded", message: "", tone: "success", iconName: "image" });
-    /* the same picture goes to the host's Home / Thumbnails under the video's
-       name, so the player there wears it too — once the video has its name */
-    void mirrorThumbToHost();
+    const still = await placeChosenPicture();
+    if (!still) {
+      toast({
+        title: "Kept for the save",
+        message: "The host has not got the name yet — the picture goes up the moment you save.",
+        tone: "info",
+        iconName: "image",
+      });
+      return;
+    }
+    toast({
+      title: "The picture is the host's",
+      message: "It sits in Home / Thumbnails under the video's name.",
+      tone: "success",
+      iconName: "image",
+    });
   } catch (error) {
     toast({ title: "Upload failed", message: error?.message || "Try again.", tone: "error" });
   }

@@ -249,25 +249,34 @@ export function sourceLabel(raw = "") {
 }
 
 /**
- * The picture Streamtape keeps for one file — its own automatic thumbnail.
+ * The picture Streamtape keeps for one file, once someone has told us which
+ * version it is — `thumb.tapecontent.net/thumb/<file>/<version>.jpg`.
  *
- * The address is the host's, not ours: `thumb.tapecontent.net` answers for a
- * file id, and the same address is what the API's `file/getsplash` hands back.
- * If the account has put a picture of its own in **Home / Thumbnails** under
- * the video's name, this address is where it is served from. Nothing to sign,
- * nothing to fetch: an `<img>` can read it directly.
+ * The version is per file and cannot be worked out from the id: the addresses
+ * without one (`…/thumb/<file>/thumb.jpg`) are 404s the host never answers. So
+ * this function only completes an address someone else already read — from the
+ * API's `file/getsplash`, which is where the version comes from — and never
+ * invents one.
  */
-export function streamtapeSplash(id = "") {
+export function streamtapeSplash(id = "", version = "") {
   const key = String(id || "").trim();
-  return key ? `https://thumb.tapecontent.net/thumb/${key}/thumb.jpg` : "";
+  const stamp = String(version || "").trim().replace(/^\/+|\.jpg$/gi, "");
+  if (!key || !stamp) return "";
+  return `https://thumb.tapecontent.net/thumb/${key}/${stamp}.jpg`;
 }
 
-/** YouTube and Streamtape hand over a still for free. */
+/**
+ * The still that comes with a link, for free.
+ *
+ * YouTube hands one over from the id alone. Streamtape does not: its picture
+ * has a version in it that only the host knows, so a Streamtape video gets its
+ * still by *asking* — `file/getsplash`, in the editor and on the watch page —
+ * and not by guessing an address here.
+ */
 export function autoThumb(raw = "") {
   const id = youtubeId(raw);
   if (id) return `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
-  const tape = streamtapeId(raw);
-  return tape ? streamtapeSplash(tape) : "";
+  return "";
 }
 
 /** Where a still came from, in the words the editor shows. */

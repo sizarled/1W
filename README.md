@@ -1766,8 +1766,10 @@ editor and saving it renames the file to the code it now carries.
 1 GB on the free plan, 100 GB on Pro, and an overage price after that — while Streamtape's plans are
 flat for storage and bandwidth. A video is the one thing that grows without a ceiling, so a video is
 the one thing that never sits in the bucket: the host keeps the films, and the bucket keeps what the
-host cannot serve — a card's picture (a JPEG, downscaled before it is sent), a profile's avatar, an
-article's inline image, the IPTV playlists, the UI sounds. Those are kilobytes; the films are not.
+host cannot serve — a profile's avatar, a cover, an article's inline image, the IPTV playlists, the UI
+sounds, and the picture of a video that is only a link to someone else's player. A card's picture for a
+video on the host is the host's own address (it is not copied here at all — see *The picture comes with
+the file, from the host*). Those are kilobytes; the films are not.
 `assets/js/utils.js` `shrinkImage()` is what keeps the picture side small: every upload point
 (avatar 320 × 320, cover 1280 × 720, a post's or a video's picture 1280, an article's 1600) draws the
 picture down first, and hands the original file back when that cannot be done — a GIF (it moves), a
@@ -1796,7 +1798,10 @@ in front of the same seven actions: `?studio=<code>` is a studio's, checked agai
 `creator_hubs_list` / `publisher_hubs` (403 when the token publishes into none of them), and no
 `studio` at all is the member's own shelf, named by the function from `member_from_token` — the
 folder in the request is ignored there, `file/createfolder` is refused, and nothing but that member's
-own folder can be listed or uploaded into. There used to be one — **`file/stream`**, which relayed a published video's own
+own folder can be listed or uploaded into. A third shape of that door is **`&shelf=thumbs`**, with no
+studio: the account's **Home / Thumbnails** folder, which is where a member's own picture for a video
+belongs. A member may not make folders on the host, so the function makes that one, and the browser
+names a file and nothing else. There used to be one — **`file/stream`**, which relayed a published video's own
 bytes so a Streamtape chapter could become a real second — and it is gone (see *A chapter is a second
 in the address, where the platform has one*). Nothing here is public any more.
 
@@ -1816,33 +1821,55 @@ Streamtape ever being called, and a token that owns a studio gets Streamtape's o
 `file/listfolder` returned the account's folders (`Subtitles`, `Thumbnails`, `Users`) and its files.
 After the relay was removed (version 6) the same endpoint was asked again: `action=file/stream` answers
 **`400` "Unknown action."** — the door is closed, not hidden — while `action=file/info` still answers
-`401` "Sign in first." without a session.
+`401` "Sign in first." without a session. Version 8 adds `&shelf=thumbs`, and it was asked the same way:
+`action=file/ul&shelf=thumbs` with a member's token answers `200` and an upload address
+(`https://<n>.tapecontent.net/xfsproupload/<token>`), while the same call without a token still answers
+`401`.
 Source the function from its file, not from a copy: a `/** … */` block header sent through the
 management API comes back truncated, so the deployed file keeps its notes as `//` lines.
 
-### The thumbnail comes with the file
+### The picture comes with the file, from the host
 
-A video uploaded to the host does not open with an empty card. The moment the file lands, the
-editor asks the host for the still it keeps for that file — `file/getsplash`, or, when the function
-has not been redeployed yet, the address the same answer gives
-(`https://thumb.tapecontent.net/thumb/<file id>/thumb.jpg`) — and puts it in the Thumbnail field as
-an **automatic** picture. Nothing is stored twice: the address is the host's, and an `<img>` reads it
-directly.
+A video uploaded to the host does not open with an empty card. The moment the file lands, the editor
+asks the host for the still it keeps for that file — `file/getsplash` — and puts the answer in the
+Thumbnail field as an **automatic** picture. The answer is the whole address, version and all:
+
+```
+https://thumb.tapecontent.net/thumb/<file id>/<version>.jpg
+```
+
+That version is the host's to give and nobody else's: `…/thumb/<file id>/thumb.jpg` is a **404** the
+host never answers, and so is any version that was guessed. So no code here makes one up any more.
+`autoThumb()` in `embed.js` hands a Streamtape link **no** picture, `streamtapeSplash(id, version)`
+only completes an address whose version was read, and a card with no picture shows the card's own
+placeholder instead of a broken image. What the site stores for a video on the host is exactly this
+address, taken from the host's answer: `VID-001039` holds
+`…/thumb/789xRL93X9HAarD/qrYJ2DjaBMHKPe.jpg` because that is what `file/getsplash` answers for
+`789xRL93X9HAarD`, and `VSR-001040` holds `…/thumb/0VBMbg4YOVsbOPK/Xw3Ov8z9MRt0V1.jpg` for the same
+reason. Both were asked on the live endpoint, and both answers came back `200`.
 
 Streamtape keeps the account's own pictures in **Home / Thumbnails**, matched to a video by name: a
-`VID-001100.jpg` there is the picture of `VID-001100.mp4`. So the account can replace a studio's
-stills without touching the site, and the editor reads whichever picture is current — the hint under
-the field says where it came from and that it can be replaced.
+`VID-001100.jpg` there is the picture of `VID-001100.mp4`. So the account can replace a still without
+touching the site, and the editor reads whichever picture is current — the hint under the field says
+where it came from and that it can be replaced.
 
 The member's own picture wins over it: **Upload**, a pasted address, or a dropped file sets the
-thumbnail, and the automatic one is never put back over a chosen one. A picture is the one upload that
-stays in the site's storage (`source/users/posts/`), because a card has to be an image a feed of a
-hundred cards can load without asking the host a hundred times. A picture the member uploads is
-also copied into **Home / Thumbnails** under the video's own name (`VID-001100.jpg`), so the host's
-own player wears the same card the site does — best-effort, after the video has its code, and a host
-that refuses an image costs nothing. `stillOf()` in `videos.js` is the reading side: a card, a row, a
-poster or the player falls back to the host's still, so a video saved before this change still shows
-a picture instead of a grey rectangle.
+thumbnail, and the automatic one is never put back over a chosen one. And that picture goes to the same
+place the video does — the host, not the bucket. It is downscaled to 1280 (`shrinkImage()`), posted into
+**Home / Thumbnails** under the video's own code, and the address the row keeps is the one the host then
+answers with. A studio's picture is written into the studio's own Thumbnails folder by the browser; a
+member's own video has no studio, and a member may not make folders on the host, so the function does it —
+`file/ul&shelf=thumbs` is the account's Thumbnails folder, resolved server-side, with no folder id from
+the browser. The name only exists once the video has its code, so a picture chosen before the first save
+waits for it: the publish uploads the picture, asks for the still again, and — when the host now answers
+with a new address — writes that address straight to the row with
+`video_thumb_save(token, code, url)` instead of saving the whole video a second time. Nothing of this
+passes through the site's storage.
+
+The one picture that is still stored with the site is the picture of a **link** — someone else's player,
+with no file on the host and therefore no splash to point at — and that one goes to
+`source/users/posts/`. `stillOf()` in `videos.js` is the reading side: a card, a row, a poster or the
+player wears the row's own picture, or YouTube's free still when the row is a YouTube link.
 
 The three doors keep their meaning, on the feed as well as on the door:
 

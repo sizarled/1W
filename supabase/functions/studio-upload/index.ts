@@ -7,6 +7,8 @@
 // Home / Users / Studio  / <studio code> / <video code>.mp4
 // Home / Users / Members / <member code> / <video code>.mp4
 //
+// A video's picture lives there too: Home / Thumbnails / <video code>.jpg.
+//
 // The browser is not trusted with the Streamtape credentials, so it talks to
 // this function instead, and the function talks to the API:
 //
@@ -37,6 +39,10 @@
 //   ?studio=<code>  the token must be one that may publish into that studio —
 //                   the same list the editor's own picker is built from (403
 //                   otherwise), and the folder is the client's, inside it.
+//   &shelf=thumbs    with no studio: the account's Home / Thumbnails folder,
+//                   which is where a member's own picture for a video lives.
+//                   The browser never names a folder, and never makes one.
+//
 //   no studio       the token must belong to a member. The member's own folder
 //                   is resolved **here** from the token (`member_from_token`),
 //                   so the browser neither names nor chooses it: `file/ul`,
@@ -60,9 +66,11 @@
 // editor shows it — it never pretends a file went anywhere.
 
 const API = "https://api.streamtape.com";
-/* the account's tree: Home / Users / { Studio | Members } / <code> */
+/* the account's tree: Home / Users / { Studio | Members } / <code>,
+   and Home / Thumbnails for the pictures */
 const SHELF_USERS = "Users";
 const SHELF_MEMBERS = "Members";
+const SHELF_THUMBS = "Thumbnails";
 const LOGIN = Deno.env.get("STREAMTAPE_LOGIN") ?? "";
 const KEY = Deno.env.get("STREAMTAPE_KEY") ?? "";
 const SERVICE_URL = Deno.env.get("SUPABASE_URL") ?? "";
@@ -217,6 +225,10 @@ Deno.serve(async (request: Request): Promise<Response> => {
   const name = String(url.searchParams.get("name") || "").trim();
   const file = String(url.searchParams.get("file") || "").trim();
 
+  /* a member's picture goes into the account's Home / Thumbnails, which only
+     this function may make — so `shelf=thumbs` names it, and nothing else */
+  const shelf = String(url.searchParams.get("shelf") || "").trim().toLowerCase();
+
   /* no studio named: this is a member's own video, and the member's own folder
      is the only one the rest of this function will speak about */
   if (!studio) {
@@ -236,8 +248,21 @@ Deno.serve(async (request: Request): Promise<Response> => {
       return json(await api(action, { file, name }));
     }
     if (action === "file/ul" || action === "file/listfolder" || action === "file/find") {
-      const folder = await memberShelf(code);
-      if (!folder) return json({ status: 502, msg: "The host would not make the member's folder.", result: null }, 502);
+      /* the account's own Thumbnails folder, or the member's own shelf */
+      const folder = shelf === "thumbs" ? await folderNamed("", SHELF_THUMBS) : await memberShelf(code);
+      if (!folder) {
+        return json(
+          {
+            status: 502,
+            msg:
+              shelf === "thumbs"
+                ? "The host would not make the Thumbnails folder."
+                : "The host would not make the member's folder.",
+            result: null,
+          },
+          502,
+        );
+      }
       if (action === "file/find") {
         const listing = await api("file/listfolder", { folder });
         if (Number(listing.status) !== 200) return json(listing);
