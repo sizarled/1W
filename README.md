@@ -1762,6 +1762,18 @@ The file on Streamtape is named after the code, so a file uploaded under an olde
 `PST-001039.mp4`. `meta.host_file` keeps the name the file actually has; opening such a video in the
 editor and saving it renames the file to the code it now carries.
 
+**Why the films are not in the bucket at all.** Supabase's file storage is metered by the gigabyte —
+1 GB on the free plan, 100 GB on Pro, and an overage price after that — while Streamtape's plans are
+flat for storage and bandwidth. A video is the one thing that grows without a ceiling, so a video is
+the one thing that never sits in the bucket: the host keeps the films, and the bucket keeps what the
+host cannot serve — a card's picture (a JPEG, downscaled before it is sent), a profile's avatar, an
+article's inline image, the IPTV playlists, the UI sounds. Those are kilobytes; the films are not.
+`assets/js/utils.js` `shrinkImage()` is what keeps the picture side small: every upload point
+(avatar 320 × 320, cover 1280 × 720, a post's or a video's picture 1280, an article's 1600) draws the
+picture down first, and hands the original file back when that cannot be done — a GIF (it moves), a
+browser without a 2D canvas, a decode that takes longer than four seconds, or a file that is already
+smaller than the redraw.
+
 **One way to the host, and the browser holds nothing.** The way in is the edge function
 `supabase/functions/studio-upload/index.ts`, deployed on this project: Streamtape's **API Login** and
 **API Key** (the key is the "API password") are its secrets, and the page only ever holds the

@@ -355,6 +355,52 @@ const queue = [
 }
 
 /* ================================================================== */
+/* pass 3b — a picture on its way to storage                          */
+/* ================================================================== */
+{
+  /* the site's bucket is metered, so a picture is drawn down to the width the
+     page can actually show before it goes up — and nothing here may ever fail
+     an upload: a moving picture, a browser without a canvas, and a file that
+     is already small all go up untouched */
+  const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  globalThis.Image = dom.window.Image;
+  globalThis.File = dom.window.File;
+
+  const utils = await import(`file://${join(root, "assets/js/utils.js")}?p=3b`);
+  expect("pictures: the toolkit offers a way to shrink one", typeof utils.shrinkImage === "function", typeof utils.shrinkImage);
+
+  const photo = new dom.window.File([new Uint8Array(2048)], "portrait.jpg", { type: "image/jpeg" });
+  const same = await utils.shrinkImage(photo, { width: 1280 });
+  expect(
+    "pictures: without a canvas the file goes up exactly as it came",
+    same === photo,
+    same === photo ? "" : String(same && same.name)
+  );
+  const gif = new dom.window.File([new Uint8Array(64)], "loop.gif", { type: "image/gif" });
+  expect("pictures: a moving picture is never re-encoded", (await utils.shrinkImage(gif, { width: 320 })) === gif);
+  const pdf = new dom.window.File([new Uint8Array(64)], "paper.pdf", { type: "application/pdf" });
+  expect("pictures: a file that is not a picture is left alone", (await utils.shrinkImage(pdf, { width: 320 })) === pdf);
+  expect("pictures: nothing at all is not a reason to throw", (await utils.shrinkImage(null)) === null);
+
+  /* the four places a picture leaves a browser */
+  const avatarSrc = read("assets/js/activated.js");
+  expect(
+    "pictures: an avatar goes up at 320 px",
+    /shrinkImage\(file, kind === "avatar" \? \{ width: 320, height: 320 \}/.test(avatarSrc),
+    "the wizard sends the camera's own size"
+  );
+  expect(
+    "pictures: a cover goes up at 1280 × 720",
+    /shrinkImage\(file, kind === "avatar"[^\n]*: \{ width: 1280, height: 720 \}/.test(avatarSrc),
+    "the cover is not fitted"
+  );
+  expect("pictures: a post's picture is fitted to its card", /shrinkImage\(file, \{ width: 1280 \}\)/.test(read("assets/js/profile.js")));
+  expect("pictures: so is a video's", /shrinkImage\(file, \{ width: 1280 \}\)/.test(read("assets/js/video-editor.js")));
+  expect("pictures: an article's picture is fitted to the column", /shrinkImage\(file, \{ width: 1600 \}\)/.test(read("assets/js/article-editor.js")));
+}
+
+/* ================================================================== */
 /* pass 4 — the clothes                                               */
 /* ================================================================== */
 {

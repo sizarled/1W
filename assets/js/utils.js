@@ -246,6 +246,76 @@ export function scrollRail(rail, direction = 1) {
 }
 
 /* ------------------------------------------------------------------ */
+/* A picture on its way to storage: smaller than the camera made it   */
+/* ------------------------------------------------------------------ */
+/**
+ * Shrink a picture before it is uploaded, and never grow it.
+ *
+ * The site keeps member pictures in its own bucket, and that bucket is metered
+ * by the gigabyte — an avatar that arrives at 800 KB costs the same as forty
+ * avatars that arrive at 20 KB. So a picture wider than `width` is redrawn on a
+ * canvas at that width before it goes up; anything already small enough, or
+ * already smaller as a file, is handed back untouched.
+ *
+ * The fallbacks are the point: a GIF is never re-encoded (it moves), a canvas
+ * that the browser will not give a 2D context to (an old browser, a test
+ * environment) leaves the file exactly as it is, and a picture that cannot be
+ * decoded inside four seconds is uploaded whole rather than held back. Nothing
+ * here can fail an upload.
+ */
+export async function shrinkImage(file, { width = 1280, height = 0, quality = 0.82 } = {}) {
+  if (!file || typeof file !== "object") return file;
+  if (!/^image\//.test(String(file.type || ""))) return file;
+  if (/gif/i.test(String(file.type))) return file;
+  if (typeof document === "undefined" || typeof URL === "undefined" || typeof URL.createObjectURL !== "function") return file;
+
+  let canvas = null;
+  try {
+    canvas = document.createElement("canvas");
+  } catch {
+    return file;
+  }
+  const ctx = canvas && typeof canvas.getContext === "function" ? canvas.getContext("2d") : null;
+  if (!ctx) return file;
+
+  const src = URL.createObjectURL(file);
+  const load = new Promise((resolve) => {
+    const node = new Image();
+    node.onload = () => resolve(node);
+    node.onerror = () => resolve(null);
+    node.src = src;
+  });
+  const image = await Promise.race([load, new Promise((resolve) => setTimeout(() => resolve(null), 4000))]);
+  try {
+    if (!image) return file;
+    const sw = Number(image.naturalWidth) || 0;
+    const sh = Number(image.naturalHeight) || 0;
+    if (!sw || !sh) return file;
+    const scale = Math.min(1, width / sw, height ? height / sh : 1);
+    if (scale >= 0.92) return file;
+    canvas.width = Math.max(1, Math.round(sw * scale));
+    canvas.height = Math.max(1, Math.round(sh * scale));
+    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const type = /png/i.test(String(file.type)) ? "image/png" : "image/jpeg";
+    const blob = await new Promise((resolve) => {
+      if (typeof canvas.toBlob !== "function") {
+        resolve(null);
+        return;
+      }
+      canvas.toBlob(resolve, type, quality);
+    });
+    if (!blob || blob.size >= Number(file.size || 0)) return file;
+    const base = String(file.name || "image").replace(/\.[^.]+$/, "") || "image";
+    const name = `${base}${type === "image/png" ? ".png" : ".jpg"}`;
+    return new File([blob], name, { type });
+  } catch {
+    return file;
+  } finally {
+    if (typeof URL.revokeObjectURL === "function") URL.revokeObjectURL(src);
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /* Horizontal scrollers: click-and-drag with the mouse                */
 /* ------------------------------------------------------------------ */
 const DRAG_SELECTOR = [

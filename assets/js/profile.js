@@ -22,7 +22,7 @@
  */
 
 import { rpc, rest } from "./data.js";
-import { qs, qsa, esc, num, formatDate, timeAgo, avatarPlaceholder, debounce } from "./utils.js";
+import { qs, qsa, esc, num, formatDate, timeAgo, avatarPlaceholder, debounce, shrinkImage } from "./utils.js";
 import { SUPABASE, storageUrl } from "./config.js";
 import { hydrateIcons } from "./icons.js";
 import { brand } from "./brands.js";
@@ -1809,6 +1809,8 @@ async function uploadThumb(file) {
   if (file.size > 4 * 1024 * 1024) {
     return toast({ title: "Image too large", message: "4 MB at most.", tone: "error" });
   }
+  /* a card is 400 px wide at most — send a picture that fits it */
+  file = await shrinkImage(file, { width: 1280 });
   const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z]/g, "");
   const name = `post_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
   try {

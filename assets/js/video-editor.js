@@ -34,7 +34,7 @@
  */
 import { rpc } from "./data.js";
 import { videoUrl, shapeOf } from "./media.js";
-import { qs, qsa, esc } from "./utils.js";
+import { qs, qsa, esc, shrinkImage } from "./utils.js";
 import { icon } from "./icons.js";
 import { toast } from "./ui.js";
 import { sessionToken, getMember } from "./session.js";
@@ -1677,6 +1677,8 @@ async function uploadThumbnail(file) {
     toast({ title: "Too large", message: "4 MB at most.", tone: "error" });
     return;
   }
+  /* the card it becomes is never wider than the page: 1280 is generous */
+  file = await shrinkImage(file, { width: 1280 });
   try {
     const url = await uploadFile(file, "posts");
     S.thumb = url;

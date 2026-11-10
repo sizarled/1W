@@ -22,7 +22,7 @@
 
 import { rpc } from "./data.js";
 import { deviceId, deviceName } from "./device.js";
-import { qs, qsa, esc, formatDate, sleep, clamp } from "./utils.js";
+import { qs, qsa, esc, formatDate, sleep, clamp, shrinkImage } from "./utils.js";
 import { hydrateIcons } from "./icons.js";
 import { toast } from "./ui.js";
 import { sessionToken, clearSessionToken, signOut, setMember } from "./session.js";
@@ -704,6 +704,11 @@ async function saveProfile(root) {
  * a fallback for deployments that still use the legacy anon key.
  */
 async function uploadImage(file, kind, memberId) {
+  /* the bucket is metered, and an avatar is drawn at 58 px: a 320 px square is
+     already more than the page can show, and it weighs a twentieth */
+  if (file) {
+    file = await shrinkImage(file, kind === "avatar" ? { width: 320, height: 320 } : { width: 1280, height: 720 });
+  }
   const rawExt = String(file.name || "").split(".").pop() || "";
   const ext = (rawExt.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg").slice(0, 5);
   const cleanId = String(memberId || "").replace(/[^A-Za-z0-9]/g, "");

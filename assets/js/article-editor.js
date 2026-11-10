@@ -55,7 +55,7 @@
  * answers `ae:published` / `ae:drafted` and the studio takes it from there.
  */
 import { rpc } from "./data.js";
-import { qs, qsa, esc, compact, timeAgo } from "./utils.js";
+import { qs, qsa, esc, compact, timeAgo, shrinkImage } from "./utils.js";
 import { icon } from "./icons.js";
 import { toast } from "./ui.js";
 import { sessionToken } from "./session.js";
@@ -1655,6 +1655,9 @@ async function uploadImage(file, onDone) {
     toast({ title: "Image too large", message: "4 MB at most.", tone: "error" });
     return;
   }
+  /* the reading column is 720 px; a 3000 px photograph is four times the file
+     for none of the picture */
+  file = await shrinkImage(file, { width: 1600 });
   const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z]/g, "");
   const name = `article_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
   try {
