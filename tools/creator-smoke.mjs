@@ -1921,6 +1921,17 @@ async function reachPass() {
       items: 2,
       share: 250,
       auto: true,
+      /* what an interaction is worth — the server's own table */
+      worth: [
+        { event: "repost", delta: 60, note: "every repost adds 60" },
+        { event: "comment_pos", delta: 30, note: "a positive comment adds 30" },
+        { event: "like", delta: 30, note: "a like adds 30" },
+        { event: "share", delta: 10, note: "every share link adds 10" },
+        { event: "share_visit", delta: 10, note: "every visit from that link adds 10 more" },
+        { event: "comment_neg", delta: -30, note: "a negative comment takes 30" },
+        { event: "dislike", delta: -30, note: "a dislike takes 30" },
+        { event: "report", delta: -60, note: "every report takes 60" },
+      ],
       day: "2026-12-05",
       rows: [
         { kind: "post", ref: "post-a", code: "VID-001032", title: "The first film", points: 250, shown: 120, rank: 5000, reached_updates: 40, reached_suggestions: 60, reached_search: 20 },
@@ -1966,13 +1977,46 @@ async function reachPass() {
   expect("reach: an untouched item says it has spent nothing", /0 shown · 250 left/.test(view.text('[data-reach-row="content-b"]')), view.text('[data-reach-row="content-b"]'));
 
   /* the three surfaces, beside the allocation, and the total at the top */
-  const heads = view.qsa(".cr-reach thead th").map((th) => th.textContent.trim());
+  const heads = view.qsa(".cr-reach .cr-table thead th").map((th) => th.textContent.trim());
   expect("reach: the table names the three surfaces", heads.join(" | ") === "Item | Kind | Reach today | Reached in the updates | Reached in the suggestions | Reached in search | Ranking points", heads.join(" | "));
   expect("reach: the updates' people are counted", view.text('[data-cr-reach-updates="post-a"]') === "40", view.text('[data-cr-reach-updates="post-a"]'));
   expect("reach: the suggestions' people are counted", view.text('[data-cr-reach-suggestions="post-a"]') === "60", view.text('[data-cr-reach-suggestions="post-a"]'));
   expect("reach: the search's people are counted", view.text('[data-cr-reach-search="post-a"]') === "20", view.text('[data-cr-reach-search="post-a"]'));
   expect("reach: the day's total is above the table", /500/.test(view.text("[data-cr-reach-total]")), view.text("[data-cr-reach-total]"));
   expect("reach: the meter shows the day spent", view.qs(".cr-reach__meter-fill")?.getAttribute("style")?.includes("24%"), view.qs(".cr-reach__meter-fill")?.getAttribute("style"));
+
+  /* what an interaction is worth is a table, not a sentence — and its numbers
+     are the server's, handed over with the day */
+  const worthHeads = view.qsa(".cr-worth thead th").map((th) => th.textContent.trim());
+  expect(
+    "reach: the worth of an interaction is a table of three columns",
+    worthHeads.join(" | ") === "Interaction | Reach points | Ranking points",
+    worthHeads.join(" | ")
+  );
+  expect("reach: one line per interaction, eight of them", view.qsa(".cr-worth tbody tr").length === 8, String(view.qsa(".cr-worth tbody tr").length));
+  const worthCell = (event, column) => view.qs(`[data-cr-worth="${event}"] .cr-worth__${column}`)?.textContent.trim();
+  expect(
+    "reach: the numbers are the ones the server sent",
+    [["repost", "+60"], ["like", "+30"], ["dislike", "−30"], ["report", "−60"], ["share", "+10"], ["share_visit", "+10"]].every(
+      ([event, value]) => worthCell(event, "delta") === value
+    ),
+    ["repost", "like", "dislike", "report", "share", "share_visit"].map((event) => worthCell(event, "delta")).join(" / ")
+  );
+  expect(
+    "reach: the ranking column says where it is earned",
+    worthCell("like", "rank") === "+30 from a search" && worthCell("report", "rank") === "−60 from a search",
+    `${worthCell("like", "rank")} / ${worthCell("report", "rank")}`
+  );
+  expect(
+    "reach: every interaction is named in words, not as a key",
+    /a repost/.test(view.text('[data-cr-worth="repost"]')) && /a visit from that link/.test(view.text('[data-cr-worth="share_visit"]')),
+    view.text('[data-cr-worth="repost"]')
+  );
+  expect(
+    "reach: the old prose is gone — the numbers are not repeated in a sentence",
+    !/Every like is worth 30/.test(view.text(".cr-reach")),
+    view.text(".cr-reach__note")
+  );
   expect(
     "reach: the bar says the day is split evenly, and between how many",
     /split evenly between 2 items/.test(view.text("[data-cr-reach-plan]")),
@@ -2078,6 +2122,11 @@ async function reachPass() {
     split.text(".cr-reach__note")
   );
   expect("reach: nothing can be typed here either", !split.qs(".cr-reach input"), (split.qs(".cr-reach")?.innerHTML || "").slice(0, 100));
+  expect(
+    "reach: without the server's worth table the page still shows the eight",
+    split.qsa(".cr-worth tbody tr").length === 8 && split.text('[data-cr-worth="like"] .cr-worth__delta') === "+30",
+    `${split.qsa(".cr-worth tbody tr").length} rows`
+  );
   expect("reach: no errors on the split", split.errors.length === 0, split.errors.join(" | "));
   split.window.close();
 

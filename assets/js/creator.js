@@ -935,6 +935,52 @@ function emptyBlock(iconName, title, text, action = "") {
  * the three surfaces — the updates, the suggestions, a search result — and,
  * last, the ranking points the item has earned from search interactions.
  */
+/**
+ * What an interaction is worth, as a table.
+ *
+ * The numbers are the server's (`reach_worth`), handed over with the rest of
+ * the tab, so the page never keeps a second copy of them; the fallback below is
+ * only for a database that predates the table, and says the same eight things.
+ */
+const WORTH_LABELS = {
+  repost: "a repost",
+  like: "a like",
+  dislike: "a dislike",
+  comment_pos: "a positive comment",
+  comment_neg: "a negative comment",
+  share: "a share link",
+  share_visit: "a visit from that link",
+  report: "a report",
+};
+
+const WORTH_FALLBACK = [
+  { event: "repost", delta: 60 },
+  { event: "comment_pos", delta: 30 },
+  { event: "like", delta: 30 },
+  { event: "share", delta: 10 },
+  { event: "share_visit", delta: 10 },
+  { event: "comment_neg", delta: -30 },
+  { event: "dislike", delta: -30 },
+  { event: "report", delta: -60 },
+];
+
+/** `+30`, `−60` — a sign in front, and a real minus, not a hyphen. */
+function signed(delta) {
+  const n = Number(delta) || 0;
+  return n >= 0 ? `+${num(n)}` : `−${num(Math.abs(n))}`;
+}
+
+function reachWorth(data) {
+  const rows = Array.isArray(data?.worth) && data.worth.length ? data.worth : WORTH_FALLBACK;
+  return rows
+    .filter((row) => row && row.event)
+    .map((row) => ({
+      event: String(row.event),
+      delta: Number(row.delta) || 0,
+      label: WORTH_LABELS[row.event] || String(row.event).replace(/_/g, " "),
+    }));
+}
+
 function reachRow(row) {
   /* -1 is LVMax: no number, and no cap */
   const share = Number(row.points);
@@ -1063,6 +1109,7 @@ function renderReach(host, hub, tab) {
   const percent = points ? Math.min(100, Math.round((spent / points) * 100)) : 0;
   const rows = data.rows || [];
   const items = Number(data.items ?? rows.length) || 0;
+  const worth = reachWorth(data);
 
   host.innerHTML = `
     <div class="cr-bar">
@@ -1097,19 +1144,40 @@ function renderReach(host, hub, tab) {
         <div class="cr-reach__meter" role="img" aria-label="${percent}% of today's reach spent">
           <span class="cr-reach__meter-fill" style="width: ${percent}%"></span>
         </div>
+        <div class="dsh-table-wrap cr-reach__worth">
+          <table class="dsh-table cr-worth">
+            <caption>What an interaction is worth</caption>
+            <thead>
+              <tr>
+                <th scope="col">Interaction</th>
+                <th scope="col">Reach points</th>
+                <th scope="col">Ranking points</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${worth
+                .map(
+                  (row) => `<tr data-cr-worth="${esc(row.event)}">
+                    <td>${esc(row.label)}</td>
+                    <td class="cr-worth__delta">${signed(row.delta)}</td>
+                    <td class="cr-worth__rank">${signed(row.delta)} from a search</td>
+                  </tr>`
+                )
+                .join("")}
+            </tbody>
+          </table>
+        </div>
         <p class="cr-reach__note">
-          Every like is worth 30, a dislike takes 30, a repost adds 60 and a report takes 60; a
-          share link adds 10 and each visit from it adds 10 more. A day's budget: every person who
-          has not seen the work yet spends one point, and at midnight the whole number comes back.
-          The day is shared <strong>evenly between everything this studio has published</strong> — ${limitless
+          A day's budget: every person who has not seen the work yet spends one point, and at
+          midnight the whole number comes back. The day is shared
+          <strong>evenly between everything this studio has published</strong> — ${limitless
             ? "and an LVMax studio is never spent out"
             : `${num(points)} points over ${num(items)} ${items === 1 ? "item" : "items"}${
                 items ? ` is ${num(Math.floor(points / items))}${
                   points % items ? " and the odd point goes to the oldest" : ""
                 } each` : ""
-              }`} — so nothing here is typed or saved: publish something and the share of
-          everything else follows. Reach decides how far the work travels — ranking points decide
-          where it stands in a search, and they come from the interactions a search brings.
+              }`}. Reach moves wherever the work is shown; ranking points move only from a search
+          result, which is what the table says in its third column.
         </p>
       </div>
 

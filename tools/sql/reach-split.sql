@@ -21,7 +21,8 @@
 --   §1 reach_split      the arithmetic, in one place
 --   §2 reach_share      one item's share of one studio's day
 --   §3 reach_claim      the same gate, with the share as the item's allowance
---   §4 hub_reach_get    the tab: the share per row, and the count it came from
+--   §4 hub_reach_get    the tab: the share per row, the count it came from,
+--                       and the worth table itself (from reach-earnings.sql)
 --   §5 the manual plan  dropped
 -- ==================================================================
 
@@ -214,6 +215,7 @@ declare
   v_hub    public.creator_hubs%rowtype;
   v_budget public.hub_reach%rowtype;
   v_rows   jsonb := '[]'::jsonb;
+  v_worth  jsonb := '[]'::jsonb;
   v_count  integer := 0;
   v_share  integer := 0;
 begin
@@ -234,6 +236,16 @@ begin
   end if;
 
   v_budget := public.reach_sync(v_hub.id);
+
+  /* what an interaction is worth — the table itself, not a sentence about it,
+     so the page never keeps a second copy of the numbers. Guarded by
+     `to_regclass` so a database without reach-earnings.sql still opens the tab */
+  if to_regclass('public.reach_worth') is not null then
+    select coalesce(jsonb_agg(jsonb_build_object('event', w.event, 'delta', w.delta, 'note', w.note)
+                             order by w.delta desc, w.event), '[]'::jsonb)
+      into v_worth
+      from public.reach_worth w;
+  end if;
 
   /* the shelf is read live and ranked once, so every row carries the share the
      gate will use for it — and the count the whole day is divided by */
@@ -327,6 +339,7 @@ begin
     'items', v_count,
     'share', v_share,
     'auto', true,
+    'worth', v_worth,
     'day', current_date,
     'resets', current_date + 1,
     'rows', v_rows

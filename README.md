@@ -3253,6 +3253,15 @@ top (what the level gives plus what the interactions earned), then one row per p
 | **Reached in search** | the people who met it in a search result today |
 | **Ranking points** | what it has earned from search interactions — read, never typed |
 
+**What an interaction is worth is a table, not a paragraph.** The reach tab carries it beside the
+day: three columns — *Interaction · Reach points · Ranking points* — one line per event, and the
+numbers are **the server's**: `hub_reach_get` returns `worth`, read from `reach_worth`
+(`tools/sql/reach-earnings.sql`), so the page keeps no second copy of a number that already exists in
+the database. The ranking column says where it is earned (`+30 from a search`), because the same like
+on the watch page is worth 30 reach points and 0 ranking points. A database that predates
+`reach_worth` still gets the eight lines — the page carries the same table as a fallback — so the tab
+never shows the rule as prose again.
+
 **Two places the numbers are worn.** *Studio → Reach* is the one place the **reach** points are
 shown, and the bar over the table names the studio they belong to — `Studio One · IDST100001 · 500
 points · 120 spent · 380 left today` — so a member with three studios never has to guess whose day is

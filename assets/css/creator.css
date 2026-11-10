@@ -4228,6 +4228,44 @@ a.crp-ad:hover {
   color: var(--muted);
 }
 
+/* what an interaction is worth: three columns, the numbers on the tab stops */
+.cr-reach__worth {
+  margin-top: 0.7rem;
+}
+
+.cr-worth caption {
+  padding: 0 0 0.4rem;
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: start;
+  color: var(--muted);
+}
+
+.cr-worth th,
+.cr-worth td {
+  padding-block: 0.32rem;
+}
+
+.cr-worth td:first-child {
+  color: var(--text-2);
+}
+
+.cr-worth__delta,
+.cr-worth__rank {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cr-worth__delta {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.cr-worth__rank {
+  color: var(--muted);
+}
+
 .cr-reach__plan {
   font-size: 0.74rem;
   font-variant-numeric: tabular-nums;
