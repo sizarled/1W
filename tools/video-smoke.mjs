@@ -494,6 +494,151 @@ const choosePlatform = (document, window, value) => {
 }
 
 /* ================================================================== */
+/* pass 2b — a suggestion sits where its own shape fits               */
+/* ================================================================== */
+{
+  const portrait = (over = {}) => card({ orientation: "v", ...over });
+  const { document, errors } = boot("videos.html", {
+    hash: "#/h/PST-001010",
+    storage: { "1w.member": JSON.stringify({ id: "m9", username: "@you", name: "You", level: 2 }), "1w.session": "tok-watch" },
+    fetchImpl: (href) => {
+      const fn = fnName(href);
+      if (fn === "video_feed") {
+        return reply({
+          ok: true,
+          rows: [
+            portrait({ code: "VSR-001041", title: "A second portrait", id: "55555555-5555-4555-8555-555555555555" }),
+            card({ code: "PST-001012", title: "For Bigger Blazes", id: "33333333-3333-4333-8333-333333333333" }),
+          ],
+          fields: [],
+          total: 2,
+        });
+      }
+      if (fn === "video_mine") return reply({ ok: true, rows: [] });
+      if (fn === "video_get")
+        return reply({
+          ok: true,
+          locked: false,
+          mine: false,
+          video: card(),
+          related: [
+            portrait({ code: "VSR-001040", title: "A portrait piece", id: "44444444-4444-4444-8444-444444444444" }),
+            card({ code: "PST-001011", title: "Elephants Dream", id: "22222222-2222-4222-8222-222222222222" }),
+          ],
+          more: [],
+        });
+      if (fn === "post_comments") return reply({ ok: true, comments: [], count: 0 });
+      return reply({ ok: true });
+    },
+  });
+  await import(`file://${join(root, "assets/js/videos.js")}?p2b`);
+  await wait(90);
+  const watch = document.querySelector("[data-v-watch]");
+  const rail = watch?.querySelector("[data-v-rail]");
+  const side = watch?.querySelector("[data-v-side-probe]") || watch?.querySelector(".vwatch__side");
+  const railCards = () => [...watch.querySelectorAll("[data-v-rail] .vrail__card")];
+  const sideRows = () => [...watch.querySelectorAll(".vwatch__side .vrow")];
+
+  expect("shape: a portrait suggestion has a rail of its own", Boolean(rail), watch?.innerHTML.slice(0, 120));
+  expect(
+    "shape: the rail is the first thing on the page, above the player",
+    rail?.parentElement?.classList.contains("vwatch") && rail?.nextElementSibling?.classList.contains("vwatch__main") === true,
+    rail?.nextElementSibling?.className
+  );
+  expect(
+    "shape: it comes before the stage in the document",
+    Boolean(rail.compareDocumentPosition(watch.querySelector(".vplayer")) & window.Node.DOCUMENT_POSITION_FOLLOWING),
+    "the rail sits after the player"
+  );
+  expect(
+    "shape: a portrait row is drawn as a poster, not a row",
+    railCards().length === 2 && railCards().every((row) => row.getAttribute("data-orientation") === "v"),
+    JSON.stringify(railCards().map((row) => row.getAttribute("data-orientation")))
+  );
+  expect(
+    "shape: the poster says which shape it is",
+    railCards()[0]?.getAttribute("data-orientation") === "v" && Boolean(railCards()[0]?.querySelector(".vrail__media img")),
+    railCards()[0]?.outerHTML?.slice(0, 90)
+  );
+  expect(
+    "shape: and it opens the vertical viewer",
+    /#\/v\/ID=VSR-001040/.test(railCards()[0]?.getAttribute("href") || ""),
+    railCards()[0]?.getAttribute("href")
+  );
+  expect(
+    "shape: the landscape row keeps the column beside the player",
+    sideRows()[0]?.getAttribute("data-v-open") === "PST-001011" && sideRows().length === 2,
+    JSON.stringify(sideRows().map((row) => row.getAttribute("data-v-open")))
+  );
+  expect(
+    "shape: and the portrait one is never in that column",
+    !sideRows().some((row) => row.getAttribute("data-v-open") === "VSR-001040"),
+    JSON.stringify(sideRows().map((row) => row.getAttribute("data-v-open")))
+  );
+  expect(
+    "shape: the video on screen is never one of its own suggestions",
+    !railCards().some((cardEl) => cardEl.getAttribute("data-v-open") === "PST-001010")
+  );
+  expect("shape: the rail is named", /Vertical videos/.test(watch.querySelector(".vrail__title")?.textContent || ""), watch.querySelector(".vrail__title")?.textContent);
+
+  /* the wider feed arrives a moment later: each shape still goes to its own place */
+  expect(
+    "shape: the feed's portrait video joins the rail",
+    railCards().some((row) => row.getAttribute("data-v-open") === "VSR-001041"),
+    JSON.stringify(railCards().map((c) => c.getAttribute("data-v-open")))
+  );
+  expect(
+    "shape: the feed's landscape video joins the column",
+    sideRows().some((row) => row.getAttribute("data-v-open") === "PST-001012"),
+    JSON.stringify(sideRows().map((row) => row.getAttribute("data-v-open")))
+  );
+  expect(
+    "shape: the column keeps its own heading for them",
+    watch.querySelector("[data-v-suggested] .vcard-box__title")?.textContent.trim() === "Suggested for you",
+    watch.querySelector("[data-v-suggested] .vcard-box__title")?.textContent
+  );
+
+  const css = readFileSync(join(root, "assets/css/video.css"), "utf8");
+  expect("shape: the rail spans both columns", /\.vwatch__rail\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/s.test(css), "not spanned");
+  expect("shape: it scrolls sideways", /\.vrail__track\s*\{[^}]*overflow-x:\s*auto/s.test(css), "no overflow-x");
+  expect("shape: a poster is 9:16", /\.vrail__media\s*\{[^}]*aspect-ratio:\s*9\s*\/\s*16/s.test(css), "no portrait ratio");
+  expect("shape: the column is unchanged beside the player", /\.vwatch\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*348px/s.test(css), "the two-column stage is gone");
+  expect(
+    "shape: the column declares itself when it has something in it",
+    watch.querySelector(".vwatch")?.getAttribute("data-side") === "yes",
+    watch.querySelector(".vwatch")?.getAttribute("data-side")
+  );
+  expect("shape: nothing threw", errors.length === 0, errors.join(" | "));
+
+  /* a page whose suggestions are all portrait has no column at all */
+  const onlyPortrait = boot("videos.html", {
+    hash: "#/h/PST-001010",
+    storage: { "1w.member": JSON.stringify({ id: "m9", username: "@you", name: "You", level: 2 }), "1w.session": "tok-watch" },
+    fetchImpl: (href) => {
+      const fn = fnName(href);
+      if (fn === "video_feed") return reply({ ok: true, rows: [portrait({ code: "VSR-001041", title: "A second portrait" })], fields: [], total: 1 });
+      if (fn === "video_mine") return reply({ ok: true, rows: [] });
+      if (fn === "video_get")
+        return reply({
+          ok: true,
+          locked: false,
+          mine: false,
+          video: card(),
+          related: [portrait({ code: "VSR-001040", title: "A portrait piece" })],
+          more: [],
+        });
+      return reply({ ok: true, comments: [], count: 0 });
+    },
+  });
+  await import(`file://${join(root, "assets/js/videos.js")}?p2c`);
+  await wait(90);
+  const lone = onlyPortrait.document.querySelector(".vwatch");
+  expect("shape: a portrait-only page keeps the rail", Boolean(lone?.querySelector("[data-v-rail] .vrail__card")));
+  expect("shape: and drops the empty column", lone?.getAttribute("data-side") === "no" && !lone?.querySelector(".vwatch__side"), lone?.getAttribute("data-side"));
+  expect("shape: nothing threw on the portrait-only page", onlyPortrait.errors.length === 0, onlyPortrait.errors.join(" | "));
+}
+
+/* ================================================================== */
 /* pass 3 — a locked video                                            */
 /* ================================================================== */
 {

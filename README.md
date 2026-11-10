@@ -1843,7 +1843,9 @@ the facts line (**minutes · views · date · language · age · visibility**), 
 description with *Show more* (three lines, chevron turning), the publisher card (58px mark, name with
 its seal, kind and code and member, `subscribers · releases`, **Follow**/Subscribe,
 `profile_follow_toggle` or `creator_subscribe`), the studio's own links, the tags as field chips, and
-the comments. The side column carries *Related* and *More from …* as thumbnail rows. Commenting
+the comments. The side column carries *Related* and *More from …* as thumbnail rows — a landscape row,
+which is the only shape that column can hold — and a **portrait suggestion rides above the player**
+(see *A suggestion sits where its own shape fits*). Commenting
 follows the site rule: **like or dislike first**, then the composer appears. A video the viewer may not
 see arrives `locked` — with its title and its thumbnail, never its source.
 
@@ -1928,11 +1930,32 @@ chapter list; no links on the studio, no row. A source that plays in its own fra
 **player.js** — the conversation that frame speaks — and only says the time when the frame will not
 answer at all.
 
-**Under the publisher's shelf, the rest of the site.** The side column lists *Related* (the server's
-own neighbours), *More from <publisher>*, and — under both — **Suggested for you**: one read of
-`video_feed` (`popular`, 24 rows), minus the video on screen and minus every row already listed beside
-it, same shape only, eight at most. It is a call of its own and never holds the page up; a video the
-viewer already has on the page is never suggested back to them.
+**Under the publisher's shelf, the rest of the site.** The page lists *Related* (the server's own
+neighbours), *More from <publisher>*, and — under both — **Suggested for you**: one read of
+`video_feed` (`popular`, 24 rows), minus the video on screen and minus every row already on the page.
+It is a call of its own and never holds the page up; a video the viewer already has on the page is
+never suggested back to them.
+
+**A suggestion sits where its own shape fits.** A 9:16 still in a 348 px column is a stamp, so a
+portrait suggestion does not go there: `suggestionsOf()` in `assets/js/videos.js` walks the same three
+lists and hands each row to the place its own shape asks for.
+
+```
+a portrait row  →  the rail above the player, sideways      .vwatch__rail + .vrail__track
+a landscape row →  the column beside the player, as before  .vwatch__side
+```
+
+The rail is the first child of the watch grid and spans both its columns, so it is read **before the
+film** rather than squeezed beside it; it scrolls sideways (a wheel, a finger, or a mouse dragged
+across it — `data-drag-scroll`) and holds up to twelve posters. A page whose suggestions are all
+portrait drops the column altogether (`data-side="no"`), rather than leaving 348 empty pixels beside
+the player. The split is the **row's**, never the page's: the shape comes from `shapeOf()`, so a
+landscape video's page can still suggest a portrait one above its player, and the two shapes are
+never drawn at each other's size.
+
+The vertical viewer draws the same rail above its stage (`railMarkup()` in
+`assets/js/vertical.js`, `.v9rail`): there the ones before and after already stand beside the 9:16
+frame, so the rest of the shelf rides above it — starting with the videos that come next.
 
 **A chapter is a second in the address, where the platform has one.** Picking one seeks the player *and*
 writes `…&t=840s` at the end of the address, the way the reference does, replacing any earlier second

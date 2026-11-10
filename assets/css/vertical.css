@@ -496,6 +496,20 @@
 }
 
 /* the stage: [previous] [player] [next] */
+/* ---- the strip above the stage ------------------------------------- */
+/* The stage already has the video before and the video after standing beside
+   it, so the rest of the shelf cannot sit there too: it rides above the
+   player as a sideways strip, drawn with the same poster the videos page uses
+   (`.vrail__*` in video.css) and pinned here so it takes no grid column. */
+.v9rail {
+  grid-column: auto;
+  margin-bottom: 0.85rem;
+}
+
+.v9rail .vrail__card {
+  flex-basis: clamp(104px, 13vw, 132px);
+}
+
 .v9stage {
   position: relative;
   display: grid;

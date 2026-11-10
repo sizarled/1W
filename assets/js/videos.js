@@ -23,7 +23,7 @@
  * its thumbnail, never its source. A password unlocks it for that visit.
  */
 import { rpc } from "./data.js";
-import { qs, qsa, esc, num, compact, timeAgo, debounce } from "./utils.js";
+import { qs, qsa, esc, num, compact, timeAgo, debounce, enableDragScrollAll } from "./utils.js";
 import { icon } from "./icons.js";
 import { toast } from "./ui.js";
 import { sessionToken, getMember } from "./session.js";
@@ -720,6 +720,97 @@ function commentsMarkup() {
     </section>`;
 }
 
+/**
+ * One vertical suggestion, as a poster.
+ *
+ * The side column is a column of wide rows, which is the right shape for a
+ * landscape video and the wrong one for a 9:16 piece: squeezed into 348 px a
+ * portrait still becomes a stamp. So a vertical suggestion is drawn as a
+ * poster in the rail above the player, and the rail scrolls sideways.
+ */
+function railCardMarkup(row) {
+  const v = row || {};
+  const still = stillOf(v);
+  const views = Number((v.counters && v.counters.impressions) || 0);
+  return `
+    <a class="vrail__card" href="${esc(videoUrl(v.code || v.id, "v"))}" data-v-open="${esc(v.code || v.id)}" data-orientation="v">
+      <span class="vrail__media">
+        ${still ? `<img src="${esc(still)}" alt="" loading="lazy" decoding="async" />` : `<span class="vrail__ph">${icon("video")}</span>`}
+        <span class="vrail__play">${icon("play")}</span>
+      </span>
+      <span class="vrail__name">${esc(v.title || "Untitled")}</span>
+      <span class="vrail__meta">${esc(compact(views))} views · ${esc(timeAgo(v.published_at) || "—")}</span>
+    </a>`;
+}
+
+/** The rail itself — above the player, sideways, and nowhere when empty. */
+function railMarkup(rows) {
+  const list = (rows || []).filter(Boolean);
+  if (!list.length) return "";
+  return `
+    <section class="vwatch__rail" data-v-rail aria-label="Vertical videos suggested for you">
+      <div class="vrail__head">
+        <span class="vrail__title">${icon("video")} Vertical videos for you</span>
+        <span class="vrail__hint">${esc(String(list.length))}</span>
+      </div>
+      <div class="vrail__track" data-v-rail-track data-drag-scroll>
+        ${list.map(railCardMarkup).join("")}
+      </div>
+    </section>`;
+}
+
+/**
+ * The three shelves, split by the shape each row carries.
+ *
+ * A 9:16 row leaves the column for the rail; a landscape row keeps the column.
+ * The split is the row's, never the page's: a landscape video can be suggested
+ * beside the player while a portrait one is suggested above it, and neither
+ * shape is ever drawn at the other's size.
+ */
+function suggestionsOf(host) {
+  const title = (host && (host.name || host.username)) || "this member";
+  const seen = new Set([String(state.code || "")]);
+  const rail = [];
+  const boxes = [
+    { key: "related", attr: "", title: "Related", rows: [] },
+    { key: "more", attr: "", title: `More from ${title}`, rows: [] },
+    { key: "suggested", attr: "data-v-suggested", title: "Suggested for you", hint: true, rows: [] },
+  ];
+  const pull = (rows, box) =>
+    (Array.isArray(rows) ? rows : []).forEach((row) => {
+      const id = String((row && (row.code || row.id)) || "");
+      if (!id || seen.has(id)) return;
+      seen.add(id);
+      if (shapeOf(row) === "v") rail.push(row);
+      else box.rows.push(row);
+    });
+  pull(state.related, boxes[0]);
+  pull(state.more, boxes[1]);
+  pull(state.suggested, boxes[2]);
+  boxes.forEach((box) => (box.rows = box.rows.slice(0, 8)));
+  return { rail: rail.slice(0, 12), boxes };
+}
+
+/** The side column: the landscape rows, in the same three boxes as before. */
+function sideMarkup(boxes) {
+  const list = (boxes || []).filter((box) => box.rows.length);
+  if (!list.length) return "";
+  return `
+      <aside class="vwatch__side">
+        ${list
+          .map(
+            (box) => `<div class="vcard-box" ${box.attr}>
+                 <div class="vcard-box__head">
+                   <span class="vcard-box__title">${esc(box.title)}</span>
+                   ${box.hint ? `<span class="vcard-box__hint">${esc(String(box.rows.length))}</span>` : ""}
+                 </div>
+                 <div style="display:grid;gap:.15rem">${box.rows.map(rowMarkup).join("")}</div>
+               </div>`
+          )
+          .join("")}
+      </aside>`;
+}
+
 function watchMarkup(v, res) {
   const meta = (v.video && v.video.meta) || {};
   const host = (v.video && v.video.host) || v.publisher || {};
@@ -747,8 +838,11 @@ function watchMarkup(v, res) {
     (state.hub && (state.hub.creator || host.id)) || ""
   );
 
+  const shelves = suggestionsOf(host);
+
   return `
-    <div class="vwatch" data-orientation="${state.orientation}">
+    <div class="vwatch" data-orientation="${state.orientation}" data-side="${shelves.boxes.some((box) => box.rows.length) ? "yes" : "no"}">
+      ${railMarkup(shelves.rail)}
       <div class="vwatch__main">
         <div class="vback-row">
           <a class="vback" href="${esc(state.hub && state.hub.name ? studioHref : "#")}" data-v-studio-back ${state.hub && state.hub.name ? "" : "hidden"}>${icon("arrowLeft")} Back to the ${esc(hubKindWord(state.hub && state.hub.kind).toLowerCase())}</a>
@@ -887,39 +981,7 @@ function watchMarkup(v, res) {
         ${res.locked ? "" : commentsMarkup()}
       </div>
 
-      <aside class="vwatch__side">
-        ${
-          state.related.length
-            ? `<div class="vcard-box">
-                 <div class="vcard-box__head"><span class="vcard-box__title">Related</span></div>
-                 <div style="display:grid;gap:.15rem">${state.related.slice(0, 8).map(rowMarkup).join("")}</div>
-               </div>`
-            : ""
-        }
-        ${
-          state.more.length
-            ? `<div class="vcard-box">
-                 <div class="vcard-box__head">
-                   <span class="vcard-box__title">More from ${esc(host.name || host.username || "this member")}</span>
-                 </div>
-                 <div style="display:grid;gap:.15rem">${state.more.slice(0, 8).map(rowMarkup).join("")}</div>
-               </div>`
-            : ""
-        }
-        ${
-          /* under the publisher's own shelf: what else the site suggests —
-             never the video being watched, never a row already above */
-          state.suggested.length
-            ? `<div class="vcard-box" data-v-suggested>
-                 <div class="vcard-box__head">
-                   <span class="vcard-box__title">Suggested for you</span>
-                   <span class="vcard-box__hint">${esc(String(state.suggested.length))}</span>
-                 </div>
-                 <div style="display:grid;gap:.15rem">${state.suggested.slice(0, 8).map(rowMarkup).join("")}</div>
-               </div>`
-            : ""
-        }
-      </aside>
+      ${sideMarkup(shelves.boxes)}
     </div>`;
 }
 
@@ -928,7 +990,7 @@ function watchMarkup(v, res) {
  * rows already listed beside it. A studio's own shelf is `more`; this is the
  * rest of the site, and it never repeats what is on the page.
  */
-async function loadSuggested(code, orientation) {
+async function loadSuggested(code) {
   state.suggested = [];
   const seen = new Set(
     [state.code]
@@ -952,14 +1014,42 @@ async function loadSuggested(code, orientation) {
     return;
   }
   const rows = res && res.ok === true && Array.isArray(res.rows) ? res.rows : [];
+  /* both shapes come back, and each is drawn where it fits: the portrait ones
+     in the rail above the player, the landscape ones in the column beside it */
   state.suggested = rows
     .filter((row) => {
       const id = String(row.code || row.id || "");
       if (!id || seen.has(id)) return false;
-      const shape = shapeOf(row);
-      return !orientation || !shape || shape === orientation;
+      seen.add(id);
+      return true;
     })
-    .slice(0, 8);
+    .slice(0, 16);
+}
+
+/**
+ * Redraw what else there is to watch, without touching the player.
+ *
+ * The first paint already has the shelves `video_get` sent; this one adds the
+ * wider feed that arrived a moment later, and it never re-renders the stage —
+ * a video that is playing is not interrupted by a suggestion.
+ */
+function paintSuggestions() {
+  const watch = watchEl();
+  /* the grid, not the host around it: the rail spans the two columns and the
+     column is the grid's own second child, so both must be inserted inside it */
+  const stage = (watch && watch.querySelector(".vwatch")) || watch;
+  if (!stage) return;
+  const host = (state.video && ((state.video.video && state.video.video.host) || state.video.publisher)) || {};
+  const shelves = suggestionsOf(host);
+  stage.querySelector("[data-v-rail]")?.remove();
+  stage.querySelector(".vwatch__side")?.remove();
+  const rail = railMarkup(shelves.rail);
+  if (rail) stage.insertAdjacentHTML("afterbegin", rail);
+  const side = sideMarkup(shelves.boxes);
+  if (side) stage.insertAdjacentHTML("beforeend", side);
+  /* a column with nothing in it is not a column */
+  stage.setAttribute("data-side", side ? "yes" : "no");
+  enableDragScrollAll(stage);
 }
 
 async function openWatch(code, orientation) {
@@ -1030,6 +1120,7 @@ async function openWatch(code, orientation) {
   if (res.locked) {
     state.comments = { comments: [], count: 0 };
     host.innerHTML = watchMarkup(res.video, res);
+    enableDragScrollAll(host);
     document.title = `${(res.video && res.video.title) || "Video"} — 1World Web`;
     bindWatch();
     return;
@@ -1075,6 +1166,7 @@ async function openWatch(code, orientation) {
   state.reaction = (v.mine && Number(v.mine.reaction)) || 0;
   state.canComment = state.reaction !== 0;
   host.innerHTML = watchMarkup(v, res);
+  enableDragScrollAll(host);
   document.documentElement.dataset.watchMode = "h";
   document.title = `${v.title || "Video"} — 1World Web`;
   const descEl = $("[data-v-desc]");
@@ -1083,22 +1175,12 @@ async function openWatch(code, orientation) {
     if (toggle) toggle.hidden = true;
     descEl.classList.remove("is-clamped");
   }
-  /* the suggestions are one more call, and they do not hold the page up */
-  loadSuggested(v.code || v.id, state.orientation).then(() => {
+  /* the suggestions are one more call, and they do not hold the page up: when
+     they land, the rail and the column are redrawn around the players that
+     were already there — nothing above them is rebuilt */
+  loadSuggested(v.code || v.id).then(() => {
     if (state.view !== "watch" || state.code !== (v.code || v.id)) return;
-    const side = $(".vwatch__side");
-    if (!side) return;
-    const box = state.suggested.length
-      ? `<div class="vcard-box" data-v-suggested>
-           <div class="vcard-box__head">
-             <span class="vcard-box__title">Suggested for you</span>
-             <span class="vcard-box__hint">${esc(String(state.suggested.length))}</span>
-           </div>
-           <div style="display:grid;gap:.15rem">${state.suggested.map(rowMarkup).join("")}</div>
-         </div>`
-      : "";
-    side.querySelector("[data-v-suggested]")?.remove();
-    if (box) side.insertAdjacentHTML("beforeend", box);
+    paintSuggestions();
   }).catch(() => {});
 
   paintBlockState();
@@ -1153,7 +1235,7 @@ function verticalAddress(next) {
 let verticalLoad = null;
 function loadVertical() {
   if (!verticalLoad) {
-    verticalLoad = import("./vertical.js?v=20261216c").catch((error) => {
+    verticalLoad = import("./vertical.js?v=20261218a").catch((error) => {
       verticalLoad = null;
       console.warn("[1World] vertical format:", error.message);
     });

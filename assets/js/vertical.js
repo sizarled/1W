@@ -241,6 +241,55 @@ function cardMarkup(row) {
     </a>`;
 }
 
+/**
+ * One suggestion in the rail above the player.
+ *
+ * The shelf's own card carries a host, a date and a counter under its poster;
+ * in a strip that sits above a video, the poster and the name are the whole
+ * point, so the card is the picture and one line.
+ */
+function railCard(row) {
+  const v = row || {};
+  const code = String(v.code || v.id || "");
+  const still = stillOf(v);
+  return `
+    <a class="vrail__card" href="${esc(hrefOf(code))}" data-v9-rail-open="${esc(code)}" data-orientation="v">
+      <span class="vrail__media">
+        ${still ? `<img src="${esc(still)}" alt="" loading="lazy" decoding="async" />` : `<span class="vrail__ph">${icon("video")}</span>`}
+        <span class="vrail__play">${icon("play")}</span>
+      </span>
+      <span class="vrail__name">${esc(v.title || "Untitled")}</span>
+      <span class="vrail__meta">${esc(compact(viewsOf(v)))} views · ${esc(timeAgo(v.published_at) || "—")}</span>
+    </a>`;
+}
+
+/**
+ * What else is on the shelf, as a strip above the player.
+ *
+ * The vertical viewer is the one screen where the suggestions cannot sit beside
+ * the video — the 9:16 frame already has the one before and the one after
+ * standing there — so they ride above it and scroll sideways. The order starts
+ * with the videos that come after this one in the shelf, because that is where
+ * a viewer is going next.
+ */
+function railMarkup(v) {
+  const at = String((v && (v.code || v.id)) || "");
+  const rows = (state.queueRows || []).filter((row) => String((row && (row.code || row.id)) || "") !== at);
+  if (!rows.length) return "";
+  const from = Math.max(0, Number(state.qIndex) || 0);
+  const ordered = [...rows.slice(from), ...rows.slice(0, from)].slice(0, 12);
+  return `
+    <section class="vwatch__rail v9rail" data-v9-rail aria-label="More vertical videos">
+      <div class="vrail__head">
+        <span class="vrail__title">${icon("video")} More vertical videos</span>
+        <span class="vrail__hint">${esc(String(ordered.length))}</span>
+      </div>
+      <div class="vrail__track" data-drag-scroll>
+        ${ordered.map(railCard).join("")}
+      </div>
+    </section>`;
+}
+
 function renderGrid({ from = 0 } = {}) {
   const host = gridEl();
   if (!host) return;
@@ -550,6 +599,8 @@ function viewerMarkup(v, res) {
         ${position ? `<span class="v9pos" data-v9-pos>${esc(position)}</span>` : ""}
       </div>
 
+      ${railMarkup(v)}
+
       <div class="v9stage" data-v9-stage>
         ${sideMarkup(prev, "prev")}
         <div class="v9player" data-v9-player-wrap>
@@ -826,6 +877,7 @@ async function openWatch(code) {
   if (seq !== state.seqWatch) return;
 
   host.innerHTML = viewerMarkup(state.video, res);
+  enableDragScrollAll(host);
   document.title = `${state.video.title || "Vertical video"} — 1World Web`;
   document.documentElement.dataset.vertView = "watch";
   /* a locked video is a door, not a player: nothing mounts behind it */

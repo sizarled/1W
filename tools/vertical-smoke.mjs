@@ -353,6 +353,38 @@ let viewer;
   expect("viewer: the document title follows", /Three minutes in the medina/.test(document.title), document.title);
   expect("viewer: the position is spoken", document.querySelector("[data-v9-pos]")?.textContent === "1 of 3", document.querySelector("[data-v9-pos]")?.textContent);
 
+  /* the suggestions: beside the player there is only the one before and the one
+     after, so the rest of the shelf rides above it and scrolls sideways */
+  const rail = document.querySelector("[data-v9-rail]");
+  const railCards = [...(rail?.querySelectorAll(".vrail__card") || [])];
+  expect("rail: the other vertical videos are on the page", Boolean(rail), "no rail");
+  expect(
+    "rail: it sits above the player",
+    rail?.nextElementSibling?.matches("[data-v9-stage]") === true,
+    rail?.nextElementSibling?.className
+  );
+  expect(
+    "rail: one poster for each of the others",
+    railCards.length === 2,
+    JSON.stringify(railCards.map((a) => a.getAttribute("href")))
+  );
+  expect(
+    "rail: never the video being watched",
+    !railCards.some((a) => /VSR-000001/.test(a.getAttribute("href") || "")),
+    JSON.stringify(railCards.map((a) => a.getAttribute("href")))
+  );
+  expect(
+    "rail: the next one in the shelf leads",
+    /#\/v\/ID=VSR-000002/.test(railCards[0]?.getAttribute("href") || ""),
+    railCards[0]?.getAttribute("href")
+  );
+  expect(
+    "rail: every card is a poster of the shape it opens",
+    railCards.every((a) => a.getAttribute("data-orientation") === "v" && Boolean(a.querySelector(".vrail__media img"))),
+    railCards[0]?.innerHTML?.slice(0, 80)
+  );
+  expect("rail: it is named", /More vertical videos/.test(rail?.querySelector(".vrail__title")?.textContent || ""), rail?.querySelector(".vrail__title")?.textContent);
+
   const acts = document.querySelectorAll("[data-v9-actions] .v9act");
   expect("viewer: seven actions", acts.length === 7, acts.length);
   expect("viewer: like carries its count", document.querySelector("[data-v9-like]")?.textContent === "12", document.querySelector("[data-v9-like]")?.textContent);
@@ -641,6 +673,9 @@ let viewer;
   expect("door: it keeps the hash it was given", /location\.hash/.test(stub));
 
   expect("css: the stage has three columns", /\.v9stage\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*auto\s*minmax\(0,\s*1fr\)/s.test(css));
+  expect("css: the strip above it is not a grid child", /\.v9rail\s*\{[^}]*grid-column:\s*auto/s.test(css), "no .v9rail rule");
+  const videoCss = readFileSync(join(root, "assets/css/video.css"), "utf8");
+  expect("css: and its track scrolls sideways", /\.vrail__track\s*\{[^}]*overflow-x:\s*auto/s.test(videoCss), "no sideways track");
   expect("css: the player is nine by sixteen", /\.v9player__box\s*\{[^}]*aspect-ratio:\s*9\s*\/\s*16/s.test(css));
   expect("css: the card is nine by sixteen", /\.v9card__media\s*\{[^}]*aspect-ratio:\s*9\s*\/\s*16/s.test(css));
   expect("css: the neighbours are blurred", /\.v9side\s*\{[^}]*filter:\s*blur/s.test(css));
