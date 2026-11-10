@@ -1711,6 +1711,23 @@ between the upload and the rename. `meta.host_file.studio` is empty for a member
 `meta.host_file.folder` with it — the shelf is the member's, not a studio's. A file may be up to
 2 GB, and nothing in this path touches the site's storage.
 
+A row saved before that rule can still play a copy from the bucket —
+`…/storage/v1/object/public/source/users/videos/…` — while the same film already sits on the host.
+`VSR-001040` was one: its file had been on Streamtape, renamed to `VSR-001040.mp4`, since the day it
+was published, but its row still carried the storage address and `host_file: null`. The list is one
+query:
+
+```sql
+select post_code from posts where embed_url like '%/storage/v1/object/public/%';
+```
+
+The fix is the **row**, not the file. `embed_url` takes the host's own address
+(`https://streamtape.com/e/<id>`) and `video_meta` takes `source` and `platform` = `streamtape` and the
+`host_file` record `{ id, ext, name, folder, studio }` — the same shape a fresh upload writes, so the
+editor opens it on **Upload a video** with the host's file behind it. The object left in the bucket is
+never asked for again; the database cannot remove its bytes, so Storage keeps them until the object
+itself is deleted (Dashboard → Storage → `source` → `users/videos`).
+
 **A video's code says what it is, and what shape it is.** Every post used to be minted from one
 default — `'PST-' || nextval` — so a video and an article looked alike (`PST-001039`), and a vertical
 video and a wide one could not be told apart either. A video now carries its shape in its code:
