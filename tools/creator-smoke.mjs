@@ -960,7 +960,7 @@ async function main() {
   expect("add: the menu opens", !s.hidden("[data-cr-add-menu]"));
   s.click(s.qs('[data-cr-add="podcast"]'));
   await s.wait(60);
-  expect("add: a new podcast editor opens", /Podcast/i.test(s.text(".cr-editor__kind")), s.text(".cr-editor__kind"));
+  expect("add: the new podcast label replaces Podcast · new", s.text(".cr-editor__kind").trim() === "Podcast Editore", s.text(".cr-editor__kind"));
   s.type(s.qs("[data-item-title]"), "Episode one");
   s.type(s.qs("[data-item-media]"), "https://example.com/ep.mp3");
   calls.length = 0;
