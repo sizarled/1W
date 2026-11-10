@@ -38,6 +38,11 @@
 --   §4 reach_screen  the gate the pages ask before they suggest or search
 --   §5 hub_reach_get / hub_reach_save   the studio's Reach tab
 --
+-- **Superseded in part.** reach-split.sql replaced §5's manual plan: the day is
+-- divided evenly between the studio's items by the server, `hub_reach_save` is
+-- dropped, and `reach_claim` takes the share from `reach_share` instead of the
+-- saved number. The tables and the gate above are unchanged.
+--
 -- and two one-row helpers, reach_visible / reach_visible_content, that the
 -- feeds call so an item whose day is spent never reaches the page.
 -- ==================================================================

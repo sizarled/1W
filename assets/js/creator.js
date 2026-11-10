@@ -936,9 +936,12 @@ function emptyBlock(iconName, title, text, action = "") {
  * last, the ranking points the item has earned from search interactions.
  */
 function reachRow(row) {
-  const points = Number(row.points) || 0;
+  /* -1 is LVMax: no number, and no cap */
+  const share = Number(row.points);
+  const unlimited = share < 0;
+  const points = unlimited ? 0 : Math.max(0, share || 0);
   const shown = Number(row.shown) || 0;
-  const left = points > 0 ? Math.max(0, points - shown) : null;
+  const left = unlimited ? null : Math.max(0, points - shown);
   const kind = row.kind === "content" ? "podcast" : "video";
   const updates = Number(row.reached_updates) || 0;
   const suggestions = Number(row.reached_suggestions) || 0;
@@ -951,10 +954,8 @@ function reachRow(row) {
       </td>
       <td><span class="cr-pill">${esc(kind)}</span></td>
       <td>
-        <input class="dsh-input cr-reach__input" type="number" min="0" step="50"
-               value="${points}" data-cr-reach-points="${esc(row.ref)}"
-               aria-label="Reach points for ${esc(row.title || "this item")}" />
-        <span class="cr-reach__left">${num(shown)} shown${left === null ? "" : ` · ${num(left)} left`}</span>
+        <span class="cr-reach__share" data-cr-reach-points="${esc(row.ref)}">${unlimited ? "no limit" : num(points)}</span>
+        <span class="cr-reach__left">${num(shown)} shown${left === null ? " · and never spent out" : ` · ${num(left)} left`}</span>
       </td>
       <td class="cr-reach__num" data-cr-reach-updates="${esc(row.ref)}">${num(updates)}</td>
       <td class="cr-reach__num" data-cr-reach-suggestions="${esc(row.ref)}">${num(suggestions)}</td>
@@ -988,9 +989,11 @@ function renderReachOffline(host, tab) {
           <span class="cr-reach__split">from the level — the interactions are not counted until the table is there</span>
         </div>
         <p class="cr-reach__note">
-          The reach table is not on the server yet: run <code>tools/sql/studio-reach.sql</code> and
-          <code>tools/sql/reach-earnings.sql</code> and this tab fills itself. The shelf below is read
-          from the studio's own items, so the door can be opened in the meantime.
+          The reach table is not on the server yet: run <code>tools/sql/studio-reach.sql</code>,
+          <code>tools/sql/reach-earnings.sql</code> and <code>tools/sql/reach-split.sql</code> and this
+          tab fills itself — the day is then divided evenly between the studio's items by the server.
+          The shelf below is read from the studio's own items, so the door can be opened in the
+          meantime.
         </p>
       </div>
       ${
@@ -1057,9 +1060,9 @@ function renderReach(host, hub, tab) {
   const earned = Number(data.earned) || 0;
   const limitless = Boolean(data.limitless);
   const remaining = limitless ? Infinity : Math.max(0, points - spent);
-  const allocated = (data.rows || []).reduce((sum, row) => sum + (Number(row.points) || 0), 0);
   const percent = points ? Math.min(100, Math.round((spent / points) * 100)) : 0;
   const rows = data.rows || [];
+  const items = Number(data.items ?? rows.length) || 0;
 
   host.innerHTML = `
     <div class="cr-bar">
@@ -1072,10 +1075,10 @@ function renderReach(host, hub, tab) {
       </div>
       <div class="cr-bar__right">
         <span class="cr-reach__plan" data-cr-reach-plan>
-          ${num(allocated)} / ${num(points)} allocated
+          ${items ? `split evenly between ${num(items)} ${items === 1 ? "item" : "items"}` : "nothing to split yet"}
         </span>
-        <button class="dsh-btn dsh-btn--primary dsh-btn--sm" type="button" data-cr-reach-save>
-          <i data-icon="check"></i> Save the plan
+        <button class="dsh-btn dsh-btn--sm" type="button" data-cr-reach-reload>
+          <i data-icon="refresh"></i> Read again
         </button>
       </div>
     </div>
@@ -1098,8 +1101,15 @@ function renderReach(host, hub, tab) {
           Every like is worth 30, a dislike takes 30, a repost adds 60 and a report takes 60; a
           share link adds 10 and each visit from it adds 10 more. A day's budget: every person who
           has not seen the work yet spends one point, and at midnight the whole number comes back.
-          Reach decides how far the work travels — ranking points decide where it stands in a
-          search, and they come from the interactions a search brings.
+          The day is shared <strong>evenly between everything this studio has published</strong> — ${limitless
+            ? "and an LVMax studio is never spent out"
+            : `${num(points)} points over ${num(items)} ${items === 1 ? "item" : "items"}${
+                items ? ` is ${num(Math.floor(points / items))}${
+                  points % items ? " and the odd point goes to the oldest" : ""
+                } each` : ""
+              }`} — so nothing here is typed or saved: publish something and the share of
+          everything else follows. Reach decides how far the work travels — ranking points decide
+          where it stands in a search, and they come from the interactions a search brings.
         </p>
       </div>
 
@@ -1130,72 +1140,6 @@ function renderReach(host, hub, tab) {
     </div>`;
 
   hydrateIcons(host);
-}
-
-/**
- * The plan as it stands on the page, before it is sent.
- *
- * The total is not on the page to be typed: it is the level's floor plus what
- * the interactions have earned, and it is read from the server. The studio only
- * decides how that number is split between its items.
- */
-function reachPlan() {
-  const total = Number(state.reach?.points) || 0;
-  const rows = qsa("[data-reach-row]").map((rowEl) => {
-    const ref = rowEl.getAttribute("data-reach-row");
-    return {
-      ref,
-      kind: rowEl.getAttribute("data-reach-kind") || "post",
-      points: Number(qs(`[data-cr-reach-points="${ref}"]`)?.value) || 0,
-    };
-  });
-  return { total, rows };
-}
-
-function reachTotals() {
-  const plan = reachPlan();
-  const allocated = plan.rows.reduce((sum, row) => sum + row.points, 0);
-  const planEl = el("[data-cr-reach-plan]");
-  if (planEl) {
-    planEl.textContent = `${num(allocated)} / ${num(plan.total)} allocated`;
-    planEl.classList.toggle("is-over", allocated > plan.total);
-  }
-  return { ...plan, allocated };
-}
-
-async function saveReach() {
-  const hub = currentHub();
-  if (!hub) return;
-  const plan = reachTotals();
-  if (plan.allocated > plan.total) {
-    toast({
-      title: "More than the day allows",
-      message: `The plan spends ${num(plan.allocated)} of ${num(plan.total)} points. Take something away first.`,
-      tone: "error",
-      iconName: "info",
-    });
-    return;
-  }
-  const res = await rpc("hub_reach_save", {
-    p_token: state.token,
-    p_hub: hub.code || hub.id,
-    p_payload: { points: plan.total, rows: plan.rows },
-  });
-  if (!res || res.ok !== true) {
-    toast({
-      title: "Not saved",
-      message:
-        res?.error === "over_budget"
-          ? "The server refused it: the plan spends more than the studio has for the day."
-          : "The reach plan was not saved. Try again in a moment.",
-      tone: "error",
-      iconName: "info",
-    });
-    return;
-  }
-  toast({ title: "Reach saved", message: `${num(plan.allocated)} points placed for the day.`, tone: "success", iconName: "check" });
-  await loadTab();
-  await refresh();
 }
 
 /* ------------------------------------------------------------------ */
@@ -3975,14 +3919,6 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
-  if (target.closest("[data-cr-reach-save]")) {
-    event.preventDefault();
-    if (state.busy) return;
-    state.busy = true;
-    await saveReach();
-    state.busy = false;
-    return;
-  }
   if (target.closest("[data-cr-reach-reload]")) {
     event.preventDefault();
     await loadTab();
@@ -4230,10 +4166,6 @@ document.addEventListener("change", (event) => {
 
 document.addEventListener("input", (event) => {
   const target = event.target;
-  if (target.matches("[data-cr-reach-points]")) {
-    reachTotals();
-    return;
-  }
   if (target.matches("[data-crp-q]")) {
     state.directory.q = target.value || "";
     queueDirectorySearch();

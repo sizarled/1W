@@ -282,21 +282,11 @@ function stubFetch(url, opts = {}) {
     return reply({ ok: true, ...reach });
   }
 
+  /* `hub_reach_save` was the manual plan, and the server no longer has it: a
+     page that still asked would be asking a door that is gone */
   if (href.includes("/rpc/hub_reach_save")) {
-    const payload = body.p_payload || {};
-    scenario.savedReach = payload;
-    if (scenario.reachSaveError) return reply({ ok: false, error: scenario.reachSaveError });
-    const allocated = (payload.rows || []).reduce((sum, row) => sum + (Number(row.points) || 0), 0);
-    if (allocated > (Number(payload.points) || 0)) return reply({ ok: false, error: "over_budget" });
-    scenario.reach = {
-      ...(scenario.reach || {}),
-      points: Number(payload.points) || 0,
-      rows: (scenario.reach?.rows || []).map((row) => {
-        const next = (payload.rows || []).find((entry) => entry.ref === row.ref);
-        return next ? { ...row, points: Number(next.points) || 0, rank: Number(next.rank) || 0 } : row;
-      }),
-    };
-    return reply({ ok: true });
+    scenario.savedReach = body.p_payload || {};
+    return reply({ ok: false, error: "not_found" });
   }
 
   if (href.includes("/rpc/creator_items")) {
@@ -1927,10 +1917,14 @@ async function reachPass() {
       points: 500,
       spent: 120,
       remaining: 380,
+      /* the server divides the day: 500 over two items, evenly */
+      items: 2,
+      share: 250,
+      auto: true,
       day: "2026-12-05",
       rows: [
-        { kind: "post", ref: "post-a", code: "VID-001032", title: "The first film", points: 200, shown: 120, rank: 5000, reached_updates: 40, reached_suggestions: 60, reached_search: 20 },
-        { kind: "content", ref: "content-b", code: "PST-000901", title: "A long talk", points: 0, shown: 0, rank: 1500, reached_updates: 0, reached_suggestions: 0, reached_search: 0 },
+        { kind: "post", ref: "post-a", code: "VID-001032", title: "The first film", points: 250, shown: 120, rank: 5000, reached_updates: 40, reached_suggestions: 60, reached_search: 20 },
+        { kind: "content", ref: "content-b", code: "PST-000901", title: "A long talk", points: 250, shown: 0, rank: 1500, reached_updates: 0, reached_suggestions: 0, reached_search: 0 },
       ],
     },
   };
@@ -1952,10 +1946,24 @@ async function reachPass() {
   expect("reach: and it says what it is made of", /100 from the level \+ 400 from the interactions/.test(total), total);
   expect("reach: one row per item", view.qsa("[data-reach-row]").length === 2, String(view.qsa("[data-reach-row]").length));
   expect("reach: a row names the item and its code", /The first film[\s\S]*VID-001032/.test(view.text('[data-reach-row="post-a"]')), view.text('[data-reach-row="post-a"]').slice(0, 90));
-  expect("reach: the item's reach is in its own field", view.qs('[data-cr-reach-points="post-a"]')?.value === "200", view.qs('[data-cr-reach-points="post-a"]')?.value);
+  expect(
+    "reach: the item's share is the server's, written as a number",
+    view.text('[data-cr-reach-points="post-a"]') === "250" && !view.qs("input[data-cr-reach-points]"),
+    view.text('[data-cr-reach-points="post-a"]')
+  );
+  expect(
+    "reach: the second item is given the same share — an even split",
+    view.text('[data-cr-reach-points="content-b"]') === "250",
+    view.text('[data-cr-reach-points="content-b"]')
+  );
+  expect(
+    "reach: nothing on the tab can be typed",
+    !view.qs(".cr-reach input, .cr-reach select"),
+    (view.qs(".cr-reach")?.innerHTML || "").slice(0, 120)
+  );
   expect("reach: its ranking points are read, not typed", view.text('[data-cr-reach-rank="post-a"]') === "5,000" && !view.qs("input[data-cr-reach-rank]"), view.text('[data-cr-reach-rank="post-a"]'));
-  expect("reach: what has been shown is counted", /120/.test(view.text('[data-reach-row="post-a"]')), view.text('[data-reach-row="post-a"]'));
-  expect("reach: an unplaced item says it has spent nothing", /0 shown/.test(view.text('[data-reach-row="content-b"]')), view.text('[data-reach-row="content-b"]'));
+  expect("reach: what has been shown is counted", /120 shown · 130 left/.test(view.text('[data-reach-row="post-a"]')), view.text('[data-reach-row="post-a"]'));
+  expect("reach: an untouched item says it has spent nothing", /0 shown · 250 left/.test(view.text('[data-reach-row="content-b"]')), view.text('[data-reach-row="content-b"]'));
 
   /* the three surfaces, beside the allocation, and the total at the top */
   const heads = view.qsa(".cr-reach thead th").map((th) => th.textContent.trim());
@@ -1965,36 +1973,35 @@ async function reachPass() {
   expect("reach: the search's people are counted", view.text('[data-cr-reach-search="post-a"]') === "20", view.text('[data-cr-reach-search="post-a"]'));
   expect("reach: the day's total is above the table", /500/.test(view.text("[data-cr-reach-total]")), view.text("[data-cr-reach-total]"));
   expect("reach: the meter shows the day spent", view.qs(".cr-reach__meter-fill")?.getAttribute("style")?.includes("24%"), view.qs(".cr-reach__meter-fill")?.getAttribute("style"));
-  expect("reach: the plan is summed as it is typed", /200 \/ 500 allocated/.test(view.text("[data-cr-reach-plan]")), view.text("[data-cr-reach-plan]"));
-
-  /* more than the day allows: the page refuses before it asks the server */
-  view.type(view.qs('[data-cr-reach-points="content-b"]'), "600");
-  await view.wait(40);
-  expect("reach: an over-plan is marked on the page", view.qs("[data-cr-reach-plan]")?.classList.contains("is-over"), view.text("[data-cr-reach-plan]"));
-  const before = calls.filter((c) => c.includes("hub_reach_save")).length;
-  view.click(view.qs("[data-cr-reach-save]"));
-  await view.wait(120);
-  expect("reach: and it never reaches the server", calls.filter((c) => c.includes("hub_reach_save")).length === before, calls.join(" "));
-  expect("reach: the refusal says why", /More than the day allows/.test(view.text("[data-toast], .toast, [role=status]") || view.document.body.textContent), view.text("[data-toast], .toast, [role=status]"));
-
-  /* back inside the budget: it saves, and the plan is read back */
-  view.type(view.qs('[data-cr-reach-points="content-b"]'), "150");
-  await view.wait(40);
-  expect("reach: within the day it is no longer over", !view.qs("[data-cr-reach-plan]")?.classList.contains("is-over"), view.text("[data-cr-reach-plan]"));
-  view.click(view.qs("[data-cr-reach-save]"));
-  await view.wait(220);
-
-  const saved = scenario.savedReach || {};
-  expect("reach: the plan was sent with the studio's number", Number(saved.points) === 500, JSON.stringify(saved.points));
-  expect("reach: and one row per item", (saved.rows || []).length === 2, JSON.stringify(saved.rows));
   expect(
-    "reach: every row keeps its own kind and points",
-    (saved.rows || []).some((row) => row.ref === "post-a" && row.kind === "post" && row.points === 200) &&
-      (saved.rows || []).some((row) => row.ref === "content-b" && row.kind === "content" && row.points === 150),
-    JSON.stringify(saved.rows)
+    "reach: the bar says the day is split evenly, and between how many",
+    /split evenly between 2 items/.test(view.text("[data-cr-reach-plan]")),
+    view.text("[data-cr-reach-plan]")
   );
-  expect("reach: and never a ranking number it did not earn", (saved.rows || []).every((row) => row.rank === undefined), JSON.stringify(saved.rows));
-  expect("reach: the tab was read again after the save", calls.filter((c) => c.includes("hub_reach_get")).length >= 2, String(calls.filter((c) => c.includes("hub_reach_get")).length));
+  expect(
+    "reach: the note says the rule, with today's numbers in it",
+    /500 points over 2 items is 250 each/.test(view.text(".cr-reach__note")),
+    view.text(".cr-reach__note")
+  );
+
+  /* nothing is saved: the split is the rule, not a plan somebody types */
+  expect("reach: there is no Save the plan to press", !view.qs("[data-cr-reach-save]"), "a save button is still there");
+  expect(
+    "reach: and nothing in the pass ever wrote a plan",
+    calls.every((c) => !c.includes("hub_reach_save")),
+    calls.filter((c) => c.includes("hub_reach_save")).join(" ")
+  );
+
+  /* reading it again is the one button the tab has, and it is a real call */
+  const reads = calls.filter((c) => c.includes("hub_reach_get")).length;
+  view.click(view.qs("[data-cr-reach-reload]"));
+  await view.wait(220);
+  expect(
+    "reach: Read again asks the server again",
+    calls.filter((c) => c.includes("hub_reach_get")).length > reads,
+    String(calls.filter((c) => c.includes("hub_reach_get")).length)
+  );
+  expect("reach: and the split is the same — it is not random", /split evenly between 2 items/.test(view.text("[data-cr-reach-plan]")), view.text("[data-cr-reach-plan]"));
   expect("reach: no errors", view.errors.length === 0, view.errors.join(" | "));
   view.window.close();
 
@@ -2028,7 +2035,7 @@ async function reachPass() {
   offline.window.close();
   scenario.reachMissing = false;
 
-  /* a server that refuses anyway: over budget is said, not swallowed */
+  /* three items and one day: the split is even, and the odd point goes first */
   scenario = {
     hubs: [hub({ id: "hub-ch", kind: "channel", name: "Studio One" })],
     items: [],
@@ -2036,24 +2043,72 @@ async function reachPass() {
       hub: { id: "hub-ch", code: "IDST100001", name: "Studio One", kind: "channel" },
       configured: true,
       base: 100,
-      earned: 400,
+      earned: 0,
       limitless: false,
-      points: 500,
+      points: 100,
       spent: 0,
-      remaining: 500,
+      remaining: 100,
+      items: 3,
+      share: 33,
+      auto: true,
       day: "2026-12-05",
-      rows: [{ kind: "post", ref: "post-a", code: "VID-001032", title: "The first film", points: 200, shown: 0, rank: 5000, reached_updates: 0, reached_suggestions: 0, reached_search: 0 }],
+      rows: [
+        { kind: "post", ref: "post-a", code: "VID-001032", title: "The oldest film", points: 34, shown: 0, rank: 0, reached_updates: 0, reached_suggestions: 0, reached_search: 0 },
+        { kind: "post", ref: "post-b", code: "VID-001033", title: "The second film", points: 33, shown: 0, rank: 0, reached_updates: 0, reached_suggestions: 0, reached_search: 0 },
+        { kind: "content", ref: "content-c", code: "PST-000902", title: "The newest talk", points: 33, shown: 0, rank: 0, reached_updates: 0, reached_suggestions: 0, reached_search: 0 },
+      ],
     },
   };
-  const refused = await boot(71, { search: "?section=studio&hub=hub-ch&tab=reach" });
-  await refused.wait(320);
-  refused.type(refused.qs("[data-cr-reach-points]"), "200");
-  await refused.wait(40);
-  refused.click(refused.qs("[data-cr-reach-save]"));
-  await refused.wait(160);
-  expect("reach: the field is drawn for the one item", refused.qsa("[data-cr-reach-points]").length === 1, String(refused.qsa("[data-cr-reach-points]").length));
-  expect("reach: a refused save is reported", /Reach saved|Not saved|More than the day allows/.test(refused.document.body.textContent), "no word after the save");
-  refused.window.close();
+  const split = await boot(71, { search: "?section=studio&hub=hub-ch&tab=reach" });
+  await split.wait(320);
+  expect("reach: one line per item, three of them", split.qsa("[data-reach-row]").length === 3, String(split.qsa("[data-reach-row]").length));
+  expect(
+    "reach: 100 points over three items is 34 / 33 / 33 — the oldest takes the odd point",
+    ["post-a", "post-b", "content-c"].map((ref) => split.text(`[data-cr-reach-points="${ref}"]`)).join(" / ") === "34 / 33 / 33",
+    ["post-a", "post-b", "content-c"].map((ref) => split.text(`[data-cr-reach-points="${ref}"]`)).join(" / ")
+  );
+  expect(
+    "reach: and the bar counts three, not two",
+    /split evenly between 3 items/.test(split.text("[data-cr-reach-plan]")),
+    split.text("[data-cr-reach-plan]")
+  );
+  expect(
+    "reach: the note explains where the odd point goes",
+    /the odd point goes to the oldest/.test(split.text(".cr-reach__note")),
+    split.text(".cr-reach__note")
+  );
+  expect("reach: nothing can be typed here either", !split.qs(".cr-reach input"), (split.qs(".cr-reach")?.innerHTML || "").slice(0, 100));
+  expect("reach: no errors on the split", split.errors.length === 0, split.errors.join(" | "));
+  split.window.close();
+
+  /* LVMax: no number, and no cap — said as such, not as a zero */
+  scenario = {
+    hubs: [hub({ id: "hub-ch", kind: "channel", name: "Studio One" })],
+    items: [],
+    reach: {
+      hub: { id: "hub-ch", code: "IDST100001", name: "Studio One", kind: "channel" },
+      configured: true,
+      base: 0,
+      earned: 0,
+      limitless: true,
+      points: 0,
+      spent: 0,
+      remaining: -1,
+      items: 1,
+      share: -1,
+      auto: true,
+      day: "2026-12-05",
+      rows: [{ kind: "post", ref: "post-a", code: "VID-001032", title: "The first film", points: -1, shown: 0, rank: 0, reached_updates: 0, reached_suggestions: 0, reached_search: 0 }],
+    },
+  };
+  const maxed = await boot(77, { search: "?section=studio&hub=hub-ch&tab=reach" });
+  await maxed.wait(320);
+  expect(
+    "reach: LVMax is said as no limit, never as a share of zero",
+    maxed.text('[data-cr-reach-points="post-a"]') === "no limit" && /and never spent out/.test(maxed.text('[data-reach-row="post-a"]')),
+    maxed.text('[data-reach-row="post-a"]')
+  );
+  maxed.window.close();
 
   /* the schema behind the tab */
   const reachSql = readFileSync(join(root, "tools/sql/studio-reach.sql"), "utf8");
@@ -2071,9 +2126,32 @@ async function reachPass() {
   expect("reach sql: the gate knows the surface", /reach_claim\(p_hub uuid, p_kind text, p_ref uuid, p_profile uuid, p_source text default 'suggestion'\)/.test(reachSql), "no source on the gate");
   expect("reach sql: a podcast ranks like a video", /member_content[\s\S]*rank_points/.test(reachSql), "no rank column for member content");
   expect("reach sql: the gate is one function", /function public\.reach_claim/.test(reachSql) && /function public\.reach_screen/.test(reachSql), "no gate");
-  expect("reach sql: the studio can never spend past its day", /over_budget/.test(reachSql) && /if v_total > v_points then/.test(reachSql), "no ceiling");
+  expect("reach sql: the studio can never spend past its day", /v_budget\.spent >= v_budget\.points/.test(reachSql), "no ceiling");
   expect("reach sql: the studio's own members are never counted", /v_owner = p_profile/.test(reachSql), "owner not excused");
   expect("reach sql: a studio is always its level plus its earnings", /b\.base \+ b\.earned/.test(reachSql), "the total is not derived");
+
+  /* the split is a rule on the server, and the manual plan is gone */
+  const splitSql = readFileSync(join(root, "tools/sql/reach-split.sql"), "utf8");
+  expect(
+    "reach sql: the day is divided evenly, the odd point first",
+    /greatest\(\s*1,/.test(splitSql) && /p_points, 0\) \/ p_total/.test(splitSql) && /% p_total then 1 else 0/.test(splitSql),
+    "no even split"
+  );
+  expect(
+    "reach sql: the share is the item's allowance in the gate",
+    /v_cap := public\.reach_share\(p_hub, p_kind, p_ref\)/.test(splitSql) && /v_item\.shown >= v_cap/.test(splitSql),
+    "the gate does not use the share"
+  );
+  expect(
+    "reach sql: the tab is read, not written — the manual plan is dropped",
+    /drop function if exists public\.hub_reach_save/.test(splitSql) && !/create or replace function public\.hub_reach_save/.test(splitSql),
+    "hub_reach_save is still created"
+  );
+  expect(
+    "reach sql: the tab hands the share to the page",
+    /'items', v_count/.test(splitSql) && /'share', v_share/.test(splitSql) && /'auto', true/.test(splitSql),
+    "the split is not returned"
+  );
 
   const videosSql = readFileSync(join(root, "tools/sql/videos-page.sql"), "utf8");
   expect(

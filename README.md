@@ -3174,9 +3174,10 @@ C (500) come back A, B, C — but once A has spent its five hundred viewers it d
 first, C second, and so on.
 
 **Where the numbers live.** [`tools/sql/studio-reach.sql`](tools/sql/studio-reach.sql) adds
-`hub_reach` (the studio's day: `points`, `spent`, `day`), `reach_items` (one allocation per item, plus
-its `rank_points`), `reach_seen` (who has already been shown what today, so a refresh costs nothing)
-and a `rank_points` column on `member_content` so a podcast ranks the way a video already did. The
+`hub_reach` (the studio's day: `points`, `spent`, `day`), `reach_items` (a row per item that has been
+shown today: what it reached, and the share it was reached under), `reach_seen` (who has already been
+shown what today, so a refresh costs nothing) and a `rank_points` column on `member_content` so a
+podcast ranks the way a video already did. The
 gate is `reach_claim(hub, kind, ref, profile)`; `reach_visible(post, profile)` and
 `reach_visible_content(content, profile)` are the one-row versions the feeds call while they build a
 list, and `reach_screen(token, codes)` answers a whole page of codes at once. A hub that has never been
@@ -3267,8 +3268,29 @@ profile, day), and `reach_claim` now carries the surface it was asked on — `no
 from what actually happened rather than guessed. `video_feed` names `search` when it is holding a
 search and `suggestion` when it is the home page, and the rail beside the player names `suggestion`.
 
-The plan is summed as it is typed and a plan that spends more than the studio owns is refused **on
-the page** and again on the server (`over_budget`), so the distribution can never exceed the account.
+### The day is divided evenly, and nobody types it
+
+[`tools/sql/reach-split.sql`](tools/sql/reach-split.sql) took the last manual step out of the tab.
+Until it ran, a studio filled in a number per item and pressed **Save the plan**; a video published
+after the plan was written had no share at all, and a video deleted kept one. Now the server divides
+the day:
+
+```
+100 points, 2 videos   50 / 50
+100 points, 3 items    34 / 33 / 33   — the odd point goes to the oldest
+  3 points, 5 items     1 / 1 / 1 / 1 / 1   — the budget stops the day, not a share of zero
+```
+
+`reach_split(points, total, rank)` is that arithmetic in one place, `reach_share(hub, kind, ref)` is
+one item's share of one studio's day (`-1` for LVMax, which is never spent out), and the gate uses it
+as the item's allowance in place of the number somebody used to save. The shelf is read **live**, so
+publishing or removing an item changes everyone's share the next time anything is counted — and
+`hub_reach_save`, the manual plan, is **dropped**: a door that accepts a plan nobody reads is worse
+than no door. `hub_reach_get` returns the share per row plus `items`/`share`/`auto`, and the tab shows
+them as text — there is nothing to type and nothing to press but **Read again**.
+
+Asked on the live endpoint after the file was run, for the studio in the example: `100 points`, `2
+items`, and `VID-001039` and `VSR-001040` at **50 each**.
 
 **The tab is a door even before the table exists.** `hub_reach_get` is caught, not trusted: on a
 database where `studio-reach.sql` has not been run yet, pressing **Reach** still opens the tab — the

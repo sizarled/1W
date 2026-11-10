@@ -4235,14 +4235,6 @@ a.crp-ad:hover {
   white-space: nowrap;
 }
 
-/* over the day's number — said with weight, not with colour */
-.cr-reach__plan.is-over {
-  color: var(--text);
-  font-weight: 650;
-  text-decoration: underline dotted;
-  text-underline-offset: 4px;
-}
-
 .cr-reach .cr-table {
   margin-top: 0.15rem;
 }
@@ -4261,10 +4253,11 @@ a.crp-ad:hover {
   color: var(--muted);
 }
 
-.cr-reach__input {
-  width: 7rem;
+/* the share the server handed this item: read, not typed */
+.cr-reach__share {
+  font-weight: 650;
   font-variant-numeric: tabular-nums;
-  text-align: end;
+  color: var(--text);
 }
 
 /* under the allocation: what has been spent of it, in a whisper */
@@ -4294,13 +4287,8 @@ a.crp-ad:hover {
   white-space: nowrap;
 }
 
-/* a phone: the plan sits under the bar and the numbers stay one line each */
+/* a phone: the split sits under the bar and the numbers stay one line each */
 @media (max-width: 640px) {
-  .cr-reach__field .dsh-input,
-  .cr-reach__input {
-    width: 6rem;
-  }
-
   .cr-reach__plan {
     order: 3;
     width: 100%;
