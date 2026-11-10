@@ -148,7 +148,8 @@ function podcastPlayerSource(input) {
       return { kind: "embed", url: `https://w.soundcloud.com/player/?url=${encodeURIComponent(url.href)}&color=%23ffffff&auto_play=false&hide_related=true&show_comments=false&show_reposts=false&visual=false` };
     }
     if (/\.(mp4|webm|mov|ogv)(\?|#|$)/i.test(url.href)) return { kind: "video", url: url.href };
-    return { kind: "audio", url: url.href };
+    if (/\.(mp3|wav|m4a|ogg|oga|opus|flac|aac)(\?|#|$)/i.test(url.href)) return { kind: "audio", url: url.href };
+    return { kind: "link", url: url.href };
   } catch {
     return { kind: "none", url: "" };
   }
@@ -185,7 +186,9 @@ function playerMarkup(item, kindInfo) {
                  </div>`
               : source.kind === "video"
               ? `<div class="aud__deck aud__deck--embed"><video class="aud__embed-video" src="${esc(source.url)}" controls playsinline preload="metadata"></video>${meta.allow_download ? `<a class="aud__download" href="${esc(source.url)}" download>${icon("download")} Open or download episode file</a>` : ""}</div>`
-              : source.kind === "audio"
+              : source.kind === "link"
+                ? `<div class="aud__gate"><span class="aud__gate-icon">${icon("link")}</span><p>This source has no supported embedded player. <a href="${esc(source.url)}" target="_blank" rel="noopener">Open source</a>.</p></div>`
+                : source.kind === "audio"
                 ? `<div class="aud__deck">
                    <audio data-a-media preload="metadata" src="${esc(source.url)}"></audio>
                    <div class="aud__transport">

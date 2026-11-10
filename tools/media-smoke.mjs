@@ -250,6 +250,16 @@ const queue = [
   await wait(100);
   expect("audio: a requested download link appears for direct audio", qs(downloadable.document, ".aud__download")?.getAttribute("href") === "https://cdn.example.com/episode.mp3");
 
+  const unsupported = boot("audio.html", {
+    hash: "#/p/ID=podcast001037",
+    fetchImpl: (href) => (fnName(href) === "audio_get"
+      ? reply({ ok: true, locked: false, item: audioItem({ media_url: "https://example.com/watch/episode" }), queue: [], hub: HUB })
+      : reply({ ok: true })),
+  });
+  await importPage("audio");
+  await wait(100);
+  expect("audio: unsupported URLs are links, not fake audio players", !qs(unsupported.document, "[data-a-media]") && qs(unsupported.document, ".aud__gate a")?.getAttribute("href") === "https://example.com/watch/episode");
+
   const song = boot("audio.html", {
     hash: "#/m/ID=song001032",
     fetchImpl: (href) => (fnName(href) === "audio_get" ? reply({ ok: true, locked: false, item: audioItem({ code: "song001032", kind: "song", title: "Night bus" }), queue: [], hub: HUB }) : reply({ ok: true })),
