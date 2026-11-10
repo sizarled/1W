@@ -960,13 +960,28 @@ async function main() {
   expect("add: the menu opens", !s.hidden("[data-cr-add-menu]"));
   s.click(s.qs('[data-cr-add="podcast"]'));
   await s.wait(60);
-  expect("add: the new podcast label replaces Podcast · new", s.text(".cr-editor__kind").trim() === "Podcast Editore", s.text(".cr-editor__kind"));
+  expect("add: the inline podcast editor replaces Podcast · new", s.text(".cr-editor__kind").trim() === "Podcast Editore" && Boolean(s.qs(".cr-pod-editor")), s.text(".cr-editor__kind"));
+  expect("add: the episode can be uploaded to the studio host", Boolean(s.qs("[data-pod-file]")) && /Streamtape/.test(s.text(".cr-pod-source")));
+  expect("add: metadata fields are part of this editor", Boolean(s.qs("[data-pod-show]")) && Boolean(s.qs("[data-pod-season]")) && Boolean(s.qs("[data-pod-transcript]")));
+  s.type(s.qs("[data-item-media]"), "https://open.spotify.com/episode/abc123");
+  expect("add: Spotify links get the real embedded player", s.qs("[data-pod-player] iframe")?.getAttribute("src")?.includes("open.spotify.com/embed/episode/abc123"));
+  s.type(s.qs("[data-item-media]"), "https://cdn.example.com/episode.mp3");
+  expect("add: direct audio URLs preview as audio", Boolean(s.qs("[data-pod-preview-audio]")));
   s.type(s.qs("[data-item-title]"), "Episode one");
-  s.type(s.qs("[data-item-media]"), "https://example.com/ep.mp3");
+  s.type(s.qs("[data-pod-show]"), "Hello podcast");
+  s.type(s.qs("[data-pod-season]"), "2");
+  s.type(s.qs("[data-pod-episode]"), "7");
+  s.type(s.qs("[data-item-summary]"), "A short episode summary");
+  s.type(s.qs("[data-item-body]"), "Show notes and guest links.");
+  s.type(s.qs("[data-pod-transcript]"), "Transcript words.");
+  s.qs("[data-pod-explicit]").checked = true;
+  s.qs("[data-pod-explicit]").dispatchEvent(new s.window.Event("change", { bubbles: true }));
   calls.length = 0;
   s.click(s.qs("[data-cr-item-publish]"));
-  await s.wait(260);
-  expect("add: publishing is sent", calls.some((c) => c.includes("creator_item_save")));
+  await s.wait(300);
+  expect("add: publishing is sent through the existing item RPC", calls.some((c) => c.includes("creator_item_save")));
+  expect("add: the existing RPC receives the audio and notes", scenario.savedItemSave?.p_media_url === "https://cdn.example.com/episode.mp3" && scenario.savedItemSave?.p_body === "Show notes and guest links.", JSON.stringify(scenario.savedItemSave));
+  expect("add: episode fields save through creator_item_meta", scenario.savedMeta?.p_meta?.show_name === "Hello podcast" && scenario.savedMeta?.p_meta?.season === 2 && scenario.savedMeta?.p_meta?.episode === 7 && scenario.savedMeta?.p_meta?.transcript === "Transcript words." && scenario.savedMeta?.p_meta?.explicit === true, JSON.stringify(scenario.savedMeta?.p_meta));
   expect("add: no errors", s.errors.length === 0, s.errors.join(" | "));
 
   /* a video is not written in this table: the editor is the form */

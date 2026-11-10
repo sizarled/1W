@@ -174,6 +174,7 @@ begin
       'media_url',   v_item.media_url,
       'cover',       coalesce(nullif(v_item.cover_url, ''), v_item.thumbnail_url),
       'minutes',     coalesce(nullif(v_item.view_minutes, 0), v_item.minutes),
+      'meta',        coalesce(v_item.meta, '{}'::jsonb) - 'host_file',
       'visibility',  v_item.visibility,
       'published_at', v_item.published_at,
       'creator',     (select coalesce(nullif(m.username, ''), m.member_id)

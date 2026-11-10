@@ -258,6 +258,16 @@
   gap: 0.85rem;
 }
 
+.aud__deck--embed { gap: 0; }
+.aud__embed-frame { display: block; width: 100%; min-height: 190px; border: 0; border-radius: 12px; background: var(--surface-2); }
+.aud__embed-video { display: block; width: 100%; max-height: min(60vh, 520px); border-radius: 12px; background: var(--surface-2); }
+.aud__show { margin-top: .35rem; font-size: .75rem; font-weight: 650; color: var(--muted); }
+.aud__transcript { margin-top: .75rem; padding: .7rem .8rem; border: 1px solid var(--line); border-radius: 10px; }
+.aud__transcript summary { cursor: pointer; font-size: .78rem; font-weight: 650; }
+.aud__transcript p { margin: .65rem 0 0; max-height: 24rem; overflow: auto; white-space: pre-wrap; font-size: .78rem; line-height: 1.65; color: var(--text-2); }
+.aud__download { display: inline-flex; align-items: center; gap: .4rem; width: fit-content; color: var(--text-2); font-size: .75rem; text-decoration: underline; text-underline-offset: 2px; }
+.aud__download .ico { width: 15px; height: 15px; }
+
 .aud__transport {
   display: flex;
   align-items: center;

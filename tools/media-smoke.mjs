@@ -224,6 +224,32 @@ const queue = [
   expect("audio: the transport is there", Boolean(qs(podcast.document, "[data-a-play]")) && Boolean(qs(podcast.document, "[data-a-seek]")));
   expect("audio: the page title follows the item", /The third act/.test(podcast.window.document.title), podcast.window.document.title);
 
+  const hosted = boot("audio.html", {
+    hash: "#/p/ID=podcast001035",
+    fetchImpl: (href) => (fnName(href) === "audio_get"
+      ? reply({ ok: true, locked: false, item: audioItem({ media_url: "https://streamtape.com/e/audio123", meta: { show_name: "Hello", season: 2, episode: 7, duration_seconds: 1253, explicit: true, transcript: "The words of this episode.", allow_download: true, host_file: { id: "private-host-id" } } }), queue: [], hub: HUB })
+      : reply({ ok: true })),
+  });
+  await importPage("audio");
+  await wait(100);
+  expect("audio: an uploaded Streamtape episode uses the host player", qs(hosted.document, ".aud__embed-frame")?.getAttribute("src") === "https://streamtape.com/e/audio123", qs(hosted.document, ".aud__embed-frame")?.getAttribute("src"));
+  expect("audio: hosted podcast metadata is shown", /Hello/.test(text(hosted.document, ".aud__show")) && /Season 2/.test(text(hosted.document, ".aud__show")) && /Episode 7/.test(text(hosted.document, ".aud__show")), text(hosted.document, ".aud__show"));
+  expect("audio: hosted episode duration comes from saved metadata", /20:53/.test(text(hosted.document, ".aud__show")), text(hosted.document, ".aud__show"));
+  expect("audio: explicit episodes are labeled", /Explicit/.test(text(hosted.document, ".aud__kind")));
+  expect("audio: transcript metadata is readable", text(hosted.document, ".aud__transcript p") === "The words of this episode.");
+  expect("audio: platform embeds do not offer a fake direct-download control", !qs(hosted.document, ".aud__download"));
+  expect("audio: hosted media does not create a broken native audio source", !qs(hosted.document, "[data-a-media]"));
+
+  const downloadable = boot("audio.html", {
+    hash: "#/p/ID=podcast001036",
+    fetchImpl: (href) => (fnName(href) === "audio_get"
+      ? reply({ ok: true, locked: false, item: audioItem({ media_url: "https://cdn.example.com/episode.mp3", meta: { allow_download: true } }), queue: [], hub: HUB })
+      : reply({ ok: true })),
+  });
+  await importPage("audio");
+  await wait(100);
+  expect("audio: a requested download link appears for direct audio", qs(downloadable.document, ".aud__download")?.getAttribute("href") === "https://cdn.example.com/episode.mp3");
+
   const song = boot("audio.html", {
     hash: "#/m/ID=song001032",
     fetchImpl: (href) => (fnName(href) === "audio_get" ? reply({ ok: true, locked: false, item: audioItem({ code: "song001032", kind: "song", title: "Night bus" }), queue: [], hub: HUB }) : reply({ ok: true })),

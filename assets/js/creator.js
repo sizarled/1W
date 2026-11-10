@@ -31,6 +31,7 @@ import { hydrateIcons } from "./icons.js";
 import { toast } from "./ui.js";
 import { sessionToken, getMember, avatarFor } from "./session.js";
 import { flagMarkup, countryByName } from "./countries.js";
+import { uploadToStudio, renameFile, studioReady, NOT_CONNECTED } from "./streamtape.js";
 
 /* ================================================================== */
 /* what hangs under each section                                      */
@@ -1614,6 +1615,28 @@ function metaOf(draft) {
   const value = (name) => el(`[data-meta-${name}]`)?.value ?? "";
   const checked = (name) => Boolean(el(`[data-meta-${name}]`)?.checked);
   const kind = draft.kind;
+  if (kind === "podcast") {
+    const podcastValue = (name) => el(`[data-pod-${name}]`)?.value ?? "";
+    const podcastChecked = (name) => Boolean(el(`[data-pod-${name}]`)?.checked);
+    const integer = (name) => {
+      const raw = podcastValue(name).trim();
+      if (!raw) return null;
+      const parsed = Number(raw);
+      return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
+    };
+    return {
+      ...((draft.meta && typeof draft.meta === "object") ? draft.meta : {}),
+      show_name: podcastValue("show").trim(),
+      season: integer("season"),
+      episode: integer("episode"),
+      duration_seconds: integer("duration"),
+      explicit: podcastChecked("explicit"),
+      video_podcast: podcastChecked("video"),
+      allow_download: podcastChecked("download"),
+      transcript: podcastValue("transcript"),
+      host_file: draft.meta?.host_file || null,
+    };
+  }
   if (kind === "channel") {
     return { group: value("group").trim(), epg_url: value("epg").trim() };
   }
@@ -1664,8 +1687,302 @@ function metaOf(draft) {
   return {};
 }
 
+/**
+ * A URL from one of the providers the audio page can actually play.
+ * Unknown addresses remain visible as links, never as an invented player.
+ */
+function podcastSource(input) {
+  const raw = String(input || "").trim();
+  if (!/^https?:\/\//i.test(raw)) return { kind: "empty" };
+  let url;
+  try { url = new URL(raw); } catch { return { kind: "invalid" }; }
+  const host = url.hostname.toLowerCase().replace(/^www\./, "");
+  const streamtape = url.pathname.match(/^\/(?:e|v)\/([\w-]+)/i);
+  if ((host === "streamtape.com" || host === "streamtape.to" || host.endsWith(".tapecontent.net")) && streamtape) {
+    return { kind: "embed", url: `https://streamtape.com/e/${encodeURIComponent(streamtape[1])}` };
+  }
+  const spotify = url.pathname.match(/^\/(episode|show)\/([\w]+)/i);
+  if (host === "open.spotify.com" && spotify) {
+    return { kind: "embed", url: `https://open.spotify.com/embed/${spotify[1]}/${spotify[2]}?utm_source=generator&theme=0` };
+  }
+  if (host === "podcasts.apple.com") {
+    const show = url.pathname.match(/\/id(\d+)/i);
+    if (show) {
+      const ep = url.searchParams.get("i");
+      const region = url.pathname.match(/^\/([a-z]{2})\//i)?.[1] || "us";
+      return { kind: "embed", url: `https://embed.podcasts.apple.com/${region}/podcast/id${show[1]}${ep ? `?i=${encodeURIComponent(ep)}&theme=auto` : "?theme=auto"}` };
+    }
+  }
+  if (host === "soundcloud.com") {
+    return { kind: "embed", url: `https://w.soundcloud.com/player/?url=${encodeURIComponent(url.href)}&color=%23ffffff&auto_play=false&hide_related=true&show_comments=false&show_reposts=false&visual=false` };
+  }
+  if (/\.(mp3|wav|m4a|ogg|oga|opus|flac|aac)(\?|#|$)/i.test(url.href)) {
+    return { kind: "audio", url: url.href };
+  }
+  if (/\.(mp4|webm|mov|ogv)(\?|#|$)/i.test(url.href)) {
+    return { kind: "video", url: url.href };
+  }
+  return { kind: "link", url: url.href };
+}
+
+function podcastPlayerMarkup(input) {
+  const source = podcastSource(input);
+  if (source.kind === "audio") {
+    return `<audio class="cr-pod__audio" data-pod-preview-audio controls preload="metadata" src="${esc(source.url)}"></audio>`;
+  }
+  if (source.kind === "video") {
+    return `<video class="cr-pod__video" data-pod-preview-audio controls playsinline preload="metadata" src="${esc(source.url)}"></video>`;
+  }
+  if (source.kind === "embed") {
+    return `<iframe class="cr-pod__frame" src="${esc(source.url)}" title="Podcast preview" loading="lazy" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" allowfullscreen></iframe>`;
+  }
+  if (source.kind === "link") {
+    return `<p class="cr-pod__unplayable">This link is not a supported audio player yet. <a href="${esc(source.url)}" target="_blank" rel="noopener">Open source</a></p>`;
+  }
+  if (source.kind === "invalid") return `<p class="cr-pod__unplayable">Enter a valid https:// or http:// media link.</p>`;
+  return `<p class="cr-pod__unplayable">Add a direct audio link, a supported podcast link, or upload an episode to the studio host.</p>`;
+}
+
+function podcastCoverUrl(draft) {
+  return String(draft.cover_url || draft.thumbnail_url || "").trim();
+}
+
+function bindPodcastEditor(host, draft) {
+  const media = el("[data-item-media]", host);
+  const preview = el("[data-pod-player]", host);
+  const note = el("[data-pod-source-note]", host);
+  const duration = el("[data-pod-duration]", host);
+  const setPreview = () => {
+    if (preview) preview.innerHTML = podcastPlayerMarkup(media?.value || "");
+    const audio = el("[data-pod-preview-audio]", preview || host);
+    if (audio && duration && !duration.value) {
+      audio.addEventListener("loadedmetadata", () => {
+        if (Number.isFinite(audio.duration)) duration.value = String(Math.round(audio.duration));
+      }, { once: true });
+    }
+  };
+  media?.addEventListener("input", () => {
+    if (draft.meta?.host_file && media.value !== draft.media_url) draft.meta.host_file = null;
+    setPreview();
+  });
+  setPreview();
+
+  const title = el("[data-item-title]", host);
+  const show = el("[data-pod-show]", host);
+  const summary = el("[data-item-summary]", host);
+  const cover = el("[data-item-cover]", host);
+  const previewTitle = el("[data-pod-preview-title]", host);
+  const previewShow = el("[data-pod-preview-show]", host);
+  const previewSummary = el("[data-pod-preview-summary]", host);
+  const coverImage = el("[data-pod-cover-preview]", host);
+  const updateCard = () => {
+    if (previewTitle) previewTitle.textContent = title?.value.trim() || "Untitled episode";
+    if (previewShow) previewShow.textContent = show?.value.trim() || "Podcast";
+    if (previewSummary) previewSummary.textContent = summary?.value.trim() || "Your episode summary appears here.";
+    const url = cover?.value.trim() || "";
+    if (coverImage) {
+      coverImage.hidden = !url;
+      coverImage.src = url;
+    }
+  };
+  [title, show, summary, cover].filter(Boolean).forEach((input) => input.addEventListener("input", updateCard));
+  updateCard();
+
+  const file = el("[data-pod-file]", host);
+  const pick = el("[data-pod-pick]", host);
+  const drop = el("[data-pod-drop]", host);
+  const progress = el("[data-pod-progress]", host);
+  const progressBar = el("[data-pod-progress-fill]", host);
+  const saveButtons = qsa("[data-cr-item-save], [data-cr-item-publish]", host);
+  const stage = (text) => { if (note) note.textContent = text; };
+  const upload = async (picked) => {
+    if (!picked) return;
+    const mediaName = String(picked.name || "");
+    const isAudio = String(picked.type || "").startsWith("audio/") || /\.(mp3|wav|m4a|ogg|oga|opus|flac|aac)$/i.test(mediaName);
+    const isVideo = String(picked.type || "").startsWith("video/") || /\.(mp4|webm|mov|ogv)$/i.test(mediaName);
+    if (!isAudio && !(isVideo && el("[data-pod-video]", host)?.checked)) {
+      toast({ title: "Unsupported file", message: "Choose audio, or enable Video podcast before choosing a video.", tone: "error" });
+      return;
+    }
+    if (picked.size > 2 * 1024 * 1024 * 1024) {
+      toast({ title: "File too large", message: "The studio host accepts files up to 2 GB.", tone: "error" });
+      return;
+    }
+    const hub = currentHub();
+    if (!hub?.code || !studioReady()) {
+      toast({ title: "Host unavailable", message: NOT_CONNECTED, tone: "error" });
+      stage("Paste a playable link, or connect the studio host to upload here.");
+      return;
+    }
+    const extRaw = String(picked.name || "").split(".").pop() || String(picked.type || "").split("/").pop() || "mp3";
+    const ext = extRaw.toLowerCase().replace(/[^a-z0-9]/g, "") || (isVideo ? "mp4" : "mp3");
+    const name = `${hub.code}-${Date.now().toString(36)}.${ext}`;
+    state.podcastUploading = true;
+    saveButtons.forEach((button) => { button.disabled = true; });
+    if (progress) progress.hidden = false;
+    if (drop) drop.classList.add("is-busy");
+    if (pick) pick.disabled = true;
+    if (note) note.textContent = `Uploading ${picked.name} to Streamtape…`;
+    try {
+      const result = await uploadToStudio(picked, {
+        studio: hub.code,
+        name,
+        onStage: stage,
+        onProgress: (loaded, total) => {
+          if (progressBar && total > 0) progressBar.style.width = `${Math.min(100, Math.round(loaded / total * 100))}%`;
+          if (note && total > 0) note.textContent = `Uploading to Streamtape · ${Math.round(loaded / total * 100)}%`;
+        },
+      });
+      draft.media_url = result.embed;
+      draft.meta = { ...(draft.meta || {}), host_file: { id: result.id, name: result.name || name, ext, studio: hub.code, folder: result.folder } };
+      if (media) {
+        media.value = result.embed;
+        media.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      stage(`Uploaded to Streamtape · ${result.name || name}. Save the episode to finish naming it.`);
+      toast({ title: "Episode uploaded", message: "It is on Streamtape, not site storage.", tone: "success" });
+    } catch (error) {
+      stage(error?.message || "Upload failed. Try again or paste a media link.");
+      toast({ title: "Upload failed", message: error?.message || "Try again.", tone: "error" });
+    } finally {
+      state.podcastUploading = false;
+      saveButtons.forEach((button) => { button.disabled = false; });
+      if (progress) progress.hidden = true;
+      if (progressBar) progressBar.style.width = "0%";
+      if (drop) drop.classList.remove("is-busy");
+      if (pick) pick.disabled = false;
+      if (file) file.value = "";
+    }
+  };
+  pick?.addEventListener("click", () => file?.click());
+  file?.addEventListener("change", () => upload(file.files?.[0]));
+  drop?.addEventListener("click", (event) => {
+    if (event.target.closest("[data-pod-pick]")) return;
+    file?.click();
+  });
+  drop?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") { event.preventDefault(); file?.click(); }
+  });
+  ["dragenter", "dragover"].forEach((name) => drop?.addEventListener(name, (event) => { event.preventDefault(); drop.classList.add("is-drag"); }));
+  ["dragleave", "dragend"].forEach((name) => drop?.addEventListener(name, (event) => { event.preventDefault(); drop.classList.remove("is-drag"); }));
+  drop?.addEventListener("drop", (event) => {
+    event.preventDefault(); drop.classList.remove("is-drag"); upload(event.dataTransfer?.files?.[0]);
+  });
+}
+
+function renderPodcastEditor(host) {
+  const draft = state.editor;
+  const meta = draft.meta && typeof draft.meta === "object" ? draft.meta : {};
+  const categories = state.categories || [];
+  const catOptions = categories.map((row) => `<option value="${esc(row.id)}" ${draft.category === row.id ? "selected" : ""}>${"— ".repeat(row.level - 1)}${esc(row.name)}</option>`).join("");
+  const access = `
+    ${excludedField(draft.excluded, "item")}
+    ${audienceFields(draft.audience, "item", draft.visibility === "exclusive")}
+    <div class="cr-grid2">
+      <label class="dsh-field"><span class="dsh-field__label">Seats — leave blank for the studio limit</span><input class="dsh-input" type="number" min="0" value="${draft.seats != null ? esc(String(draft.seats)) : ""}" placeholder="${esc(String(hubCeiling(currentHub()) ?? ""))}" data-item-seats /></label>
+      <span class="cr-pill">${esc(capText(hubCeiling(currentHub())))}</span>
+    </div>`;
+  const cover = podcastCoverUrl(draft);
+  host.innerHTML = `
+    <div class="cr-pod-editor">
+      <div class="cr-editor__head">
+        <button class="cr-editor__back" type="button" data-cr-editor-back><i data-icon="arrowLeft"></i> Back to Podcasts</button>
+        <span class="cr-editor__head-right"><span class="cr-editor__kind"><i data-icon="mic"></i> Podcast Editore</span></span>
+      </div>
+      <div class="cr-pod-editor__columns">
+        <div class="cr-pod-editor__main">
+          <section class="cr-card cr-pod-source">
+            <div class="cr-card__head"><h2 class="cr-card__title">Episode audio</h2><span class="cr-bar__count">Streamtape is the studio's media storage</span></div>
+            <button class="cr-pod-drop" type="button" data-pod-drop aria-label="Choose or drop an episode file">
+              <i data-icon="mic"></i><strong>Drop an audio file here</strong><span>or choose a file to upload directly to this studio's Streamtape folder.</span>
+              <span class="dsh-btn dsh-btn--sm" data-pod-pick>Choose audio file</span>
+            </button>
+            <input type="file" accept="audio/*,video/*" data-pod-file hidden />
+            <div class="cr-pod-progress" data-pod-progress hidden><span data-pod-progress-fill></span></div>
+            <div class="cr-pod-source-row">
+              <span>Or use a playable link</span>
+              <input class="dsh-input" type="url" value="${esc(draft.media_url || "")}" placeholder="Audio file, Spotify, Apple Podcasts, or SoundCloud link" data-item-media />
+            </div>
+            <p class="cr-card__hint" data-pod-source-note>${meta.host_file?.id ? `Streamtape file · ${esc(meta.host_file.name || "uploaded")}` : "Files upload to the studio host; links are validated for supported players."}</p>
+            <div class="cr-pod-player" data-pod-player></div>
+          </section>
+
+          <section class="cr-card">
+            <div class="cr-card__head"><h2 class="cr-card__title">Episode</h2><span class="cr-bar__count">Title, show, season and episode</span></div>
+            <label class="dsh-field"><span class="dsh-field__label">Episode title</span><input class="dsh-input" type="text" maxlength="140" value="${esc(draft.title || "")}" placeholder="Name this episode" data-item-title /></label>
+            <div class="cr-grid2">
+              <label class="dsh-field"><span class="dsh-field__label">Podcast / show name</span><input class="dsh-input" type="text" maxlength="80" value="${esc(meta.show_name || "")}" placeholder="e.g. Hello" data-pod-show /></label>
+              <label class="dsh-field"><span class="dsh-field__label">Episode summary</span><input class="dsh-input" type="text" maxlength="320" value="${esc(draft.summary || "")}" placeholder="A short description" data-item-summary /></label>
+            </div>
+            <div class="cr-grid3">
+              <label class="dsh-field"><span class="dsh-field__label">Season</span><input class="dsh-input" type="number" min="0" value="${meta.season != null ? esc(String(meta.season)) : ""}" data-pod-season /></label>
+              <label class="dsh-field"><span class="dsh-field__label">Episode number</span><input class="dsh-input" type="number" min="0" value="${meta.episode != null ? esc(String(meta.episode)) : ""}" data-pod-episode /></label>
+              <label class="dsh-field"><span class="dsh-field__label">Duration (seconds)</span><input class="dsh-input" type="number" min="0" value="${meta.duration_seconds != null ? esc(String(meta.duration_seconds)) : ""}" data-pod-duration /></label>
+            </div>
+          </section>
+          <section class="cr-card">
+            <div class="cr-card__head"><h2 class="cr-card__title">Show notes</h2><span class="cr-bar__count" data-pod-wordcount>${num(String(draft.body || "").trim() ? String(draft.body).trim().split(/\s+/).filter(Boolean).length : 0)} words</span></div>
+            <label class="dsh-field"><span class="dsh-field__label">Notes, links and guest information</span><textarea class="dsh-textarea dsh-textarea--tall" rows="8" maxlength="20000" data-item-body>${esc(draft.body || "")}</textarea></label>
+          </section>
+          <section class="cr-card">
+            <div class="cr-card__head"><h2 class="cr-card__title">Classification</h2><span class="cr-bar__count">Up to 8 tags · 24 characters each</span></div>
+            <div class="cr-grid2">
+              <label class="dsh-field"><span class="dsh-field__label">Micro niche</span><input class="dsh-input" type="text" maxlength="30" value="${esc(draft.micro_niche || "")}" placeholder="film soundtracks" data-item-micro /></label>
+              <label class="dsh-field"><span class="dsh-field__label">Nano niche</span><input class="dsh-input" type="text" maxlength="30" value="${esc(draft.nano_niche || "")}" placeholder="one composer" data-item-nano /></label>
+            </div>
+            <label class="dsh-field"><span class="dsh-field__label">Tags — comma separated</span><input class="dsh-input" type="text" maxlength="220" value="${esc((draft.tags || []).join(", "))}" data-item-tags /></label>
+          </section>
+          <details class="cr-card cr-pod-advanced">
+            <summary>Advanced — explicit, video episode, download and transcript</summary>
+            <div class="cr-pod-advanced__body">
+              <label class="cr-pod-check"><input type="checkbox" data-pod-explicit ${meta.explicit ? "checked" : ""} /><span><b>Explicit content</b><small>Mark this episode as explicit.</small></span></label>
+              <label class="cr-pod-check"><input type="checkbox" data-pod-video ${meta.video_podcast ? "checked" : ""} /><span><b>Video podcast</b><small>Allows a video source in addition to audio.</small></span></label>
+              <label class="cr-pod-check"><input type="checkbox" data-pod-download ${meta.allow_download ? "checked" : ""} /><span><b>Allow downloads</b><small>Show a file link for direct audio/video sources that support it.</small></span></label>
+              <label class="dsh-field"><span class="dsh-field__label">Transcript — optional</span><textarea class="dsh-textarea" rows="5" maxlength="50000" data-pod-transcript>${esc(meta.transcript || "")}</textarea></label>
+            </div>
+          </details>
+        </div>
+        <aside class="cr-pod-editor__side">
+          <section class="cr-card">
+            <div class="cr-card__head"><h2 class="cr-card__title">Live preview</h2><span class="cr-bar__count">This episode</span></div>
+            <div class="cr-pod-preview">
+              <span class="cr-pod-preview__cover"><img data-pod-cover-preview ${cover ? `src="${esc(cover)}"` : ""} alt="" ${cover ? "" : "hidden"}/><i data-icon="mic" ${cover ? "hidden" : ""}></i></span>
+              <div class="cr-pod-preview__text"><strong data-pod-preview-show>${esc(meta.show_name || "Podcast")}</strong><h3 data-pod-preview-title>${esc(draft.title || "Untitled episode")}</h3><p data-pod-preview-summary>${esc(draft.summary || "Your episode summary appears here.")}</p></div>
+            </div>
+          </section>
+          <section class="cr-card">
+            <div class="cr-card__head"><h2 class="cr-card__title">Cover image</h2><span class="cr-bar__count">Paste its public URL</span></div>
+            <label class="dsh-field"><span class="dsh-field__label">Cover / thumbnail URL</span><input class="dsh-input" type="url" value="${esc(cover)}" placeholder="https://…/cover.jpg" data-item-cover /></label>
+            <p class="cr-card__hint">The image stays at its source URL; audio and video files go to Streamtape.</p>
+          </section>
+          <section class="cr-card">
+            <div class="cr-card__head"><h2 class="cr-card__title">Publishing</h2></div>
+            <div class="cr-grid2">
+              <label class="dsh-field"><span class="dsh-field__label">Visibility</span><select class="dsh-select" data-item-visibility>${VISIBILITY.map(([value, label]) => `<option value="${value}" ${draft.visibility === value ? "selected" : ""}>${label}</option>`).join("")}</select></label>
+              ${categories.length ? `<label class="dsh-field"><span class="dsh-field__label">Category</span><select class="dsh-select" data-item-category><option value="">None</option>${catOptions}</select></label>` : ""}
+              <label class="dsh-field"><span class="dsh-field__label">Age rating</span><select class="dsh-select" data-item-age>${AGES.map(([value, label]) => `<option value="${value}" ${String(draft.age_rating) === value ? "selected" : ""}>${label}</option>`).join("")}</select></label>
+              <label class="dsh-field"><span class="dsh-field__label">Language</span><select class="dsh-select" data-item-language>${LANGUAGES.map(([value, label]) => `<option value="${value}" ${draft.language === value ? "selected" : ""}>${label}</option>`).join("")}</select></label>
+            </div>
+          </section>
+          <section class="cr-card"><div class="cr-card__head"><h2 class="cr-card__title">Who sees it</h2><span class="cr-bar__count">Item access</span></div>${access}</section>
+        </aside>
+      </div>
+      <footer class="cr-editor__foot cr-pod-editor__foot">
+        <span class="cr-save__state" data-item-state>${isSeatPublisher() ? esc(`${currentHub()?.name || "This hub"} is not yours — your draft waits for its owner.`) : ""}</span>
+        <div class="cr-editor__actions">
+          ${draft.id ? `<button class="dsh-btn dsh-btn--sm dsh-btn--danger" type="button" data-cr-item-delete="${esc(draft.id)}"><i data-icon="trash"></i> Delete</button>` : ""}
+          <button class="dsh-btn dsh-btn--sm" type="button" data-cr-item-save><i data-icon="check"></i> Save draft</button>
+          ${isSeatPublisher() ? "" : `<button class="dsh-btn dsh-btn--primary dsh-btn--sm" type="button" data-cr-item-publish><i data-icon="upload"></i> Publish</button>`}
+        </div>
+      </footer>
+    </div>`;
+  hydrateIcons(host);
+  bindPodcastEditor(host, draft);
+}
+
 function renderEditor(host) {
   const draft = state.editor;
+  if (draft.kind === "podcast") return renderPodcastEditor(host);
   const fields = KIND_FIELDS[draft.kind] || {};
   const hub = currentHub();
   const categories = state.categories || [];
@@ -3731,7 +4048,7 @@ function itemPayload(publish) {
 
 async function saveItem(publish) {
   const draft = state.editor;
-  if (!draft || state.busy) return;
+  if (!draft || state.busy || state.podcastUploading) return;
   /* a publisher seat writes a draft; the owner is the one who publishes it */
   const seatDraft = isSeatPublisher() && Boolean(publish);
   if (seatDraft) publish = false;
@@ -3759,6 +4076,22 @@ async function saveItem(publish) {
   const row = res.row || {};
   state.editor.id = row.id || state.editor.id;
   state.editor.status = row.status || state.editor.status;
+
+  /* A podcast upload starts under a temporary studio name because the item
+     code does not exist until the server saves it. Rename it to that code on
+     the host; its id-only embed URL does not change. */
+  if (draft.kind === "podcast" && draft.meta?.host_file?.id && row.code) {
+    const file = draft.meta.host_file;
+    const named = `${row.code}.${String(file.ext || "mp3").replace(/[^a-z0-9]/gi, "") || "mp3"}`;
+    if (file.name !== named) {
+      try {
+        await renameFile(file.id, named, file.studio || currentHub()?.code);
+        draft.meta.host_file = { ...file, name: named };
+      } catch (error) {
+        console.warn("[1World] podcast file rename:", error?.message || error);
+      }
+    }
+  }
 
   const seats = Number(el("[data-item-seats]")?.value || 0);
   let detail = null;

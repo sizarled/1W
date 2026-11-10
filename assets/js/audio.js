@@ -123,17 +123,55 @@ function rowMarkup(row) {
     </li>`;
 }
 
+function podcastPlayerSource(input) {
+  const raw = String(input || "").trim();
+  try {
+    const url = new URL(raw);
+    const host = url.hostname.toLowerCase().replace(/^www\./, "");
+    const tape = url.pathname.match(/^\/(?:e|v)\/([\w-]+)/i);
+    if ((host === "streamtape.com" || host === "streamtape.to" || host.endsWith(".tapecontent.net")) && tape) {
+      return { kind: "embed", url: `https://streamtape.com/e/${encodeURIComponent(tape[1])}` };
+    }
+    const spotify = url.pathname.match(/^\/(episode|show)\/([\w]+)/i);
+    if (host === "open.spotify.com" && spotify) {
+      return { kind: "embed", url: `https://open.spotify.com/embed/${spotify[1]}/${spotify[2]}?utm_source=generator&theme=0` };
+    }
+    if (host === "podcasts.apple.com") {
+      const show = url.pathname.match(/\/id(\d+)/i);
+      if (show) {
+        const episode = url.searchParams.get("i");
+        const region = url.pathname.match(/^\/([a-z]{2})\//i)?.[1] || "us";
+        return { kind: "embed", url: `https://embed.podcasts.apple.com/${region}/podcast/id${show[1]}${episode ? `?i=${encodeURIComponent(episode)}&theme=auto` : "?theme=auto"}` };
+      }
+    }
+    if (host === "soundcloud.com") {
+      return { kind: "embed", url: `https://w.soundcloud.com/player/?url=${encodeURIComponent(url.href)}&color=%23ffffff&auto_play=false&hide_related=true&show_comments=false&show_reposts=false&visual=false` };
+    }
+    if (/\.(mp4|webm|mov|ogv)(\?|#|$)/i.test(url.href)) return { kind: "video", url: url.href };
+    return { kind: "audio", url: url.href };
+  } catch {
+    return { kind: "none", url: "" };
+  }
+}
+
 function playerMarkup(item, kindInfo) {
   const src = item.media_url || item.audio || item.src || "";
+  const source = podcastPlayerSource(src);
+  const meta = item.meta && typeof item.meta === "object" ? item.meta : {};
+  const showName = String(meta.show_name || "").trim();
+  const knownDuration = Number(meta.duration_seconds) || (Number(item.minutes) || 0) * 60;
+  const episodeLabel = [meta.season != null ? `Season ${meta.season}` : "", meta.episode != null ? `Episode ${meta.episode}` : "", knownDuration ? fmt(knownDuration) : ""].filter(Boolean).join(" · ");
   const locked = Boolean(item.locked) || state.locked;
   return `
     <section class="aud__card" data-a-card data-kind="${esc(state.key)}">
       ${coverMarkup(item, kindInfo)}
       <div class="aud__body">
-        <p class="aud__kind">${icon(kindInfo.icon)} ${esc(kindInfo.label)}${item.visibility ? `<span class="aud__vis">${esc(item.visibility)}</span>` : ""}</p>
+        <p class="aud__kind">${icon(kindInfo.icon)} ${esc(kindInfo.label)}${item.visibility ? `<span class="aud__vis">${esc(item.visibility)}</span>` : ""}${meta.explicit ? `<span class="aud__vis">Explicit</span>` : ""}</p>
         <h1 class="aud__title" data-a-title>${esc(item.title || "Untitled")}</h1>
         ${byline(item)}
+        ${showName ? `<p class="aud__show">${esc(showName)}${episodeLabel ? ` · ${esc(episodeLabel)}` : ""}</p>` : ""}
         ${item.summary ? `<p class="aud__summary">${esc(item.summary)}</p>` : ""}
+        ${meta.transcript ? `<details class="aud__transcript"><summary>Transcript</summary><p>${esc(meta.transcript)}</p></details>` : ""}
 
         ${
           locked
@@ -141,9 +179,15 @@ function playerMarkup(item, kindInfo) {
                  <span class="aud__gate-icon">${icon("lock")}</span>
                  <p>${esc(state.gateNote || "This one is not for everyone. Ask the creator.")}</p>
                </div>`
-            : src
-              ? `<div class="aud__deck">
-                   <audio data-a-media preload="metadata" src="${esc(src)}"></audio>
+            : source.kind === "embed"
+              ? `<div class="aud__deck aud__deck--embed">
+                   <iframe class="aud__embed-frame" src="${esc(source.url)}" title="${esc(item.title || "Podcast player")}" loading="lazy" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" allowfullscreen></iframe>
+                 </div>`
+              : source.kind === "video"
+              ? `<div class="aud__deck aud__deck--embed"><video class="aud__embed-video" src="${esc(source.url)}" controls playsinline preload="metadata"></video>${meta.allow_download ? `<a class="aud__download" href="${esc(source.url)}" download>${icon("download")} Open or download episode file</a>` : ""}</div>`
+              : source.kind === "audio"
+                ? `<div class="aud__deck">
+                   <audio data-a-media preload="metadata" src="${esc(source.url)}"></audio>
                    <div class="aud__transport">
                      <button class="aud__btn" type="button" data-a-skip="-15" aria-label="Back 15 seconds">${icon("rewind")}</button>
                      <button class="aud__btn aud__btn--play" type="button" data-a-play aria-label="Play" aria-pressed="false">${icon("play")}</button>
@@ -152,17 +196,18 @@ function playerMarkup(item, kindInfo) {
                    <div class="aud__timeline">
                      <span class="aud__time" data-a-now>0:00</span>
                      <input class="aud__range" type="range" min="0" max="1000" value="0" step="1" data-a-seek aria-label="Seek" />
-                     <span class="aud__time" data-a-dur>${item.minutes ? fmt((Number(item.minutes) || 0) * 60) : "0:00"}</span>
+                     <span class="aud__time" data-a-dur>${knownDuration ? fmt(knownDuration) : "0:00"}</span>
                    </div>
                    <div class="aud__volume">
                      <button class="aud__btn aud__btn--sm" type="button" data-a-mute aria-label="Mute" aria-pressed="false">${icon("volume")}</button>
                      <input class="aud__range aud__range--vol" type="range" min="0" max="100" value="80" step="1" data-a-vol aria-label="Volume" />
                      <button class="aud__btn aud__btn--sm" type="button" data-a-share aria-label="Copy the link">${icon("link")}</button>
                    </div>
+                   ${meta.allow_download ? `<a class="aud__download" href="${esc(source.url)}" download>${icon("download")} Open or download episode file</a>` : ""}
                  </div>`
-              : `<div class="aud__gate">
+                : `<div class="aud__gate">
                    <span class="aud__gate-icon">${icon("info")}</span>
-                   <p>This one has no file attached yet — the creator has not uploaded the audio.</p>
+                   <p>This one has no playable audio link yet — the creator has not added a supported source.</p>
                  </div>`
         }
       </div>
@@ -217,7 +262,7 @@ function bind() {
   const mute = qs("[data-a-mute]");
 
   const paintTime = () => {
-    const dur = state.duration || (Number(state.item?.minutes) || 0) * 60;
+    const dur = state.duration || Number(state.item?.meta?.duration_seconds) || (Number(state.item?.minutes) || 0) * 60;
     const now = state.current || 0;
     const nowEl = qs("[data-a-now]");
     const durEl = qs("[data-a-dur]");
