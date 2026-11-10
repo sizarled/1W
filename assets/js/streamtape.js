@@ -1,15 +1,21 @@
 /**
  * streamtape.js — the host a studio's video files live on.
  * ------------------------------------------------------------------
- * A video uploaded in the editor while a studio is chosen is not kept in the
- * site's storage: it is sent to Streamtape, and the tree it lands in is the
- * one the account uses for studios:
+ * No video file is kept in the site's storage: every video the editor takes is
+ * sent to Streamtape, and the tree it lands in is the account's own:
  *
  *   Home
  *     └ Users
- *         └ Studio
- *             └ <studio code>          e.g. IDST100001
- *                 └ <video code>.mp4   e.g. VID-001100.mp4, VSR-001101.mp4
+ *         ├ Studio
+ *         │   └ <studio code>          e.g. IDST100001
+ *         │       └ <video code>.mp4   e.g. VID-001100.mp4, VSR-001101.mp4
+ *         └ Members
+ *             └ <member code>          e.g. ID100019 — a video with no studio
+ *                 └ <video code>.mp4
+ *
+ * A studio's folder is named by the picker; a member's folder is resolved by
+ * the function from the token, so a video published without a studio still
+ * lives on the host, under the member's own name.
  *
  * The folder is made on the way in — `Users` and `Studio` once, the studio's
  * own folder the first time that studio uploads — and their ids are remembered
@@ -47,14 +53,17 @@ const CACHE_KEY = "1w.streamtape.folders";
  */
 export const THUMBS = "Thumbnails";
 
-/** The studio shelf is reachable: a proxy stands in front, or keys are set. */
+/** The host is reachable: a proxy stands in front, or keys are set. */
 export function studioReady() {
   return Boolean(STREAMTAPE.proxy || (STREAMTAPE.login && STREAMTAPE.key));
 }
 
+/** The same door, for a video that belongs to no studio. */
+export const memberReady = studioReady;
+
 /** A member-facing sentence for "the host is not connected". */
 export const NOT_CONNECTED =
-  "The studio host is not connected yet — the site's owner has to deploy the studio-upload function and give it the Streamtape API Login and Key.";
+  "The video host is not connected yet — the site's owner has to deploy the studio-upload function and give it the Streamtape API Login and Key.";
 
 /** The embed address for a file id — name-free, so a rename cannot break it. */
 export function embedOf(id) {
@@ -370,6 +379,62 @@ export async function uploadToStudio(file, { studio, name, onStage, onProgress }
     id,
     name: String(row.name || fileName),
     folder: String(studio),
+    link: String(row.url || row.link || `https://streamtape.com/v/${id}/${fileName}`),
+    embed: embedOf(id),
+  };
+}
+
+/**
+ * Upload one file that belongs to no studio.
+ *
+ * The folder is not named here: the function reads the member from the token
+ * and puts the file in `Home / Users / Members / <member code>`, so the browser
+ * neither knows nor chooses where on the host its own shelf is. Everything else
+ * is the same road as a studio upload — an upload address from `file/ul`, the
+ * file posted straight to it, and `file/find` when the answer cannot be read.
+ *
+ * Returns `{ id, name, folder, embed }`; `folder` is empty because the shelf is
+ * the member's, not a studio's.
+ */
+export async function uploadToHost(file, { name, onStage, onProgress } = {}) {
+  if (!studioReady()) throw new Error(NOT_CONNECTED);
+  const fileName = String(name || file.name || "video.mp4");
+  const stage = typeof onStage === "function" ? onStage : () => {};
+
+  stage("Getting a place to put it…");
+  const spot = await call("file/ul", {});
+  const target = spot && spot.url;
+  if (!target) throw new Error("The host did not hand back an upload address.");
+
+  stage("Uploading…");
+  const sent = await postFile(target, file, fileName, onProgress);
+  let answer = null;
+  try {
+    answer = sent.text ? JSON.parse(sent.text) : null;
+  } catch {
+    answer = null;
+  }
+  if (answer && Number(answer.status) && Number(answer.status) !== 200) {
+    throw new Error(String(answer.msg || "The host refused the file.").slice(0, 160));
+  }
+  const row = (answer && (answer.result || answer)) || {};
+  let id = idOf(row);
+
+  /* the answer was unreadable — the member's own folder knows what arrived */
+  if (!id) {
+    try {
+      const found = await call("file/find", { name: fileName });
+      id = String(found && found.id ? found.id : "");
+    } catch {
+      id = "";
+    }
+  }
+  if (!id) throw new Error("The host took the file but did not give it an id.");
+
+  return {
+    id,
+    name: String(row.name || fileName),
+    folder: "",
     link: String(row.url || row.link || `https://streamtape.com/v/${id}/${fileName}`),
     embed: embedOf(id),
   };

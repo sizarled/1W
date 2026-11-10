@@ -33,17 +33,19 @@ export function storageUrl(path) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Streamtape — where a studio's video files live                      */
+/* Streamtape — where every video file lives                           */
 /* ------------------------------------------------------------------ */
 /**
- * A video uploaded in the editor while a **studio** is chosen does not stay in
- * the site's storage: it goes to Streamtape, under
- * `Home / Users / Studio / <studio code> / <video code>.<ext>`.
+ * A video uploaded in the editor does not stay in the site's storage: it goes
+ * to Streamtape, under `Home / Users / Studio / <studio code> / <video
+ * code>.<ext>` when a studio is chosen, and under `Home / Users / Members /
+ * <member code> / <video code>.<ext>` when none is.
  *
  * The way in is the `studio-upload` Edge Function, where the API Login and API
  * Key are secrets (`supabase secrets set STREAMTAPE_LOGIN=… STREAMTAPE_KEY=…`):
  * the browser holds only a session token, and the function decides which studio
- * that token may upload into. The function is deployed on this project, and the
+ * that token may upload into — or, with no studio named, which member's own
+ * shelf it is. The function is deployed on this project, and the
  * two slots below are **empty on purpose** — nothing in the browser is worth
  * stealing.
  *

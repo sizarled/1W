@@ -19,10 +19,13 @@
  * The same call edits: `?id=VID-001005` pre-fills the form from
  * video_get, and the payload carries the code back.
  *
- * A file uploaded while a **studio** is chosen does not go to the site's
- * storage: it goes to Streamtape, into `Home / Users / Studio / <studio code>`,
- * and takes the video's own code as its name (see `streamtape.js`). Without a
- * studio, a small file still goes to storage and its link is filled in.
+ * No video file is kept in the site's storage. A file uploaded while a
+ * **studio** is chosen goes to Streamtape, into
+ * `Home / Users / Studio / <studio code>`, and a file uploaded with no studio
+ * goes to the member's own shelf, `Home / Users / Members / <member code>`;
+ * both take the video's own code as their name (see `streamtape.js`). A
+ * picture is the one thing that stays on the site's storage, because a card
+ * has to be an image the page can load.
  *
  * The source is one thing or the other, never both: `S.mode` is `"file"` (a
  * dropped or picked file, whose address the upload fills in) or `"link"` (one
@@ -40,7 +43,7 @@ import { SUPABASE, storageUrl } from "./config.js";
 import { embedUrl, fullscreenSrc, FRAME_ALLOW, autoThumb, streamtapeSplash, streamtapeId, isFile, sourceKind, sourceLabel, HOSTS, pinterestId, redditPath, tapeColour, canSeek } from "./embed.js";
 import { currentTheme } from "./theme.js";
 import { createContents } from "./contents.js";
-import { studioReady, uploadToStudio, renameFile, splashOf, putThumbnail, NOT_CONNECTED } from "./streamtape.js";
+import { studioReady, uploadToStudio, uploadToHost, renameFile, splashOf, putThumbnail, NOT_CONNECTED } from "./streamtape.js";
 
 const S = {
   token: "",
@@ -1064,14 +1067,14 @@ function applyLink(raw) {
   return true;
 }
 
-/** The box says where the file it takes will land — the studio decides. */
+/** The box says where the file it takes will land — the studio decides the shelf. */
 function paintDropNote() {
   const note = $("[data-ved-drop-note]");
   if (!note) return;
   const studio = studioHub();
   note.textContent = studio
-    ? `This studio's videos go to Streamtape — Home / Users / Studio / ${studio.code} — and take the video's own code as their name.`
-    : "Without a studio, a small file stays in the site's storage. Choose a studio below and it goes to the studio's host instead.";
+    ? `This video goes to Streamtape — Home / Users / Studio / ${studio.code} — and takes the video's own code as its name.`
+    : "This video goes to Streamtape too — Home / Users / Members / your own code. Choose a studio below to publish it under a studio instead.";
 }
 
 /** The studio this video belongs to, when it belongs to one. */
@@ -1761,6 +1764,58 @@ async function uploadToStudioHost(file, studio) {
   }
 }
 
+/**
+ * The same upload with no studio chosen: the file lands on the member's own
+ * shelf, `Home / Users / Members / <member code>`, and is named after the video
+ * the moment it has a code. Nothing about the video changes — only the folder.
+ */
+async function uploadToMemberHost(file) {
+  const ext = extensionOf(file);
+  const named = Boolean(S.code);
+  const name = named ? `${S.code}.${ext}` : `member-${Date.now().toString(36)}.${ext}`;
+  const button = $("[data-ved-file-btn]");
+  const box = $("[data-ved-drop]");
+  if (button) button.disabled = true;
+  box?.classList.add("is-busy");
+  beginUpload(file.name, file.size);
+  fileNote("Talking to the video host…");
+  try {
+    const out = await uploadToHost(file, {
+      name,
+      onStage: (text) => {
+        fileNote(text);
+        /* the line keeps the file's own name; the stage is said in the note */
+        stepUpload(uploadRun.loaded, uploadRun.total);
+      },
+      onProgress: (loaded, total) => stepUpload(loaded, total),
+    });
+    S.host = { id: out.id, name: out.name || name, ext, studio: "", folder: "", named };
+    el.embed.value = out.embed;
+    el.embed.dispatchEvent(new Event("input"));
+    fileNote(
+      `${out.name || name} · ${(file.size / (1024 * 1024)).toFixed(1)} MB — Streamtape, Home / Users / Members` +
+        (named ? "" : " · it takes the video's own name when you save it")
+    );
+    endUpload(true);
+    toast({
+      title: "Uploaded to Streamtape",
+      message: "Home / Users / Members — your own shelf.",
+      tone: "success",
+      iconName: "check",
+    });
+    await takeHostStill({ force: true }).catch(() => "");
+  } catch (error) {
+    endUpload(false, error?.message || "The upload failed.");
+    fileNote(error?.message || "The upload failed. Paste a link instead.", "error");
+    toast({ title: "Upload failed", message: error?.message || "Paste a link instead.", tone: "error" });
+  } finally {
+    if (button) button.disabled = false;
+    box?.classList.remove("is-busy");
+    scheduleDraft();
+    paintStatus();
+  }
+}
+
 /** A file the host took under a provisional name gets the video's name now. */
 async function nameHostFile() {
   if (!S.host || S.host.named || !S.code) return;
@@ -1769,7 +1824,7 @@ async function nameHostFile() {
     await renameFile(S.host.id, wanted, S.host.studio);
     S.host.name = wanted;
     S.host.named = true;
-    fileNote(`${wanted} — Streamtape, Home / Users / Studio / ${S.host.studio}`);
+    fileNote(`${wanted} — Streamtape, Home / Users / ${S.host.studio ? `Studio / ${S.host.studio}` : "Members"}`);
     scheduleDraft();
   } catch (error) {
     /* the video is saved and plays either way — the file keeps its working name */
@@ -1785,47 +1840,22 @@ async function uploadVideoFile(file) {
     fileNote("MP4, WEBM, OGG or MOV — those are the files a browser can play.", "error");
     return;
   }
-  /* a studio's videos live on the host, in the studio's own folder */
+  /* every video file goes to the host: a studio's own folder, or the member's */
+  if (!studioReady()) {
+    fileNote(`${NOT_CONNECTED} You can still paste a link above.`, "error");
+    toast({ title: "The video host is not connected", message: NOT_CONNECTED, tone: "error" });
+    return;
+  }
+  if (file.size > 2 * 1024 * 1024 * 1024) {
+    fileNote("2 GB at most on the host.", "error");
+    return;
+  }
   const studio = studioHub();
   if (studio) {
-    if (!studioReady()) {
-      fileNote(`${NOT_CONNECTED} You can still paste a link above.`, "error");
-      toast({ title: "The studio host is not connected", message: NOT_CONNECTED, tone: "error" });
-      return;
-    }
-    if (file.size > 2 * 1024 * 1024 * 1024) {
-      fileNote("2 GB at most, even on the host.", "error");
-      return;
-    }
     await uploadToStudioHost(file, studio);
     return;
   }
-  if (file.size > 50 * 1024 * 1024) {
-    fileNote("50 MB at most here. A longer film belongs on a host — choose a studio, or paste its link.", "error");
-    return;
-  }
-  const button = $("[data-ved-file-btn]");
-  const box = $("[data-ved-drop]");
-  if (button) button.disabled = true;
-  box?.classList.add("is-busy");
-  beginUpload(file.name, file.size);
-  fileNote("Uploading… 0%");
-  try {
-    const url = await uploadFile(file, "videos", (text) => fileNote(text));
-    el.embed.value = url;
-    el.embed.dispatchEvent(new Event("input"));
-    fileNote(`${file.name} · ${(file.size / (1024 * 1024)).toFixed(1)} MB — in the site's storage`);
-    endUpload(true);
-    toast({ title: "File uploaded", message: "The link is in the field above.", tone: "success", iconName: "check" });
-  } catch (error) {
-    endUpload(false, error?.message || "The upload failed.");
-    fileNote(error?.message || "The upload failed. Paste a link instead.", "error");
-    toast({ title: "Upload failed", message: error?.message || "Paste a link instead.", tone: "error" });
-  } finally {
-    if (button) button.disabled = false;
-    box?.classList.remove("is-busy");
-    scheduleDraft();
-  }
+  await uploadToMemberHost(file);
 }
 
 /* ================================================================== */

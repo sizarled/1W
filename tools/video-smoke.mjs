@@ -1003,6 +1003,33 @@ async function editor(tag) {
     hostFunction.includes("STREAMTAPE_LOGIN") && hostFunction.includes("STREAMTAPE_KEY") && hostFunction.includes("Deno.env.get")
   );
   expect("studio upload: no key is written into the function", !/120GYLeBYluelxJ|010abc21eb8af8b77b42/.test(hostFunction));
+  expect(
+    "studio upload: a call with no studio is a member's own video",
+    hostFunction.includes("member_from_token") && /if \(!studio\)/.test(hostFunction),
+    "the function does not read a member from the token"
+  );
+  expect(
+    "studio upload: the member's shelf is Home / Users / Members",
+    hostFunction.includes('const SHELF_MEMBERS = "Members"') && hostFunction.includes("memberShelf"),
+    "no Members shelf"
+  );
+  expect(
+    "studio upload: the browser never names the member's folder",
+    /return json\(await api\(action, \{ folder \}\)\)/.test(hostFunction) &&
+      !/url.searchParams.get\("folder"\)[\s\S]{0,80}member/i.test(hostFunction),
+    "the folder comes from the query"
+  );
+  expect(
+    "studio upload: and it makes no folders for a member",
+    /action === "file\/createfolder"\s*\)\s*\{\s*return json\(\{ status: 400/.test(hostFunction),
+    "createfolder is not refused"
+  );
+  const hostClientModule = readFileSync(join(root, "assets/js/streamtape.js"), "utf8");
+  expect(
+    "studio upload: the client has one road for both — studio or member",
+    /export async function uploadToStudio/.test(hostClientModule) && /export async function uploadToHost/.test(hostClientModule),
+    "uploadToHost is missing"
+  );
 }
 
 {
@@ -1241,7 +1268,7 @@ async function editor(tag) {
 /* pass 8 — a file from the machine, the draft, and the key           */
 /* ================================================================== */
 {
-  /* a stand-in for XMLHttpRequest: the storage upload, without a network */
+  /* a stand-in for XMLHttpRequest: the file goes up without a network */
   const uploads = [];
   class FakeXhr {
     constructor() {
@@ -1256,23 +1283,46 @@ async function editor(tag) {
     setRequestHeader(key, value) {
       this.headers = { ...(this.headers || {}), [key]: value };
     }
-    send(file) {
-      uploads.push({ url: this.url, headers: this.headers, name: file && file.name, size: file && file.size });
+    send(body) {
+      const sent = body && typeof body.get === "function" ? body.get("file1") : body;
+      uploads.push({ url: this.url, headers: this.headers, name: sent && sent.name, size: sent && sent.size });
       this.upload.onprogress?.({ lengthComputable: true, loaded: 5, total: 10 });
       this.status = 200;
-      this.responseText = "{}";
+      /* the host answers the upload with the id it filed the file under */
+      this.responseText = /tapecontent\.net/.test(this.url)
+        ? JSON.stringify({ status: 200, result: { id: "fid2", name: sent && sent.name } })
+        : "{}";
       setTimeout(() => this.onload?.(), 5);
     }
   }
   globalThis.XMLHttpRequest = FakeXhr;
 
   const seen = [];
+  const tape = { places: [], studios: [], auth: "", splashes: 0 };
   const ctx = boot("video-editor.html", {
     storage: STORAGE,
-    fetchImpl: (href) => {
+    fetchImpl: (href, opts) => {
       const fn = fnName(href);
       seen.push(fn);
       if (fn === "video_save") return reply({ ok: true, code: "PST-001101", status: "published", scheduled_at: null });
+      if (href.includes("/functions/v1/studio-upload")) {
+        const url = new URL(href);
+        const action = url.searchParams.get("action");
+        tape.studios.push(url.searchParams.get("studio"));
+        tape.auth = (opts.headers && (opts.headers.Authorization || opts.headers.authorization)) || tape.auth;
+        if (action === "file/ul") {
+          tape.places.push({ folder: url.searchParams.get("folder") });
+          return reply({ status: 200, result: { url: "https://tapecontent.net/xfsupload/tok" } });
+        }
+        if (action === "file/getsplash") {
+          tape.splashes += 1;
+          return reply({ status: 404, msg: "no still yet", result: null });
+        }
+        if (action === "file/find") {
+          return reply({ status: 200, result: { id: "fid2", name: url.searchParams.get("name") } });
+        }
+        return reply({ status: 400, msg: "unexpected call" });
+      }
       return reply([]);
     },
   });
@@ -1289,18 +1339,33 @@ async function editor(tag) {
   const drop = document.querySelector("[data-ved-drop]");
   const dropEvent = new window.Event("drop", { bubbles: true, cancelable: true });
   dropEvent.dataTransfer = {
-    files: [{ name: "short.mp4", type: "video/mp4", size: 1024 * 1024 }],
+    files: [new window.File([new Uint8Array(1024 * 1024)], "short.mp4", { type: "video/mp4" })],
     getData: () => "",
   };
   drop.dispatchEvent(dropEvent);
   await wait(80);
-  expect("files: the upload went to storage", uploads.length === 1, JSON.stringify(uploads.map((u) => u.url)));
-  expect("files: under the videos folder", uploads[0]?.url.includes("/storage/v1/object/source/users/videos/"), uploads[0]?.url);
-  expect("files: with the publishable key", Boolean(uploads[0]?.headers?.apikey), JSON.stringify(uploads[0]?.headers));
+  expect("files: the file went up, once", uploads.length === 1, JSON.stringify(uploads.map((u) => u.url)));
+  expect("files: straight to the host that was handed back", uploads[0]?.url === "https://tapecontent.net/xfsupload/tok", uploads[0]?.url);
+  expect(
+    "files: nothing goes to the site's storage",
+    uploads.every((row) => !row.url.includes("/storage/v1/")),
+    JSON.stringify(uploads.map((u) => u.url))
+  );
+  expect("files: the host was asked for a place", tape.places.length === 1, JSON.stringify(tape.places));
+  expect("files: with no studio named — the function reads the member", tape.studios[0] === null, String(tape.studios[0]));
+  expect("files: and the member's token rides along", tape.auth === "Bearer tok-123", tape.auth);
   const embed = document.querySelector("[data-ved-embed]");
-  expect("files: the source field holds the new address", embed.value.includes("/storage/v1/object/public/source/users/videos/"), embed.value);
-  expect("files: the note says what happened", document.querySelector("[data-ved-file-note]")?.textContent.includes("short.mp4"), document.querySelector("[data-ved-file-note]")?.textContent);
-  expect("files: a file is named as one", document.querySelector("[data-ved-source-badge]")?.textContent === "File", document.querySelector("[data-ved-source-badge]")?.textContent);
+  expect("files: the source field holds the host's embed address", embed.value === "https://streamtape.com/e/fid2", embed.value);
+  const fileNote = document.querySelector("[data-ved-file-note]")?.textContent || "";
+  expect("files: the note says where the file landed", fileNote.includes("Home / Users / Members"), fileNote);
+  expect("files: and how big it was", fileNote.includes("1.0 MB"), fileNote);
+  expect("files: a host file is named as one", document.querySelector("[data-ved-source-badge]")?.textContent === "Streamtape", document.querySelector("[data-ved-source-badge]")?.textContent);
+  expect(
+    "files: the still the host keeps is already on the card",
+    (document.querySelector("[data-ved-thumb-box] img")?.getAttribute("src") || "").includes("thumb.tapecontent.net/thumb/fid2/thumb.jpg"),
+    document.querySelector("[data-ved-thumb-box] img")?.getAttribute("src")
+  );
+  expect("files: the box says where a no-studio file lands", /Home \/ Users \/ Members/.test(document.querySelector("[data-ved-drop-note]")?.textContent || ""), document.querySelector("[data-ved-drop-note]")?.textContent);
 
   /* the upload's own line: a bar, the time gone, the speed */
   const progress = document.querySelector("[data-ved-progress]");

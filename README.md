@@ -1651,9 +1651,8 @@ way held.
   (the whole box is the way in, not only its button), up to 2 GB, and says where it will land. While
   it travels, a line under the box reports it: a bar with its percentage, **elapsed** time, **speed**
   (`12.4 MB/s`) and the time left, then the file's name and the last numbers before the line steps
-  away. Both upload paths report the same way — the site's storage through XHR's own progress events,
-  and the studio's host through the same events in `streamtape.js` (fetch cannot report bytes, which
-  is why the file is posted with XHR there).
+  away. The file goes to the host, and the line is fed by XHR's own progress events in
+  `streamtape.js` (fetch cannot report bytes, which is why the file is posted with XHR).
 - **A link from a platform** — the platform is chosen **first** (YouTube, Vimeo, Facebook,
   Instagram, Pinterest, TikTok, Reddit, X), and only then does the field open, with a placeholder
   that names it: *Paste the YouTube link*. A link from any other host is refused — the note says
@@ -1677,23 +1676,30 @@ and when the picked platform and the link disagree the hint says so instead of s
 of them. `embed.js` grew the two missing readers for that: `instagram.com|instagr.am` (framed through
 `/p/<code>/embed/captioned/`) and `twitter.com|x.com`.
 
-**A studio's video file lives on the studio's host.** When the editor's *Studio* picker names a
-studio (a hub of kind `channel`), *Upload a file* no longer puts the file in the site's storage: it
-goes to **Streamtape**, and the tree it lands in is the account's own:
+**No video file is kept on the site — every one of them lives on the host.** *Upload a file* sends the
+film to **Streamtape**, and the folder it lands in depends on one thing only: whether the editor's
+*Studio* picker names a studio (a hub of kind `channel`):
 
 ```
 Home
 └ Users
-  └ Studio
-    └ <studio code>          IDST100001
-      └ <video code>.mp4     VID-001100.mp4
+  ├ Studio
+  │ └ <studio code>          IDST100001
+  │   └ <video code>.mp4     VID-001100.mp4
+  └ Members
+    └ <member code>          ID100019        a video with no studio chosen
+      └ <video code>.mp4     VID-001101.mp4
 ```
 
-`assets/js/streamtape.js` makes the folders on the way in (`Users` and `Studio` once, the studio's
-own folder the first time it uploads), remembers their ids in `localStorage["1w.streamtape.folders"]`
-so a second upload is three calls shorter, asks for an upload address (`file/ul`), posts the file as
-`multipart/form-data` under `file1`, and reads the file's id back — from the answer, or from the
-folder's own listing when the answer is bare. The field is filled with the id-only embed address
+With a studio, `assets/js/streamtape.js` makes the folders on the way in (`Users` and `Studio` once,
+the studio's own folder the first time it uploads) and remembers their ids in
+`localStorage["1w.streamtape.folders"]`, so a second upload is three calls shorter. With no studio,
+the browser names **nothing**: the call carries no `studio`, and the edge function reads the member
+from the token (`member_from_token`) and answers for that member's own folder — `file/ul`,
+`file/listfolder` and `file/find` are all pinned to it, and the browser is never told where on the
+host its own shelf is. Either way the file goes up the same road: an upload address (`file/ul`), the
+file posted as `multipart/form-data` under `file1`, and the id read back from the answer — or from
+the folder's own listing when the answer is bare. The field is filled with the id-only embed address
 (`https://streamtape.com/e/<id>`), so the link survives the rename.
 
 A brand-new video has no code until it is saved, so its file travels up under a working name
@@ -1701,8 +1707,9 @@ A brand-new video has no code until it is saved, so its file travels up under a 
 server hands the code back — and a file that is already on the host when the video is opened is
 never renamed again. The record kept beside the video is `meta.host_file { id, studio, folder, ext }`:
 the **name is not stored**, because the name is the video's own code, so the record cannot go stale
-between the upload and the rename. A file without a studio, or one under 50 MB without a studio
-chosen, still goes to the site's storage; a studio's file may be up to 2 GB.
+between the upload and the rename. `meta.host_file.studio` is empty for a member's own video, and
+`meta.host_file.folder` with it — the shelf is the member's, not a studio's. A file may be up to
+2 GB, and nothing in this path touches the site's storage.
 
 **A video's code says what it is, and what shape it is.** Every post used to be minted from one
 default — `'PST-' || nextval` — so a video and an article looked alike (`PST-001039`), and a vertical
@@ -1755,8 +1762,12 @@ upload address and posts the film straight to it, so a two-gigabyte upload costs
 small JSON answer. `file/find` is the safety net for a host whose upload endpoint refuses to be read
 across origins — the function lists the folder and names the file instead.
 
-Every action here is a studio's, and every one of them needs a member's token: there is no reader's
-door on this function. There used to be one — **`file/stream`**, which relayed a published video's own
+Every action needs a member's token, and there is no reader's door on this function. Two doors stand
+in front of the same seven actions: `?studio=<code>` is a studio's, checked against
+`creator_hubs_list` / `publisher_hubs` (403 when the token publishes into none of them), and no
+`studio` at all is the member's own shelf, named by the function from `member_from_token` — the
+folder in the request is ignored there, `file/createfolder` is refused, and nothing but that member's
+own folder can be listed or uploaded into. There used to be one — **`file/stream`**, which relayed a published video's own
 bytes so a Streamtape chapter could become a real second — and it is gone (see *A chapter is a second
 in the address, where the platform has one*). Nothing here is public any more.
 
@@ -1782,7 +1793,7 @@ management API comes back truncated, so the deployed file keeps its notes as `//
 
 ### The thumbnail comes with the file
 
-A video uploaded into a studio does not open with an empty card. The moment the file lands, the
+A video uploaded to the host does not open with an empty card. The moment the file lands, the
 editor asks the host for the still it keeps for that file — `file/getsplash`, or, when the function
 has not been redeployed yet, the address the same answer gives
 (`https://thumb.tapecontent.net/thumb/<file id>/thumb.jpg`) — and puts it in the Thumbnail field as
@@ -1795,7 +1806,9 @@ stills without touching the site, and the editor reads whichever picture is curr
 the field says where it came from and that it can be replaced.
 
 The member's own picture wins over it: **Upload**, a pasted address, or a dropped file sets the
-thumbnail, and the automatic one is never put back over a chosen one. A picture the member uploads is
+thumbnail, and the automatic one is never put back over a chosen one. A picture is the one upload that
+stays in the site's storage (`source/users/posts/`), because a card has to be an image a feed of a
+hundred cards can load without asking the host a hundred times. A picture the member uploads is
 also copied into **Home / Thumbnails** under the video's own name (`VID-001100.jpg`), so the host's
 own player wears the same card the site does — best-effort, after the video has its code, and a host
 that refuses an image costs nothing. `stillOf()` in `videos.js` is the reading side: a card, a row, a
@@ -2357,8 +2370,9 @@ dated in the status line), **Ctrl/Cmd+Enter** to publish, and a **follows-you** 
 preview so the followers-only door can be tried as well.
 
 The video editor gained the mock's uploads and the same safety net: **a picture from the machine** as
-the thumbnail, **a video file from the machine** (up to 50 MB, with the percentage on the page, and
-the storage address written into the field when it lands), a **draft on the device**, **Ctrl/Cmd+Enter**,
+the thumbnail, **a video file from the machine** (up to 2 GB, to the host, with the percentage on the
+page and the host's own embed address written into the field when it lands), a **draft on the device**,
+**Ctrl/Cmd+Enter**,
 a link **pasted anywhere** on the page, and the mock's five **age ratings** (3+, 6+, 13+, 16+, 18+).
 
 **The player is now in the editor.** As soon as the field holds a link the source is framed under it —
@@ -3627,8 +3641,8 @@ tools/apps-script/recovery-delivery.gs  the Google Apps Script: email, WhatsApp,
 supabase/functions/whatsapp-webhook/    the edge function Meta calls: verify, statuses, inbound
 supabase/functions/telegram-bot/        the bot's webhook: /start <code> links a chat, /stop unlinks
 supabase/functions/oauth-link/          the OAuth callback for the six networks (state → code → token → profile)
-supabase/functions/studio-upload/       the studio's host: Streamtape folders, upload addresses, renames
-assets/js/streamtape.js                  the studio's host, spoken from the page (never the credentials)
+supabase/functions/studio-upload/       the video host: Streamtape folders, upload addresses, renames
+assets/js/streamtape.js                  the video host, spoken from the page (never the credentials)
 assets/css/dashboard.css    app shell: header rail, sidebar, gates, section views
 assets/js/dashboard.js      dashboard controller (member_dashboard + code/notify/court/account actions)
 assets/js/activated.js      activation wizard (profile → viewing code → ad gate → activate), reactivation, upgrade
