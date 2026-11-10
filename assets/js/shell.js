@@ -412,8 +412,16 @@ function initSidebar() {
 /* ------------------------------------------------------------------ */
 function initScrollEffects() {
   const header = document.querySelector("[data-header]");
+  /* A scroll listener that writes to the DOM on every frame is a layout per
+     frame. The class only means something when it changes, so it is only
+     written when it changes — the browser is left to composite the scroll. */
+  let stuck = null;
   const onScroll = () => {
-    header?.classList.toggle("is-stuck", window.scrollY > 14);
+    if (!header) return;
+    const next = window.scrollY > 14;
+    if (next === stuck) return;
+    stuck = next;
+    header.classList.toggle("is-stuck", next);
   };
   onScroll();
   window.addEventListener("scroll", onScroll, { passive: true });

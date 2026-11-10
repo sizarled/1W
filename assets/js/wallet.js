@@ -116,9 +116,12 @@ export function refreshWallet(delayMs = 120) {
  * Three things make it real time rather than *eventually* right: every call
  * that moves points says so (see `notePoints` in `data.js`), coming back to the
  * tab asks at once, and a slow poll is the safety net for a change made on
- * another device.
+ * another device. The net is thrown once a minute rather than twice: the two
+ * things that actually move a counter — an action on this page and a tab
+ * coming back — are answered the moment they happen, so the poll only has to
+ * catch a phone left open on a table.
  */
-export function watchWallet(intervalMs = 30000) {
+export function watchWallet(intervalMs = 60000) {
   if (!live) {
     live = true;
     window.addEventListener("1w:points", () => refreshWallet());
@@ -131,7 +134,7 @@ export function watchWallet(intervalMs = 30000) {
   startWalletPolling(intervalMs);
 }
 
-export function startWalletPolling(intervalMs = 30000) {
+export function startWalletPolling(intervalMs = 60000) {
   stopWalletPolling();
   if (!getMember()) return;
   noteSeen(getMember());

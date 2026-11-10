@@ -191,9 +191,15 @@ export function initNotifications() {
   refreshNotifications({ announce: false });
   if (pollHandle) clearInterval(pollHandle);
   if (getMember()) {
+    /* A minute was two requests a minute for a badge that only moves when
+       someone writes to this member. Two minutes, and a tab coming back asks
+       once — the badge is never stale for longer than it takes to look. */
     pollHandle = setInterval(() => {
       if (!document.hidden) refreshNotifications({ announce: true });
-    }, 60000);
+    }, 120000);
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden && getMember()) refreshNotifications({ announce: true });
+    });
   }
 
   window.addEventListener("1w:session", () => {

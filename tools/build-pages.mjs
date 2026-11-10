@@ -70,7 +70,23 @@ const page = ([file, title, iconName, description, note]) => `<!doctype html>
     <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+    <!-- `crossorigin` is what makes this socket usable by the CORS fetch that follows -->
+    <link rel="preconnect" href="https://vtbqbhuywdhnvitbcsfy.supabase.co" crossorigin />
+    <link rel="dns-prefetch" href="https://image.tmdb.org" />
+    <link rel="dns-prefetch" href="https://thumb.tapecontent.net" />
+    <!-- one variable Inter, every weight; the sheet lands after the first paint -->
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400..800&family=Instrument+Serif:ital@0;1&display=swap"
+      onload="this.onload=null;this.rel='stylesheet'"
+    />
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400..800&family=Instrument+Serif:ital@0;1&display=swap"
+      />
+    </noscript>
     <link rel="stylesheet" href="assets/css/base.css?v=${BUILD}" />
     <link rel="stylesheet" href="assets/css/layout.css?v=${BUILD}" />
     <link rel="stylesheet" href="assets/css/components.css?v=${BUILD}" />

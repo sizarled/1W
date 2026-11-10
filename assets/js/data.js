@@ -100,8 +100,35 @@ function notePoints(fn) {
   }
 }
 
+/**
+ * Two readers asking for the same thing at the same moment share one call.
+ *
+ * A page often wants the same answer twice — the videos feed draws itself while
+ * its suggestions ask for the same public feed, a header and a panel both read
+ * the same card — and two requests for one answer cost a round trip each. The
+ * map below holds the promise of a call that is still in the air; the second
+ * caller gets that promise, and it is forgotten the moment the answer lands, so
+ * nothing is ever served stale. A POST that must happen twice (a reaction, a
+ * comment, a message) stays out of it, and so does `keepalive`.
+ */
+const inFlight = new Map();
+
 /** Calls a Postgres function through PostgREST (security definer on the server). */
-export async function rpc(fn, body = {}, { keepalive = false } = {}) {
+export function rpc(fn, body = {}, { keepalive = false } = {}) {
+  if (keepalive) return rpcOnce(fn, body, { keepalive });
+  const key = `${fn}:${JSON.stringify(body || {})}`;
+  const running = inFlight.get(key);
+  if (running) return running;
+  const run = rpcOnce(fn, body, { keepalive });
+  inFlight.set(key, run);
+  const forget = () => {
+    if (inFlight.get(key) === run) inFlight.delete(key);
+  };
+  run.then(forget, forget);
+  return run;
+}
+
+async function rpcOnce(fn, body, { keepalive }) {
   const res = await fetch(`${SUPABASE.restUrl}/rpc/${fn}`, {
     method: "POST",
     headers: { ...sbHeaders, Prefer: "return=representation" },

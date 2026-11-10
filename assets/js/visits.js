@@ -35,7 +35,7 @@ const TAB_KEY = "1w.visit.tab"; // one id per tab, survives a reload
 const ERROR_KEY = "1w.visit.error";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const HEARTBEAT = 10000; // how often a tab says "still here"
+const HEARTBEAT = 20000; // how often a tab says "still here"
 const TAB_STALE = 150000; // a tab that missed beats for 2.5 min is gone (background throttling)
 const REJOIN_GRACE = 15000; // page-to-page gap that still counts as the same visit
 
@@ -199,7 +199,25 @@ function tick() {
   if (document.hidden || !pageFocused) return;
   state.seconds += 1;
   state.pending += 1;
-  if (state.pending >= 5) flushPending();
+  /* the shared session copy is written once a quarter minute, not every fifth
+     second: a write to localStorage is synchronous and it lands on the same
+     thread that is drawing the page. Nothing is lost by waiting — leaving the
+     page, hiding it or blurring it all flush what is pending first. */
+  if (state.pending >= 15) flushPending();
+}
+
+/* A hidden tab does not need to wake every second to decide it is hidden. */
+function stopTicking() {
+  if (state.timer) clearInterval(state.timer);
+  if (state.beat) clearInterval(state.beat);
+  state.timer = null;
+  state.beat = null;
+}
+
+function startTicking() {
+  stopTicking();
+  state.timer = setInterval(tick, 1000);
+  state.beat = setInterval(() => touchSession(0), HEARTBEAT);
 }
 
 /**
@@ -228,10 +246,7 @@ export function finishVisit({ keepalive = false } = {}) {
 
 /** This page is going away: drop the tab from the shared session. */
 function leaveTab() {
-  clearInterval(state.timer);
-  clearInterval(state.beat);
-  state.timer = null;
-  state.beat = null;
+  stopTicking();
   flushPending();
   const session = readSession();
   if (session?.id === state.visitId) {
@@ -273,6 +288,10 @@ export async function startVisitTracking() {
     if (document.hidden) {
       flushPending();
       finishVisit({ keepalive: true });
+      stopTicking();
+    } else {
+      startTicking();
+      touchSession(0);
     }
   });
 

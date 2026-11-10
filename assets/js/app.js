@@ -3,12 +3,12 @@
  * Mounts the shell, restores the session and, on the homepage, boots the
  * section controllers.
  */
-import { mountShell } from "./shell.js?v=20261216a";
+import { mountShell } from "./shell.js?v=20261217a";
 import { getMember, refreshMember, setMember, signOut, noteSeen } from "./session.js";
 import { awardPoints, renderWallet, syncFromMember, watchWallet, refreshWallet } from "./wallet.js";
 import { toast } from "./ui.js";
 import { avatarPlaceholder, enableDragScrollAll } from "./utils.js";
-import { startVisitTracking, finishVisit, lastVisitError } from "./visits.js?v=20261101a";
+import { startVisitTracking, finishVisit, lastVisitError } from "./visits.js?v=20261217a";
 import { initTheme, setTheme, toggleTheme, resetTheme, currentTheme, systemTheme } from "./theme.js";
 import { lookupVisitor, cachedVisitor } from "./geo.js";
 import { rpc } from "./data.js";
@@ -32,13 +32,42 @@ async function capturePublisherRef() {
   }
 }
 
+/**
+ * Work that nobody is waiting for waits for the browser to exhale.
+ *
+ * The visit row and a publisher's click are bookkeeping: the page is fully
+ * painted and usable without them. They used to be fired inside `boot()`, in
+ * the same breath as the shell, which put a geo-IP lookup and a write against
+ * the critical path of the first screen. `requestIdleCallback` hands them to the
+ * browser's spare time; a browser without it gets a short timer, and a page that
+ * is closed before either runs still flushes the visit with `pagehide`.
+ */
+function whenIdle(task, timeout = 2500) {
+  const run = () => {
+    try {
+      const out = task();
+      if (out && out.catch) out.catch(() => {});
+    } catch {
+      /* bookkeeping never breaks a page */
+    }
+  };
+  if (typeof window.requestIdleCallback === "function") {
+    window.requestIdleCallback(run, { timeout });
+    return;
+  }
+  setTimeout(run, 700);
+}
+
 async function boot() {
-  capturePublisherRef();
   mountShell();
   enableDragScrollAll();
   // the header list can be re-rendered when the session changes → wire it again
-  window.addEventListener("1w:session", () => enableDragScrollAll());
-  startVisitTracking().catch((error) => console.warn("[1World] visits:", error.message));
+  window.addEventListener("1w:session", () => {
+    if (window.requestAnimationFrame) window.requestAnimationFrame(() => enableDragScrollAll());
+    else enableDragScrollAll();
+  });
+  whenIdle(() => capturePublisherRef());
+  whenIdle(() => startVisitTracking().catch((error) => console.warn("[1World] visits:", error.message)));
 
   if (document.body.dataset.page === "home") {
     const { initHome } = await import("./home.js?v=20261116b");
@@ -82,14 +111,21 @@ async function boot() {
 
   const member = getMember();
   if (member) {
-    const fresh = await refreshMember().catch(() => null);
-    if (fresh) {
-      noteSeen(fresh);
-      syncFromMember(fresh);
-    }
+    /* the wallet shows what was stored last time at once — no waiting on a
+       round trip to draw a number the visitor already saw on the last page */
+    renderWallet();
     /* the counter is live from here on: an action, a tab coming back, or a
        change made elsewhere all move it without a reload */
     watchWallet();
+    refreshMember()
+      .then((fresh) => {
+        if (!fresh) return;
+        noteSeen(fresh);
+        syncFromMember(fresh);
+        renderWallet();
+      })
+      .catch(() => {});
+    return;
   }
 
   renderWallet();

@@ -2365,8 +2365,9 @@ the editors need**, each pinned to a name pattern and a set of extensions (`user
 | `node tools/article-smoke.mjs` | **293/293** (the index, the reader, the gates, the editors) |
 | `node tools/blog-smoke.mjs` | **82/82** (the address, the closed door, the hero, the home, a section, the search, the plain cover) |
 | `node tools/video-smoke.mjs` | **583/583** (the two uploads through a stand-in for `XMLHttpRequest`, every host in the list, the player, the oEmbed still and the oEmbed refusal, the gate and the task) |
-| `node tools/media-smoke.mjs` | **95/95** (the address book, the three pages, the portrait stage, the locked item, the shelves) |
+| `node tools/media-smoke.mjs` | **97/97** (the address book, the three pages, the portrait stage, the locked item, the shelves, which controller each address loads) |
 | `node tools/shell-smoke.mjs` | **67/67** (which page carries which menu, the signed-in header, the header wallet — one ask per action, the number moving without a reload, a re-ask on return to the tab) |
+| `node tools/perf-smoke.mjs` | **37/37** (the module budget of every entry point, the head hints, the first frame of both video addresses, the idle visit, the shared call, the sound pool, the paint rules) |
 
 ### Vertical videos — one page, two formats
 
@@ -2908,6 +2909,73 @@ depth, never a new shape, a colour or a library: the same monochrome identity, a
 Cache stamps on those three sheets travel with the pages, so a change to `components.css` reaches a
 browser that already has the old file.
 
+### Performance — what a page stops paying for
+
+Browsing felt slow, and the cost was not one slow request: it was a handful of small decisions, each
+made on every page. Nothing was deleted and no page changed its shape — every function is still
+where it was, and every screen is still drawn by the same file. What changed is **when** the work
+happens.
+
+**The numbers** (`node tools/perf-smoke.mjs` measures them on every run: the static module graph of
+a page, gzipped, the way a browser fetches it):
+
+| Entry point | Before | After |
+| --- | --- | --- |
+| `videos.html`, a landscape grid | 27 modules, **127.8K gz** | 26 modules, **113.8K gz** |
+| `videos.html#/vertical`, the 9:16 shelf | 27 modules, **127.8K gz** | 25 modules, **100.6K gz** |
+| any page (`app.js`) | 19 modules, 71.0K gz | unchanged — it is the shell every page needs |
+
+**The 9:16 controller is a promise now.** `videos.js` used to load `vertical.js` (and the shelf, and
+the portrait player) on every visit to the videos page, including the landscape grid that never draws
+one. It is imported the moment an address asks for it — `#/vertical`, `#/v/ID=…`, or a row that turns
+out to be portrait — and a page opened on the shelf no longer fetches the grid's feed at all. This is
+the whole 14–27K gz above, and it is the difference between one round trip and two on a phone.
+
+**One font file, and it no longer blocks the first paint.** Six static Inter weights (300–800) became
+one variable face (`wght@400..800`), which is also what the type scale was asking for all along: 540,
+550, 570, 650 and 750 are used in the CSS and none of them existed as a file. The stylesheet is a
+`preload` swapped to a stylesheet on load, with a `<noscript>` twin, so the first paint uses the
+system stack instead of waiting on `fonts.googleapis.com`. The API preconnect now carries
+`crossorigin` — without it the socket could not be reused by the CORS `fetch()` that follows, which
+made the old hint pure cost — and thumbnails get a `dns-prefetch`.
+
+**The page's own controller starts loading while the shell is still parsing.** `modulepreload` on the
+nine pages whose controller `app.js` imports (`home`, `watch`, `cast`, `login`, `iptv`, `panel`,
+`rest`, `register`, `videos`) removes one round trip from the waterfall.
+
+**Bookkeeping left the critical path.** The visit row — a geo-IP lookup that may take 2.5 s followed
+by a `log_visit` write — used to be fired inside `boot()`, in the same breath as the header. It now
+runs in `requestIdleCallback` (a 700 ms timer where that does not exist), and the page is fully usable
+before it starts. The wallet counter paints the number it already had and the refresh lands when it
+lands, instead of holding the header back behind a round trip.
+
+**Two readers, one request.** `rpc()` in `data.js` shares a call that is already in the air: the
+videos feed and its suggestions ask for the same public feed, and a page that wants the same answer
+twice now costs one round trip. The promise is forgotten the moment the answer lands, so nothing is
+ever served stale, and calls that must happen twice (`keepalive` writes) stay out of it.
+
+**Nothing is downloaded before it is used.** `sound.js` used to build all six players and play each at
+volume 0 on the first touch — six MP3s before the visitor had heard anything. A 44-byte silent WAV
+spends the gesture now, and a sound is fetched the first time it is played.
+
+**The idle is quieter.** The wallet poll went from 30 s to 60 s and notifications from 60 s to 120 s
+(both still refresh instantly on an action, on focus and on a tab coming back — the poll is only the
+net for another device). Visit tracking beats every 20 s instead of 10 s, writes the shared session
+once a quarter minute instead of every fifth second, and stops its timers entirely while the tab is
+hidden.
+
+**The paint has a budget.** `content-visibility: auto` on the card grids (`vgrid`, `cr-grid2/3`,
+`crs-grid`, `crp-hubgrid`, `dsh-grid`, `iptv-grid`) lets the renderer skip cards below the fold, with
+`contain-intrinsic-size: auto 320px` so the scrollbar stays honest and nothing shifts on the way down.
+The blurred fixed header drops its `backdrop-filter` below 780 px and for
+`prefers-reduced-transparency` — a full-width filter re-run on every scroll frame is the most
+expensive thing on the page, and on a phone it buys nothing. The scroll listener that toggles
+`is-stuck` now writes to the DOM only when the answer changes, not on every frame.
+
+Gate: `node tools/perf-smoke.mjs` — **37/37**, and it fails on the numbers above, not on a feeling:
+the module budgets, the head hints, the idle visit, the shared call, the sound pool and the CSS rules
+are all assertions.
+
 ### Tests
 
 ```bash
@@ -2923,6 +2991,7 @@ node tools/iptv-smoke.mjs        # 43 checks: the playlists, the groups, the pag
 node tools/activated-smoke.mjs   # 35 checks: hidden panels, image link, ad pause, code return
 node tools/rest-smoke.mjs        # 32 checks: the three steps, the link, the device path, the .txt
 node tools/delivery-smoke.mjs    # 35 checks: the Apps Script itself — email, WhatsApp, Telegram
+node tools/perf-smoke.mjs        # 37 checks: the gzipped module graph, the head, the first frame, the idle, the shared call, the paint
 ```
 
 `dashboard-smoke.mjs` boots the page in jsdom with a stubbed `member_dashboard` and walks the

@@ -1145,7 +1145,24 @@ function verticalAddress(next) {
   return Boolean(next && next.surface === "videos" && next.orientation === "v" && next.id);
 }
 
+/* The 9:16 controller is a second file, and most visits never need it: a
+   landscape grid used to download the shelf, the portrait player and their
+   markup before it drew its first card. It is imported the moment an address
+   asks for the vertical format — directly, or after a row turns out to be
+   portrait — and never otherwise. */
+let verticalLoad = null;
+function loadVertical() {
+  if (!verticalLoad) {
+    verticalLoad = import("./vertical.js?v=20261216c").catch((error) => {
+      verticalLoad = null;
+      console.warn("[1World] vertical format:", error.message);
+    });
+  }
+  return verticalLoad;
+}
+
 function yieldToVertical() {
+  loadVertical();
   showBrowse();
   if (typeof stopPlayhead === "function") stopPlayhead();
   stopPlayhead = null;
@@ -1540,8 +1557,14 @@ function route() {
     yieldToVertical();
     return;
   }
-  if (next.surface === "videos" && next.id) openWatch(next.id, next.orientation || "h");
-  else showBrowse();
+  /* the grid is about to be seen: the feed it draws is fetched now, not on the
+     first load of a page that was opened on the vertical shelf */
+  if (next.surface === "videos" && next.id) {
+    openWatch(next.id, next.orientation || "h");
+    return;
+  }
+  ensureFeed();
+  showBrowse();
 }
 
 /* ================================================================== */
@@ -2324,12 +2347,28 @@ function bindWatch() {
 /* ================================================================== */
 /* boot                                                               */
 /* ================================================================== */
+/* One fetch for the grid, whoever asks for it first. */
+let feedBooted = false;
+function ensureFeed() {
+  if (feedBooted) return;
+  feedBooted = true;
+  loadFeed();
+  loadMine();
+}
+
 function boot() {
   state.token = sessionToken();
   bindFeed();
-  route();
-  loadFeed();
-  loadMine();
+  if (verticalAddress(parseRoute(location.hash))) {
+    /* the address is portrait: the grid, its feed and its strip of own videos
+       are all behind a screen nobody is looking at, so none of them load */
+    loadVertical();
+    yieldToVertical();
+  } else {
+    /* `route()` decides: a grid address fetches the feed, a stage address
+       fetches the video it was asked for and leaves the covered grid alone */
+    route();
+  }
 
   const publish = $("[data-v-publish]");
   if (publish && !signedIn()) {

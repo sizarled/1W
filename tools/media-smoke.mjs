@@ -188,7 +188,10 @@ const queue = [
      landscape stage and the landscape grid are out of the way */
   expect("videos: #/v/ leaves the portrait stage to the vertical format", !qs(tall.document, "[data-v-watch] .vwatch"), "the videos stage drew it");
   expect("videos: and the grid steps aside", qs(tall.document, "[data-v-browse]")?.hidden === true);
-  expect("videos: this format does not spend the tall one's call", !tall.calls.find((c) => fnName(c.href) === "video_get"), "video_get was spent");
+  /* the 9:16 controller is a second file that loads only for the addresses
+     that ask for it — a landscape visit never pays for it */
+  expect("videos: the wide address never loads the tall controller", !wide.document.documentElement.dataset.vertView, wide.document.documentElement.dataset.vertView);
+  expect("videos: the tall address hands the screen to it", tall.document.documentElement.dataset.vertView === "watch", tall.document.documentElement.dataset.vertView);
 
   const old = boot("videos.html", { hash: "#/v/CA4728CD", fetchImpl: stub });
   await importPage("videos");

@@ -624,7 +624,11 @@ let viewer;
   expect("page: the sidebar is the site's", /data-site-sidebar/.test(html));
   expect("page: the footer is the site's", /data-site-footer/.test(html));
   expect("page: it carries the vertical stylesheet", /assets\/css\/vertical\.css/.test(html));
-  expect("page: it carries the vertical script", /assets\/js\/vertical\.js/.test(html));
+  expect(
+    "page: the vertical script loads only for the address that asks for it",
+    /import\(\s*["'][^"']*vertical\.js/.test(readFileSync(join(root, "assets/js/videos.js"), "utf8")) &&
+      !/assets\/js\/vertical\.js/.test(html)
+  );
   expect("page: both formats have their containers", /data-v-browse/.test(html) && /data-v-watch/.test(html) && /data-vert-browse/.test(html) && /data-vert-watch/.test(html));
   expect("page: the vertical block starts out of the way", /<div data-vert-page hidden>/.test(html));
   expect("page: the shelf is reached from the page itself", /href="#\/vertical"/.test(html));

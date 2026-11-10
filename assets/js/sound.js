@@ -25,22 +25,27 @@ function el(name) {
   return pool.get(name);
 }
 
+/* A gesture unlocks the browser's audio, not the seven sounds.
+ *
+ * This used to build all seven players and play each one at volume 0 the first
+ * time a finger touched the page — seven MP3s on the wire before the visitor had
+ * asked for a single sound. One 44-byte silent WAV spends the gesture now; a
+ * sound is fetched the first time it is actually played, and never before. */
+const SILENT =
+  "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAgD4AAIA+AAABAAgAZGF0YQAAAAA=";
+
 function unlock() {
   if (unlocked) return;
   unlocked = true;
-  Object.keys(SOUNDS).forEach((name) => {
-    const audio = el(name);
-    if (!audio) return;
-    const prev = audio.volume;
-    audio.volume = 0;
-    const p = audio.play();
-    if (p && p.catch) p.catch(() => {});
-    setTimeout(() => {
-      audio.pause();
-      audio.currentTime = 0;
-      audio.volume = prev;
-    }, 30);
-  });
+  try {
+    const silent = new Audio(SILENT);
+    silent.volume = 0;
+    const p = silent.play();
+    if (p && p.then) p.then(() => { silent.pause(); }).catch(() => {});
+  } catch {
+    /* a browser that refuses the silent note will ask again on the next press */
+    unlocked = false;
+  }
 }
 
 ["pointerdown", "keydown", "touchstart"].forEach((evt) =>

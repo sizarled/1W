@@ -10,10 +10,32 @@
     <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+    <!-- the API is the first thing every page asks for; `crossorigin` is what
+         makes the socket usable by the CORS fetch that follows -->
+    <link rel="preconnect" href="https://vtbqbhuywdhnvitbcsfy.supabase.co" crossorigin />
+    <link rel="dns-prefetch" href="https://image.tmdb.org" />
+    <link rel="dns-prefetch" href="https://thumb.tapecontent.net" />
+    <!-- One variable Inter covers every weight the design uses — the named
+         ones (400/500/600/700/800) and the half steps the type scale asks for
+         (540, 550, 570, 650, 750) — so the page downloads one font file
+         instead of six, and the stylesheet arrives after the first paint
+         rather than holding it up. The system stack draws the words in
+         between, which is what `display=swap` was always going to do. -->
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400..800&family=Instrument+Serif:ital@0;1&display=swap"
+      onload="this.onload=null;this.rel='stylesheet'"
+    />
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400..800&family=Instrument+Serif:ital@0;1&display=swap"
+      />
+    </noscript>
     <link rel="stylesheet" href="assets/css/base.css?v=20261116a" />
     <link rel="stylesheet" href="assets/css/layout.css?v=20261116a" />
-    <link rel="stylesheet" href="assets/css/components.css?v=20261215a" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261217a" />
     <script>
       /* apply the saved theme (or the OS preference) before first paint */
       (function () {
@@ -31,7 +53,7 @@
         } catch (e) {}
       })();
     </script>
-    <script type="module" src="assets/js/app.js?v=20261216a"></script>
+    <script type="module" src="assets/js/app.js?v=20261217a"></script>
   </head>
   <body data-page="market" data-title="Market">
     <a class="skip-link" href="#main">Skip to content</a>

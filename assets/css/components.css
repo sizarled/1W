@@ -2457,3 +2457,39 @@ html[data-theme="light"] .plan--featured {
 .aud__card {
   position: relative;
 }
+
+/* ------------------------------------------------------------------ */
+/* painting budget                                                    */
+/* ------------------------------------------------------------------ */
+/* The long grids are drawn as far as they are looked at.
+   `content-visibility: auto` lets the renderer skip layout, paint and image
+   decode for a card that is below the fold — on a page carrying forty of them
+   that is most of the first frame. The `auto` keyword in `contain-intrinsic-
+   size` hands back the size the card had the last time it was drawn, so the
+   scrollbar never lies and nothing shifts when a card comes into view. */
+.vgrid > *,
+.cr-grid2 > *,
+.cr-grid3 > *,
+.crs-grid > *,
+.crp-hubgrid > *,
+.dsh-grid > *,
+.iptv-grid > * {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 320px;
+}
+
+/* The header is a fixed, blurred bar over everything that scrolls under it:
+   one filter pass across the full width, re-run on every scroll frame. On a
+   phone the same bar reads the same at near-full opacity and costs nothing,
+   and so does the sandboxed reader that asks for less transparency. */
+@media (max-width: 780px), (prefers-reduced-transparency: reduce) {
+  .site-header.is-stuck,
+  .site-header {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .site-header.is-stuck {
+    background: color-mix(in srgb, var(--bg) 97%, transparent);
+  }
+}
