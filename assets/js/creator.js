@@ -2835,12 +2835,33 @@ function itemCard(row) {
     </article>`;
 }
 
+/** Every name a feed row records its studio under — the only doors a row has. */
+function studioCodeOf(row) {
+  const meta = (row.video && row.video.meta) || row.meta || {};
+  const file = meta.host_file || {};
+  return String(
+    (row.hub && row.hub.code) ||
+      (row.video && row.video.hub && row.video.hub.code) ||
+      file.studio ||
+      file.folder ||
+      meta.studio ||
+      ""
+  )
+    .trim()
+    .toUpperCase();
+}
+
 /**
- * A studio's videos are published into `posts`, and a hub view that reads only
- * the studio's own shelf cannot see them. The public feed is asked for the ones
- * that name this studio — read from whichever door the row carries — and they
- * are added as items, never invented: a row that does not name this hub is not
- * this hub's.
+ * The safety net under a studio's shelf.
+ *
+ * `creator_hub_view` reads the studio's items from `member_content` **and**
+ * `posts` (see `tools/sql/studio-items.sql`); a shelf that comes back shorter
+ * than the count the hub reports is the one case this is for — a server that
+ * has not been taught the second table yet. The public feed is asked for the
+ * rows that name this studio and they are added as items, never invented: a row
+ * that does not name this hub is not this hub's. The studio's code is read from
+ * the place the row actually keeps it — the host file's folder (`IDST100001/…`)
+ * — and never guessed from the publisher.
  */
 async function feedItemsFor(hub) {
   if (!hub || (!hub.id && !hub.code)) return [];
@@ -2858,33 +2879,31 @@ async function feedItemsFor(hub) {
     return [];
   }
   const rows = res && res.ok && Array.isArray(res.rows) ? res.rows : [];
-  const ids = [];
-  const codes = [];
-  rows.forEach((row) => {
-    const id = row.hub_id || row.hub?.id || row.video?.hub?.id || row.video?.hub_id || "";
-    const code = row.hub?.code || row.video?.hub?.code || "";
-    if (id) ids.push(String(id));
-    if (code) codes.push(String(code));
-  });
+  const code = String(hub.code || "").trim().toUpperCase();
   return rows
     .filter((row) => {
       const id = String(row.hub_id || row.hub?.id || row.video?.hub?.id || row.video?.hub_id || "");
-      const code = String(row.hub?.code || row.video?.hub?.code || "");
-      return (hub.id && id === String(hub.id)) || (hub.code && code === String(hub.code));
+      const named = studioCodeOf(row);
+      return (hub.id && id === String(hub.id)) || (code && named === code);
     })
-    .map((row) => ({
-      ...row,
-      kind: "video",
-      code: row.code || row.id,
-      /* every name a still can travel under, so a card is never a blank box */
-      thumbnail: stillOf(row),
-      summary: row.description || row.summary || "",
-      views: viewsOf(row),
-      likes: row.likes != null ? row.likes : row.counters?.likes,
-      minutes: row.minutes != null ? row.minutes : row.video?.meta?.minutes,
-      published_at: row.published_at || row.created_at || null,
-      orientation: row.orientation || row.video?.meta?.orientation || null,
-    }));
+    .map((row) => {
+      const portrait = String(row.orientation || "").toLowerCase() === "v" || row.video?.meta?.vertical === true;
+      return {
+        ...row,
+        kind: "video",
+        code: row.code || row.id,
+        /* what the shelf reads a card from, named the way the shelf names it */
+        shape: portrait ? "v" : "h",
+        /* every name a still can travel under, so a card is never a blank box */
+        thumbnail: stillOf(row),
+        summary: row.description || row.summary || "",
+        views: viewsOf(row),
+        likes: row.likes != null ? row.likes : row.counters?.likes,
+        minutes: row.minutes != null ? row.minutes : row.video?.meta?.minutes,
+        published_at: row.published_at || row.created_at || null,
+        orientation: portrait ? "v" : "h",
+      };
+    });
 }
 
 async function loadHubPage(ref, password = "") {
@@ -2895,11 +2914,17 @@ async function loadHubPage(ref, password = "") {
   try {
     const res = await rpc("creator_hub_view", { p_token: state.token || "", p_hub: ref, p_password: password });
     if (res && res.ok) {
-      /* an empty shelf is not the last word: the studio's published videos may
-         live in `posts`, so the feed is asked for the ones that name it */
-      if (!(res.items || []).length) {
+      /* the shelf already carries what was published into the studio; it is
+         only asked again when the page is holding fewer items than the studio
+         says it has published — a server that still reads one table */
+      const shown = (res.items || []).length;
+      const counted = Number((res.hub && res.hub.published) || 0);
+      if (shown < counted) {
         const extra = await feedItemsFor(res.hub);
-        if (extra.length) res.items = extra;
+        if (extra.length) {
+          const known = new Set((res.items || []).map((row) => String(row.code || row.id || "")));
+          res.items = (res.items || []).concat(extra.filter((row) => !known.has(String(row.code || row.id || ""))));
+        }
       }
       state.hubView = res;
       state.hubViewId = res.hub?.id || ref;

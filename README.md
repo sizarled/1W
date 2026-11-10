@@ -1301,7 +1301,7 @@ published (and refused without a media link), an article refused in a studio hub
 categories three deep with the fourth refused (`deep`) and a duplicate refused, a third blog created
 then a fourth refused (`limit`, level 1), staff added by code and an unknown code refused
 (`member`), and the subscriber list reporting a real member with their country.
-`tools/creator-smoke.mjs` (372 checks) runs the studio end to end — an empty studio, its tables
+`tools/creator-smoke.mjs` (460 checks) runs the studio end to end — an empty studio, its tables
 (private + password + staff), saves, refuses, and deletes a studio; a studio page holding one of each
 hub (tables, columns, action menus, the editor saving a draft then publishing, blog articles vs
 drafts, categories, subscribers, library books); and the `?section=&tab=` deep links — including
@@ -1389,8 +1389,39 @@ servers and cinemas is not built yet.
 | --- | --- |
 | `creators_search(token, query, kind, country, sort)` | `{ok, rows[], countries[], count}` — 60 at most; a member with no non-private hub never appears |
 | `creator_public(token, ref)` | `{ok, is_self, creator{}, totals{}, hubs[]}` — `ref` is a code, an `@handle` or a uuid; a private hub only for the owner, staff and VIP |
-| `creator_hub_view(token, hub, password)` | `{ok, locked, hub{}, items[]}` — the locked reply carries only the name, logo, cover and whether a password exists |
+| `creator_hub_view(token, hub, password)` | `{ok, locked, hub{}, items[]}` — the locked reply carries only the name, logo, cover and whether a password exists; the items are the hub's own shelf **and** everything published into it (see below) |
 | `creator_hub_subscribers(hub)` | the count, used by every total above |
+
+#### A studio reads its members' posts — the shelf that said "nothing published"
+
+A video is written to `posts`; a studio's own shelf is `member_content`. `creator_hub_view` drew its
+items from `member_content` alone, while the hub's **counters** come from `creator_hub_posts`, which
+reads `posts`. So a studio could report `published: 1` and still draw the empty state — *"Nothing
+published yet"* — beside a video that was live on the feed. That is the bug that made a studio with
+two published videos look empty.
+
+`tools/sql/studio-items.sql` (**applied**) closes it: the items are one aggregate over both tables —
+the studio's own shelf first, then `posts` rows whose `hub_id` is this hub (`content_type` video,
+article or question, `status = 'published'`, not deleted), newest first, in one shape. The owner's
+own table (`creator_items`) had already read both tables; this is the same union on the public side.
+
+- **Shape**: carried as `shape: "v" | "h"` from `posts.video_meta->>'vertical'` — the same flag
+  `video_card` reads — so a vertical video lands in the portrait rail and a landscape one in the
+  grid, and each card opens `videos.html#/v/ID=…` or `#/h/ID=…` with the code the row carries.
+- **Visibility**: mapped the way the table maps it — `general → public`, `limited → exclusive`,
+  `followers → exclusive`, `private → private`. A visitor sees what the feed would show; the owner and
+  the studio's approved publishers see everything that is not deleted.
+- **The safety net**: if a page is ever handed a shelf shorter than the hub's own `published` count
+  (a server that still reads one table), `creator.js` asks the public feed once and adds only the rows
+  that **name this studio** — read from `video_meta.host_file.studio` / `folder` (the studio folder an
+  upload landed in), never guessed from the publisher. A row that does not name the hub is not the
+  hub's.
+- **The second video had no studio at all.** `VSR-001040` was published with `hub_id` null (the
+  editor's studio picker was left empty), so no studio could claim it — a video is only in a studio
+  when its row says so. Its row was attached to `IDST100001` (the only `channel` this owner runs) on
+  the live database; both videos now sit on that studio's shelf. Publishing from inside a studio
+  carries it automatically — the table's "Publish a video" link is `video-editor.html?studio=<code>`,
+  and the desk hands the hub to the embedded editor.
 
 #### Working in somebody else's place — publishers and advertisers
 
@@ -1505,7 +1536,7 @@ blog with `role: "publisher"`, `creator_items` returned its two published rows w
 `draft`, `creator_item_get` opened it and `creator_item_delete` removed it — while another member's row
 answered `not_found`. The seat and the test session were removed afterwards. `tools/publisher-smoke.mjs`
 (52 checks) holds `publisher.html` to the program alone and follows an old `?studio=` link to
-`creator.html?studio=<code>`; `tools/creator-smoke.mjs` (372 checks) walks a publisher's seat room by
+`creator.html?studio=<code>`; `tools/creator-smoke.mjs` (460 checks) walks a publisher's seat room by
 room and re-checks that the owner's page did not change.
 
 DDL + functions: `tools/sql/creator-requests.sql` — **applied**, and exercised on the real database:
@@ -2984,7 +3015,7 @@ node tools/dashboard-smoke.mjs   # 272 checks: the five gates, rail, popover, co
 node tools/sidebar-smoke.mjs     # 93 checks: the edge, the pin, Escape, the mobile drawer, the dashboard menu
 node tools/panel-smoke.mjs       # 90 checks: the desk's three states, the rows, the switch, the dialog, the shelf
 node tools/court-smoke.mjs       # 115 checks: the four steps, uploads, both doors, the court room
-node tools/creator-smoke.mjs     # 449 checks: the search (owners + publishers), the tables, the editors, a publisher's seat, the head of the page, the Reach tab
+node tools/creator-smoke.mjs     # 460 checks: the search (owners + publishers), the tables, the editors, a publisher's seat, the head of the page, the Reach tab, the shelf that reads posts
 node tools/media-smoke.mjs       # 89 checks: the address book, videos.html#/h|v/, audio.html#/p|m/, playlist.html#/videos|podcasts|songs/
 node tools/publisher-smoke.mjs   # 52 checks: the program, the seat, the links, and the hand-off to the creator page
 node tools/iptv-smoke.mjs        # 43 checks: the playlists, the groups, the page, the deep links

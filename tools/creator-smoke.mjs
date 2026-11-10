@@ -549,6 +549,13 @@ function stubFetch(url, opts = {}) {
   }
 
   if (href.includes("/rpc/member_logout")) return reply({ ok: true });
+
+  /* the studio's safety net: the public feed, asked only when a shelf comes
+     back shorter than the count the hub reports */
+  if (href.includes("/rpc/video_feed")) {
+    return reply({ ok: true, rows: scenario.feedRows || [], total: (scenario.feedRows || []).length, fields: [] });
+  }
+
   return reply([]);
 }
 
@@ -2131,9 +2138,98 @@ async function headPass() {
 }
 
 /* ------------------------------------------------------------------ */
+/* pass 83 — a studio reads what was published into it                 */
+/* ------------------------------------------------------------------ */
+/* The bug this guards: a video is written to `posts`, and the studio shelf
+   was drawn from `member_content` alone — so a studio could report one
+   published item and still say "Nothing published yet". The shelf is read
+   from both tables now (`tools/sql/studio-items.sql`), and the shape each row
+   carries decides the shelf it lands on. */
+async function postsPass() {
+  const post = (over = {}) => ({
+    ...item({ id: over.id, code: over.code, title: over.title, shape: over.shape, thumbnail: over.thumbnail }),
+    minutes: over.minutes ?? null,
+    kind: "video",
+  });
+
+  scenario = {
+    hubs: [],
+    items: [],
+    creators: [],
+    creator: creatorRow(),
+    creatorHubs: [],
+    pubhubs: [],
+    hubItems: [
+      post({ id: "p-wide", code: "VID-001039", title: "The wide one", shape: "h", thumbnail: "https://thumb.tapecontent.net/thumb/wide.jpg" }),
+      post({ id: "p-tall", code: "VSR-001040", title: "The tall one", shape: "v" }),
+    ],
+    hubView: { published: 2 },
+  };
+  calls.length = 0;
+  const studio = await boot(83, { search: "?studio=IDST100001&creator=ID100015" });
+  await studio.wait(300);
+  expect("shelf: a studio with published videos is not empty", !/Nothing published yet/.test(studio.text("[data-cr-view]")), studio.text("[data-cr-view]").slice(0, 140));
+  expect("shelf: the landscape video is in the grid", /The wide one/.test(studio.text('[data-crs-sec="videos"]')), studio.text('[data-crs-sec="videos"]').slice(0, 120));
+  expect(
+    "shelf: and it opens videos.html#/h/ID=",
+    studio.qs('[data-crs-sec="videos"] .crs-card')?.getAttribute("href") === "videos.html#/h/ID=VID-001039",
+    studio.qs('[data-crs-sec="videos"] .crs-card')?.getAttribute("href")
+  );
+  expect("shelf: the portrait video gets its own rail", /The tall one/.test(studio.text('[data-crs-sec="vertical"]')), studio.text('[data-crs-sec="vertical"]').slice(0, 120));
+  expect(
+    "shelf: and it opens videos.html#/v/ID=",
+    studio.qs('[data-crs-sec="vertical"] .crs-card')?.getAttribute("href") === "videos.html#/v/ID=VSR-001040",
+    studio.qs('[data-crs-sec="vertical"] .crs-card')?.getAttribute("href")
+  );
+  expect("shelf: the shelf answers for itself — the feed is not asked", !calls.some((c) => c.includes("video_feed")), calls.join(" "));
+  expect("shelf: no errors", studio.errors.length === 0, studio.errors.join(" | "));
+  studio.window.close();
+
+  /* a server that still reads one table: the count is bigger than the shelf, so
+     the feed is asked — and only a row that names this studio is added */
+  scenario = {
+    hubs: [],
+    items: [],
+    creators: [],
+    creator: creatorRow(),
+    creatorHubs: [],
+    pubhubs: [],
+    hubItems: [post({ id: "p-wide", code: "VID-001039", title: "The wide one", shape: "h" })],
+    hubView: { published: 2 },
+    feedRows: [
+      {
+        id: "f-1",
+        code: "VID-001050",
+        title: "Published into this studio",
+        orientation: "h",
+        thumbnail: "https://thumb.tapecontent.net/thumb/a.jpg",
+        published_at: "2026-11-09T10:00:00Z",
+        video: { meta: { host_file: { studio: "IDST100001", folder: "IDST100001" } } },
+      },
+      {
+        id: "f-2",
+        code: "VID-001051",
+        title: "Belongs to another studio",
+        orientation: "h",
+        video: { meta: { host_file: { studio: "IDST100099", folder: "IDST100099" } } },
+      },
+    ],
+  };
+  calls.length = 0;
+  const short = await boot(84, { search: "?studio=IDST100001&creator=ID100015" });
+  await short.wait(320);
+  expect("shelf: a shelf shorter than the count asks the feed", calls.some((c) => c.includes("video_feed")), calls.join(" "));
+  expect("shelf: the row that names this studio is added", /Published into this studio/.test(short.text('[data-crs-sec="videos"]')), short.text('[data-crs-sec="videos"]').slice(0, 140));
+  expect("shelf: a row from another studio is not", !/Belongs to another studio/.test(short.text("[data-cr-view]")), short.text("[data-cr-view]").slice(0, 140));
+  expect("shelf: no errors", short.errors.length === 0, short.errors.join(" | "));
+  short.window.close();
+}
+
+/* ------------------------------------------------------------------ */
 /* results                                                             */
 /* ------------------------------------------------------------------ */
 await main();
+await postsPass();
 await seatPass();
 await reachPass();
 await headPass();
