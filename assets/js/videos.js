@@ -558,7 +558,7 @@ function actionsMarkup(v) {
   const reaction = Number(mine.reaction) || 0;
   const canDownload = meta.download && isFile((v.video && v.video.embed) || "");
   return `
-    <div class="vacts" data-v-actions>
+    <div class="vacts" id="video-actions" data-v-actions tabindex="-1">
       <button class="vact" type="button" data-v-react="1" aria-pressed="${reaction === 1}">
         ${icon("thumbUp")} <span>Like</span>
         <span data-v-like>${esc(compact(counters.likes || 0))}</span>
@@ -613,18 +613,29 @@ function commentsMarkup() {
   const reaction = Number(state.reaction) || 0;
 
   const composer = !signedIn()
-    ? `<div class="vcomposer">
-         <p class="vcomposer__note">${icon("user")} <span><a href="login.html?next=${encodeURIComponent(videoUrl(state.code, state.orientation))}">Sign in</a> to join the conversation.</span></p>
+    ? `<div class="vcomposer vcomposer--locked" role="group" aria-label="Comment access">
+         <span class="vcomposer__badge">${icon("user")}</span>
+         <div class="vcomposer__copy">
+           <strong>Join the conversation</strong>
+           <span>Sign in to write a comment, reply, or react to a comment.</span>
+         </div>
+         <a class="btn btn--ghost btn--sm" href="login.html?next=${encodeURIComponent(videoUrl(state.code, state.orientation))}">Sign in</a>
        </div>`
-    : !canComment
-      ? `<div class="vcomposer">
-           <p class="vcomposer__note">${icon("info")} <span>Like or dislike the video first — then you can comment. That is the rule everywhere on 1World.</span></p>
+    : !canComment || !reaction
+      ? `<div class="vcomposer vcomposer--locked" role="group" aria-label="Comment access">
+           <span class="vcomposer__badge">${icon("info")}</span>
+           <div class="vcomposer__copy">
+             <strong>React first to join in</strong>
+             <span>Like or dislike this video to unlock comments and replies.</span>
+           </div>
+           <button class="btn btn--ghost btn--sm" type="button" data-v-comment-unlock>Choose Like or Dislike</button>
          </div>`
-      : `<div class="vcomposer">
-           <textarea class="textarea" rows="3" data-v-comment-input maxlength="4000" placeholder="Add a comment"></textarea>
+      : `<div class="vcomposer vcomposer--open">
+           <label class="vcomposer__label" for="v-comment-draft">Your comment</label>
+           <textarea id="v-comment-draft" class="textarea" rows="3" data-v-comment-input maxlength="4000" placeholder="Share a thought…"></textarea>
            <div class="vcomposer__row">
-             <span class="vcomposer__note" data-v-comment-state>${icon("user")} <span>${esc((me && (me.name || me.username)) || "You")}${reaction ? " · you reacted" : ""}</span></span>
-             <button class="btn btn--primary btn--sm" type="button" data-v-comment-send>${icon("send")} Post</button>
+             <span class="vcomposer__note" data-v-comment-state>${icon("user")} <span>${esc((me && (me.name || me.username)) || "You")} · ${reaction > 0 ? "you liked this video" : "you disliked this video"}</span></span>
+             <button class="btn btn--primary btn--sm" type="button" data-v-comment-send>${icon("send")} Post comment</button>
            </div>
          </div>`;
 
@@ -636,11 +647,11 @@ function commentsMarkup() {
   const voteRow = (c) => {
     const id = esc(String(c.id ?? ""));
     const mine = String(c.mine_reaction || c.mine || "");
-    return `<div class="vcom__acts">
-      <button class="vcom__act" type="button" data-v-cvote="1" data-v-cvote-id="${id}" aria-pressed="${mine === "agree"}" aria-label="Like this comment">${icon("thumbUp")}<span data-v-cagree>${esc(num(Number(c.likes ?? c.agree_count ?? 0)))}</span></button>
-      <button class="vcom__act" type="button" data-v-cvote="0" data-v-cvote-id="${id}" aria-pressed="${mine === "disagree"}" aria-label="Dislike this comment">${icon("thumbDown")}<span data-v-cdisagree>${esc(num(Number(c.dislikes ?? c.disagree_count ?? 0)))}</span></button>
-      <button class="vcom__act" type="button" data-v-creply="${id}">${icon("comment")} Reply</button>
-      <button class="vcom__act" type="button" data-v-creport="${id}">${icon("flag")} Report</button>
+    return `<div class="vcom__acts" aria-label="Comment actions">
+      <button class="vcom__act" type="button" data-v-cvote="1" data-v-cvote-id="${id}" aria-pressed="${mine === "agree"}" aria-label="Like this comment" title="Like this comment">${icon("thumbUp")}<span>Like</span><b data-v-cagree>${esc(num(Number(c.likes ?? c.agree_count ?? 0)))}</b></button>
+      <button class="vcom__act" type="button" data-v-cvote="0" data-v-cvote-id="${id}" aria-pressed="${mine === "disagree"}" aria-label="Dislike this comment" title="Dislike this comment">${icon("thumbDown")}<span>Dislike</span><b data-v-cdisagree>${esc(num(Number(c.dislikes ?? c.disagree_count ?? 0)))}</b></button>
+      <button class="vcom__act" type="button" data-v-creply="${id}" aria-label="Reply to this comment">${icon("comment")}<span>Reply</span></button>
+      <button class="vcom__act" type="button" data-v-creport="${id}" aria-label="Report this comment">${icon("flag")}<span>Report</span></button>
     </div>`;
   };
 
@@ -704,8 +715,11 @@ function commentsMarkup() {
   return `
     <section class="vcomments" id="comments">
       <div class="vcom__head">
-        <h2 class="vcom__title">Comments <span class="vcount" data-v-comment-count>${esc(num(data.count || rows.length))}</span></h2>
-        <span class="vcom__hint">${canComment ? "You can comment on this one." : "Reactions unlock commenting."}</span>
+        <div class="vcom__head-copy">
+          <span class="vcom__eyebrow">The conversation</span>
+          <h2 class="vcom__title">Comments <span class="vcount" data-v-comment-count>${esc(num(data.count || rows.length))}</span></h2>
+        </div>
+        <span class="vcom__hint">${canComment && reaction ? "You’re in — add a thought or reply." : "Read freely · react to join in."}</span>
       </div>
       ${composer}
       <div class="vcom__list" data-v-comment-list>
@@ -714,7 +728,11 @@ function commentsMarkup() {
             ? tops
                 .map(thread)
                 .join("")
-            : `<p class="vcom__hint" style="padding:1rem .35rem">No comments yet${canComment ? " — say the first thing." : "."}</p>`
+            : `<div class="vcom__empty">
+                 <span class="vcom__empty-icon">${icon("comment")}</span>
+                 <strong>No comments yet</strong>
+                 <span>${canComment && reaction ? "Be the first to share a thought." : "React to the video to start the conversation."}</span>
+               </div>`
         }
       </div>
     </section>`;
@@ -2074,9 +2092,8 @@ function bindWatch() {
       }
       reactBtn.disabled = false;
       if (res && res.ok) {
-        const wasNone = !Number(state.reaction);
         state.reaction = Number(res.reaction) || 0;
-        state.canComment = state.canComment || state.reaction !== 0;
+        state.canComment = state.reaction !== 0;
         const like = $("[data-v-like]");
         const dislike = $("[data-v-dislike]");
         if (like) like.textContent = compact(res.likes || 0);
@@ -2084,8 +2101,19 @@ function bindWatch() {
         qsa("[data-v-react]", root).forEach((b) => {
           b.setAttribute("aria-pressed", String(Number(b.getAttribute("data-v-react")) === state.reaction));
         });
-        if (state.reaction !== 0 && wasNone) paintComments();
+        /* Paint the gate immediately, then re-read the server's
+           can_comment after both setting and removing it — never leave stale UI
+           open if the follow-up read is offline. */
+        paintComments();
+        await loadComments(state.code);
       }
+      return;
+    }
+
+    if (event.target.closest("[data-v-comment-unlock]")) {
+      const actions = $("[data-v-actions]");
+      actions?.scrollIntoView({ behavior: "smooth", block: "center" });
+      actions?.querySelector("[data-v-react]")?.focus({ preventScroll: true });
       return;
     }
 
@@ -2243,6 +2271,12 @@ function bindWatch() {
     const creply = event.target.closest("[data-v-creply]");
     if (creply) {
       event.preventDefault();
+      if (!signedIn()) return toast({ title: "Sign in first", message: "Replies need a member account.", tone: "error", iconName: "user" });
+      if (!state.canComment || !state.reaction) {
+        toast({ title: "React first", message: "Like or dislike this video to unlock replies.", tone: "default", iconName: "info" });
+        $("[data-v-comment-unlock]")?.focus();
+        return;
+      }
       const id = creply.getAttribute("data-v-creply");
       const box = root.querySelector(`[data-v-reply-box="${id}"]`);
       if (!box) return;
@@ -2268,6 +2302,11 @@ function bindWatch() {
       event.preventDefault();
       if (!signedIn()) {
         return toast({ title: "Sign in first", message: "Replies hang from a member account.", iconName: "login" });
+      }
+      if (!state.canComment || !state.reaction) {
+        toast({ title: "React first", message: "Like or dislike this video to unlock replies.", tone: "default", iconName: "info" });
+        await loadComments(state.code);
+        return;
       }
       const id = creplySend.getAttribute("data-v-reply-send");
       const box = root.querySelector(`[data-v-reply-box="${id}"]`);
@@ -2379,6 +2418,12 @@ function bindWatch() {
     }
 
     if (event.target.closest("[data-v-comment-send]")) {
+      if (!signedIn()) return toast({ title: "Sign in first", message: "Comments need a member account.", tone: "error", iconName: "user" });
+      if (!state.canComment || !state.reaction) {
+        toast({ title: "React first", message: "Like or dislike this video to unlock comments.", tone: "default", iconName: "info" });
+        await loadComments(state.code);
+        return;
+      }
       const input = $("[data-v-comment-input]");
       const body = String((input && input.value) || "").trim();
       if (!body) {

@@ -305,6 +305,7 @@ const choosePlatform = (document, window, value) => {
 /* pass 2 — the watch screen                                          */
 /* ================================================================== */
 {
+  let watchReaction = 0;
   const { document, calls, errors, window } = boot("videos.html", {
     hash: "#/v/PST-001010",
     storage: { "1w.member": JSON.stringify({ id: "m9", username: "@you", name: "You", level: 2 }), "1w.session": "tok-watch" },
@@ -314,8 +315,11 @@ const choosePlatform = (document, window, value) => {
       if (fn === "video_feed") return reply(FEED);
       if (fn === "video_mine") return reply({ ok: true, rows: [] });
       if (fn === "video_get") return reply({ ok: true, locked: false, mine: false, video: card(), related: [card({ code: "PST-001011", title: "Elephants Dream" })], more: [] });
-      if (fn === "post_comments") return reply(COMMENTS);
-      if (fn === "post_react" || fn === "post_react_from") return reply({ ok: true, likes: 5, dislikes: 1, reaction: sent.p_value ?? 1 });
+      if (fn === "post_comments") return reply({ ...COMMENTS, reaction: watchReaction || null, can_comment: watchReaction !== 0 });
+      if (fn === "post_react" || fn === "post_react_from") {
+        watchReaction = Number(sent.p_value) || 0;
+        return reply({ ok: true, likes: 5, dislikes: 1, reaction: watchReaction });
+      }
       if (fn === "post_comment" || fn === "post_comment_from") return reply({ ok: true, comments: [], comments_pos: 1, comments_neg: 0, sentiment: 1 });
       if (fn === "post_comment_vote") return reply({ ok: true, agree: sent.p_agree ? 2 : 1, disagree: sent.p_agree ? 0 : 1, mine: sent.p_agree ? "agree" : "disagree" });
       if (fn === "post_report" || fn === "post_report_from") return reply({ ok: true, reported: true });
@@ -366,7 +370,13 @@ const choosePlatform = (document, window, value) => {
 
   /* the comment rule */
   expect("watch: no composer before a reaction", !document.querySelector("[data-v-comment-input]"));
-  expect("watch: the rule is explained", document.querySelector(".vcomposer__note")?.textContent.includes("Like or dislike"));
+  expect("watch: the rule is explained clearly", document.querySelector(".vcomposer__copy")?.textContent.includes("Like or dislike this video"));
+  expect("watch: the gate has a real route to the existing reactions", Boolean(document.querySelector("[data-v-comment-unlock]")) && Boolean(document.querySelector("#video-actions [data-v-react]")));
+  expect(
+    "watch: comment actions have visible labels",
+    [...document.querySelectorAll(".vcom__acts .vcom__act")].slice(0, 4).map((b) => b.querySelector("span")?.textContent.trim()).join(" | ") === "Like | Dislike | Reply | Report",
+    [...document.querySelectorAll(".vcom__acts .vcom__act")].slice(0, 4).map((b) => b.querySelector("span")?.textContent.trim()).join(" | ")
+  );
 
   /* like → the composer appears */
   document.querySelector("[data-v-react='1']").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
@@ -378,6 +388,8 @@ const choosePlatform = (document, window, value) => {
   expect("watch: the counter moves at once", document.querySelector("[data-v-like]")?.textContent === "5", document.querySelector("[data-v-like]")?.textContent);
   expect("watch: pressed now", document.querySelector("[data-v-react='1']")?.getAttribute("aria-pressed") === "true");
   expect("watch: the composer is open", Boolean(document.querySelector("[data-v-comment-input]")));
+  expect("watch: the gate is replaced after the server confirms the reaction", !document.querySelector("[data-v-comment-unlock]"));
+  expect("watch: the composer names the reaction that unlocked it", document.querySelector("[data-v-comment-state]")?.textContent.includes("you liked this video"));
 
   /* comment */
   const box = document.querySelector("[data-v-comment-input]");
@@ -432,6 +444,20 @@ const choosePlatform = (document, window, value) => {
   expect("comments: and it quotes the comment it is about", /Comment #7/.test(reportCall?.body.p_note || "") && /Watched it twice/.test(reportCall?.body.p_note || ""), reportCall?.body.p_note);
   expect("comments: the box closes once it is sent", reportBox?.hidden === true);
   expect("watch: the box empties", box.value === "");
+
+  /* removing the video reaction must close the composer again */
+  document.querySelector("[data-v-react='1']").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await wait(60);
+  expect("watch: removing the like closes the composer", !document.querySelector("[data-v-comment-input]"));
+  expect("watch: the unlock note returns when the reaction is removed", Boolean(document.querySelector("[data-v-comment-unlock]")));
+
+  /* a dislike opens the same door; removing that reaction closes it again */
+  document.querySelector("[data-v-react='-1']").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await wait(60);
+  expect("watch: a dislike unlocks commenting too", Boolean(document.querySelector("[data-v-comment-input]")) && document.querySelector("[data-v-comment-state]")?.textContent.includes("you disliked this video"));
+  document.querySelector("[data-v-react='-1']").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  await wait(60);
+  expect("watch: removing the dislike closes the composer", !document.querySelector("[data-v-comment-input]"));
 
   /* ---- the whole screen ------------------------------------------- */
   const fsButton = document.querySelector("[data-v-fs]");
