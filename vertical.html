@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Vertical videos — 1World Web</title>
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml" />
+    <script>
+      /*
+       * `vertical.html` is no longer a page of its own: the vertical format
+       * lives inside `videos.html`, where the address decides which format
+       * draws the screen — `#/v/ID=…` is 9:16, `#/h/ID=…` is the videos page's
+       * own stage, `#/vertical` is the shelf.
+       *
+       * This file keeps every old link working: it forwards the hash it was
+       * given, and an empty hash lands on the shelf.
+       */
+      (function () {
+        var hash = window.location.hash || "";
+        if (hash === "#" || hash === "#/") hash = "";
+        window.location.replace("videos.html" + (hash || "#/vertical"));
+      })();
+    </script>
+    <noscript><meta http-equiv="refresh" content="0; url=videos.html#/vertical" /></noscript>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #060607;
+        color: #f6f6f7;
+        font: 500 15px/1.6 Inter, system-ui, sans-serif;
+      }
+      a {
+        color: inherit;
+      }
+    </style>
+  </head>
+  <body>
+    <p>Vertical videos live on the <a href="videos.html#/vertical">videos page</a>.</p>
+  </body>
+</html>

@@ -1,0 +1,6 @@
+node_modules/
+.DS_Store
+*.log
+
+# local test dependencies symlink (jsdom lives outside the repo)
+tools/node_modules

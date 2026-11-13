@@ -1,0 +1,714 @@
+-- ==================================================================
+-- studio-reach — how far a studio's content travels, and how high it ranks
+-- ------------------------------------------------------------------
+-- Two different numbers, on purpose:
+--
+--   reach points     the studio's own authority, spent as impressions. A
+--                    studio with 500 reach points shows its work to 500
+--                    interested people a day; a studio with 10 000 can cover
+--                    five thousand and still have five thousand left for the
+--                    rest of its shelf that day. It is **a day's budget**: at
+--                    midnight it comes back whole.
+--
+--   ranking points   one number per item (a video, a podcast, a song, a
+--                    playlist), **permanent**, and the only thing the search
+--                    and the "popular" sort are ordered by. The studio hands
+--                    them out from the item's own row.
+--
+-- The example the brief gives, in these terms:
+--
+--   studio 1   500 reach   video A   rank 5000   suggested first, gone after 500
+--   studio 2  1500 reach   video B   rank 1500   next, gone after 1500
+--   studio 3 10000 reach   video C   rank  500   last, gone after 5000 — and it
+--                                                keeps 5000 for its other work
+--
+-- and in a search the three come back in rank order (A, B, C) until A and B
+-- have spent their reach, at which point C is the first result left standing.
+--
+-- The reach is only spent on **someone new**: a person who has already been
+-- shown the item today costs nothing, and the studio's own members are never
+-- counted. A hub that has never been configured is not gated at all, so this
+-- migration cannot hide anything that exists today.
+--
+-- Applied on 2026-12-05 as one migration.
+--
+--   §1 hub_reach     the studio's day: its points, what it has spent
+--   §2 reach_items   one allocation per item, and its ranking points
+--   §3 reach_seen    who has already been shown what, so a refresh is free
+--   §4 reach_screen  the gate the pages ask before they suggest or search
+--   §5 hub_reach_get / hub_reach_save   the studio's Reach tab
+--
+-- **Superseded in part.** reach-split.sql replaced §5's manual plan: the day is
+-- divided evenly between the studio's items by the server, `hub_reach_save` is
+-- dropped, and `reach_claim` takes the share from `reach_share` instead of the
+-- saved number. The tables and the gate above are unchanged.
+--
+-- and two one-row helpers, reach_visible / reach_visible_content, that the
+-- feeds call so an item whose day is spent never reaches the page.
+-- ==================================================================
+
+begin;
+
+-- ------------------------------------------------------------------
+-- 1. the studio's day
+-- ------------------------------------------------------------------
+create table if not exists public.hub_reach (
+  hub_id    uuid primary key references public.creator_hubs (id) on delete cascade,
+  /* what the level gives, and what the interactions have added — `points` is
+     the two together, kept here so the gate reads one number */
+  base      integer not null default 0 check (base >= 0),
+  earned    integer not null default 0,
+  limitless boolean not null default false,
+  points    integer not null default 0 check (points >= 0),
+  day       date not null default current_date,
+  spent     integer not null default 0 check (spent >= 0),
+  updated_at timestamptz not null default now()
+);
+
+/* a database that already had the first version of this table gets the three
+   new columns without losing a row */
+alter table public.hub_reach add column if not exists base      integer not null default 0;
+alter table public.hub_reach add column if not exists earned    integer not null default 0;
+alter table public.hub_reach add column if not exists limitless boolean not null default false;
+
+comment on table public.hub_reach is
+  'A studio''s reach points: a day''s budget of impressions, spent on people who have not seen the item yet.';
+
+alter table public.hub_reach enable row level security;
+
+/**
+ * Whose reach this is, and how much of it there is.
+ *
+ * The level sets the floor — LV1 starts at 100, LV2 at 200 … LV10 at 1 000 —
+ * and the interactions add to or take from it (see reach-earnings.sql). LV0
+ * has nothing to start with, and **LVMax** is without a number at all: it is
+ * first in the order and its showing never runs out.
+ *
+ * Called by every door, so a studio's number is always its level plus what it
+ * has earned, and never a number somebody typed.
+ */
+create or replace function public.reach_sync(p_hub uuid)
+returns public.hub_reach
+language plpgsql
+security definer
+set search_path to 'public', 'pg_temp'
+as $function$
+declare
+  v_level integer;
+  v_row   public.hub_reach%rowtype;
+begin
+  select coalesce(m.level, 0) into v_level
+    from public.creator_hubs h
+    join public.members m on m.id = h.owner
+   where h.id = p_hub;
+
+  v_level := coalesce(v_level, 0);
+
+  insert into public.hub_reach as b (hub_id, base, earned, limitless, points, day, spent)
+  values (p_hub,
+          case when v_level >= 11 then 0 else 100 * greatest(v_level, 0) end,
+          0,
+          v_level >= 11,
+          0,
+          current_date,
+          0)
+  on conflict (hub_id) do nothing;
+
+  update public.hub_reach b
+     set base      = case when coalesce((select m.level from public.creator_hubs h
+                                           join public.members m on m.id = h.owner
+                                          where h.id = p_hub), 0) >= 11 then 0
+                          else 100 * greatest(coalesce((select m.level from public.creator_hubs h
+                                                          join public.members m on m.id = h.owner
+                                                         where h.id = p_hub), 0), 0) end,
+         limitless = coalesce((select m.level from public.creator_hubs h
+                                 join public.members m on m.id = h.owner
+                                where h.id = p_hub), 0) >= 11,
+         /* the day is over: everything that was spent comes back */
+         spent     = case when b.day <> current_date then 0 else b.spent end,
+         day       = current_date,
+         updated_at = now()
+   where b.hub_id = p_hub;
+
+  update public.hub_reach b
+     set points = greatest(0, b.base + b.earned)
+   where b.hub_id = p_hub;
+
+  select * into v_row from public.hub_reach where hub_id = p_hub;
+  return v_row;
+end;
+$function$;
+
+-- ------------------------------------------------------------------
+-- 2. one allocation per item — and the number search is ordered by
+-- ------------------------------------------------------------------
+-- a ranking column for member content, so a podcast ranks like a video does
+alter table public.member_content
+  add column if not exists rank_points integer not null default 0 check (rank_points >= 0);
+
+create table if not exists public.reach_items (
+  id        uuid primary key default gen_random_uuid(),
+  hub_id    uuid not null references public.creator_hubs (id) on delete cascade,
+  kind      text not null check (kind in ('post', 'content')),
+  ref       uuid not null,
+  code      text not null,
+  points    integer not null default 0 check (points >= 0),
+  shown     integer not null default 0 check (shown >= 0),
+  day       date not null default current_date,
+  constraint reach_items_once unique (kind, ref)
+);
+
+create index if not exists reach_items_hub_idx on public.reach_items (hub_id);
+create index if not exists reach_items_code_idx on public.reach_items (upper(code));
+
+alter table public.reach_items enable row level security;
+
+-- ------------------------------------------------------------------
+-- 3. who has already been shown what
+-- ------------------------------------------------------------------
+create table if not exists public.reach_seen (
+  kind       text not null,
+  ref        uuid not null,
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  day        date not null default current_date,
+  primary key (kind, ref, profile_id, day)
+);
+
+alter table public.reach_seen enable row level security;
+
+-- ------------------------------------------------------------------
+-- 3a. who was reached, and where
+-- ------------------------------------------------------------------
+/*
+ * One row per person reached, with **the surface they were reached on**:
+ *
+ *   notification   the updates rail (what a follower is handed)
+ *   suggestion     the home pages and the rail beside a player
+ *   search         a search result
+ *   feed / share   the rest, so nothing is lost
+ *
+ * The tab counts these three, per item, for today — reach is a day's budget,
+ * so the numbers beside a video are the people it reached before midnight.
+ */
+create table if not exists public.reach_impressions (
+  id       bigint generated always as identity primary key,
+  hub_id   uuid not null references public.creator_hubs (id) on delete cascade,
+  item     text not null default 'post' check (item in ('post', 'content')),
+  ref      uuid not null,
+  source   text not null default 'suggestion'
+             check (source in ('notification', 'suggestion', 'search', 'feed', 'share', 'profile')),
+  profile  uuid references public.profiles (id) on delete set null,
+  day      date not null default current_date,
+  at       timestamptz not null default now()
+);
+
+create index if not exists reach_impressions_item_idx on public.reach_impressions (ref, day, source);
+create index if not exists reach_impressions_hub_idx  on public.reach_impressions (hub_id, day);
+
+alter table public.reach_impressions enable row level security;
+
+-- ------------------------------------------------------------------
+-- 4. the gate
+-- ------------------------------------------------------------------
+/**
+ * A day rolls over: the budget is whole again and every item starts at zero.
+ * Called by both doors below, so a studio that is never on the page still
+ * starts its day when it opens the tab.
+ */
+create or replace function public.reach_tick(p_hub uuid)
+returns void
+language plpgsql
+security definer
+set search_path to 'public', 'pg_temp'
+as $function$
+begin
+  update public.hub_reach
+     set spent = 0,
+         day = current_date,
+         updated_at = now()
+   where hub_id = p_hub and day < current_date;
+
+  update public.reach_items
+     set shown = 0,
+         day = current_date
+   where hub_id = p_hub and day < current_date;
+end;
+$function$;
+
+/**
+ * One item, one person: may it be shown right now?
+ *
+ *   allowed   the person sees it, and a reach point is spent (unless they had
+ *             already seen it today — a refresh is free)
+ *   blocked   the studio's day is finished, or the item's own allowance is
+ *
+ * The studio's own members are always allowed and never counted.
+ */
+create or replace function public.reach_claim(p_hub uuid, p_kind text, p_ref uuid, p_profile uuid, p_source text default 'suggestion')
+returns boolean
+language plpgsql
+security definer
+set search_path to 'public', 'pg_temp'
+as $function$
+declare
+  v_budget public.hub_reach%rowtype;
+  v_item   public.reach_items%rowtype;
+  v_owner  uuid;
+  v_seen   boolean;
+  v_cap    integer;
+  v_src    text := case when btrim(coalesce(p_source, '')) in ('notification', 'suggestion', 'search', 'feed', 'share', 'profile')
+                        then btrim(p_source) else 'suggestion' end;
+begin
+  v_budget := public.reach_sync(p_hub);
+  if v_budget.hub_id is null then
+    return true;
+  end if;
+
+  select owner into v_owner from public.creator_hubs where id = p_hub;
+  if v_owner = p_profile then
+    return true;
+  end if;
+
+  /* LVMax: always first, and the showing never runs out */
+  if v_budget.limitless then
+    return true;
+  end if;
+
+  /* the day is finished: nothing more goes out until tomorrow */
+  if v_budget.spent >= v_budget.points then
+    return false;
+  end if;
+
+  select * into v_item from public.reach_items where kind = p_kind and ref = p_ref;
+
+  /* an item with an allowance of its own: it is spent first. An item with none
+     draws on whatever the studio has left — the brief's "the rest of the day
+     serves the other videos". */
+  if v_item.id is not null and v_item.points > 0 then
+    v_cap := v_item.points;
+    if v_item.shown >= v_cap then
+      return false;
+    end if;
+  end if;
+
+  /* somebody with no session cannot be remembered, so every look is a new
+     person and costs a point — the gate stays honest for visitors */
+  if p_profile is not null then
+    select exists (
+      select 1 from public.reach_seen s
+       where s.kind = p_kind and s.ref = p_ref and s.profile_id = p_profile and s.day = current_date
+    ) into v_seen;
+
+    if v_seen then
+      return true;
+    end if;
+
+    insert into public.reach_seen (kind, ref, profile_id, day)
+    values (p_kind, p_ref, p_profile, current_date)
+    on conflict do nothing;
+  end if;
+
+  if v_item.id is not null then
+    update public.reach_items
+       set shown = shown + 1,
+           day = current_date
+     where id = v_item.id;
+  end if;
+
+  update public.hub_reach
+     set spent = spent + 1,
+         updated_at = now()
+   where hub_id = p_hub;
+
+  /* who was reached, and on which surface — the numbers the tab shows */
+  insert into public.reach_impressions (hub_id, item, ref, source, profile, day)
+  values (p_hub, case when p_kind = 'content' then 'content' else 'post' end, p_ref, v_src, p_profile, current_date);
+
+  return true;
+end;
+$function$;
+
+/* the older three-argument gate, gone: a call that names no surface is a
+   suggestion, which is what the default above says */
+drop function if exists public.reach_claim(uuid, text, uuid, uuid);
+
+/**
+ * The same gate, but from inside a list: one video, one person.
+ *
+ * The pages call this while they build a feed, so an item that has spent its
+ * reach simply never reaches the page — the next item moves up on its own.
+ * Anything that is not the studio's item, or a studio that has never been
+ * configured, passes without a word.
+ */
+drop function if exists public.reach_visible(uuid, uuid);
+create or replace function public.reach_visible(p_post uuid, p_profile uuid, p_source text default 'suggestion')
+returns boolean
+language plpgsql
+security definer
+set search_path to 'public', 'pg_temp'
+as $function$
+declare
+  v_hub uuid;
+begin
+  select p.hub_id into v_hub from public.posts p where p.id = p_post;
+  if v_hub is null then
+    return true;
+  end if;
+  return public.reach_claim(v_hub, 'post', p_post, p_profile, p_source);
+end;
+$function$;
+
+/** The same for a podcast, a song or a playlist. */
+drop function if exists public.reach_visible_content(uuid, uuid);
+create or replace function public.reach_visible_content(p_content uuid, p_profile uuid, p_source text default 'suggestion')
+returns boolean
+language plpgsql
+security definer
+set search_path to 'public', 'pg_temp'
+as $function$
+declare
+  v_hub uuid;
+begin
+  select c.hub into v_hub from public.member_content c where c.id = p_content;
+  if v_hub is null then
+    return true;
+  end if;
+  return public.reach_claim(v_hub, 'content', p_content, p_profile, p_source);
+end;
+$function$;
+
+/**
+ * The gate the pages ask: a list of codes in, the ones that may be shown now
+ * out — in the order they were given. Anything that is not a studio's item
+ * passes untouched, so a page can hand it everything it was about to draw.
+ */
+drop function if exists public.reach_screen(text, jsonb);
+create or replace function public.reach_screen(p_token text, p_codes jsonb, p_source text default 'suggestion')
+returns jsonb
+language plpgsql
+security definer
+set search_path to 'public', 'pg_temp'
+as $function$
+declare
+  v_me      public.members%rowtype := public.member_from_token(p_token);
+  v_code    text;
+  v_allowed text[] := '{}';
+  v_blocked text[] := '{}';
+  v_left    jsonb := '[]'::jsonb;
+  v_total   integer := 0;
+begin
+  if v_me.id is null then
+    return jsonb_build_object('ok', false, 'error', 'session');
+  end if;
+
+  for v_code in
+    select value from jsonb_array_elements_text(case when jsonb_typeof(coalesce(p_codes, '[]'::jsonb)) = 'array'
+                                                     then coalesce(p_codes, '[]'::jsonb) else '[]'::jsonb end)
+  loop
+    declare
+      v_ref   uuid;
+      v_kind  text;
+      v_hub   uuid;
+      v_budget public.hub_reach%rowtype;
+      v_item  public.reach_items%rowtype;
+    begin
+      v_total := v_total + 1;
+
+      /* a video — a row in posts */
+      select p.id, 'post', p.hub_id into v_ref, v_kind, v_hub
+        from public.posts p
+       where p.post_code = v_code and p.status = 'published'
+       limit 1;
+
+      /* a podcast, a song, a playlist — a row in member_content */
+      if v_ref is null then
+        select c.id, 'content', c.hub into v_ref, v_kind, v_hub
+          from public.member_content c
+         where upper(left(replace(c.id::text, '-', ''), 8)) = upper(v_code)
+           and c.status = 'published'
+         limit 1;
+      end if;
+
+      /* not a studio's item at all: it passes */
+      if v_ref is null or v_hub is null then
+        v_allowed := array_append(v_allowed, v_code);
+        continue;
+      end if;
+
+      if public.reach_claim(v_hub, v_kind, v_ref, v_me.id, p_source) then
+        v_allowed := array_append(v_allowed, v_code);
+        select * into v_budget from public.hub_reach where hub_id = v_hub;
+        select * into v_item from public.reach_items where kind = v_kind and ref = v_ref;
+        v_left := v_left || jsonb_build_array(jsonb_build_object(
+          'code', v_code,
+          'points', coalesce(v_item.points, 0),
+          'shown', coalesce(v_item.shown, 0),
+          'left', case when coalesce(v_item.points, 0) > 0
+                       then greatest(0, coalesce(v_item.points, 0) - coalesce(v_item.shown, 0))
+                       else greatest(0, coalesce(v_budget.points, 0) - coalesce(v_budget.spent, 0)) end
+        ));
+      else
+        v_blocked := array_append(v_blocked, v_code);
+        v_left := v_left || jsonb_build_array(jsonb_build_object(
+          'code', v_code, 'points', coalesce(v_item.points, 0), 'shown', coalesce(v_item.shown, 0), 'left', 0
+        ));
+      end if;
+    end;
+  end loop;
+
+  return jsonb_build_object(
+    'ok', true,
+    'asked', v_total,
+    'allowed', to_jsonb(v_allowed),
+    'blocked', to_jsonb(v_blocked),
+    'rows', v_left
+  );
+end;
+$function$;
+
+-- ------------------------------------------------------------------
+-- 5. the studio's Reach tab
+-- ------------------------------------------------------------------
+/** Everything one hub can reach with: its day, and a row per item. */
+create or replace function public.hub_reach_get(p_token text, p_hub text)
+returns jsonb
+language plpgsql
+security definer
+set search_path to 'public', 'pg_temp'
+as $function$
+declare
+  v_me     public.members%rowtype := public.member_from_token(p_token);
+  v_hub    public.creator_hubs%rowtype;
+  v_budget public.hub_reach%rowtype;
+  v_rows   jsonb := '[]'::jsonb;
+begin
+  if v_me.id is null then
+    return jsonb_build_object('ok', false, 'error', 'session');
+  end if;
+
+  select * into v_hub
+    from public.creator_hubs h
+   where h.code = btrim(coalesce(p_hub, '')) or h.id::text = btrim(coalesce(p_hub, ''))
+   limit 1;
+
+  if v_hub.id is null then
+    return jsonb_build_object('ok', false, 'error', 'hub');
+  end if;
+  if not public.creator_hub_manage(v_hub, v_me) then
+    return jsonb_build_object('ok', false, 'error', 'hub_role');
+  end if;
+
+  v_budget := public.reach_sync(v_hub.id);
+
+  select coalesce(jsonb_agg(row order by row ->> 'sort', row ->> 'title'), '[]'::jsonb)
+    into v_rows
+    from (
+      /* a video, from posts — with the three surfaces counted beside it */
+      select jsonb_build_object(
+               'kind', 'post',
+               'ref', p.id,
+               'code', p.post_code,
+               'title', p.title,
+               'sort', to_char(coalesce(p.published_at, p.created_at), 'YYYYMMDDHH24MISS'),
+               'points', coalesce(r.points, 0),
+               'shown', coalesce(r.shown, 0),
+               'rank', p.rank_points,
+               'reached_updates', (select count(*) from public.reach_impressions i
+                                    where i.ref = p.id and i.day = current_date and i.source = 'notification'),
+               'reached_suggestions', (select count(*) from public.reach_impressions i
+                                        where i.ref = p.id and i.day = current_date and i.source = 'suggestion'),
+               'reached_search', (select count(*) from public.reach_impressions i
+                                   where i.ref = p.id and i.day = current_date and i.source = 'search')
+             ) as row
+        from public.posts p
+        left join public.reach_items r on r.kind = 'post' and r.ref = p.id
+       where p.hub_id = v_hub.id and p.status = 'published' and p.content_type = 'video'
+
+      union all
+
+      /* a podcast, or a song on the music shelf — one row each, each with its
+         own ranking points and its own three surfaces */
+      select jsonb_build_object(
+               'kind', 'content',
+               'ref', c.id,
+               'code', upper(left(replace(c.id::text, '-', ''), 8)),
+               'title', c.title,
+               'sort', to_char(coalesce(c.published_at, c.created_at), 'YYYYMMDDHH24MISS'),
+               'points', coalesce(r.points, 0),
+               'shown', coalesce(r.shown, 0),
+               'rank', c.rank_points,
+               'reached_updates', (select count(*) from public.reach_impressions i
+                                    where i.ref = c.id and i.day = current_date and i.source = 'notification'),
+               'reached_suggestions', (select count(*) from public.reach_impressions i
+                                        where i.ref = c.id and i.day = current_date and i.source = 'suggestion'),
+               'reached_search', (select count(*) from public.reach_impressions i
+                                   where i.ref = c.id and i.day = current_date and i.source = 'search')
+             ) as row
+        from public.member_content c
+        left join public.reach_items r on r.kind = 'content' and r.ref = c.id
+       where c.hub = v_hub.id and c.status = 'published' and c.kind in ('podcast', 'video')
+    ) boxed;
+
+  return jsonb_build_object(
+    'ok', true,
+    'hub', jsonb_build_object('code', v_hub.code, 'name', v_hub.name, 'kind', v_hub.kind),
+    'configured', v_budget.hub_id is not null,
+    /* the day's number: what the level gives, what the interactions added,
+       and whether this studio is LVMax (limitless, and first in the order) */
+    'base', coalesce(v_budget.base, 0),
+    'earned', coalesce(v_budget.earned, 0),
+    'limitless', coalesce(v_budget.limitless, false),
+    'points', coalesce(v_budget.points, 0),
+    'spent', coalesce(v_budget.spent, 0),
+    'remaining', case when coalesce(v_budget.limitless, false) then -1
+                      else greatest(0, coalesce(v_budget.points, 0) - coalesce(v_budget.spent, 0)) end,
+    'day', current_date,
+    'resets', current_date + 1,
+    'rows', v_rows
+  );
+end;
+$function$;
+
+/**
+ * The tab's save: the studio's own reach, and one line per item —
+ * `{"points": 300, "rank": 5000}`.
+ *
+ * What it refuses:
+ *   • a hub this member does not run;
+ *   • an allocation that spends more than the studio has for the day;
+ *   • a negative number anywhere.
+ *
+ * The allocations are a standing plan: they survive the night, while `shown`
+ * starts again at zero. The studio's total is **not** its to set — it is the
+ * level's floor plus what the interactions have earned (reach-earnings.sql) —
+ * and ranking points are earned from search interactions only, so `rank` in a
+ * row is read and never written here.
+ */
+create or replace function public.hub_reach_save(p_token text, p_hub text, p_payload jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path to 'public', 'pg_temp'
+as $function$
+declare
+  v_me     public.members%rowtype := public.member_from_token(p_token);
+  v_hub    public.creator_hubs%rowtype;
+  v_data   jsonb := case when jsonb_typeof(coalesce(p_payload, '{}'::jsonb)) = 'object'
+                         then coalesce(p_payload, '{}'::jsonb) else '{}'::jsonb end;
+  v_points integer;
+  v_rows   jsonb;
+  v_row    jsonb;
+  v_total  integer := 0;
+  v_item   public.reach_items%rowtype;
+  v_saved  integer := 0;
+begin
+  if v_me.id is null then
+    return jsonb_build_object('ok', false, 'error', 'session');
+  end if;
+
+  select * into v_hub
+    from public.creator_hubs h
+   where h.code = btrim(coalesce(p_hub, '')) or h.id::text = btrim(coalesce(p_hub, ''))
+   limit 1;
+
+  if v_hub.id is null then
+    return jsonb_build_object('ok', false, 'error', 'hub');
+  end if;
+  if not public.creator_hub_manage(v_hub, v_me) then
+    return jsonb_build_object('ok', false, 'error', 'hub_role');
+  end if;
+
+  /* the studio does not set its own size: the level gives the floor and the
+     interactions add to it. What the tab sends for `points` is ignored. */
+  v_points := (public.reach_sync(v_hub.id)).points;
+  v_rows := case when jsonb_typeof(v_data -> 'rows') = 'array' then v_data -> 'rows' else '[]'::jsonb end;
+
+  for v_row in select value from jsonb_array_elements(v_rows)
+  loop
+    declare
+      v_alloc integer := greatest(0, coalesce((v_row ->> 'points')::integer, 0));
+    begin
+      v_total := v_total + v_alloc;
+    end;
+  end loop;
+
+  if v_total > v_points then
+    return jsonb_build_object('ok', false, 'error', 'over_budget', 'points', v_points, 'asked', v_total);
+  end if;
+
+  perform public.reach_sync(v_hub.id);
+
+  for v_row in select value from jsonb_array_elements(v_rows)
+  loop
+    declare
+      v_kind  text := case when (v_row ->> 'kind') = 'content' then 'content' else 'post' end;
+      v_ref   uuid := nullif(v_row ->> 'ref', '')::uuid;
+      v_alloc integer := greatest(0, coalesce((v_row ->> 'points')::integer, 0));
+      v_code  text := btrim(coalesce(v_row ->> 'code', ''));
+      v_owns  uuid;
+    begin
+      if v_ref is null then
+        continue;
+      end if;
+
+      if v_kind = 'post' then
+        select p.hub_id into v_owns from public.posts p where p.id = v_ref;
+      else
+        select c.hub into v_owns from public.member_content c where c.id = v_ref;
+      end if;
+
+      /* a row from another hub is not this studio's to place */
+      if v_owns is distinct from v_hub.id then
+        continue;
+      end if;
+
+      insert into public.reach_items (hub_id, kind, ref, code, points, shown, day)
+      values (v_hub.id, v_kind, v_ref, v_code, v_alloc, 0, current_date)
+      on conflict (kind, ref) do update
+        set points = excluded.points,
+            hub_id = excluded.hub_id,
+            code = excluded.code;
+
+      /* ranking points are never typed in: they come from the interactions a
+         search brings (reach_award), so the `rank` a row carries is read and
+         not written */
+
+      v_saved := v_saved + 1;
+    end;
+  end loop;
+
+  return jsonb_build_object('ok', true, 'saved', v_saved, 'points', v_points, 'allocated', v_total);
+end;
+$function$;
+
+-- ------------------------------------------------------------------
+-- 6. grants — the gate, the screen, and the studio's own tab
+-- ------------------------------------------------------------------
+revoke all on function public.reach_tick(uuid) from public;
+revoke all on function public.reach_claim(uuid, text, uuid, uuid, text) from public;
+revoke all on function public.reach_visible(uuid, uuid, text) from public;
+revoke all on function public.reach_visible_content(uuid, uuid, text) from public;
+revoke all on function public.reach_screen(text, jsonb, text) from public;
+revoke all on function public.hub_reach_get(text, text) from public;
+revoke all on function public.hub_reach_save(text, text, jsonb) from public;
+
+/* the feeds and the pages ask the gate as the person looking, so anon may ask
+   too — a visitor with no session is never remembered, and each look spends */
+grant execute on function public.reach_visible(uuid, uuid, text) to anon, authenticated, service_role;
+grant execute on function public.reach_visible_content(uuid, uuid, text) to anon, authenticated, service_role;
+grant execute on function public.reach_screen(text, jsonb, text) to anon, authenticated, service_role;
+grant execute on function public.hub_reach_get(text, text) to anon, authenticated, service_role;
+grant execute on function public.hub_reach_save(text, text, jsonb) to anon, authenticated, service_role;
+
+commit;
+
+-- ------------------------------------------------------------------
+-- check
+-- ------------------------------------------------------------------
+--   select * from public.hub_reach;
+--   select * from public.reach_items order by shown desc limit 20;
+--
+--   -- hand a studio its authority (no admin panel yet: this is the operator's line)
+--   insert into public.hub_reach (hub_id, points)
+--   select id, 1500 from public.creator_hubs where code = 'IDST100001'
+--   on conflict (hub_id) do update set points = excluded.points;

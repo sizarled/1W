@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Articles — 1World Web</title>
+    <meta name="description" content="Everything members write: long-form pieces by field, exclusive to an audience or private to the people the writer names." />
+    <meta name="theme-color" content="#060607" />
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- the API is the first thing every page asks for; `crossorigin` is what
+         makes the socket usable by the CORS fetch that follows -->
+    <link rel="preconnect" href="https://vtbqbhuywdhnvitbcsfy.supabase.co" crossorigin />
+    <link rel="dns-prefetch" href="https://image.tmdb.org" />
+    <link rel="dns-prefetch" href="https://thumb.tapecontent.net" />
+    <!-- One variable Inter covers every weight the design uses — the named
+         ones (400/500/600/700/800) and the half steps the type scale asks for
+         (540, 550, 570, 650, 750) — so the page downloads one font file
+         instead of six, and the stylesheet arrives after the first paint
+         rather than holding it up. The system stack draws the words in
+         between, which is what `display=swap` was always going to do. -->
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400..800&family=Instrument+Serif:ital@0;1&display=swap"
+      onload="this.onload=null;this.rel='stylesheet'"
+    />
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400..800&family=Instrument+Serif:ital@0;1&display=swap"
+      />
+    </noscript>
+    <link rel="stylesheet" href="assets/css/base.css?v=20261116a" />
+    <link rel="stylesheet" href="assets/css/layout.css?v=20261116a" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261217a" />
+    <link rel="stylesheet" href="assets/css/article.css?v=20261116a" />
+    <script>
+      /* apply the saved theme (or the OS preference) before first paint */
+      (function () {
+        try {
+          var saved = JSON.parse(localStorage.getItem("1w.theme") || "null");
+          var theme =
+            saved === "light" || saved === "dark"
+              ? saved
+              : window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
+                ? "light"
+                : "dark";
+          document.documentElement.dataset.theme = theme;
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute("content", theme === "light" ? "#f4f4f5" : "#060607");
+        } catch (e) {}
+      })();
+    </script>
+    <script type="module" src="assets/js/app.js?v=20261217a"></script>
+    <script type="module" src="assets/js/articles.js?v=20261106a"></script>
+  </head>
+  <body data-page="articles" data-title="Articles">
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div data-site-header></div>
+    <div data-site-sidebar></div>
+
+    <main class="site-main arts" id="main">
+      <div class="wrap">
+        <!-- ============================================================ -->
+        <!-- the head                                                     -->
+        <!-- ============================================================ -->
+        <header class="arts__head">
+          <div class="arts__intro">
+            <p class="eyebrow"><span class="eyebrow__dot"></span>Member writing</p>
+            <h1 class="arts__title">Articles</h1>
+            <p class="arts__sub">
+              Long-form pieces written by members and published in their own name. Every shelf is a field — Film, Cinema,
+              Series, Language, Technology — and every piece carries its own door: open to everyone, exclusive to an
+              audience, or private to the people the writer named.
+            </p>
+          </div>
+          <div class="arts__acts">
+            <a class="btn btn--ghost btn--sm" href="#yours"><i data-icon="pen"></i> Your articles</a>
+            <a class="btn btn--primary" href="article-editor.html" data-a-write><i data-icon="pen"></i> Write an article</a>
+          </div>
+        </header>
+
+        <!-- ============================================================ -->
+        <!-- search + sort + fields                                       -->
+        <!-- ============================================================ -->
+        <div class="abar">
+          <div class="abar__row">
+            <label class="abar__search">
+              <i data-icon="search"></i>
+              <input class="input" type="search" data-a-search placeholder="Search a title, a line, a description" aria-label="Search articles" autocomplete="off" />
+            </label>
+            <span class="abar__count" data-a-count></span>
+            <div class="segmented" data-a-sort role="tablist" aria-label="Sort the articles">
+              <button class="segmented__btn is-active" type="button" role="tab" aria-selected="true" data-sort="popular">Popular</button>
+              <button class="segmented__btn" type="button" role="tab" aria-selected="false" data-sort="new">Newest</button>
+              <button class="segmented__btn" type="button" role="tab" aria-selected="false" data-sort="liked">Most liked</button>
+              <button class="segmented__btn" type="button" role="tab" aria-selected="false" data-sort="discussed">Discussed</button>
+              <button class="segmented__btn" type="button" role="tab" aria-selected="false" data-sort="long">Longest</button>
+            </div>
+          </div>
+          <div class="abar__fields" data-a-fields hidden></div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- what stands at the top                                       -->
+        <!-- ============================================================ -->
+        <section class="afeat" data-a-feature hidden></section>
+        <div class="arails" data-a-rails hidden></div>
+
+        <!-- ============================================================ -->
+        <!-- everything                                                   -->
+        <!-- ============================================================ -->
+        <div class="agrid" data-a-grid></div>
+        <div data-a-empty hidden></div>
+        <div class="amore">
+          <button class="btn btn--ghost btn--block" type="button" data-a-more hidden>More articles</button>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- the member's own pieces                                      -->
+        <!-- ============================================================ -->
+        <section class="asect" id="yours" data-a-yours hidden>
+          <div class="asect__head">
+            <h2 class="asect__title"><i data-icon="pen"></i> In your name</h2>
+            <span class="asect__sub" data-a-yours-count></span>
+          </div>
+          <div class="agrid agrid--own" data-a-shelf></div>
+        </section>
+      </div>
+    </main>
+
+    <div data-site-footer></div>
+  </body>
+</html>

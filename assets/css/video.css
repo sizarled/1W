@@ -1,0 +1,3293 @@
+/* ==================================================================
+   Member videos — the public feed (videos.html) and the publish
+   page (video-editor.html).
+   Same tokens, same cards, same buttons as every other page: only the
+   geometry of the two screens is new.
+   ================================================================== */
+
+/* ------------------------------------------------------------------ */
+/* page head                                                          */
+/* ------------------------------------------------------------------ */
+.vids {
+  padding-bottom: clamp(3rem, 6vw, 5rem);
+}
+
+.vids__head {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1.4rem 2rem;
+  flex-wrap: wrap;
+  padding-block: clamp(1.9rem, 3.8vw, 3rem) clamp(1.2rem, 2.4vw, 1.8rem);
+}
+
+.vids__head::before {
+  content: "";
+  position: absolute;
+  inset-inline: calc(var(--gutter) * -1);
+  inset-block: -1px 0;
+  z-index: -1;
+  background: radial-gradient(72% 120% at 12% 0%, color-mix(in srgb, var(--text) 5%, transparent), transparent 72%);
+  pointer-events: none;
+}
+
+.vids__head::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--line-2), transparent 72%);
+}
+
+.vids__intro {
+  min-width: 0;
+}
+
+.vids__title {
+  margin-top: 0.55rem;
+  font-family: var(--font-serif);
+  font-weight: 400;
+  font-size: clamp(2.4rem, 5.4vw, 4rem);
+  line-height: 0.96;
+  letter-spacing: -0.012em;
+}
+
+.vids__sub {
+  margin-top: 0.7rem;
+  max-width: 62ch;
+  font-size: 0.92rem;
+  line-height: 1.65;
+  color: var(--muted);
+}
+
+.vids__acts {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+/* ------------------------------------------------------------------ */
+/* filter bar                                                         */
+/* ------------------------------------------------------------------ */
+.vbar {
+  position: sticky;
+  top: calc(var(--header-h) + 0.6rem);
+  z-index: 6;
+  display: grid;
+  gap: 0.9rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(18px) saturate(140%);
+  transition: border-color 0.22s var(--ease), box-shadow 0.22s var(--ease);
+}
+
+.vbar:focus-within {
+  border-color: var(--line-2);
+  box-shadow: var(--shadow);
+}
+
+.vbar__row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+
+.vbar__search {
+  position: relative;
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.vbar__search .ico {
+  position: absolute;
+  left: 0.85rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  color: var(--faint);
+  pointer-events: none;
+}
+
+.vbar__search .input {
+  padding-left: 2.4rem;
+  height: 42px;
+  border-radius: 999px;
+}
+
+.vbar__count {
+  font-size: 0.76rem;
+  color: var(--faint);
+  white-space: nowrap;
+}
+
+.vbar__fields {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  min-height: 30px;
+}
+
+/* ------------------------------------------------------------------ */
+/* grid of cards                                                      */
+/* ------------------------------------------------------------------ */
+.vgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 258px), 1fr));
+  gap: clamp(0.9rem, 1.6vw, 1.35rem);
+  margin-top: clamp(1.1rem, 2.2vw, 1.7rem);
+}
+
+.vcard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  overflow: hidden;
+  transition: transform 0.3s var(--ease), border-color 0.3s var(--ease), background 0.3s var(--ease);
+}
+
+.vcard:hover {
+  transform: translateY(-4px);
+  border-color: var(--line-2);
+  background: var(--surface-2);
+}
+
+.vcard__media {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.vcard__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: var(--art-filter);
+  transition: transform 0.6s var(--ease-out), filter 0.4s var(--ease);
+}
+
+.vcard:hover .vcard__media img {
+  transform: scale(1.045);
+  filter: var(--art-filter-hover);
+}
+
+.vcard__ph {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: var(--faint);
+  background: var(--hero-base);
+}
+
+.vcard__ph .ico {
+  width: 26px;
+  height: 26px;
+}
+
+.vcard__shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(6, 6, 7, 0.05) 40%, rgba(6, 6, 7, 0.72) 100%);
+  pointer-events: none;
+}
+
+/* the play disc sits on the still from the start: black glass, and solid black
+   the moment the pointer is on the card */
+.vcard__play {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  opacity: 1;
+  pointer-events: none;
+}
+
+.vcard__play span {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  color: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 12px 30px -12px rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(2px);
+  transition: background 0.18s var(--ease), transform 0.18s var(--ease);
+}
+
+.vcard:hover .vcard__play span,
+.vcard:focus-visible .vcard__play span {
+  background: rgba(0, 0, 0, 0.92);
+  transform: scale(1.06);
+}
+
+.vcard__play .ico {
+  width: 17px;
+  height: 17px;
+}
+
+.vcard__tags {
+  position: absolute;
+  left: 0.62rem;
+  top: 0.62rem;
+  right: 0.62rem;
+  display: flex;
+  align-items: center;
+  gap: 0.32rem;
+  flex-wrap: wrap;
+  pointer-events: none;
+}
+
+.vcard__tags .badge {
+  background: rgba(6, 6, 7, 0.68);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #f2f2f4;
+  backdrop-filter: blur(6px);
+}
+
+.vcard__tags .badge--solid {
+  background: var(--text);
+  color: var(--bg);
+}
+
+.vcard__body {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.8rem 0.85rem 0.9rem;
+}
+
+.vcard__title {
+  font-size: 0.92rem;
+  font-weight: 560;
+  line-height: 1.35;
+  letter-spacing: -0.012em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.vcard__host {
+  display: flex;
+  align-items: center;
+  gap: 0.42rem;
+  min-width: 0;
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+.vcard__host img,
+.vcard__host .vav {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: none;
+  border: 1px solid var(--line-2);
+}
+
+.vcard__host b {
+  font-weight: 550;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vcard__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.42rem;
+  flex-wrap: wrap;
+  font-size: 0.72rem;
+  color: var(--faint);
+}
+
+.vcard__meta i {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.6;
+}
+
+.vcard__meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.vcard__meta .ico {
+  width: 13px;
+  height: 13px;
+}
+
+/* the ranking points a search card carries: the number the video has earned
+   in search, where the search is */
+.vcard__rank {
+  margin-left: auto;
+  padding: 0.08rem 0.4rem 0.08rem 0.32rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.vcard__rank .ico {
+  width: 12px;
+  height: 12px;
+  opacity: 0.75;
+}
+
+.vcard__state {
+  position: absolute;
+  right: 0.62rem;
+  bottom: 0.62rem;
+}
+
+/* avatar fallback with an initial */
+.vav {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--text-2);
+  font-size: 0.6rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  flex: none;
+}
+
+.vav--lg {
+  width: 44px;
+  height: 44px;
+  font-size: 0.86rem;
+}
+
+/* ------------------------------------------------------------------ */
+/* skeleton / empty                                                   */
+/* ------------------------------------------------------------------ */
+.vsk {
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.vsk__media {
+  aspect-ratio: 16 / 9;
+  background: linear-gradient(100deg, var(--surface-2) 20%, var(--surface-3) 40%, var(--surface-2) 60%);
+  background-size: 220% 100%;
+  animation: vshimmer 1.4s linear infinite;
+}
+
+.vsk__line {
+  height: 11px;
+  margin: 0.62rem 0.85rem;
+  border-radius: 999px;
+  background: linear-gradient(100deg, var(--surface-2) 20%, var(--surface-3) 40%, var(--surface-2) 60%);
+  background-size: 220% 100%;
+  animation: vshimmer 1.4s linear infinite;
+}
+
+.vsk__line--sm {
+  width: 45%;
+  margin-bottom: 0.95rem;
+  height: 9px;
+}
+
+@keyframes vshimmer {
+  from {
+    background-position: 120% 0;
+  }
+  to {
+    background-position: -20% 0;
+  }
+}
+
+.vempty {
+  display: grid;
+  justify-items: center;
+  gap: 0.65rem;
+  text-align: center;
+  padding: clamp(2.4rem, 6vw, 4.2rem) 1.4rem;
+  margin-top: clamp(1.1rem, 2.2vw, 1.7rem);
+  border: 1px dashed var(--line-2);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--surface) 45%, transparent);
+}
+
+.vempty__icon {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  border: 1px solid var(--line-2);
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+
+.vempty__icon .ico {
+  width: 22px;
+  height: 22px;
+}
+
+.vempty h2 {
+  font-size: 1.1rem;
+  letter-spacing: -0.02em;
+}
+
+.vempty p {
+  max-width: 48ch;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+/* ------------------------------------------------------------------ */
+/* a horizontal shelf (your videos, related)                          */
+/* ------------------------------------------------------------------ */
+.vsect {
+  margin-top: clamp(1.8rem, 3.4vw, 2.8rem);
+}
+
+.vsect__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.9rem;
+}
+
+.vsect__title {
+  font-size: 1.02rem;
+  font-weight: 580;
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.vsect__title .ico {
+  width: 16px;
+  height: 16px;
+  color: var(--faint);
+}
+
+.vsect__sub {
+  font-size: 0.78rem;
+  color: var(--faint);
+}
+
+.vshelf {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(240px, 268px);
+  gap: 0.8rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+}
+
+.vshelf > * {
+  scroll-snap-align: start;
+}
+
+.vshelf::-webkit-scrollbar {
+  height: 6px;
+}
+
+.vshelf::-webkit-scrollbar-thumb {
+  background: var(--line-2);
+  border-radius: 999px;
+}
+
+/* a small row card used in the watch page's side column */
+.vrow {
+  display: grid;
+  grid-template-columns: 118px 1fr;
+  gap: 0.62rem;
+  align-items: start;
+  padding: 0.42rem;
+  border-radius: 13px;
+  border: 1px solid transparent;
+  transition: background 0.24s var(--ease), border-color 0.24s var(--ease);
+}
+
+.vrow:hover {
+  background: var(--surface-2);
+  border-color: var(--line);
+}
+
+.vrow__media {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: 9px;
+  overflow: hidden;
+  background: var(--surface-3);
+}
+
+.vrow__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: var(--art-filter);
+}
+
+.vrow__body {
+  display: grid;
+  gap: 0.22rem;
+  min-width: 0;
+  padding-top: 0.1rem;
+}
+
+.vrow__title {
+  font-size: 0.8rem;
+  font-weight: 540;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.vrow__meta {
+  font-size: 0.71rem;
+  color: var(--faint);
+}
+
+/* ------------------------------------------------------------------ */
+/* the publish page                                                   */
+/* ------------------------------------------------------------------ */
+.ved {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: clamp(1rem, 2.2vw, 1.6rem);
+  align-items: start;
+  padding-block: clamp(1.2rem, 2.6vw, 2rem) 7rem;
+}
+
+.ved__col {
+  display: grid;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+.ved__side {
+  display: grid;
+  gap: 0.85rem;
+  min-width: 0;
+  position: sticky;
+  top: calc(var(--header-h) + 1rem);
+}
+
+.vcard-box.is-jump {
+  outline: 1px solid var(--line-2);
+  outline-offset: 4px;
+}
+
+.vcard-box {
+  display: grid;
+  gap: 0.8rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.vcard-box__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+
+.vcard-box__title {
+  font-size: 0.86rem;
+  font-weight: 580;
+  letter-spacing: -0.01em;
+}
+
+.vcard-box__hint {
+  font-size: 0.74rem;
+  line-height: 1.55;
+  color: var(--faint);
+}
+
+.vcount {
+  font-size: 0.72rem;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.vcount.is-over {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* source input / drop zone */
+/* the one choice: a file from the machine, or one platform's own link */
+.vchoose {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.vchoose__opt {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.5rem 0.85rem;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 0.8rem;
+  font-weight: 540;
+  cursor: pointer;
+  transition: border-color 0.2s var(--ease), color 0.2s var(--ease), background 0.2s var(--ease);
+}
+
+.vchoose__opt input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.vchoose__opt span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.vchoose__opt .ico {
+  width: 15px;
+  height: 15px;
+}
+
+.vchoose__opt:hover {
+  color: var(--text);
+  border-color: var(--line);
+}
+
+.vchoose__opt.is-on {
+  border-color: var(--text);
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.vchoose__opt:focus-within {
+  outline: 2px solid var(--text-2);
+  outline-offset: 2px;
+}
+
+.vdrop {
+  display: grid;
+  justify-items: center;
+  gap: 0.55rem;
+  padding: clamp(1.3rem, 3vw, 2rem) 1rem;
+  border: 1px dashed var(--line-2);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface-2) 45%, transparent);
+  text-align: center;
+  transition: border-color 0.24s var(--ease), background 0.24s var(--ease);
+}
+
+.vdrop.is-over {
+  border-color: var(--text);
+  background: var(--surface-2);
+}
+
+/* the whole box is the way in — clicking it opens the picker */
+.vdrop {
+  cursor: pointer;
+}
+
+.vdrop.is-over,
+.vdrop:hover {
+  border-color: var(--text-2);
+}
+
+.vdrop small b {
+  color: var(--text-2);
+  font-weight: 570;
+}
+
+.vdrop__row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 0.15rem;
+}
+
+/* the upload's own line: how far, how long, how fast */
+.vprog {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.vprog__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8rem;
+  font-size: 0.76rem;
+}
+
+.vprog__name {
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vprog__pct {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.vprog__bar {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.vprog__fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: var(--text);
+  transition: width 0.25s var(--ease);
+}
+
+.vprog__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.1rem;
+  font-size: 0.72rem;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.vprog__meta b {
+  color: var(--text-2);
+  font-weight: 570;
+}
+
+.vprog.is-done .vprog__fill {
+  background: var(--text);
+}
+
+.vprog.is-failed .vprog__fill {
+  background: var(--faint);
+}
+
+.vdrop__note {
+  font-size: 0.72rem;
+  line-height: 1.55;
+  color: var(--text-2);
+  max-width: 52ch;
+  padding: 0.28rem 0.6rem;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--surface-3);
+}
+
+.vdrop__or {
+  font-size: 0.72rem;
+  color: var(--faint);
+}
+
+.vdrop.is-busy {
+  cursor: progress;
+  opacity: 0.75;
+}
+
+/* the link row: the address, the platform it belongs to, and the door */
+.vsrc__label {
+  font-size: 0.78rem;
+  font-weight: 570;
+  color: var(--text-2);
+  margin-top: 0.35rem;
+}
+
+.vsrc__row--link .select {
+  flex: 0 1 190px;
+  height: 44px;
+}
+
+.vsrc__row--link .input {
+  flex: 1 1 260px;
+}
+
+.vplatform {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.vplatform .vcount {
+  color: var(--text);
+}
+
+@media (max-width: 560px) {
+  .vcomposer--locked {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .vcomposer--locked > .btn {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
+@media (max-width: 640px) {
+  .vsrc__row--link .select,
+  .vsrc__row--link .btn {
+    flex: 1 1 100%;
+  }
+}
+
+.vdrop__icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 1px solid var(--line-2);
+  background: var(--surface-3);
+  color: var(--text-2);
+}
+
+.vdrop__icon .ico {
+  width: 20px;
+  height: 20px;
+}
+
+.vdrop b {
+  font-size: 0.88rem;
+  font-weight: 570;
+}
+
+.vdrop small {
+  font-size: 0.75rem;
+  color: var(--faint);
+  max-width: 44ch;
+  line-height: 1.55;
+}
+
+.vsrc {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.vsrc__row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.vsrc__row .input {
+  flex: 1 1 220px;
+  height: 44px;
+}
+
+.vsrc__found {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.77rem;
+  color: var(--muted);
+}
+
+.vsrc__found .badge {
+  flex: none;
+}
+
+.vsrc__found .ico {
+  width: 14px;
+  height: 14px;
+  color: var(--text-2);
+  flex: none;
+}
+
+/* the mini preview inside the sidebar */
+.vprev__media {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface-3);
+  border: 1px solid var(--line);
+}
+
+.vprev__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.vprev__ph {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: var(--faint);
+  background: var(--hero-base);
+}
+
+.vprev__ph .ico {
+  width: 24px;
+  height: 24px;
+}
+
+/* a play glyph over the still: the card is a video, not a photograph */
+.vprev__play {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  pointer-events: none;
+}
+
+.vprev__play .ico {
+  width: 34px;
+  height: 34px;
+  padding: 8px;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 55%);
+  backdrop-filter: blur(2px);
+}
+
+.vprev__ph {
+  gap: 0.3rem;
+  text-align: center;
+  padding: 0.5rem;
+  font-size: 0.72rem;
+  line-height: 1.3;
+}
+
+.vprev__ph span {
+  display: block;
+}
+
+/* the player inside the editor */
+.vplay {
+  position: relative;
+  margin-top: 0.7rem;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #000;
+  aspect-ratio: 16 / 9;
+}
+
+.vplay iframe,
+.vplay video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #000;
+}
+
+/* a vertical source keeps its shape instead of being cropped to nothing */
+.vplay.is-vertical {
+  aspect-ratio: 9 / 16;
+  max-width: 280px;
+  margin-inline: auto;
+}
+
+.vprev__title {
+  font-size: 0.87rem;
+  font-weight: 560;
+  line-height: 1.35;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.vprev__meta {
+  font-size: 0.73rem;
+  color: var(--faint);
+}
+
+/* the studio the video will appear in, on the preview card itself */
+.vprev__studio {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--text-2);
+}
+
+.vprev__studio .ico {
+  width: 12px;
+  height: 12px;
+  flex: none;
+}
+
+.vprev__studio[hidden] {
+  display: none;
+}
+
+/* thumbnail controls */
+.vthumb__box {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--line-2);
+  background: var(--surface-2);
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  color: var(--faint);
+  font-size: 0.76rem;
+}
+
+.vthumb__box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.vthumb__btns {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+/* visibility / audience */
+.vseg {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.vseg__btn {
+  flex: 1 1 auto;
+  min-width: 74px;
+  height: 36px;
+  padding: 0 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 0.76rem;
+  font-weight: 550;
+  cursor: pointer;
+  transition: all 0.2s var(--ease);
+}
+
+.vseg__btn:hover {
+  border-color: var(--line-3);
+  color: var(--text);
+}
+
+.vseg__btn.is-on {
+  background: var(--text);
+  color: var(--bg);
+  border-color: transparent;
+}
+
+.vhint {
+  font-size: 0.74rem;
+  line-height: 1.55;
+  color: var(--faint);
+}
+
+.vhint--warn {
+  color: var(--text-2);
+}
+
+.vstack {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.vgrid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+
+.vtaglist {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.vtaglist .tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.vtaglist .tag button {
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  color: var(--faint);
+  cursor: pointer;
+}
+
+.vtaglist .tag button:hover {
+  color: var(--text);
+}
+
+.vtaglist .tag button .ico {
+  width: 10px;
+  height: 10px;
+}
+
+.vadv {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--surface-2) 45%, transparent);
+  overflow: hidden;
+}
+
+.vadv > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.7rem 0.8rem;
+  font-size: 0.78rem;
+  font-weight: 550;
+  color: var(--text-2);
+  cursor: pointer;
+  list-style: none;
+}
+
+.vadv > summary::-webkit-details-marker {
+  display: none;
+}
+
+.vadv > summary .ico {
+  width: 14px;
+  height: 14px;
+  color: var(--faint);
+  transition: transform 0.22s var(--ease);
+}
+
+.vadv[open] > summary .ico {
+  transform: rotate(90deg);
+}
+
+.vadv__body {
+  display: grid;
+  gap: 0.7rem;
+  padding: 0 0.8rem 0.85rem;
+}
+
+.vcheck {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  font-size: 0.79rem;
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.vcheck input {
+  margin-top: 2px;
+  accent-color: var(--text);
+}
+
+.vcheck small {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--faint);
+  line-height: 1.5;
+}
+
+/* sticky publish bar */
+.vfoot {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  border-top: 1px solid var(--line-2);
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  backdrop-filter: blur(18px) saturate(1.2);
+}
+
+@media (min-width: 1024px) {
+  /* the bar stops at the sidebar, like the content above it */
+  body.sb-open .vfoot {
+    left: var(--sidebar-w);
+  }
+}
+
+.vfoot__in {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 0.7rem var(--gutter);
+}
+
+.vfoot__state {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  min-width: 0;
+}
+
+.vfoot__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--faint);
+  flex: none;
+  box-shadow: 0 0 0 3px var(--line);
+}
+
+.vfoot__dot.is-ready {
+  background: var(--text);
+}
+
+.vfoot__acts {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* ------------------------------------------------------------------ */
+/* responsive                                                         */
+/* ------------------------------------------------------------------ */
+@media (max-width: 1180px) {
+  .vwatch {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .vwatch__side {
+    position: static;
+  }
+
+  .ved {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ved__side {
+    position: static;
+  }
+}
+
+@media (max-width: 720px) {
+  .vids__head {
+    align-items: flex-start;
+  }
+
+  .vids__acts .btn {
+    flex: 1 1 auto;
+  }
+
+  .vgrid {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr));
+  }
+
+  .vrow {
+    grid-template-columns: 96px 1fr;
+  }
+
+  @media (min-width: 1024px) {
+  /* the bar stops at the sidebar, like the content above it */
+  body.sb-open .vfoot {
+    left: var(--sidebar-w);
+  }
+}
+
+.vfoot__in {
+    gap: 0.6rem;
+  }
+
+  .vfoot__acts {
+    width: 100%;
+  }
+
+  .vfoot__acts .btn {
+    flex: 1 1 auto;
+  }
+
+  .vgrid2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vcard,
+  .vcard__media img,
+  .vcard__play,
+  .vsk__media,
+  .vsk__line {
+    transition: none;
+    animation: none;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* a vertical video keeps its own shape                               */
+/* ------------------------------------------------------------------ */
+/* `videos.html#/v/ID=…` is a 9:16 piece: the stage turns portrait and
+   the column narrows around it, so the player is never letterboxed into
+   a landscape frame it does not belong in. `#/h/ID=…` is untouched. */
+.vwatch[data-orientation="v"] .vplayer {
+  aspect-ratio: 9 / 16;
+  max-width: min(420px, 100%);
+  margin-inline: auto;
+}
+
+.vwatch[data-orientation="v"] .vplayer iframe,
+.vwatch[data-orientation="v"] .vplayer video,
+.vwatch[data-orientation="v"] .vplayer img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* the card in the feed says which shape it is before it is opened */
+.vcard[data-orientation="v"] .vthumb,
+.vcard[data-orientation="v"] .vcard__thumb {
+  aspect-ratio: 9 / 16;
+}
+
+/* the live preview is the door to the video's own page */
+.vprev__media {
+  display: block;
+  position: relative;
+  color: inherit;
+  text-decoration: none;
+}
+
+.vprev__media[aria-disabled="true"] {
+  cursor: default;
+}
+
+.vprev__media[href] {
+  cursor: pointer;
+}
+
+.vprev__open {
+  position: absolute;
+  left: 50%;
+  bottom: 0.55rem;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.28rem 0.65rem;
+  border-radius: 999px;
+  background: var(--surface-inv);
+  color: var(--bg);
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  opacity: 0;
+  transition: opacity 0.18s var(--ease-out);
+}
+
+.vprev__open svg {
+  width: 0.78rem;
+  height: 0.78rem;
+}
+
+.vprev__media[href]:hover .vprev__open,
+.vprev__media[href]:focus-visible .vprev__open {
+  opacity: 1;
+}
+
+.vprev__media[href]:focus-visible {
+  outline: 2px solid var(--muted);
+  outline-offset: 3px;
+}
+
+.vprev__note {
+  margin: 0.45rem 0 0;
+  font-size: 0.74rem;
+  line-height: 1.45;
+  color: var(--faint);
+}
+
+.vprev__note[hidden] {
+  display: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* the publisher is the studio, when the video went into one          */
+/* ------------------------------------------------------------------ */
+/* A video published into a studio is published *by* it: the studio's
+   mark and name lead, and the member is the line under it. A video with
+   no studio keeps the face and the follower count it always had. */
+.vhost__logo {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--bg-soft);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------------ */
+/* the details under a video                                          */
+/* ------------------------------------------------------------------ */
+/* Chapters, the studio's counts, and its own links. All of it is read
+   from what the member wrote — nothing is invented, and a description
+   with no time in it draws no chapter list. */
+.vback-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.vback[hidden] {
+  display: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* the index, as the editor writes it                                 */
+/* ------------------------------------------------------------------ */
+.vchps {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.6rem 0 0.5rem;
+  padding: 0;
+  list-style: none;
+}
+
+.vchp {
+  display: grid;
+  grid-template-columns: auto 6.5rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.vchp__n {
+  font-size: 0.74rem;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  min-width: 1.4rem;
+}
+
+.vchp__time {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.vchp__del {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.vchp__del:hover {
+  color: var(--text);
+  border-color: var(--muted);
+}
+
+.vchp__del svg {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+.vchp__none {
+  padding: 0.7rem 0.8rem;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.vchp__none b {
+  color: var(--text);
+}
+
+.vchp__acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+@media (max-width: 560px) {
+  .vchp {
+    grid-template-columns: auto 5.2rem minmax(0, 1fr) auto;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* the publisher's two buttons, and its menu                          */
+/* ------------------------------------------------------------------ */
+/* A studio card holds Follow, and one menu behind it: share, copy,
+   open the studio, more from it, report. The menu is a `<details>`, so
+   it works with the keyboard and closes on a second press. */
+.vhost__acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: auto;
+}
+
+/* the menu's last row, and the message it can open */
+.vmenu__item--danger {
+  color: var(--muted);
+}
+
+/* the publisher's foot: the blurb, then the links it wrote in its settings */
+.vhost__foot {
+  display: grid;
+  gap: 0.55rem;
+  padding-top: 0.6rem;
+  margin-top: 0.1rem;
+  border-top: 1px solid var(--line);
+}
+
+/* ================================================================== */
+/* the watch screen                                                    */
+/* ================================================================== */
+/* The layout follows the reference watch page: one column of cards on
+   the reading side, one sticky column of suggestions beside it, and
+   every block — actions, chapters, the publisher, its links, the
+   comments — a card with the same border, radius and blur. The colours
+   are the site's own tokens; nothing here invents one. */
+
+.vwatch {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 348px;
+  gap: clamp(1rem, 2.2vw, 1.5rem);
+  align-items: start;
+  padding-block: clamp(0.9rem, 2vw, 1.35rem) clamp(2.4rem, 5vw, 4rem);
+}
+
+/* no landscape suggestion to sit beside the stage: the page is one column */
+.vwatch[data-side="no"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.vwatch__main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.vwatch__side {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  position: sticky;
+  top: calc(var(--header-h) + 1rem);
+}
+
+/* ---- the vertical suggestions, above the player ------------------- */
+/* A 9:16 still cannot live in a 348 px column: it becomes a stamp. So a
+   portrait suggestion rides in this rail, above the player, and the rail
+   scrolls sideways; a landscape suggestion keeps the column beside the
+   stage. The rail spans both columns, and it is the first thing on the
+   page — the suggestions are read before the film, never around it. */
+.vwatch__rail {
+  grid-column: 1 / -1;
+  min-width: 0;
+  padding: 0.85rem 1rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  backdrop-filter: blur(14px) saturate(120%);
+  box-shadow: var(--shadow-sm);
+}
+
+.vrail__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.vrail__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.vrail__title .ico {
+  width: 15px;
+  height: 15px;
+  color: var(--accent);
+}
+
+.vrail__hint {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.vrail__track {
+  display: flex;
+  gap: 0.7rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+  padding-bottom: 0.3rem;
+  overscroll-behavior-x: contain;
+}
+
+.vrail__card {
+  flex: 0 0 clamp(118px, 15vw, 148px);
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.vrail__media {
+  position: relative;
+  display: block;
+  aspect-ratio: 9 / 16;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #000;
+}
+
+.vrail__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.35s var(--ease);
+}
+
+.vrail__card:hover .vrail__media img,
+.vrail__card:focus-visible .vrail__media img {
+  transform: scale(1.04);
+}
+
+.vrail__card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 0.75rem;
+}
+
+.vrail__play {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: linear-gradient(to top, rgb(0 0 0 / 0.5), transparent 58%);
+  opacity: 0;
+  transition: opacity 0.2s var(--ease);
+}
+
+.vrail__card:hover .vrail__play,
+.vrail__card:focus-visible .vrail__play {
+  opacity: 1;
+}
+
+.vrail__play .ico {
+  width: 22px;
+  height: 22px;
+}
+
+.vrail__ph {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--muted);
+}
+
+.vrail__name {
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.vrail__meta {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+
+/* the card every block sits on */
+.vpanel {
+  padding: 1rem 1.15rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  backdrop-filter: blur(14px) saturate(120%);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ---- the way back ------------------------------------------------- */
+.vback-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.vback {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.7rem;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: all 0.2s var(--ease);
+}
+
+.vback:hover {
+  color: var(--text);
+  border-color: var(--line-3);
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+.vback .ico {
+  width: 15px;
+  height: 15px;
+}
+
+/* ---- the stage ---------------------------------------------------- */
+.vplayer {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: #000;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  scroll-margin-top: calc(var(--header-h) + 1rem);
+}
+
+.vplayer video,
+.vplayer iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+  background: #000;
+  object-fit: cover;
+}
+
+/* the gate before the film --------------------------------------------
+ * An hour of watching is paid for by thirty seconds of somebody else's page.
+ * The gate covers the player completely and the frame behind it is inert, so
+ * no click, no tab key and no keyboard reaches the film before it is paid.
+ */
+/* the way out to the whole screen ------------------------------------
+ * A disc of its own in the corner: an embedded player is a window of its own,
+ * so the button that enlarges it has to live on top of it, not inside it. It
+ * stays quiet until the pointer is near, and once the screen is the player it
+ * is always there — that is the only way back out.
+ */
+.vplayer__fs {
+  position: absolute;
+  z-index: 3;
+  inset-block-start: 0.6rem;
+  inset-inline-end: 0.6rem;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(0, 0, 0, 0.45);
+  color: rgba(255, 255, 255, 0.95);
+  opacity: 0;
+  backdrop-filter: blur(6px);
+  transition: opacity 0.18s var(--ease), background 0.18s var(--ease), transform 0.18s var(--ease);
+}
+
+.vplayer__fs .ico {
+  width: 18px;
+  height: 18px;
+}
+
+.vplayer:hover .vplayer__fs,
+.vplayer__fs:focus-visible,
+.vplayer:fullscreen .vplayer__fs {
+  opacity: 1;
+}
+
+.vplayer__fs:hover {
+  background: rgba(0, 0, 0, 0.92);
+  transform: scale(1.04);
+}
+
+.vplayer__fs:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.9);
+  outline-offset: 2px;
+}
+
+/* the player takes the screen: no frame, no rounded corners, one black box */
+.vplayer:fullscreen,
+.vplayer:-webkit-full-screen {
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  max-height: none;
+  aspect-ratio: auto;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.vplayer:fullscreen::backdrop {
+  background: #000;
+}
+
+.vplayer:fullscreen video,
+.vplayer:fullscreen iframe,
+.vplayer:-webkit-full-screen video,
+.vplayer:-webkit-full-screen iframe {
+  object-fit: contain;
+}
+
+/* the preview in the editor takes the screen by the same rules */
+.vplay:fullscreen,
+.vplay:-webkit-full-screen {
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  aspect-ratio: auto;
+  border: 0;
+  border-radius: 0;
+}
+
+.vplay:fullscreen::backdrop {
+  background: #000;
+}
+
+.vplay:fullscreen iframe,
+.vplay:fullscreen video {
+  object-fit: contain;
+}
+
+.vplay:hover .vplayer__fs,
+.vplay .vplayer__fs:focus-visible,
+.vplay:fullscreen .vplayer__fs {
+  opacity: 1;
+}
+
+/* an iPhone puts only the video itself full screen; the shell stays behind */
+.vplayer video::-webkit-media-controls {
+  background: transparent;
+}
+
+.vplayer__poster {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  filter: brightness(0.55) saturate(1.02);
+}
+
+.vplayer__idle {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  text-align: center;
+}
+
+.vplayer__btn {
+  display: grid;
+  place-items: center;
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.94);
+  color: #08080a;
+  transition: transform 0.24s var(--ease), background 0.24s var(--ease);
+}
+
+.vplayer__btn:hover {
+  transform: scale(1.05);
+  background: #fff;
+}
+
+.vplayer__btn .ico {
+  width: 24px;
+  height: 24px;
+}
+
+.vplayer__note {
+  font-size: 0.76rem;
+  color: #e6e6e9;
+  max-width: 40ch;
+  line-height: 1.5;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.8);
+}
+
+/* locked / gated states */
+.vgate {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 0.65rem;
+  padding: clamp(1rem, 3vw, 2rem);
+  text-align: center;
+  background: rgba(6, 6, 7, 0.82);
+  backdrop-filter: blur(14px);
+}
+
+.vgate__icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+.vgate__icon .ico {
+  width: 20px;
+  height: 20px;
+}
+
+.vgate h2 {
+  font-size: 1.02rem;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+
+.vgate p {
+  max-width: 46ch;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.vgate__form {
+  display: flex;
+  gap: 0.45rem;
+  margin-top: 0.3rem;
+  width: min(340px, 100%);
+}
+
+.vgate__form .input {
+  height: 42px;
+  border-radius: 999px;
+  text-align: center;
+  letter-spacing: 0.18em;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+.vgate__err {
+  min-height: 1rem;
+  font-size: 0.74rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* ---- the action row ----------------------------------------------- */
+.vacts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.85rem 0.15rem;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.vact {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  height: 38px;
+  padding: 0 0.95rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s var(--ease);
+}
+
+.vact .ico {
+  width: 17px;
+  height: 17px;
+  flex: none;
+}
+
+.vact:hover {
+  color: var(--text);
+  border-color: var(--line-3);
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+.vact[aria-pressed="true"] {
+  color: var(--text);
+  border-color: var(--line-3);
+  background: color-mix(in srgb, var(--text) 11%, transparent);
+}
+
+.vact--quiet {
+  border-color: transparent;
+  background: transparent;
+}
+
+.vact--quiet:hover {
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+}
+
+.vact--end {
+  margin-inline-start: auto;
+}
+
+/* ---- chapters ----------------------------------------------------- */
+.vchaps {
+  padding: 0.9rem 1.1rem;
+}
+
+.vchaps__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+
+.vchaps__title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.vchaps__title::before {
+  content: "";
+  width: 4px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--text);
+  flex: none;
+}
+
+.vchaps__toggle {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 0.5rem;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.2s var(--ease);
+}
+
+.vchaps__toggle:hover {
+  color: var(--text);
+  border-color: var(--line-3);
+}
+
+.vchaps__toggle .ico {
+  width: 14px;
+  height: 14px;
+  transition: transform 0.25s var(--ease);
+}
+
+.vchaps.is-collapsed .vchaps__toggle .ico {
+  transform: rotate(-90deg);
+}
+
+.vchaps.is-collapsed .vchaps__list {
+  display: none;
+}
+
+.vchaps__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 340px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-3) transparent;
+  padding: 2px 0;
+  margin: 0;
+  list-style: none;
+}
+
+.vchaps__row {
+  margin: 0;
+}
+
+.vchaps__btn {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  border-radius: 0.6rem;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-align: start;
+  cursor: pointer;
+  transition: all 0.15s var(--ease);
+}
+
+.vchaps__btn:hover {
+  background: var(--surface-2);
+  border-color: var(--line);
+}
+
+.vchaps__row.is-active .vchaps__btn {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  border-color: var(--line-3);
+}
+
+.vchaps__n {
+  min-width: 1rem;
+  font-size: 0.66rem;
+  font-weight: 800;
+  color: var(--muted);
+  opacity: 0.6;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.vchaps__time {
+  flex: none;
+  min-width: 3.5rem;
+  padding: 0.18rem 0.55rem;
+  border-radius: 0.38rem;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.vchaps__row.is-active .vchaps__time {
+  background: var(--text);
+  border-color: transparent;
+  color: var(--bg);
+}
+
+.vchaps__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- the line of facts, then the title ---------------------------- */
+.vmeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.85rem;
+  padding-inline: 0.2rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.vmeta i {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.5;
+}
+
+.vmeta b {
+  color: var(--text);
+  font-weight: 800;
+}
+
+.vtitle {
+  padding-inline: 0.2rem;
+  font-size: clamp(1.25rem, 2.3vw, 1.62rem);
+  font-weight: 800;
+  line-height: 1.35;
+  letter-spacing: -0.015em;
+  max-width: 46ch;
+}
+
+/* ---- the description ---------------------------------------------- */
+.vdesc {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0 0.2rem;
+}
+
+.vdesc__body {
+  font-size: 0.88rem;
+  line-height: 1.8;
+  color: var(--muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.vdesc__body.is-clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.vdesc__more {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text);
+  opacity: 0.72;
+  cursor: pointer;
+}
+
+.vdesc__more:hover {
+  opacity: 1;
+}
+
+/* ---- the publisher ------------------------------------------------ */
+.vhost {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.9rem;
+  padding: 1.15rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  backdrop-filter: blur(14px) saturate(120%);
+  box-shadow: var(--shadow-sm);
+  transition: opacity 0.24s var(--ease), filter 0.24s var(--ease);
+}
+
+.vhost.is-blocked {
+  opacity: 0.5;
+  filter: grayscale(1);
+}
+
+.vhost__logo {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  border: 1px solid var(--line-2);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  overflow: hidden;
+}
+
+.vhost__logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.vhost > .vav {
+  width: 58px;
+  height: 58px;
+  font-size: 1.1rem;
+}
+
+.vhost__id {
+  flex: 1 1 220px;
+  min-width: 0;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.vhost__name {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  font-size: 0.98rem;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.vhost__name a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.vhost__name a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.vhost__kind {
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--line-2);
+  border-radius: 0.4rem;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--text-2);
+}
+
+.vhost__meta {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.vhost__meta a {
+  color: var(--text-2);
+  text-decoration: none;
+  border-bottom: 1px solid var(--line-2);
+}
+
+.vhost__meta a:hover {
+  border-bottom-color: var(--text);
+}
+
+.vhost__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.85rem;
+  margin-top: 0.2rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.vhost__stats b {
+  color: var(--text);
+  font-weight: 800;
+}
+
+/* the studio's buttons: the follow door, and its menu */
+.vhost__acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  margin-inline-start: auto;
+}
+
+.vhost__acts .btn {
+  border-radius: 0.65rem;
+}
+
+.vhost__acts .btn--primary {
+  border-color: transparent;
+  background: linear-gradient(90deg, var(--text), var(--muted));
+  color: var(--bg);
+  font-weight: 700;
+}
+
+.vhost__acts .btn--primary:hover {
+  filter: brightness(1.07);
+}
+
+/* the menu behind "Take action": a trigger, then discs */
+.vmenu {
+  position: relative;
+}
+
+.vmenu > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  height: 38px;
+  padding: 0 0.9rem;
+  border-radius: 0.65rem;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 0.79rem;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+  transition: all 0.2s var(--ease);
+}
+
+.vmenu > summary::-webkit-details-marker,
+.vmenu > summary::marker {
+  display: none;
+  content: "";
+}
+
+.vmenu > summary:hover {
+  border-color: var(--line-3);
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+.vmenu > summary svg {
+  width: 16px;
+  height: 16px;
+}
+
+.vmenu__panel {
+  position: absolute;
+  inset-inline-end: 0;
+  top: calc(100% + 0.45rem);
+  z-index: 40;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(4.4rem, 1fr));
+  gap: 0.55rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.85rem;
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  animation: vmenu-in 0.22s var(--ease);
+}
+
+@keyframes vmenu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.vmenu__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.65rem 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 0.7rem;
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.3;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s var(--ease);
+}
+
+.vmenu__item:hover {
+  border-color: var(--line-3);
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+  transform: translateY(-2px);
+}
+
+.vmenu__item svg {
+  width: 18px;
+  height: 18px;
+  padding: 0.55rem;
+  box-sizing: content-box;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--text), var(--muted));
+  color: var(--bg);
+}
+
+.vmenu__item--danger:hover {
+  color: var(--text);
+}
+
+.vmenu__item--danger svg {
+  background: linear-gradient(135deg, var(--line-3), var(--muted));
+  color: var(--text);
+}
+
+.vmenu__item.is-on {
+  border-color: var(--line-3);
+  background: color-mix(in srgb, var(--text) 9%, transparent);
+}
+
+/* the publisher's foot: the blurb, then the links it wrote in its settings */
+.vhost__foot {
+  flex-basis: 100%;
+  display: grid;
+  gap: 0.7rem;
+  padding-top: 0.8rem;
+  margin-top: 0.2rem;
+  border-top: 1px solid var(--line);
+}
+
+.vhost__bio {
+  font-size: 0.85rem;
+  line-height: 1.75;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.vlinks {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.vlinks__head {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
+.vlinks__head .ico {
+  width: 14px;
+  height: 14px;
+}
+
+.vlinks__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.vlinks .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 0.55rem;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 0.74rem;
+  font-weight: 600;
+  transition: all 0.18s var(--ease);
+}
+
+.vlinks .chip:hover {
+  border-color: var(--line-3);
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+.vlinks .chip .ico,
+.vlinks .chip svg {
+  width: 13px;
+  height: 13px;
+  flex: none;
+}
+
+/* ---- tags --------------------------------------------------------- */
+.vtags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0 0.2rem;
+}
+
+.vtags .chip {
+  padding: 0.32rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.vtags .chip:hover {
+  color: var(--text);
+  border-color: var(--line-3);
+}
+
+/* ---- comments ----------------------------------------------------- */
+.vcomments {
+  padding: 1.15rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  backdrop-filter: blur(14px) saturate(120%);
+  box-shadow: var(--shadow-sm);
+}
+
+.vcomments .vcom__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.vcom__head-copy {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.vcom__eyebrow {
+  font-size: 0.62rem;
+  font-weight: 750;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.vcomments .vcom__title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.vcomments .vcount {
+  padding: 0.05rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.vcomments .vcom__hint {
+  font-size: 0.75rem;
+  color: var(--faint);
+}
+
+.vcomposer {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 0.85rem;
+  background: color-mix(in srgb, var(--surface-2) 85%, var(--bg-soft));
+  margin-bottom: 1rem;
+}
+
+.vcomposer--locked {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  border-color: color-mix(in srgb, var(--line-2) 70%, transparent);
+}
+
+.vcomposer__badge {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.7rem;
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.vcomposer__badge .ico {
+  width: 1rem;
+  height: 1rem;
+}
+
+.vcomposer__copy {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.vcomposer__copy strong {
+  font-size: 0.8rem;
+  color: var(--text);
+}
+
+.vcomposer__copy > span {
+  font-size: 0.73rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.vcomposer__label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.vcomposer .textarea {
+  min-height: 84px;
+  background: var(--bg-soft);
+}
+
+.vcomposer__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+
+.vcomposer__note {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.vcomposer__note .ico {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+.vcomposer__note a {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.vcom__list {
+  display: grid;
+  gap: 0;
+  margin-top: 0.25rem;
+}
+
+.vcom__empty {
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  padding: 1.75rem 1rem;
+  border-top: 1px solid var(--line);
+  text-align: center;
+}
+
+.vcom__empty-icon {
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  margin-bottom: 0.2rem;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+.vcom__empty-icon .ico {
+  width: 1rem;
+  height: 1rem;
+}
+
+.vcom__empty strong {
+  font-size: 0.82rem;
+}
+
+.vcom__empty > span:last-child {
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+.vcom {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  gap: 0.65rem;
+  padding: 0.8rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.vcom:first-child {
+  border-top: 0;
+  padding-top: 0.3rem;
+}
+
+.vcom__av {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--line-2);
+  font-size: 0.8rem;
+}
+
+.vcom__body {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.vcom__top {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.vcom__name {
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.vcom__time {
+  font-size: 0.71rem;
+  color: var(--faint);
+}
+
+.vcom__text {
+  font-size: 0.86rem;
+  line-height: 1.7;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  margin-top: 0.15rem;
+}
+
+.vcom__acts {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-top: 0.45rem;
+}
+
+.vcom__act {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: transparent;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s var(--ease);
+}
+
+.vcom__act:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.vcom__act b {
+  font-size: 0.68rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+}
+
+.vcom__act[aria-pressed="true"] b {
+  color: inherit;
+}
+
+.vacts [data-v-react]:focus-visible {
+  outline: 2px solid var(--line-3);
+  outline-offset: 3px;
+}
+
+/* ---- the side column ---------------------------------------------- */
+.vcard-box {
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  backdrop-filter: blur(14px) saturate(120%);
+  box-shadow: var(--shadow-sm);
+}
+
+.vcard-box__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.7rem;
+}
+
+.vcard-box__title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.vcard-box__title::before {
+  content: "";
+  width: 4px;
+  height: 15px;
+  border-radius: 2px;
+  background: var(--text);
+  flex: none;
+}
+
+.vcard-box__hint {
+  font-size: 0.72rem;
+  color: var(--faint);
+}
+
+.vcard-box .vrow {
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 0.55rem;
+  padding: 0.4rem;
+  border-radius: 0.7rem;
+}
+
+.vcard-box .vrow__media {
+  border-radius: 0.55rem;
+}
+
+.vcard-box .vrow__title {
+  font-size: 0.79rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.vcard-box .vrow__meta {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+/* ---- the message dialog the menu opens ---------------------------- */
+.vmsg {
+  width: min(30rem, 94vw);
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.vmsg__form {
+  display: grid;
+  gap: 0.6rem;
+  padding: 1rem;
+}
+
+.vmsg__head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 800;
+}
+
+.vmsg__head svg {
+  width: 1rem;
+  height: 1rem;
+  color: var(--muted);
+}
+
+.vmsg__note {
+  margin: 0;
+  font-size: 0.76rem;
+  color: var(--faint);
+}
+
+.vmsg__acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
+/* ---- how it folds -------------------------------------------------- */
+@media (max-width: 1180px) {
+  .vwatch {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .vwatch__side {
+    position: static;
+  }
+}
+
+@media (max-width: 720px) {
+  .vpanel,
+  .vhost,
+  .vcomments,
+  .vcard-box {
+    padding: 0.9rem;
+  }
+
+  .vacts {
+    gap: 0.4rem;
+    padding: 0.7rem 0;
+  }
+
+  .vact {
+    height: 36px;
+    padding: 0 0.8rem;
+    font-size: 0.77rem;
+  }
+
+  .vhost__acts {
+    margin-inline-start: 0;
+    width: 100%;
+  }
+
+  .vhost__acts .btn,
+  .vmenu > summary {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .vmenu__panel {
+    inset-inline: 0;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .vcard-box .vrow {
+    grid-template-columns: 96px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 420px) {
+  .vmenu__panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .vtitle {
+    font-size: 1.16rem;
+  }
+}
+
+/* the seal beside a studio's name: it is a mark, not a word */
+.vhost__seal {
+  display: inline-flex;
+  color: var(--muted);
+}
+
+.vhost__seal svg {
+  width: 16px;
+  height: 16px;
+}
+
+.vchaps__count {
+  padding: 0.05rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.vdesc__more .ico {
+  width: 14px;
+  height: 14px;
+}
+
+/* a comment answers, is counted, and can be reported where it stands */
+.vcom__act[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  border-color: var(--line-3);
+  color: var(--text);
+}
+
+.vcom__act .ico {
+  width: 12px;
+  height: 12px;
+}
+
+.vcom__box {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.55rem;
+  padding: 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 0.7rem;
+  background: var(--surface-2);
+}
+
+.vcom__box[hidden] {
+  display: none;
+}
+
+.vcom__box .textarea {
+  min-height: 62px;
+  background: var(--bg-soft);
+}
+
+.vcom__boxact {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.vcom__replies {
+  display: grid;
+  gap: 0;
+  margin-inline-start: 2.4rem;
+  padding-inline-start: 0.9rem;
+  border-inline-start: 1px solid var(--line);
+}
+
+.vcom__replies .vcom {
+  grid-template-columns: 30px 1fr;
+}
+
+.vcom__replies .vcom__av {
+  width: 30px;
+  height: 30px;
+  font-size: 0.72rem;
+}
+
+.vcom--reply .vcom__name {
+  font-size: 0.78rem;
+}
+
+.vcom--reply .vcom__text {
+  font-size: 0.82rem;
+}
+
+/* ---- keywords: a main word, and its subs under it ------------------ */
+/* one block per main keyword, stacked — the other .vtaglist hosts keep
+   their flowing chips */
+.vtaglist[data-ved-tags] {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.vkw {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+  background: var(--surface-2);
+}
+
+.vkw__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.vkw__field {
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.vkw__count {
+  font-size: 0.7rem;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.vkw__subs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding-inline-start: 0.9rem;
+  border-inline-start: 1px solid var(--line-2);
+}
+
+.vkw__add {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.vkw__add .input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 36px;
+  font-size: 0.8rem;
+}
+
+.tag--sub {
+  font-size: 0.72rem;
+  opacity: 0.9;
+}

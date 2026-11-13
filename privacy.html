@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Privacy — 1World Web</title>
+    <meta name="description" content="What 1World stores, why, for how long, and how to have it removed." />
+    <meta name="theme-color" content="#060607" />
+    <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- the API is the first thing every page asks for; `crossorigin` is what
+         makes the socket usable by the CORS fetch that follows -->
+    <link rel="preconnect" href="https://vtbqbhuywdhnvitbcsfy.supabase.co" crossorigin />
+    <link rel="dns-prefetch" href="https://image.tmdb.org" />
+    <link rel="dns-prefetch" href="https://thumb.tapecontent.net" />
+    <!-- One variable Inter covers every weight the design uses — the named
+         ones (400/500/600/700/800) and the half steps the type scale asks for
+         (540, 550, 570, 650, 750) — so the page downloads one font file
+         instead of six, and the stylesheet arrives after the first paint
+         rather than holding it up. The system stack draws the words in
+         between, which is what `display=swap` was always going to do. -->
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400..800&family=Instrument+Serif:ital@0;1&display=swap"
+      onload="this.onload=null;this.rel='stylesheet'"
+    />
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400..800&family=Instrument+Serif:ital@0;1&display=swap"
+      />
+    </noscript>
+    <link rel="stylesheet" href="assets/css/base.css?v=20261116a" />
+    <link rel="stylesheet" href="assets/css/layout.css?v=20261116a" />
+    <link rel="stylesheet" href="assets/css/components.css?v=20261217a" />
+    <link rel="stylesheet" href="assets/css/policy.css?v=20261103c" />
+    <script>
+      /* apply the saved theme (or the OS preference) before first paint */
+      (function () {
+        try {
+          var saved = JSON.parse(localStorage.getItem("1w.theme") || "null");
+          var theme =
+            saved === "light" || saved === "dark"
+              ? saved
+              : window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
+                ? "light"
+                : "dark";
+          document.documentElement.dataset.theme = theme;
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute("content", theme === "light" ? "#f4f4f5" : "#060607");
+        } catch (e) {}
+      })();
+    </script>
+    <script type="module" src="assets/js/app.js?v=20261217a"></script>
+  </head>
+  <body data-page="privacy" data-title="Privacy">
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div data-site-header></div>
+    <div data-site-sidebar></div>
+
+    <main class="site-main" id="main">
+      <article class="policy">
+        <header class="policy__head">
+          <p class="eyebrow"><span class="eyebrow__dot"></span>Legal</p>
+          <h1 class="policy__title">Privacy</h1>
+          <p class="policy__lede">
+            What this site keeps about you, why it keeps it, how long it stays, and how to have it
+            removed. Written to be read once, not skimmed by a lawyer.
+          </p>
+          <dl class="policy__meta">
+            <div>
+              <dt>Applies to</dt>
+              <dd>1World Web and the members' dashboard</dd>
+            </div>
+            <div>
+              <dt>Last updated</dt>
+              <dd>3 November 2026</dd>
+            </div>
+            <div>
+              <dt>Minimum age</dt>
+              <dd>13 years</dd>
+            </div>
+          </dl>
+        </header>
+
+        <nav class="policy__toc" aria-label="Contents">
+          <a href="#short">In short</a>
+          <a href="#collect">What we collect</a>
+          <a href="#linked">Accounts you link</a>
+          <a href="#others">Who else sees it</a>
+          <a href="#storage">Cookies and storage</a>
+          <a href="#keep">How long</a>
+          <a href="#rights">Your rights</a>
+          <a href="#children">Children</a>
+          <a href="#contact">Contact</a>
+        </nav>
+
+        <section id="short">
+          <h2>In short</h2>
+          <ul>
+            <li>We keep what a membership needs: your account, your viewing codes, your points and
+              what you publish. Nothing more than the pages actually use.</li>
+            <li>We do <strong>not</strong> sell your data, and we do not build advertising profiles
+              from it. There are no third-party trackers on the member pages.</li>
+            <li>Your password is stored only as a hash. Nobody here — including the admins — can read
+              it back.</li>
+            <li>You can change your password, unlink a network and ask for your account to be deleted
+              at any time.</li>
+            <li>An account that is never activated, or that lapses, is deleted after 30 days.</li>
+          </ul>
+        </section>
+
+        <section id="collect">
+          <h2>What we collect</h2>
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">What</th>
+                <th scope="col">Why</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Account</strong> — name, username, member ID, email, phone, country,
+                  language, avatar and cover</td>
+                <td>So you can sign in, be recognised by other members, and be reached about your
+                  account</td>
+              </tr>
+              <tr>
+                <td><strong>Security</strong> — password hash, session tokens, the IP address and the
+                  browser string of each sign-in</td>
+                <td>To check that a session is really yours, and to stop one account being used in
+                  several places at once</td>
+              </tr>
+              <tr>
+                <td><strong>Viewing codes and devices</strong> — the six-digit code, its plan, its age
+                  rating, the device name and MAC address</td>
+                <td>A code is bound to one device; that binding is what the code is for</td>
+              </tr>
+              <tr>
+                <td><strong>Membership and points</strong> — plan, dates, points balance and the ledger
+                  of every movement, plus payment references</td>
+                <td>To unlock what has been paid for, and to answer “where did my points go?”</td>
+              </tr>
+              <tr>
+                <td><strong>What you do here</strong> — likes and dislikes, lists, watch minutes,
+                  comments, messages, court cases, notifications and their switches</td>
+                <td>These <em>are</em> the product; a reaction cannot work without being stored</td>
+              </tr>
+              <tr>
+                <td><strong>Visitor id</strong> — a random six digits, kept in a cookie and in local
+                  storage</td>
+                <td>To count a visitor once, and to keep a form from losing its place</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="policy__note">
+            We do not collect your address book, your location beyond the country you type, your
+            device's files, or anything from your machine that this site does not show you.
+          </p>
+        </section>
+
+        <section id="linked">
+          <h2>Accounts you link</h2>
+          <p>
+            Signing in with Google, or with any other network once its app is configured, uses that
+            network only to prove who you are. Linking works the same way: you open the network's own
+            window, it asks you to approve, and it sends us back one thing — that you are the account
+            holder.
+          </p>
+          <h3>What arrives from the network</h3>
+          <ul>
+            <li>An <strong>account id</strong> for that network, and a <strong>display name</strong>
+              (on Google, the email address you approved as well).</li>
+            <li>A token, which is kept so the recovery code can be delivered to that network later.</li>
+          </ul>
+          <h3>What we never do</h3>
+          <ul>
+            <li>We never post, message or change anything on your account there.</li>
+            <li>We never read your contacts, your timeline, your photos or your friends.</li>
+            <li>We never receive or store your password for that network — it never leaves it.</li>
+          </ul>
+          <p>
+            One external account belongs to one member. You can remove any link from
+            <em>Account settings → Linked accounts</em>, and the token goes with it. Removing a link
+            does not cancel your membership.
+          </p>
+        </section>
+
+        <section id="others">
+          <h2>Who else sees it</h2>
+          <ul>
+            <li><strong>Our database and functions host</strong> (Supabase) keeps the rows and runs the
+              checks that sign you in. It is a processor: it does not use your data for anything of its
+              own.</li>
+            <li><strong>The mail script</strong> (Google Apps Script) sends the recovery code to your
+              email address. It receives the address and the code, nothing else.</li>
+            <li><strong>The Telegram bot</strong> delivers a code or a notice to a chat you linked
+              yourself.</li>
+            <li><strong>The networks you choose</strong> — Google, Facebook and the rest — see a
+              sign-in request from this site. Their own privacy policies apply to what they do with
+              that.</li>
+            <li><strong>The film and series data</strong> comes from TMDB; no member data is sent to
+              it.</li>
+            <li><strong>The activation gate</strong> opens a third-party advertising page. That page
+              has its own cookies and its own policy; we only ask it to stay open for the 30 seconds
+              the activation rule needs.</li>
+          </ul>
+          <p>
+            We hand data to a government only when a lawful order names it — and we will say so on
+            this page if it ever happens.
+          </p>
+        </section>
+
+        <section id="storage">
+          <h2>Cookies and local storage</h2>
+          <p>No advertising cookies. These are the keys this site writes, and what each one is for:</p>
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Key</th>
+                <th scope="col">What it holds</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>1w.session</code></td>
+                <td>Your session token — in <em>local storage</em> for 30 days if you ticked “stay
+                  signed in”, otherwise in <em>session storage</em>, which the tab drops when it
+                  closes</td>
+              </tr>
+              <tr>
+                <td><code>1w.member</code></td>
+                <td>The name, level and avatar shown in the header, so a page does not flash a blank
+                  corner</td>
+              </tr>
+              <tr>
+                <td><code>1w.visitor</code>, cookie <code>1w_vid</code></td>
+                <td>The random visitor id, kept two years</td>
+              </tr>
+              <tr>
+                <td><code>1w.geo</code></td>
+                <td>The country and IP the visitor lookup answered, so it is asked once a day and not
+                  once a page</td>
+              </tr>
+              <tr>
+                <td><code>1w.theme</code></td>
+                <td>Light or dark, so the next page opens in the one you chose</td>
+              </tr>
+              <tr>
+                <td><code>1w.points.seen</code>, <code>1w.level.seen</code></td>
+                <td>The last balance and level you saw, so a new one can be announced</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>Clearing your browser storage signs you out and gives you a new visitor id.</p>
+        </section>
+
+        <section id="keep">
+          <h2>How long we keep it</h2>
+          <ul>
+            <li><strong>Accounts</strong> — an account that never activates, or whose membership
+              lapses and stays lapsed, is deleted after <strong>30 days</strong>. Its profile, lists
+              and messages go with it.</li>
+            <li><strong>Payments</strong> — kept as a record after the account is gone, but cut loose
+              from it: the row keeps a member reference, not your name, phone or email.</li>
+            <li><strong>Sessions</strong> — 12 hours, or 30 days when you asked to stay signed in.
+              Signing out ends it at once, and changing the password ends every other session.</li>
+            <li><strong>Codes</strong> — a viewing code lives as long as its plan; the original code is
+              bound to its device and cannot be moved to another one.</li>
+            <li><strong>Visitors</strong> — the visitor id expires after two years of no visits.</li>
+          </ul>
+        </section>
+
+        <section id="rights">
+          <h2>Your rights</h2>
+          <ul>
+            <li><strong>See what we hold</strong> — most of it is already on your dashboard: profile,
+              codes, devices, sessions, points, notifications and history.</li>
+            <li><strong>Correct it</strong> — name, bio, avatar, cover, language and country are
+              editable from your profile. The email on the account is fixed: it is the address the
+              recovery code is bound to, so it is changed by us, by hand, after a request.</li>
+            <li><strong>Keep it out of reach</strong> — change the password, sign out every other
+              session, or unlink a network from Account settings.</li>
+            <li><strong>Have it deleted</strong> — ask through the <a href="contact.html">contact
+              page</a>; the account is deleted with everything attached to it. Points and paid time are
+              not refunded for a deletion you asked for.</li>
+            <li><strong>Object</strong> — write to us and we will explain, or stop, whatever you are
+              objecting to.</li>
+          </ul>
+        </section>
+
+        <section id="children">
+          <h2>Children</h2>
+          <p>
+            The site is for people aged <strong>13 and over</strong>. A membership created by someone
+            younger is removed when we learn of it. Titles carry their own age rating, and a viewing
+            code is issued with one.
+          </p>
+        </section>
+
+        <section id="changes">
+          <h2>Changes to this page</h2>
+          <p>
+            When the way we handle something changes, this page changes with it and the date above
+            moves. A change that widens what we collect is announced in the dashboard before it takes
+            effect.
+          </p>
+        </section>
+
+        <section id="contact">
+          <h2>Contact</h2>
+          <p>
+            Questions, a deletion, a correction: use the <a href="contact.html">contact page</a>. Say
+            which member you are (the <code>ID</code> on your dashboard is enough) and what you want
+            done. We answer from the same place a recovery code comes from — the address on your
+            account.
+          </p>
+          <div class="policy__foot">
+            <a href="terms.html">Terms</a>
+            <a href="login.html">Sign in</a>
+            <a href="index.html">Homepage</a>
+            <a href="help.html">Help</a>
+          </div>
+        </section>
+      </article>
+    </main>
+
+    <div data-site-footer></div>
+  </body>
+</html>
